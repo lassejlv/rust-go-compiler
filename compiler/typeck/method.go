@@ -345,6 +345,12 @@ func (fcx *FnCtxt) envMethod(steps []autoderefStep, name string, sp lexer.Span) 
 					continue
 				}
 				item := e.Trait.Trait.Items[name]
+				// an earlier autoderef step that itself implements the
+				// trait wins (`it: &mut I` → `<&mut I as Iterator>::take`,
+				// not a move out of `*it`)
+				if si > 0 && fcx.earlierStepImplements(steps[:si], e) {
+					return nil
+				}
 				selfTy := fcx.methodSelfTy(item, e.Args)
 				s := fcx.ic.snapshot()
 				if !fcx.ic.unify(selfTy, adjusted) {
@@ -361,4 +367,19 @@ func (fcx *FnCtxt) envMethod(steps []autoderefStep, name string, sp lexer.Span) 
 		}
 	}
 	return nil
+}
+
+// earlierStepImplements reports whether one of the autoderef steps
+// implements e's trait (with e's other trait args).
+func (fcx *FnCtxt) earlierStepImplements(steps []autoderefStep, e *TraitRef) bool {
+	for _, st := range steps {
+		if st.ty.Kind == TInfer {
+			return false
+		}
+		args := append([]Ty{st.ty}, e.Args[1:]...)
+		if k := fcx.ic.evaluate(&Predicate{Trait: &TraitRef{Trait: e.Trait, Args: args}}, 0); k == SelImpl || k == SelBuiltin {
+			return true
+		}
+	}
+	return false
 }

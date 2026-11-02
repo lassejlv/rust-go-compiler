@@ -237,6 +237,15 @@ func writeTypeName(b *strings.Builder, t Ty) {
 				b.WriteByte('>')
 			}
 		}
+		if t.Sub&DynSend != 0 {
+			b.WriteString(" + core::marker::Send")
+		}
+		if t.Sub&DynSync != 0 {
+			b.WriteString(" + core::marker::Sync")
+		}
+		if t.Sub&DynUnpin != 0 {
+			b.WriteString(" + core::marker::Unpin")
+		}
 	default:
 		b.WriteString(t.String())
 	}

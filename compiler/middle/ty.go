@@ -378,6 +378,14 @@ func FnPtr(inputs []Ty, ret Ty, variadic bool) Ty {
 func Closure(d *Def, id int, args []Ty) Ty {
 	return intern(&TyS{Kind: TClosure, Def: d, Index: id, Args: args})
 }
+// Auto-trait bits of a trait object type (TyS.Sub of a TDyn).
+const (
+	DynSend uint8 = 1 << iota
+	DynSync
+	DynUnpin
+	DynOtherAuto
+)
+
 func Dyn(trait *Def, args []Ty, bindings []Binding, auto uint8) Ty {
 	return intern(&TyS{Kind: TDyn, Def: trait, Args: args, Bindings: bindings, Sub: auto})
 }

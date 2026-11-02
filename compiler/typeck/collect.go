@@ -682,7 +682,17 @@ func (ac *astConv) lowerDyn(bounds []*ast.Bound, sp lexer.Span) Ty {
 			continue
 		}
 		if tr.Trait.Trait.Auto || tr.Trait.LangItem == "send" || tr.Trait.LangItem == "sync" || tr.Trait.Name == "Send" || tr.Trait.Name == "Sync" || tr.Trait.Name == "Unpin" {
-			auto |= 1
+			// auto traits are part of the object type's identity
+			switch {
+			case tr.Trait.LangItem == "send" || tr.Trait.Name == "Send":
+				auto |= DynSend
+			case tr.Trait.LangItem == "sync" || tr.Trait.Name == "Sync":
+				auto |= DynSync
+			case tr.Trait.Name == "Unpin":
+				auto |= DynUnpin
+			default:
+				auto |= DynOtherAuto
+			}
 			continue
 		}
 		if principal != nil {

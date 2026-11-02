@@ -6,6 +6,10 @@ pub fn black_box<T>(dummy: T) -> T {
     dummy
 }
 
+/// Hints to the compiler that the current code path is cold.
+#[inline(always)]
+pub fn cold_path() {}
+
 /// Emits a machine instruction to signal the processor that it is running in a busy-wait spin-loop.
 #[inline]
 pub fn spin_loop() {}

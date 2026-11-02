@@ -489,6 +489,20 @@ impl<'b, T: ?Sized> Ref<'b, T> {
         Ref { value, borrow, _marker: PhantomData }
     }
 
+    /// Splits a `Ref` into multiple `Ref`s for different components of the borrowed data.
+    #[inline]
+    pub fn map_split<U: ?Sized, V: ?Sized, F>(orig: Ref<'b, T>, f: F) -> (Ref<'b, U>, Ref<'b, V>)
+    where
+        F: FnOnce(&T) -> (&U, &V),
+    {
+        let (a, b) = f(unsafe { &*orig.value });
+        let (a, b) = (a as *const U, b as *const V);
+        let borrow = orig.borrow;
+        mem::forget(orig);
+        borrow.set(borrow.get() + 1);
+        (Ref { value: a, borrow, _marker: PhantomData }, Ref { value: b, borrow, _marker: PhantomData })
+    }
+
     /// Makes a new `Ref` for an optional component of the borrowed data.
     #[inline]
     pub fn filter_map<U: ?Sized, F>(orig: Ref<'b, T>, f: F) -> Result<Ref<'b, U>, Self>
@@ -560,6 +574,20 @@ impl<'b, T: ?Sized> RefMut<'b, T> {
         let borrow = orig.borrow;
         mem::forget(orig);
         RefMut { value, borrow, _marker: PhantomData }
+    }
+
+    /// Splits a `RefMut` into multiple `RefMut`s for different components of the borrowed data.
+    #[inline]
+    pub fn map_split<U: ?Sized, V: ?Sized, F>(orig: RefMut<'b, T>, f: F) -> (RefMut<'b, U>, RefMut<'b, V>)
+    where
+        F: FnOnce(&mut T) -> (&mut U, &mut V),
+    {
+        let (a, b) = f(unsafe { &mut *orig.value });
+        let (a, b) = (a as *mut U, b as *mut V);
+        let borrow = orig.borrow;
+        mem::forget(orig);
+        borrow.set(borrow.get() - 1);
+        (RefMut { value: a, borrow, _marker: PhantomData }, RefMut { value: b, borrow, _marker: PhantomData })
     }
 
     /// Makes a new `RefMut` for an optional component of the borrowed data.

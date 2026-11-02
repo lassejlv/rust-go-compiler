@@ -77,6 +77,26 @@ impl<T> Option<T> {
         }
     }
 
+    /// Converts from `Pin<&Option<T>>` to `Option<Pin<&T>>`.
+    #[inline]
+    pub fn as_pin_ref(self: crate::pin::Pin<&Self>) -> Option<crate::pin::Pin<&T>> {
+        match crate::pin::Pin::get_ref(self) {
+            Some(x) => unsafe { Some(crate::pin::Pin::new_unchecked(x)) },
+            None => None,
+        }
+    }
+
+    /// Converts from `Pin<&mut Option<T>>` to `Option<Pin<&mut T>>`.
+    #[inline]
+    pub fn as_pin_mut(self: crate::pin::Pin<&mut Self>) -> Option<crate::pin::Pin<&mut T>> {
+        unsafe {
+            match crate::pin::Pin::get_unchecked_mut(self).as_mut() {
+                Some(x) => Some(crate::pin::Pin::new_unchecked(x)),
+                None => None,
+            }
+        }
+    }
+
     /// Returns a mutable slice of the contained value, if any.
     pub fn as_mut_slice(&mut self) -> &mut [T] {
         match *self {

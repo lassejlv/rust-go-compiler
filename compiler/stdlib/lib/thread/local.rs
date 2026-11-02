@@ -178,6 +178,15 @@ impl<T: 'static> LocalKey<Cell<T>> {
     pub fn replace(&'static self, value: T) -> T {
         self.with(|cell| cell.replace(value))
     }
+
+    /// Updates the contained value using a function.
+    #[track_caller]
+    pub fn update(&'static self, f: impl FnOnce(T) -> T)
+    where
+        T: Copy,
+    {
+        self.with(|cell| cell.set(f(cell.get())))
+    }
 }
 
 impl<T: 'static> LocalKey<RefCell<T>> {

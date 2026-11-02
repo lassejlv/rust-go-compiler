@@ -178,7 +178,11 @@ func (fcx *FnCtxt) canUnsize(src, dst Ty) bool {
 		}
 	case TDyn:
 		if src.Kind == TDyn {
-			// dyn A -> dyn B (auto trait drop / supertrait upcast)
+			// dyn A -> dyn B (auto trait drop / supertrait upcast); auto
+			// traits can be dropped but not added
+			if dst.Sub&^src.Sub != 0 {
+				return false
+			}
 			if src.Def == dst.Def {
 				return fcx.ic.unify(Dyn(src.Def, src.Args, src.Bindings, 0), Dyn(dst.Def, dst.Args, dst.Bindings, 0))
 			}

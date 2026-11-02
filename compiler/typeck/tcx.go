@@ -205,6 +205,7 @@ func (t *Tcx) checkCoherence() {
 			for _, a := range impl.Impl.TraitRef.Args {
 				key += fmt.Sprintf("%p,", a) // types are interned
 			}
+
 			if prev := seen[key]; prev != nil {
 				t.Errorf(impl.Span, "conflicting implementations of trait `%s` for type `%s` (first at %s)", tr.Name, impl.Impl.TraitRef.Args[0], prev.Span.Lo)
 				continue
