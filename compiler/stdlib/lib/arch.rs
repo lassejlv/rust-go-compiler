@@ -941,6 +941,189 @@ pub mod x86_64 {
         let _ = (p, strategy);
     }
 
+    /// Blends packed 16-bit integers from `a` and `b` using control mask `imm8`.
+    #[inline]
+    pub unsafe fn _mm_blend_epi16(a: __m128i, b: __m128i, imm8: i32) -> __m128i {
+        let mut r = a.bytes;
+        let mut i = 0;
+        while i < 8 {
+            if (imm8 >> i) & 1 != 0 {
+                r[2 * i] = b.bytes[2 * i];
+                r[2 * i + 1] = b.bytes[2 * i + 1];
+            }
+            i += 1;
+        }
+        __m128i::from_bytes(r)
+    }
+
+    macro_rules! shift64_ops {
+        ($v:ident, $n:expr, slli = $slli:ident, srli = $srli:ident) => {
+            /// Shifts packed 64-bit integers left by `imm8` while shifting in zeros.
+            #[inline]
+            pub unsafe fn $slli(a: $v, imm8: i32) -> $v {
+                let mut r = [0u8; $n];
+                let sh = imm8 as u32;
+                if sh < 64 {
+                    let mut i = 0;
+                    while i < $n / 8 {
+                        wr64(&mut r, i, rd64(&a.bytes, i) << sh);
+                        i += 1;
+                    }
+                }
+                $v::from_bytes(r)
+            }
+
+            /// Shifts packed 64-bit integers right by `imm8` while shifting in zeros.
+            #[inline]
+            pub unsafe fn $srli(a: $v, imm8: i32) -> $v {
+                let mut r = [0u8; $n];
+                let sh = imm8 as u32;
+                if sh < 64 {
+                    let mut i = 0;
+                    while i < $n / 8 {
+                        wr64(&mut r, i, rd64(&a.bytes, i) >> sh);
+                        i += 1;
+                    }
+                }
+                $v::from_bytes(r)
+            }
+        };
+    }
+    shift64_ops!(__m128i, 16, slli = _mm_slli_epi64, srli = _mm_srli_epi64);
+    shift64_ops!(__m256i, 32, slli = _mm256_slli_epi64, srli = _mm256_srli_epi64);
+
+    /// Copies `a`, then inserts 128 bits from `b` at the half selected by `imm8`.
+    #[inline]
+    pub unsafe fn _mm256_insertf128_si256(a: __m256i, b: __m128i, imm8: i32) -> __m256i {
+        let mut r = a.bytes;
+        let o = if imm8 & 1 != 0 { 16 } else { 0 };
+        let mut i = 0;
+        while i < 16 {
+            r[o + i] = b.bytes[i];
+            i += 1;
+        }
+        __m256i::from_bytes(r)
+    }
+
+    /// Copies `a`, then inserts 128 bits from `b` at the half selected by `imm8`.
+    #[inline]
+    pub unsafe fn _mm256_inserti128_si256(a: __m256i, b: __m128i, imm8: i32) -> __m256i {
+        _mm256_insertf128_si256(a, b, imm8)
+    }
+
+    /// Sets packed `__m256i` from two 128-bit halves (`hi`, `lo`).
+    #[inline]
+    pub unsafe fn _mm256_set_m128i(hi: __m128i, lo: __m128i) -> __m256i {
+        let mut r = [0u8; 32];
+        let mut i = 0;
+        while i < 16 {
+            r[i] = lo.bytes[i];
+            r[16 + i] = hi.bytes[i];
+            i += 1;
+        }
+        __m256i::from_bytes(r)
+    }
+
+    /// Sets packed 64-bit integers, highest element first.
+    #[inline]
+    pub unsafe fn _mm256_set_epi64x(e3: i64, e2: i64, e1: i64, e0: i64) -> __m256i {
+        let mut r = [0u8; 32];
+        wr64(&mut r, 0, e0 as u64);
+        wr64(&mut r, 1, e1 as u64);
+        wr64(&mut r, 2, e2 as u64);
+        wr64(&mut r, 3, e3 as u64);
+        __m256i::from_bytes(r)
+    }
+
+    #[inline]
+    fn sha_lanes(v: __m128i) -> [u32; 4] {
+        [rd32(&v.bytes, 0) as u32, rd32(&v.bytes, 1) as u32, rd32(&v.bytes, 2) as u32, rd32(&v.bytes, 3) as u32]
+    }
+
+    #[inline]
+    fn sha_from_lanes(l: [u32; 4]) -> __m128i {
+        let mut r = [0u8; 16];
+        let mut i = 0;
+        while i < 4 {
+            wr32(&mut r, i, l[i] as i32);
+            i += 1;
+        }
+        __m128i::from_bytes(r)
+    }
+
+    /// Intermediate calculation for the next four SHA256 message dwords.
+    #[inline]
+    pub unsafe fn _mm_sha256msg1_epu32(a: __m128i, b: __m128i) -> __m128i {
+        fn s0(x: u32) -> u32 {
+            x.rotate_right(7) ^ x.rotate_right(18) ^ (x >> 3)
+        }
+        let w = sha_lanes(a);
+        let w4 = sha_lanes(b)[0];
+        sha_from_lanes([
+            w[0].wrapping_add(s0(w[1])),
+            w[1].wrapping_add(s0(w[2])),
+            w[2].wrapping_add(s0(w[3])),
+            w[3].wrapping_add(s0(w4)),
+        ])
+    }
+
+    /// Final calculation for the next four SHA256 message dwords.
+    #[inline]
+    pub unsafe fn _mm_sha256msg2_epu32(a: __m128i, b: __m128i) -> __m128i {
+        fn s1(x: u32) -> u32 {
+            x.rotate_right(17) ^ x.rotate_right(19) ^ (x >> 10)
+        }
+        let x = sha_lanes(a);
+        let y = sha_lanes(b);
+        let w16 = x[0].wrapping_add(s1(y[2]));
+        let w17 = x[1].wrapping_add(s1(y[3]));
+        let w18 = x[2].wrapping_add(s1(w16));
+        let w19 = x[3].wrapping_add(s1(w17));
+        sha_from_lanes([w16, w17, w18, w19])
+    }
+
+    /// Performs two rounds of SHA256 operation.
+    #[inline]
+    pub unsafe fn _mm_sha256rnds2_epu32(a: __m128i, b: __m128i, k: __m128i) -> __m128i {
+        let x = sha_lanes(a);
+        let y = sha_lanes(b);
+        let wk = sha_lanes(k);
+        let (mut ra, mut rb, mut rc, mut rd) = (y[3], y[2], x[3], x[2]);
+        let (mut re, mut rf, mut rg, mut rh) = (y[1], y[0], x[1], x[0]);
+        let mut i = 0;
+        while i < 2 {
+            let ch = (re & rf) ^ (!re & rg);
+            let maj = (ra & rb) ^ (ra & rc) ^ (rb & rc);
+            let sum0 = ra.rotate_right(2) ^ ra.rotate_right(13) ^ ra.rotate_right(22);
+            let sum1 = re.rotate_right(6) ^ re.rotate_right(11) ^ re.rotate_right(25);
+            let t = ch.wrapping_add(sum1).wrapping_add(wk[i]).wrapping_add(rh);
+            let na = t.wrapping_add(maj).wrapping_add(sum0);
+            let ne = t.wrapping_add(rd);
+            rh = rg;
+            rg = rf;
+            rf = re;
+            re = ne;
+            rd = rc;
+            rc = rb;
+            rb = ra;
+            ra = na;
+            i += 1;
+        }
+        sha_from_lanes([rf, re, rb, ra])
+    }
+
+    /// `XFEATURE_ENABLED_MASK` for `XCR`.
+    pub const _XCR_XFEATURE_ENABLED_MASK: u32 = 0;
+
+    /// Reads the contents of the extended control register `XCR` specified in `xcr_no`.
+    ///
+    /// NOTE: consistent with the masked `cpuid` (baseline x86_64, no AVX state),
+    /// `XCR0` reports only the x87 and SSE state components.
+    #[inline]
+    pub unsafe fn _xgetbv(xcr_no: u32) -> u64 {
+        if xcr_no == 0 { 0b11 } else { 0 }
+    }
+
     /// Result of the `cpuid` instruction.
     #[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
     pub struct CpuidResult {
@@ -960,11 +1143,43 @@ pub mod x86_64 {
 
     /// Returns the result of the `cpuid` instruction for a given `leaf` (`EAX`)
     /// and `sub_leaf` (`ECX`).
+    ///
+    /// NOTE: rustgo emulates SIMD intrinsics lane by lane and reports only the
+    /// baseline x86_64 feature set (see `is_x86_feature_detected!`). The raw
+    /// `cpuid` result is masked to match, so crates that detect features via
+    /// `cpuid` (cpufeatures, raw-cpuid, ...) select their portable code paths:
+    /// leaf 1 ECX loses SSE3..AVX/AES/RDRAND (and XSAVE/OSXSAVE), leaf 7
+    /// reports no extended features, and leaf 0x8000_0001 ECX loses
+    /// LZCNT/SSE4A/XOP/FMA4/TBM. Vendor, brand, cache and topology leaves are
+    /// passed through unchanged.
     #[inline]
     pub fn __cpuid_count(leaf: u32, sub_leaf: u32) -> CpuidResult {
         let mut out = [0u32; 4];
         unsafe { rustgo_cpuid(leaf, sub_leaf, out.as_mut_ptr()) };
-        CpuidResult { eax: out[0], ebx: out[1], ecx: out[2], edx: out[3] }
+        let mut r = CpuidResult { eax: out[0], ebx: out[1], ecx: out[2], edx: out[3] };
+        match leaf {
+            1 => {
+                // sse3, pclmulqdq, ssse3, fma, cx16, sse4.1, sse4.2, movbe,
+                // popcnt, aes, xsave, osxsave, avx, f16c, rdrand
+                const CLEAR: u32 = (1 << 0) | (1 << 1) | (1 << 9) | (1 << 12) | (1 << 13) | (1 << 19) | (1 << 20)
+                    | (1 << 22) | (1 << 23) | (1 << 25) | (1 << 26) | (1 << 27) | (1 << 28) | (1 << 29) | (1 << 30);
+                r.ecx &= !CLEAR;
+            }
+            7 => {
+                r.ebx = 0;
+                r.ecx = 0;
+                r.edx = 0;
+                if sub_leaf != 0 {
+                    r.eax = 0;
+                }
+            }
+            0x8000_0001 => {
+                const CLEAR: u32 = (1 << 5) | (1 << 6) | (1 << 11) | (1 << 16) | (1 << 21);
+                r.ecx &= !CLEAR;
+            }
+            _ => {}
+        }
+        r
     }
 
     /// See [`__cpuid_count`].

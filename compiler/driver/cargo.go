@@ -114,6 +114,13 @@ func planCargo(co *CargoOptions) ([]*crateUnit, error) {
 	}
 	cmd := exec.Command("cargo", args...)
 	cmd.Stderr = os.Stderr
+	// the global cfgs also decide target-cfg'd dependencies
+	// (`[target.'cfg(rustix_use_libc)'.dependencies]`)
+	flags := strings.TrimSpace(os.Getenv("RUSTFLAGS"))
+	for _, c := range globalCfgs {
+		flags = strings.TrimSpace(flags + " --cfg " + c)
+	}
+	cmd.Env = append(os.Environ(), "RUSTFLAGS="+flags)
 	out, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("cargo metadata failed: %v", err)

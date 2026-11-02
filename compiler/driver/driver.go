@@ -202,7 +202,9 @@ func addMainWrapper(c *ast.Crate) string {
 		if tt, ok := fn.Decl.Output.(*ast.TupleType); ok && len(tt.Elems) == 0 {
 			return "main"
 		}
-		src := `fn __rustgo_main() { match main() { ::std::result::Result::Ok(_) => {}, ::std::result::Result::Err(e) => { eprintln!("Error: {:?}", e); ::std::process::exit(1) } } }`
+		// via Termination, so it also fits whichever `main` survives
+		// cfg-stripping (several cfg'd mains with different return types)
+		src := `fn __rustgo_main() { let code = ::std::process::Termination::report(main()); if code.to_i32() != 0 { ::std::process::exit(code.to_i32()) } }`
 		wc, err := parser.ParseCrate(lexer.AddFile("<main-wrapper>", src), src)
 		if err != nil {
 			return "main"

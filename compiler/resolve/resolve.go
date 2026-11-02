@@ -583,6 +583,10 @@ func (r *Resolver) lookupUseFirst(m *Module, name string, ns Namespace, self *Im
 			return b.Res, true, true
 		}
 	}
+	// `use u64;` / `pub use bool;` (how core::primitive is defined)
+	if ns == TypeNS && primTypes[name] {
+		return Res{Kind: ResPrim, Prim: name}, true, true
+	}
 	return Res{}, false, true
 }
 

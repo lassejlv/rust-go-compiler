@@ -52,6 +52,24 @@ func (fcx *FnCtxt) checkPatInner(p ast.Pat, expected Ty, bm bindingMode, oc *orC
 			return
 		}
 	}
+	if pp, ok := p.(*ast.PathPat); ok {
+		// a const of reference type (`record::NAME: &str`) matches the
+		// reference itself: don't peel it like other non-ref patterns
+		vr, ty := fcx.resolveValuePath(pp.QSelf, pp.Path, pp.Span, true, nil)
+		if vr == nil {
+			return
+		}
+		isRefConst := vr.Kind == VConst && fcx.shallow(ty).Kind == TRef
+		expected = fcx.peelForPat(p, expected, &bm, isRefConst)
+		fcx.record(p.GetID(), expected)
+		fcx.r.Paths[pp.ID] = vr
+		if vr.Kind == VFn {
+			fcx.errorf(pp.Span, "expected unit struct, unit variant or constant, found tuple variant")
+			return
+		}
+		fcx.demandEq(pp.Span, expected, ty)
+		return
+	}
 	if isNonRefPat(p) {
 		expected = fcx.peelForPat(p, expected, &bm, false)
 	} else if lp, ok := p.(*ast.LitPat); ok {
