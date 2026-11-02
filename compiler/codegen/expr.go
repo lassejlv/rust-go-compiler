@@ -1040,7 +1040,7 @@ func (fc *fnGen) callResolvedSpan(d *Def, args []Ty, vals []string, ret Ty, sp a
 		}
 		rd, rargs, ok := fc.g.tcx.ResolveAssocFn(d, args)
 		if !ok || rd == nil {
-			fc.g.fatalf("%s: error: no implementation of `%s` for `%s`", sp.Lo, d.Path(), args[0])
+			fc.g.fatalf("%s: error: no implementation of `%s` for `%s` (args %v)", sp.Lo, d.Path(), args[0], args)
 		}
 		if rd == d && d.Fn.Ast.Body == nil {
 			// builtin impl (Clone for closures, Fn traits, ...)

@@ -185,8 +185,10 @@ func (ic *InferCtxt) selectTrait(tr *TraitRef, depth int) Selection {
 		return Selection{Kind: SelAmbig}
 	}
 	_ = ambig
-	// Commit the unique candidate.
+	// Commit the unique candidate, confirming its where clauses so that
+	// projections in them (e.g. F: FnMut(..) -> B) drive inference.
 	iargs, _, _ := ic.matchImpl(cands[0], tr, depth)
+	ic.confirmImpl(cands[0], iargs, depth)
 	return Selection{Kind: SelImpl, Impl: cands[0], Args: ic.resolveList(iargs)}
 }
 
@@ -219,6 +221,27 @@ func (ic *InferCtxt) matchImpl(impl *Def, tr *TraitRef, depth int) ([]Ty, bool, 
 		}
 	}
 	return args, true, ambig
+}
+
+// confirmImpl commits inference from an impl's where clauses that carry
+// associated-type bindings.
+func (ic *InferCtxt) confirmImpl(impl *Def, args []Ty, depth int) {
+	g := ic.t.Generics(impl)
+	for _, p := range g.Predicates {
+		if p.Maybe || len(p.Bindings) == 0 {
+			continue
+		}
+		sp := p.Subst(args)
+		sel := ic.selectTrait(sp.Trait, depth+1)
+		if sel.Kind == SelNone || sel.Kind == SelAmbig {
+			continue
+		}
+		for _, b := range sp.Bindings {
+			if n := ic.normalizeBinding(sp.Trait, b.Name, depth+1); n != nil {
+				ic.unify(n, b.Ty)
+			}
+		}
+	}
 }
 
 // builtinCopy handles Copy for structural types.
