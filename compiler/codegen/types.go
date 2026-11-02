@@ -140,8 +140,8 @@ func (g *Gen) defineType(t Ty) {
 			g.defineByValue(e)
 		}
 		fmt.Fprintf(&b, "struct %s {", ti.name)
-		for i, e := range t.Elems {
-			fmt.Fprintf(&b, " %s f%d;", g.ctype(e), i)
+		for _, i := range g.tcx.FieldOrder(t, 0) {
+			fmt.Fprintf(&b, " %s f%d;", g.ctype(t.Elems[i]), i)
 		}
 		b.WriteString(" };\n")
 	case TArray:
@@ -155,7 +155,8 @@ func (g *Gen) defineType(t Ty) {
 			}
 		}
 		fmt.Fprintf(&b, "struct %s {", ti.name)
-		for i, c := range ci.Captures {
+		for _, i := range g.tcx.FieldOrder(t, 0) {
+			c := ci.Captures[i]
 			if c.ByRef {
 				fmt.Fprintf(&b, " %s* c%d;", g.ctype(c.Ty), i)
 			} else {
@@ -179,9 +180,11 @@ func (g *Gen) defineType(t Ty) {
 				}
 			}
 			fmt.Fprintf(&b, "%s %s {", kw, ti.name)
-			for i, ft := range fts {
+			order := g.tcx.FieldOrder(t, 0)
+			for pos, i := range order {
+				ft := fts[i]
 				if ft.IsUnsized() {
-					if i == 0 {
+					if pos == 0 {
 						b.WriteString(" uint8_t __rg_hdr[0];")
 					}
 					// unsized tail: flexible array member
@@ -213,20 +216,7 @@ func (g *Gen) defineType(t Ty) {
 					g.defineByValue(ft)
 				}
 			}
-			if n := g.niche(t); n != nil {
-				fmt.Fprintf(&b, "struct %s { %s f0; };\n", ti.name, g.ctype(g.fieldTypes(t, n.data.Index)[0]))
-				break
-			}
-			fmt.Fprintf(&b, "struct %s { %s tag; union {", ti.name, g.tagType(d))
-			for vi := range d.Adt.Variants {
-				fts := g.fieldTypes(t, vi)
-				fmt.Fprintf(&b, " struct {")
-				for i, ft := range fts {
-					fmt.Fprintf(&b, " %s f%d;", g.ctype(ft), i)
-				}
-				fmt.Fprintf(&b, " } v%d;", vi)
-			}
-			b.WriteString(" } u; };\n")
+			g.enumDef(&b, t, ti.name)
 		}
 	default:
 		ti.defining = false
@@ -249,22 +239,6 @@ func (g *Gen) defineByValue(t Ty) {
 	case TArray, TAdt, TClosure:
 		g.defineType(t)
 	}
-}
-
-func (g *Gen) tagType(d *Def) string {
-	if it, ok := IntTyByName(d.Adt.Repr); ok {
-		return g.ctype(IntT(it))
-	}
-	for _, a := range d.Attrs {
-		if a.Path == "repr" && len(a.Tokens) > 0 && a.Tokens[0].Delim == '(' {
-			for _, tt := range a.Tokens[0].Inner {
-				if tt.Tok.Text == "C" {
-					return "int32_t"
-				}
-			}
-		}
-	}
-	return "int64_t"
 }
 
 func (g *Gen) arrayLen(t Ty) uint64 {

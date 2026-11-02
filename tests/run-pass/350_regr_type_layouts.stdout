@@ -1,0 +1,21 @@
+sizes: Mid=1 Option<Mid>=1 Wide=2 Neg=1 Prim=8 CEnum=16 Small=2
+sizes: Packed3=8 InOrder=12 (u8,u32,u8)=8 Option<char>=4 Option<Option<char>>=4
+sizes: Option<Vec<u8>>=24 Option<String>=24 Option<Rc<u8>>=8 Option<Box<Tree>>=8 Tree=16
+a+ F+ T+ c+ d+ | none=None eq=true
+[None, Some(None), Some(Some(false)), Some(Some(true))]
+[None, Some(None), Some(Some('\u{10ffff}'))]
+[None, Some(Less), Some(Equal), Some(Greater)] 4
+transmute: None::<bool>=2 Less=-1 None::<Ordering>=254 Some(true)=1
+1000 2000 | -5 0 5
+neg sum 0 small -300 300
+A(70000)/1 B { x: 3, y: 65535 }/7 C/9 
+[A(9), B(1099511627776)]
+Packed3 { a: 1, b: 3735896336, c: 3, d: 4 } true
+1 2 3
+Some([0, 1, 2]) Some(3)
+Some("") true
+Some(5) count 2
+count 1
+None Some([1, 2])
+depth 3
+[Ok(1), Err(Less), Ok(255)] 2

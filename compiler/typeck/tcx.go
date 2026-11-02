@@ -24,6 +24,8 @@ import (
 type Tcx struct {
 	R *resolve.Resolver
 
+	layouts *layoutCaches // layout.go
+
 	Errors    []string
 	errSeen   map[string]bool
 	MaxErrors int

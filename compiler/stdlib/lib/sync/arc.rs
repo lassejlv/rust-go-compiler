@@ -21,6 +21,7 @@ struct ArcInner<T: ?Sized> {
 /// A thread-safe reference-counting pointer.
 #[rustc_coerce_unsized]
 pub struct Arc<T: ?Sized> {
+    #[rustgo_nonnull]
     ptr: *mut ArcInner<T>,
 }
 

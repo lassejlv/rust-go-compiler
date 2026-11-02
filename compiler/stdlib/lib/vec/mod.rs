@@ -57,6 +57,7 @@ use crate::slice::{self, SliceIndex};
 
 /// A contiguous growable array type.
 pub struct Vec<T> {
+    #[rustgo_nonnull]
     ptr: *mut T,
     cap: usize,
     len: usize,

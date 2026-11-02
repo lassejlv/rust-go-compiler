@@ -21,6 +21,7 @@ struct RcBox<T: ?Sized> {
 /// A single-threaded reference-counting pointer.
 #[rustc_coerce_unsized]
 pub struct Rc<T: ?Sized> {
+    #[rustgo_nonnull]
     ptr: *mut RcBox<T>,
 }
 
