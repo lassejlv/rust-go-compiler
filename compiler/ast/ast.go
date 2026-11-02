@@ -747,6 +747,10 @@ type ClosureExpr struct {
 	Params []*ClosureParam
 	Ret    Type // may be nil
 	Body   Expr
+	// MoveParamsOf marks the future-producing closure of a non-move async
+	// closure: it moves only that closure's parameters and captures other
+	// variables like a non-move closure.
+	MoveParamsOf *ClosureExpr
 }
 
 type BreakExpr struct {

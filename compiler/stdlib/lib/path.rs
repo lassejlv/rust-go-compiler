@@ -870,7 +870,7 @@ impl<'a> From<&'a PathBuf> for Cow<'a, Path> {
 impl From<PathBuf> for crate::sync::Arc<Path> {
     fn from(s: PathBuf) -> crate::sync::Arc<Path> {
         let arc: crate::sync::Arc<[u8]> = crate::sync::Arc::from(s.inner.into_encoded_bytes());
-        unsafe { crate::sync::Arc::from_raw(crate::sync::Arc::into_raw(arc) as *const Path) }
+        unsafe { crate::mem::transmute::<crate::sync::Arc<[u8]>, crate::sync::Arc<Path>>(arc) }
     }
 }
 
@@ -883,7 +883,7 @@ impl From<&Path> for crate::sync::Arc<Path> {
 impl From<PathBuf> for crate::rc::Rc<Path> {
     fn from(s: PathBuf) -> crate::rc::Rc<Path> {
         let rc: crate::rc::Rc<[u8]> = crate::rc::Rc::from(s.inner.into_encoded_bytes());
-        unsafe { crate::rc::Rc::from_raw(crate::rc::Rc::into_raw(rc) as *const Path) }
+        unsafe { crate::mem::transmute::<crate::rc::Rc<[u8]>, crate::rc::Rc<Path>>(rc) }
     }
 }
 

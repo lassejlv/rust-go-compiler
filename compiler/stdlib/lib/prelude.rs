@@ -13,6 +13,7 @@ pub mod v1 {
     pub use crate::mem::drop;
     pub use crate::mem::{align_of, align_of_val, size_of, size_of_val};
     pub use crate::ops::{Drop, Fn, FnMut, FnOnce};
+    pub use crate::future::{AsyncFn, AsyncFnMut, AsyncFnOnce};
     pub use crate::option::Option;
     pub use crate::option::Option::{None, Some};
     pub use crate::result::Result;

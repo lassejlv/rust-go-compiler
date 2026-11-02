@@ -213,3 +213,44 @@ pub fn __current_cx() -> &'static mut Context<'static> {
 pub fn __yield_now() {
     unsafe { coro::coro_yield() }
 }
+
+// ---------------------------------------------------------------------------
+// Async closure traits. `async |x| body` desugars to a closure returning a
+// future, so these are implemented for every closure returning a future.
+
+/// An async closure callable by value.
+pub trait AsyncFnOnce<Args> {
+    /// The future returned by the call.
+    type CallOnceFuture: Future<Output = Self::Output>;
+    /// The value the future resolves to.
+    type Output;
+}
+
+/// An async closure callable by mutable reference.
+pub trait AsyncFnMut<Args>: AsyncFnOnce<Args> {}
+
+/// An async closure callable by shared reference.
+pub trait AsyncFn<Args>: AsyncFnMut<Args> {}
+
+impl<F, Args, Fut> AsyncFnOnce<Args> for F
+where
+    F: FnOnce<Args, Output = Fut>,
+    Fut: Future,
+{
+    type CallOnceFuture = Fut;
+    type Output = Fut::Output;
+}
+
+impl<F, Args, Fut> AsyncFnMut<Args> for F
+where
+    F: FnMut<Args, Output = Fut>,
+    Fut: Future,
+{
+}
+
+impl<F, Args, Fut> AsyncFn<Args> for F
+where
+    F: Fn<Args, Output = Fut>,
+    Fut: Future,
+{
+}

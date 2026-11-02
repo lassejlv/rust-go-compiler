@@ -7,12 +7,14 @@ mod buffered;
 mod cursor;
 mod error;
 mod impls;
+mod pipe;
 mod stdio;
 mod util;
 
 pub use self::buffered::{BufReader, BufWriter, IntoInnerError, LineWriter, WriterPanicked};
 pub use self::cursor::Cursor;
 pub use self::error::{Error, ErrorKind, Result};
+pub use self::pipe::{pipe, PipeReader, PipeWriter};
 pub(crate) use self::error::{const_io_error, decode_error_kind};
 pub use self::stdio::{
     _eprint, _print, stderr, stdin, stdout, IsTerminal, Stderr, StderrLock, Stdin, StdinLock, Stdout, StdoutLock,

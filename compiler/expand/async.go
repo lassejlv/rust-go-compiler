@@ -117,6 +117,9 @@ func desugarAsync(c *ast.Crate) error {
 				fail(err)
 				return x
 			}
+			if !e.Move {
+				inner.(*ast.CallExpr).Args[0].(*ast.ClosureExpr).MoveParamsOf = e
+			}
 			e.Body = inner
 			e.Ret = nil
 			return e

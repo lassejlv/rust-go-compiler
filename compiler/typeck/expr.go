@@ -791,6 +791,12 @@ func (fcx *FnCtxt) checkRef(x *ast.RefExpr, expected Ty) Ty {
 		et := fcx.shallow(expected)
 		if et.Kind == TRef || et.Kind == TPtr {
 			hint = et.Elem
+			// an unsized-tail struct pointee is only a weak hint for an
+			// rvalue operand (rustc's ExpectRvalueLikeUnsized): the literal
+			// is checked on its own and the borrow unsize-coerces
+			if h := fcx.shallow(hint); h.Kind == TAdt && h.IsUnsized() && !isPlaceExprTy(x.X) {
+				hint = nil
+			}
 		}
 	}
 	t := fcx.checkExpr(x.X, hint)
@@ -1203,4 +1209,25 @@ func firstClosure(es []ast.Expr) *ast.ClosureExpr {
 		return &ast.ClosureExpr{}
 	}
 	return ce
+}
+
+func unparenExpr(e ast.Expr) ast.Expr {
+	for {
+		p, ok := e.(*ast.ParenExpr)
+		if !ok {
+			return e
+		}
+		e = p.X
+	}
+}
+
+// isPlaceExprTy reports whether e is syntactically a place expression.
+func isPlaceExprTy(e ast.Expr) bool {
+	switch x := unparenExpr(e).(type) {
+	case *ast.PathExpr, *ast.FieldExpr, *ast.IndexExpr:
+		return true
+	case *ast.UnaryExpr:
+		return x.Op == ast.UnDeref
+	}
+	return false
 }

@@ -547,19 +547,25 @@ func (ic *InferCtxt) normalizeProjection(trait *Def, args []Ty, name string, dep
 			}
 		}
 	}
+	// generic associated types carry their own args after the trait's
+	var gat []Ty
+	if n := len(t.Generics(trait).Params); len(args) > n {
+		gat = args[n:]
+		args = args[:n]
+	}
 	tr := &TraitRef{Trait: trait, Args: args}
 	sel := ic.selectTrait(tr, depth+1)
 	switch sel.Kind {
 	case SelImpl:
 		if it, ok := sel.Impl.Impl.Items[name]; ok && it.Kind == DefAssocTy {
-			return ic.tryNormalize(Subst(t.ImplAssocTy(it), sel.Args))
+			return ic.tryNormalize(Subst(t.ImplAssocTy(it), append(append([]Ty{}, sel.Args...), gat...)))
 		}
 		// default in trait
 		if it, ok := trait.Trait.Items[name]; ok && it.AssocTy.Default != nil {
 			ac := t.itemConv(it)
 			t.Generics(it)
 			dt := ac.lowerTy(it.AssocTy.Default)
-			return ic.tryNormalize(Subst(dt, args))
+			return ic.tryNormalize(Subst(dt, append(append([]Ty{}, args...), gat...)))
 		}
 	case SelObject:
 		for _, b := range self.Bindings {

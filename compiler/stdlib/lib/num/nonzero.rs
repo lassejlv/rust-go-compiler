@@ -124,17 +124,17 @@ macro_rules! __std_nonzero_common {
 
                 /// Returns the number of leading zeros in the binary representation of `self`.
                 #[inline]
-                pub const fn leading_zeros(self) -> u32 {
+                pub fn leading_zeros(self) -> u32 {
                     self.0.leading_zeros()
                 }
                 /// Returns the number of trailing zeros in the binary representation of `self`.
                 #[inline]
-                pub const fn trailing_zeros(self) -> u32 {
+                pub fn trailing_zeros(self) -> u32 {
                     self.0.trailing_zeros()
                 }
                 /// Returns the number of ones in the binary representation of `self`.
                 #[inline]
-                pub const fn count_ones(self) -> NonZero<u32> {
+                pub fn count_ones(self) -> NonZero<u32> {
                     NonZero(self.0.count_ones())
                 }
                 /// Multiplies two non-zero integers together, checking for overflow.

@@ -206,13 +206,29 @@ func (fcx *FnCtxt) analyzeCaptures() {
 		sort.Slice(locals, func(i, j int) bool { return us[locals[i]].order < us[locals[j]].order })
 		kind := 0
 		ci.Captures = nil
+		// a non-move async closure's future moves only the closure's params
+		var ownParams map[*Local]bool
+		if ce.MoveParamsOf != nil {
+			ownParams = map[*Local]bool{}
+			for _, p := range ce.MoveParamsOf.Params {
+				ast.Walk(p.Pat, func(n any) bool {
+					if ip, ok := n.(*ast.IdentPat); ok {
+						if pl := fcx.r.Locals[ip.ID]; pl != nil {
+							ownParams[pl] = true
+						}
+					}
+					return true
+				})
+			}
+		}
 		for _, l := range locals {
 			u := us[l]
 			copyTy := fcx.t.IsCopy(l.Ty)
 			c := &Capture{Local: l, Ty: l.Ty}
 			moved := u.value && !copyTy
+			isMove := ce.Move && (ownParams == nil || ownParams[l])
 			switch {
-			case ce.Move:
+			case isMove:
 				c.ByRef = false
 			case moved:
 				c.ByRef = false
@@ -267,7 +283,7 @@ func (w *capWalker) record(l *Local, ctx useCtx) {
 		case usePlaceMut:
 			u.mut = true
 		}
-		if c.Move {
+		if c.Move && c.MoveParamsOf == nil {
 			moveSeen = true
 		}
 	}

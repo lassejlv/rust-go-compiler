@@ -890,6 +890,9 @@ func (ac *astConv) assocTypeOn(base Ty, segs []*ast.PathSegment, sp lexer.Span) 
 	for _, seg := range segs {
 		name := seg.Ident.Name
 		next := ac.findAssocType(cur, name, sp)
+		if next != nil {
+			next = ac.applyGatArgs(next, cur, name, seg)
+		}
 		if next == nil {
 			t.Errorf(sp, "associated type `%s` not found for `%s`", name, cur)
 			return TyErr
@@ -897,6 +900,43 @@ func (ac *astConv) assocTypeOn(base Ty, segs []*ast.PathSegment, sp lexer.Span) 
 		cur = next
 	}
 	return cur
+}
+
+// gatArgs lowers the type arguments of a generic associated type segment
+// (`Self::Member<T>`); lifetimes are erased.
+func (ac *astConv) gatArgs(seg *ast.PathSegment) []Ty {
+	if seg == nil || seg.Args == nil || seg.Args.Parenthesized {
+		return nil
+	}
+	var out []Ty
+	for _, a := range seg.Args.Args {
+		if a.Type != nil {
+			out = append(out, ac.lowerTy(a.Type))
+		}
+	}
+	return out
+}
+
+// applyGatArgs attaches GAT arguments to a resolved associated type: a
+// projection carries them after the trait's args; an impl's own definition
+// has its GAT params substituted.
+func (ac *astConv) applyGatArgs(at Ty, cur Ty, name string, seg *ast.PathSegment) Ty {
+	gat := ac.gatArgs(seg)
+	if len(gat) == 0 {
+		return at
+	}
+	if at.Kind == TProjection {
+		args := append(append([]Ty{}, at.Args...), gat...)
+		return Projection(at.Def, args, at.Name)
+	}
+	// the impl's own `type Name<..> = ..` (Self inside the impl)
+	if ac.selfDef != nil && ac.selfDef.Kind == DefImpl {
+		if it, ok := ac.selfDef.Impl.Items[name]; ok && it.Kind == DefAssocTy {
+			full := append(ac.t.Generics(ac.selfDef).Identity(), gat...)
+			return ac.sub(Subst(ac.t.ImplAssocTy(it), full))
+		}
+	}
+	return at
 }
 
 // findAssocType finds `<cur as SomeTrait>::name`.

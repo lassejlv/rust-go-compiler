@@ -70,6 +70,11 @@ func (fcx *FnCtxt) checkMethodCall(x *ast.MethodCallExpr, expected Ty) Ty {
 	// before arguments and the result are coerced against expectations
 	fcx.selectWherePossible()
 	fcx.checkArgs(x.Args, ins, false, x.Span)
+	if o := fcx.shallow(out); o.Kind == TInfer && o.Sub == 0 {
+		// the result is a pending projection: resolve it now that the
+		// arguments are known, before it meets the caller's expectation
+		fcx.selectWherePossible()
+	}
 	kind := CallFn
 	if p.virtual {
 		kind = CallVirtual

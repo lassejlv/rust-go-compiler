@@ -208,37 +208,37 @@ macro_rules! __std_wrapping_impl {
 
                 /// Returns the number of ones in the binary representation of `self`.
                 #[inline]
-                pub const fn count_ones(self) -> u32 {
+                pub fn count_ones(self) -> u32 {
                     self.0.count_ones()
                 }
                 /// Returns the number of zeros in the binary representation of `self`.
                 #[inline]
-                pub const fn count_zeros(self) -> u32 {
+                pub fn count_zeros(self) -> u32 {
                     self.0.count_zeros()
                 }
                 /// Returns the number of trailing zeros in the binary representation of `self`.
                 #[inline]
-                pub const fn trailing_zeros(self) -> u32 {
+                pub fn trailing_zeros(self) -> u32 {
                     self.0.trailing_zeros()
                 }
                 /// Returns the number of leading zeros in the binary representation of `self`.
                 #[inline]
-                pub const fn leading_zeros(self) -> u32 {
+                pub fn leading_zeros(self) -> u32 {
                     self.0.leading_zeros()
                 }
                 /// Shifts the bits to the left by a specified amount, wrapping the truncated bits to the end.
                 #[inline]
-                pub const fn rotate_left(self, n: u32) -> Wrapping<$t> {
+                pub fn rotate_left(self, n: u32) -> Wrapping<$t> {
                     Wrapping(self.0.rotate_left(n))
                 }
                 /// Shifts the bits to the right by a specified amount, wrapping the truncated bits to the beginning.
                 #[inline]
-                pub const fn rotate_right(self, n: u32) -> Wrapping<$t> {
+                pub fn rotate_right(self, n: u32) -> Wrapping<$t> {
                     Wrapping(self.0.rotate_right(n))
                 }
                 /// Reverses the byte order of the integer.
                 #[inline]
-                pub const fn swap_bytes(self) -> Wrapping<$t> {
+                pub fn swap_bytes(self) -> Wrapping<$t> {
                     Wrapping(self.0.swap_bytes())
                 }
                 /// Raises self to the power of `exp`, using exponentiation by squaring.
@@ -263,7 +263,7 @@ macro_rules! __std_wrapping_impl {
                 }
                 /// Returns the number of ones in the binary representation of `self`.
                 #[inline]
-                pub const fn count_ones(self) -> u32 {
+                pub fn count_ones(self) -> u32 {
                     self.0.count_ones()
                 }
             }

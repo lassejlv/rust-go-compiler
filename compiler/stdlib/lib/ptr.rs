@@ -471,6 +471,12 @@ impl<T> NonNull<T> {
         NonNull { pointer: dangling::<T>() }
     }
 
+    /// Creates a new pointer with the given address.
+    #[inline]
+    pub fn with_addr(self, addr: crate::num::NonZeroUsize) -> Self {
+        NonNull { pointer: addr.get() as *const T }
+    }
+
     /// Creates a pointer with the given address and no provenance.
     #[inline]
     pub fn without_provenance(addr: crate::num::NonZeroUsize) -> Self {
@@ -615,7 +621,7 @@ impl<T> NonNull<T> {
     /// Creates a non-null raw slice from a thin pointer and a length.
     #[inline]
     pub fn slice_from_raw_parts(data: NonNull<T>, len: usize) -> NonNull<[T]> {
-        NonNull { pointer: intrinsics::slice_from_raw_parts(data.pointer, len) }
+        NonNull { pointer: unsafe { intrinsics::slice_from_raw_parts(data.pointer, len) } }
     }
 
     /// Returns a shared reference to the value (which may be uninitialized).
@@ -702,12 +708,6 @@ impl<T: ?Sized> NonNull<T> {
     #[inline]
     pub fn addr(self) -> crate::num::NonZeroUsize {
         unsafe { crate::num::NonZeroUsize::new_unchecked(self.pointer as *const u8 as usize) }
-    }
-
-    /// Creates a new pointer with the given address.
-    #[inline]
-    pub fn with_addr(self, addr: crate::num::NonZeroUsize) -> Self {
-        NonNull { pointer: addr.get() as *const u8 as *const T }
     }
 
     /// Converts from `&T` to `NonNull<T>`.

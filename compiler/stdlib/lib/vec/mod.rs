@@ -7,7 +7,6 @@ pub use self::drain::Drain;
 pub use self::into_iter::IntoIter;
 
 /// A splicing iterator for `Vec` (yields the removed elements).
-#[derive(Debug)]
 pub struct Splice<'a, I: Iterator + 'a> {
     removed: IntoIter<I::Item>,
     _marker: crate::marker::PhantomData<(&'a mut (), I)>,
@@ -33,6 +32,15 @@ impl<'a, I: Iterator> DoubleEndedIterator for Splice<'a, I> {
 }
 
 impl<'a, I: Iterator> ExactSizeIterator for Splice<'a, I> {}
+
+impl<'a, I: Iterator> fmt::Debug for Splice<'a, I>
+where
+    I::Item: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("Splice").field(&self.removed.as_slice()).finish()
+    }
+}
 
 use crate::alloc::{alloc_array, capacity_overflow, dealloc_array, realloc_array};
 use crate::cmp::Ordering;
