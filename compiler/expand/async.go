@@ -120,6 +120,15 @@ func desugarAsync(c *ast.Crate) error {
 				if k.Body != nil {
 					ast.RewriteExprs(k.Body, rewrite)
 				}
+				if k.Async && k.Body == nil {
+					// trait method declaration: return type becomes impl Future
+					k.Async = false
+					ret := k.Decl.Output
+					if ret == nil {
+						ret = &ast.TupleType{TypeBase: ast.TypeBase{Span: it.Span, ID: ast.NewID()}}
+					}
+					k.Decl.Output = futureOutputType(ret, it.Span)
+				}
 				if k.Async && k.Body != nil {
 					k.Async = false
 					ret := k.Decl.Output
