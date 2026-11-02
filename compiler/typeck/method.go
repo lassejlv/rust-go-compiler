@@ -255,7 +255,7 @@ func (fcx *FnCtxt) lookupMethod(recv Ty, name string, sp lexer.Span) *pick {
 				found.adjust = adj
 				tr := found.item.Parent
 				fcx.ic.obligations = append(fcx.ic.obligations, &Obligation{Pred: &Predicate{Trait: &TraitRef{Trait: tr, Args: found.parent}}, Span: sp})
-				if fcx.shallow(found.parent[0]).Kind == TDyn {
+				if st := fcx.shallow(found.parent[0]); st.Kind == TDyn && fcx.t.IsObjectMethod(found.item, st) {
 					found.virtual = true
 				}
 				return found

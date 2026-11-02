@@ -1004,7 +1004,19 @@ func (fc *fnGen) callExpr(x *ast.CallExpr, t Ty) string {
 		}
 		fp := fmt.Sprintf("((%s(*)(%s))((void**)(%s).meta)[3])", fc.ctype(t), strings.Join(pts, ", "), fat)
 		all := append([]string{fat + ".ptr"}, args...)
-		return fc.finishCall(fmt.Sprintf("%s(%s)", fp, strings.Join(all, ", ")), t)
+		res := fc.finishCall(fmt.Sprintf("%s(%s)", fp, strings.Join(all, ", ")), t)
+		if c.Ty.Def.LangItem == "fn_once" {
+			// the boxed FnOnce consumed its environment; free the box
+			// without dropping its contents
+			if pe, ok := unparen(x.Fn).(*ast.PathExpr); ok {
+				if vr := fc.r.Paths[pe.ID]; vr != nil && vr.Kind == typeck.VLocal {
+					if _, flag := fc.localPlace(vr.Local); flag != "" {
+						fc.line("%s = 0;", flag)
+					}
+				}
+			}
+		}
+		return res
 	}
 	fc.g.fatalf("unsupported call kind")
 	return ""
@@ -1053,7 +1065,7 @@ func (fc *fnGen) callResolved(d *Def, args []Ty, vals []string, ret Ty) string {
 
 func (fc *fnGen) callResolvedSpan(d *Def, args []Ty, vals []string, ret Ty, sp ast.Span) string {
 	if d.InTrait() {
-		if len(args) > 0 && args[0].Kind == TDyn {
+		if len(args) > 0 && args[0].Kind == TDyn && fc.g.tcx.IsObjectMethod(d, args[0]) {
 			// virtual call through a generic path
 			idx := fc.g.vtableIndex(args[0], d)
 			recv := vals[0]

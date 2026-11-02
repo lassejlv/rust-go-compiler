@@ -253,6 +253,10 @@ func (fc *fnGen) localPlace(l *typeck.Local) (string, string) {
 			if c.ByRef {
 				return fmt.Sprintf("(*env->c%d)", i), ""
 			}
+			if fc.closure.Kind == 2 && fc.g.needsDrop(c.Ty) {
+				// FnOnce body owns its by-value captures
+				return fmt.Sprintf("env->c%d", i), fmt.Sprintf("dfc%d", i)
+			}
 			return fmt.Sprintf("env->c%d", i), ""
 		}
 	}

@@ -617,7 +617,7 @@ func (t *Tcx) ResolveAssocFn(d *Def, args []Ty) (*Def, []Ty, bool) {
 	tg := t.Generics(trait)
 	ntrait := len(tg.Params)
 	self := args[0]
-	if self.Kind == TDyn {
+	if self.Kind == TDyn && t.IsObjectMethod(d, self) {
 		return d, args, false
 	}
 	tr := &TraitRef{Trait: trait, Args: args[:ntrait]}
@@ -660,4 +660,20 @@ func (ic *InferCtxt) opaqueBound(o Ty, trait *Def) *Predicate {
 		}
 	}
 	return nil
+}
+
+// IsObjectMethod reports whether trait method d is dispatched through the
+// vtable of trait object type dyn (its trait is the principal trait or one
+// of its supertraits).
+func (t *Tcx) IsObjectMethod(d *Def, dyn Ty) bool {
+	if dyn.Kind != TDyn || dyn.Def == nil || !d.InTrait() {
+		return false
+	}
+	obj := &TraitRef{Trait: dyn.Def, Args: append([]Ty{dyn}, dyn.Args...)}
+	for _, st := range t.AllSupertraits(obj) {
+		if st.Trait == d.Parent {
+			return true
+		}
+	}
+	return false
 }

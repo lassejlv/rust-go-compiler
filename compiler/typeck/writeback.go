@@ -58,8 +58,11 @@ func (fcx *FnCtxt) finCallee(c *Callee) {
 	}
 	c.Args = fcx.finList(c.Args)
 	c.Ty = fcx.fin(c.Ty)
-	if c.Kind == CallFn && c.Def != nil && c.Def.InTrait() && len(c.Args) > 0 && c.Args[0].Kind == TDyn {
+	if c.Kind == CallFn && c.Def != nil && c.Def.InTrait() && len(c.Args) > 0 && c.Args[0].Kind == TDyn && fcx.t.IsObjectMethod(c.Def, c.Args[0]) {
 		c.Kind = CallVirtual
+	}
+	if c.Kind == CallVirtual && c.Def != nil && len(c.Args) > 0 && !fcx.t.IsObjectMethod(c.Def, c.Args[0]) {
+		c.Kind = CallFn
 	}
 }
 

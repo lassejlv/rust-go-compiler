@@ -386,6 +386,19 @@ func (g *Gen) genClosure(t Ty) {
 		ps = append(ps, fmt.Sprintf("%s a%d", g.ctype(in), i))
 	}
 	fg.pushScope()
+	if ci.Kind == 2 {
+		// an FnOnce closure consumes its environment: by-value captures not
+		// moved out by the body are dropped when it returns
+		for i, c := range ci.Captures {
+			if !c.ByRef && g.needsDrop(c.Ty) {
+				place := fmt.Sprintf("env->c%d", i)
+				flag := fmt.Sprintf("dfc%d", i)
+				fg.line("uint8_t %s = 1;", flag)
+				fg.addDrop(place, flag, c.Ty)
+				fg.line("RG_CS_PUSH(&%s, %s, &%s);", place, g.dropFn(c.Ty), flag)
+			}
+		}
+	}
 	for i, l := range ci.Params {
 		fg.declLocal(l)
 		fg.line("%s = a%d;", fg.localName(l), i)
