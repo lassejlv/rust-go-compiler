@@ -267,6 +267,107 @@ func (fc *fnGen) intrinsic(d *Def, args []Ty, v []string, ret Ty, sp ast.Span) s
 			return fmt.Sprintf("((%s)__builtin_bswap64((uint64_t)(%s)))", ct(t), v[0])
 		}
 		return fmt.Sprintf("((%s)rg_bswap128(%s))", ct(t), v[0])
+	// ---- panics / unwinding
+	case "panic_impl_static":
+		return fmt.Sprintf("(rg_panic_impl_static(%s, %s, %s, %s), (Unit){})", v[0], v[1], v[2], v[3])
+	case "panic_resume":
+		return fmt.Sprintf("(rg_panic_resume(%s, %s), (Unit){})", v[0], v[1])
+	case "try_call":
+		return fmt.Sprintf("rg_try((Unit (*)(uint8_t*))(%s), %s)", v[0], v[1])
+	case "panic_message":
+		return "rg_panic_msg()"
+	case "panic_message_is_static":
+		return "((uint8_t)rg_pmsg_static)"
+	case "thread_panicking":
+		return "((uint8_t)(rg_panicking != 0))"
+	// ---- threads
+	case "thread_spawn":
+		return fmt.Sprintf("rg_thread_spawn((Unit (*)(uint8_t*))(%s), %s, %s)", v[0], v[1], v[2])
+	case "thread_join":
+		return fmt.Sprintf("(rg_thread_join(%s), (Unit){})", v[0])
+	case "thread_is_finished":
+		return fmt.Sprintf("rg_thread_is_finished(%s)", v[0])
+	case "thread_retain":
+		return fmt.Sprintf("(rg_thread_retain(%s), (Unit){})", v[0])
+	case "thread_release":
+		return fmt.Sprintf("(rg_thread_release(%s), (Unit){})", v[0])
+	case "thread_set_name":
+		return fmt.Sprintf("(rg_thread_set_name(%s, %s), (Unit){})", v[0], v[1])
+	case "thread_sleep_ns":
+		return fmt.Sprintf("(rg_sleep_ns(%s), (Unit){})", v[0])
+	case "thread_yield":
+		return "(sched_yield(), (Unit){})"
+	case "thread_is_main":
+		return "((uint8_t)rg_is_main)"
+	case "available_parallelism":
+		return "rg_available_parallelism()"
+	case "futex_wait":
+		return fmt.Sprintf("rg_futex_wait((uint32_t*)(%s), %s, %s)", v[0], v[1], v[2])
+	case "futex_wake":
+		return fmt.Sprintf("rg_futex_wake((uint32_t*)(%s))", v[0])
+	case "futex_wake_all":
+		return fmt.Sprintf("(rg_futex_wake_all((uint32_t*)(%s)), (Unit){})", v[0])
+	// ---- thread-local storage
+	case "tls_new_key":
+		return "rg_tls_new_key()"
+	case "tls_get":
+		return fmt.Sprintf("rg_tls_get(%s)", v[0])
+	case "tls_set":
+		return fmt.Sprintf("(rg_tls_set(%s, %s, (Unit (*)(uint8_t*))(%s)), (Unit){})", v[0], v[1], v[2])
+	// ---- atomics (all sequentially consistent)
+	case "atomic_load":
+		return fmt.Sprintf("((%s)__atomic_load_n(%s, __ATOMIC_SEQ_CST))", ct(arg(0)), v[0])
+	case "atomic_store":
+		return fmt.Sprintf("(__atomic_store_n(%s, %s, __ATOMIC_SEQ_CST), (Unit){})", v[0], v[1])
+	case "atomic_xchg":
+		return fmt.Sprintf("((%s)__atomic_exchange_n(%s, %s, __ATOMIC_SEQ_CST))", ct(arg(0)), v[0], v[1])
+	case "atomic_cxchg", "atomic_cxchg_weak":
+		weak := "0"
+		if name == "atomic_cxchg_weak" {
+			weak = "1"
+		}
+		tmp := fc.newName("cx")
+		exp := fc.newName("ce")
+		fc.line("%s %s;", ct(ret), tmp)
+		fc.line("%s %s = %s;", ct(arg(0)), exp, v[1])
+		fc.line("%s.f1 = __atomic_compare_exchange_n(%s, &%s, %s, %s, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);", tmp, v[0], exp, v[2], weak)
+		fc.line("%s.f0 = %s;", tmp, exp)
+		return tmp
+	case "atomic_xadd", "atomic_xsub", "atomic_and", "atomic_or", "atomic_xor", "atomic_nand":
+		op := map[string]string{"atomic_xadd": "add", "atomic_xsub": "sub", "atomic_and": "and", "atomic_or": "or", "atomic_xor": "xor", "atomic_nand": "nand"}[name]
+		return fmt.Sprintf("((%s)__atomic_fetch_%s(%s, %s, __ATOMIC_SEQ_CST))", ct(arg(0)), op, v[0], v[1])
+	case "atomic_max", "atomic_min":
+		return fmt.Sprintf("((%s)RG_ATOMIC_%s(%s, %s))", ct(arg(0)), strings.ToUpper(strings.TrimPrefix(name, "atomic_")), v[0], v[1])
+	case "atomic_fence":
+		return "(__atomic_thread_fence(__ATOMIC_SEQ_CST), (Unit){})"
+	// ---- time
+	case "time_monotonic_ns":
+		return "rg_clock_ns(CLOCK_MONOTONIC)"
+	case "time_realtime_ns":
+		return "rg_clock_ns(CLOCK_REALTIME)"
+	// ---- process environment
+	case "args_count":
+		return "((uint64_t)rg_argc)"
+	case "arg_ptr":
+		return fmt.Sprintf("((uint8_t*)rg_arg_ptr(%s))", v[0])
+	case "arg_len":
+		return fmt.Sprintf("rg_arg_len(%s)", v[0])
+	case "env_get":
+		return fmt.Sprintf("((uint8_t*)rg_env_get(%s, %s))", v[0], v[1])
+	case "env_count":
+		return "rg_env_count()"
+	case "env_entry":
+		return fmt.Sprintf("((uint8_t*)rg_env_entry(%s))", v[0])
+	case "cstr_len":
+		return fmt.Sprintf("((uint64_t)strlen((const char*)(%s)))", v[0])
+	case "process_id":
+		return "((uint32_t)getpid())"
+	case "stdin_fill":
+		return "rg_stdin_fill()"
+	case "stdin_ptr":
+		return "((uint8_t*)rg_stdin_ptr())"
+	case "stdin_consume":
+		return fmt.Sprintf("(rg_stdin_consume(%s), (Unit){})", v[0])
 	case "fmt_f64":
 		return fmt.Sprintf("rg_fmt_f64(%s, %s, %s, %s, %s)", v[0], v[1], v[2], v[3], v[4])
 	case "parse_f64":

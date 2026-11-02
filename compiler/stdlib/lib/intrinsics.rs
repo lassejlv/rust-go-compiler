@@ -53,6 +53,78 @@ extern "rust-intrinsic" {
     pub fn flush_stdout();
     pub fn panic_impl(msg: &str, file: &str, line: u32, col: u32) -> !;
 
+    // ---- panics and unwinding
+    /// Like `panic_impl`, but the payload is a `&'static str` (not a `String`).
+    pub fn panic_impl_static(msg: &str, file: &str, line: u32, col: u32) -> !;
+    /// Unwinds with the given payload message without invoking the panic hook.
+    pub fn panic_resume(msg: &str, is_static: bool) -> !;
+    /// Calls `f(data)`; returns true if it panicked (the panic was caught).
+    pub fn try_call(f: fn(*mut u8), data: *mut u8) -> bool;
+    /// The message of the last panic caught by `try_call` on this thread.
+    pub fn panic_message() -> &'static str;
+    /// Whether the last caught panic had a `&'static str` payload.
+    pub fn panic_message_is_static() -> bool;
+    /// Whether the current thread is unwinding.
+    pub fn thread_panicking() -> bool;
+
+    // ---- threads (handles are opaque; `thread_spawn` returns 0 on failure)
+    pub fn thread_spawn(entry: fn(*mut u8), data: *mut u8, stack_size: usize) -> u64;
+    pub fn thread_join(handle: u64);
+    pub fn thread_is_finished(handle: u64) -> bool;
+    pub fn thread_retain(handle: u64);
+    pub fn thread_release(handle: u64);
+    pub fn thread_set_name(p: *const u8, len: usize);
+    pub fn thread_sleep_ns(ns: u64);
+    pub fn thread_yield();
+    pub fn thread_is_main() -> bool;
+    pub fn available_parallelism() -> usize;
+
+    // ---- futex (timeout_ns = u64::MAX: no timeout; wait returns false on timeout)
+    pub fn futex_wait(p: *const u32, expected: u32, timeout_ns: u64) -> bool;
+    pub fn futex_wake(p: *const u32) -> bool;
+    pub fn futex_wake_all(p: *const u32);
+
+    // ---- thread-local storage (a destroyed slot reads as the address 1)
+    pub fn tls_new_key() -> usize;
+    pub fn tls_get(key: usize) -> *mut u8;
+    pub fn tls_set(key: usize, p: *mut u8, dtor: fn(*mut u8));
+
+    // ---- atomics (sequentially consistent; T = integer, bool or thin pointer)
+    pub fn atomic_load<T>(p: *const T) -> T;
+    pub fn atomic_store<T>(p: *mut T, v: T);
+    pub fn atomic_xchg<T>(p: *mut T, v: T) -> T;
+    pub fn atomic_cxchg<T>(p: *mut T, old: T, new: T) -> (T, bool);
+    pub fn atomic_cxchg_weak<T>(p: *mut T, old: T, new: T) -> (T, bool);
+    pub fn atomic_xadd<T>(p: *mut T, v: T) -> T;
+    pub fn atomic_xsub<T>(p: *mut T, v: T) -> T;
+    pub fn atomic_and<T>(p: *mut T, v: T) -> T;
+    pub fn atomic_or<T>(p: *mut T, v: T) -> T;
+    pub fn atomic_xor<T>(p: *mut T, v: T) -> T;
+    pub fn atomic_nand<T>(p: *mut T, v: T) -> T;
+    pub fn atomic_max<T>(p: *mut T, v: T) -> T;
+    pub fn atomic_min<T>(p: *mut T, v: T) -> T;
+    pub fn atomic_fence();
+
+    // ---- time
+    pub fn time_monotonic_ns() -> u64;
+    pub fn time_realtime_ns() -> u64;
+
+    // ---- process environment
+    pub fn args_count() -> usize;
+    pub fn arg_ptr(i: usize) -> *const u8;
+    pub fn arg_len(i: usize) -> usize;
+    /// Returns a NUL-terminated value, or null when the variable is not set.
+    pub fn env_get(name: *const u8, len: usize) -> *const u8;
+    pub fn env_count() -> usize;
+    /// The i-th `KEY=VALUE` entry (NUL-terminated).
+    pub fn env_entry(i: usize) -> *const u8;
+    pub fn cstr_len(p: *const u8) -> usize;
+    pub fn process_id() -> u32;
+    /// Buffers stdin data; returns the number of available bytes (0 = EOF, < 0 = error).
+    pub fn stdin_fill() -> isize;
+    pub fn stdin_ptr() -> *const u8;
+    pub fn stdin_consume(n: usize);
+
     // ---- integer arithmetic (T = any integer type)
     pub fn wrapping_add<T>(a: T, b: T) -> T;
     pub fn wrapping_sub<T>(a: T, b: T) -> T;

@@ -99,6 +99,20 @@ func (e *Expander) deriveItem(it *ast.Item) ([]*ast.Item, error) {
 		}
 		for i, name := range names {
 			dv, ok := derives[name]
+			if pm := e.ProcMacros[name]; pm != nil && pm.Kind == PMDerive {
+				var others []*ast.Attr
+				for _, oa := range it.Attrs {
+					if oa.Path != "derive" {
+						others = append(others, oa)
+					}
+				}
+				items, err := e.procDerive(pm, it, others, 0)
+				if err != nil {
+					return nil, err
+				}
+				out = append(out, items...)
+				continue
+			}
 			if !ok {
 				return nil, errAt(spans[i], "cannot find derive macro `%s` in this scope", name)
 			}

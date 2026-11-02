@@ -58,12 +58,16 @@ func (p *Parser) parseFnQuals() (q fnQuals, ok bool) {
 
 func (p *Parser) parseItemAfterAttrs(lo lexer.Pos, attrs []*ast.Attr) *ast.Item {
 	it := &ast.Item{Attrs: attrs}
+	start := p.idx
 	it.Vis = p.parseVis()
 	t := p.cur()
 	finish := func(kind ast.ItemKind) *ast.Item {
 		it.Kind = kind
 		it.Span = p.span(lo)
 		it.ID = ast.NewID()
+		if p.idx > start && p.idx <= len(p.toks) {
+			it.Tokens = append([]lexer.Token(nil), p.toks[start:p.idx]...)
+		}
 		return it
 	}
 	if q, ok := p.parseFnQuals(); ok {

@@ -40,6 +40,13 @@ func (e *Expander) macTokens(mac *ast.MacCall) (tts []ast.TokenTree, user bool, 
 		tts, err = bi(e, mac)
 		return tts, false, err
 	}
+	if pm := e.ProcMacros[name]; pm != nil && pm.Kind == PMBang {
+		tts, err = pm.Server.Call(PMBang, pm.Fn, nil, mac.Args, mac.Span)
+		if err != nil {
+			return nil, false, errAt(mac.Span, "in `%s!`: %v", name, err)
+		}
+		return tts, true, nil
+	}
 	return nil, false, errAt(mac.Span, "cannot find macro `%s` in this scope", name)
 }
 

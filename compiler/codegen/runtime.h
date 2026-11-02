@@ -14,11 +14,55 @@ typedef struct { void* ptr; uint64_t meta; } Fat;
 #define RG_I128_MIN (-RG_I128_MAX - 1)
 #define RG_U128_MAX (~(unsigned __int128)0)
 
+#include <pthread.h>
+#include <setjmp.h>
+#include <unistd.h>
+#include <time.h>
+#include <errno.h>
+#include <sched.h>
+#include <sys/syscall.h>
+#include <linux/futex.h>
+
+extern char** environ;
+
 static char rg_outbuf[1 << 16];
+static int rg_argc;
+static char** rg_argv;
+
+/* ---- per-thread runtime state ---- */
+/* cleanup stack for unwinding on panic (grows on demand) */
+typedef struct { void* p; void (*f)(void*); uint8_t* flag; } RgCleanup;
+static __thread RgCleanup* rg_cs;
+static __thread size_t rg_csn, rg_cscap;
+static __thread int rg_panicking;
+static __thread int rg_is_main;
+static __thread char* rg_tname;          /* thread name (NULL: "main" / "<unnamed>") */
+static __thread size_t rg_tname_len;
+/* the payload message of the last caught panic of this thread */
+static __thread char* rg_pmsg;
+static __thread size_t rg_pmsg_len;
+static __thread int rg_pmsg_static;
+typedef struct RgTry { jmp_buf jb; size_t csbase; struct RgTry* prev; } RgTry;
+static __thread RgTry* rg_try_top;
+static int rg_first_panic = 1;
+
+__attribute__((noinline)) static void rg_cs_grow(void) {
+  size_t n = rg_cscap ? rg_cscap * 2 : 256;
+  RgCleanup* p = (RgCleanup*)realloc(rg_cs, n * sizeof(RgCleanup));
+  if (!p) { fprintf(stderr, "rustgo: out of memory (cleanup stack)\n"); abort(); }
+  rg_cs = p; rg_cscap = n;
+}
+#define RG_CS_PUSH(P, F, FL) do { if (__builtin_expect(rg_csn >= rg_cscap, 0)) rg_cs_grow(); rg_cs[rg_csn] = (RgCleanup){ (void*)(P), (void (*)(void*))(F), (FL) }; rg_csn++; } while (0)
+#define RG_CS_POP(N) (rg_csn -= (N))
+
+static void rg_tls_run_dtors(void);
+static void rg_atexit(void) { rg_tls_run_dtors(); }
 
 static void rg_init(int argc, char** argv) {
-  (void)argc; (void)argv;
+  rg_argc = argc; rg_argv = argv;
+  rg_is_main = 1;
   setvbuf(stdout, rg_outbuf, _IOFBF, sizeof rg_outbuf);
+  atexit(rg_atexit);
 }
 
 static void rg_flush_stdout(void) { fflush(stdout); }
@@ -29,38 +73,70 @@ static void rg_write_stderr(const uint8_t* p, uint64_t n) { fflush(stdout); if (
 __attribute__((noreturn)) static void rg_exit(int32_t code) { fflush(stdout); exit(code); }
 __attribute__((noreturn)) static void rg_abort(void) { fflush(stdout); abort(); }
 
-/* cleanup stack for unwinding on panic */
-typedef struct { void* p; void (*f)(void*); uint8_t* flag; } RgCleanup;
-static RgCleanup rg_cs[1 << 18];
-static size_t rg_csn;
-static int rg_panicking;
-#define RG_CS_PUSH(P, F, FL) do { if (rg_csn < (1 << 18)) rg_cs[rg_csn] = (RgCleanup){ (void*)(P), (void (*)(void*))(F), (FL) }; rg_csn++; } while (0)
-#define RG_CS_POP(N) (rg_csn -= (N))
+static void rg_thread_name_get(const char** p, int* n) {
+  if (rg_tname) { *p = rg_tname; *n = (int)rg_tname_len; }
+  else if (rg_is_main) { *p = "main"; *n = 4; }
+  else { *p = "<unnamed>"; *n = 9; }
+}
 
-__attribute__((noreturn, cold)) static void rg_panic_raw(const char* msg, uint64_t mlen, const char* file, uint64_t flen, uint32_t line, uint32_t col) {
-  fflush(stdout);
-  fprintf(stderr, "\nthread 'main' panicked at %.*s:%u:%u:\n%.*s\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
-          (int)flen, file, line, col, (int)mlen, msg);
-  fflush(stderr);
-  if (rg_panicking) { fprintf(stderr, "thread 'main' panicked while processing panic. aborting.\n"); abort(); }
+/* Unwinds the current thread: runs the pending destructors down to the
+   innermost catch frame and jumps there, or exits the process (main thread)
+   / the thread (other threads) when there is none. */
+__attribute__((noreturn)) static void rg_unwind(const char* msg, uint64_t mlen, int is_static) {
+  size_t base = rg_try_top ? rg_try_top->csbase : 0;
   rg_panicking = 1;
-  while (rg_csn > 0) {
+  while (rg_csn > base) {
     rg_csn--;
-    if (rg_csn < (1 << 18)) {
-      RgCleanup c = rg_cs[rg_csn];
-      if (*c.flag) { *c.flag = 0; c.f(c.p); }
-    }
+    RgCleanup c = rg_cs[rg_csn];
+    if (*c.flag) { *c.flag = 0; c.f(c.p); }
+  }
+  if (rg_try_top) {
+    char* m = (char*)malloc(mlen + 1);
+    if (mlen) memcpy(m, msg, mlen);
+    m[mlen] = 0;
+    free(rg_pmsg);
+    rg_pmsg = m; rg_pmsg_len = mlen; rg_pmsg_static = is_static;
+    longjmp(rg_try_top->jb, 1);
   }
   fflush(stdout);
+  if (!rg_is_main) pthread_exit(NULL);
   exit(101);
 }
 
+__attribute__((noreturn, cold)) static void rg_panic_full(const char* msg, uint64_t mlen, const char* file, uint64_t flen, uint32_t line, uint32_t col, int is_static) {
+  const char* tn; int tl;
+  rg_thread_name_get(&tn, &tl);
+  fflush(stdout);
+  flockfile(stderr);
+  fprintf(stderr, "thread '%.*s' panicked at %.*s:%u:%u:\n%.*s\n", tl, tn, (int)flen, file, line, col, (int)mlen, msg);
+  if (__atomic_exchange_n(&rg_first_panic, 0, __ATOMIC_SEQ_CST))
+    fprintf(stderr, "note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n");
+  funlockfile(stderr);
+  fflush(stderr);
+  if (rg_panicking) { fprintf(stderr, "thread '%.*s' panicked while processing panic. aborting.\n", tl, tn); fflush(stdout); abort(); }
+  rg_unwind(msg, mlen, is_static);
+}
+
+__attribute__((noreturn, cold)) static void rg_panic_raw(const char* msg, uint64_t mlen, const char* file, uint64_t flen, uint32_t line, uint32_t col) {
+  rg_panic_full(msg, mlen, file, flen, line, col, 0);
+}
+
 __attribute__((noreturn, cold)) static void rg_panic_impl(Fat msg, Fat file, uint32_t line, uint32_t col) {
-  rg_panic_raw((const char*)msg.ptr, msg.meta, (const char*)file.ptr, file.meta, line, col);
+  rg_panic_full((const char*)msg.ptr, msg.meta, (const char*)file.ptr, file.meta, line, col, 0);
+}
+
+__attribute__((noreturn, cold)) static void rg_panic_impl_static(Fat msg, Fat file, uint32_t line, uint32_t col) {
+  rg_panic_full((const char*)msg.ptr, msg.meta, (const char*)file.ptr, file.meta, line, col, 1);
+}
+
+/* resume_unwind: unwinds without printing a message */
+__attribute__((noreturn, cold)) static void rg_panic_resume(Fat msg, uint8_t is_static) {
+  if (rg_panicking) { fflush(stdout); abort(); }
+  rg_unwind((const char*)msg.ptr, msg.meta, is_static);
 }
 
 __attribute__((noreturn, cold)) static void rg_panic_str(const char* msg, const char* file, uint32_t line, uint32_t col) {
-  rg_panic_raw(msg, strlen(msg), file, strlen(file), line, col);
+  rg_panic_full(msg, strlen(msg), file, strlen(file), line, col, 1);
 }
 
 __attribute__((noreturn, cold)) static void rg_panic_bounds(uint64_t idx, uint64_t len, const char* file, uint32_t line, uint32_t col) {
@@ -68,6 +144,198 @@ __attribute__((noreturn, cold)) static void rg_panic_bounds(uint64_t idx, uint64
   int n = snprintf(buf, sizeof buf, "index out of bounds: the len is %llu but the index is %llu", (unsigned long long)len, (unsigned long long)idx);
   rg_panic_raw(buf, n, file, strlen(file), line, col);
 }
+
+/* Calls f(data), catching a panic: returns 1 if f panicked (the message is
+   then available through rg_pmsg). */
+static uint8_t rg_try(Unit (*f)(uint8_t*), uint8_t* data) {
+  RgTry t;
+  t.csbase = rg_csn;
+  t.prev = rg_try_top;
+  rg_try_top = &t;
+  if (setjmp(t.jb) == 0) {
+    f(data);
+    rg_try_top = t.prev;
+    return 0;
+  }
+  rg_try_top = t.prev;
+  rg_panicking = 0;
+  return 1;
+}
+static Fat rg_panic_msg(void) { return (Fat){ rg_pmsg ? rg_pmsg : (char*)"", rg_pmsg ? rg_pmsg_len : 0 }; }
+
+/* ---- futex ---- */
+static uint8_t rg_futex_wait(uint32_t* p, uint32_t expected, uint64_t timeout_ns) {
+  struct timespec ts, *tsp = NULL;
+  if (timeout_ns != UINT64_MAX) {
+    ts.tv_sec = (time_t)(timeout_ns / 1000000000ull);
+    ts.tv_nsec = (long)(timeout_ns % 1000000000ull);
+    tsp = &ts;
+  }
+  long r = syscall(SYS_futex, p, FUTEX_WAIT_PRIVATE, expected, tsp, NULL, 0);
+  return !(r < 0 && errno == ETIMEDOUT);
+}
+static uint8_t rg_futex_wake(uint32_t* p) { return syscall(SYS_futex, p, FUTEX_WAKE_PRIVATE, 1, NULL, NULL, 0) > 0; }
+static void rg_futex_wake_all(uint32_t* p) { syscall(SYS_futex, p, FUTEX_WAKE_PRIVATE, 0x7fffffff, NULL, NULL, 0); }
+
+/* ---- thread-local storage (thread_local!) ---- */
+typedef struct { uint8_t* p; Unit (*dtor)(uint8_t*); } RgTlsSlot;
+static __thread RgTlsSlot* rg_tls;
+static __thread size_t rg_tls_cap;
+static __thread uint64_t* rg_tls_order;
+static __thread size_t rg_tls_n, rg_tls_ocap;
+static uint64_t rg_tls_next_key = 1;
+static uint64_t rg_tls_new_key(void) { return __atomic_fetch_add(&rg_tls_next_key, 1, __ATOMIC_SEQ_CST); }
+static uint8_t* rg_tls_get(uint64_t key) { return key < rg_tls_cap ? rg_tls[key].p : NULL; }
+static void rg_tls_set(uint64_t key, uint8_t* p, Unit (*dtor)(uint8_t*)) {
+  if (key >= rg_tls_cap) {
+    size_t n = rg_tls_cap ? rg_tls_cap : 16;
+    while (n <= key) n *= 2;
+    RgTlsSlot* q = (RgTlsSlot*)realloc(rg_tls, n * sizeof(RgTlsSlot));
+    if (!q) abort();
+    memset(q + rg_tls_cap, 0, (n - rg_tls_cap) * sizeof(RgTlsSlot));
+    rg_tls = q; rg_tls_cap = n;
+  }
+  if (dtor && !rg_tls[key].dtor) {
+    if (rg_tls_n == rg_tls_ocap) {
+      rg_tls_ocap = rg_tls_ocap ? rg_tls_ocap * 2 : 16;
+      rg_tls_order = (uint64_t*)realloc(rg_tls_order, rg_tls_ocap * sizeof(uint64_t));
+      if (!rg_tls_order) abort();
+    }
+    rg_tls_order[rg_tls_n++] = key;
+  }
+  rg_tls[key].p = p;
+  if (dtor) rg_tls[key].dtor = dtor;
+}
+/* Runs the destructors of this thread's thread-locals (most recently
+   registered first); a destroyed slot holds the sentinel pointer 1. */
+static void rg_tls_run_dtors(void) {
+  while (rg_tls_n > 0) {
+    uint64_t key = rg_tls_order[--rg_tls_n];
+    RgTlsSlot* s = &rg_tls[key];
+    uint8_t* p = s->p;
+    Unit (*d)(uint8_t*) = s->dtor;
+    s->dtor = NULL;
+    if (p && p != (uint8_t*)1 && d) { s->p = (uint8_t*)1; d(p); }
+  }
+}
+
+/* ---- threads ---- */
+typedef struct RgThread {
+  Unit (*entry)(uint8_t*);
+  uint8_t* data;
+  uint32_t finished; /* futex word */
+  int refs;
+} RgThread;
+
+static void rg_thread_release(uint64_t h) {
+  RgThread* th = (RgThread*)(uintptr_t)h;
+  if (th && __atomic_sub_fetch(&th->refs, 1, __ATOMIC_ACQ_REL) == 0) free(th);
+}
+static void rg_thread_retain(uint64_t h) {
+  RgThread* th = (RgThread*)(uintptr_t)h;
+  __atomic_add_fetch(&th->refs, 1, __ATOMIC_ACQ_REL);
+}
+
+static void rg_thread_cleanup(void* arg) {
+  RgThread* th = (RgThread*)arg;
+  free(rg_cs); rg_cs = NULL; rg_csn = rg_cscap = 0;
+  free(rg_tls); rg_tls = NULL; rg_tls_cap = 0;
+  free(rg_tls_order); rg_tls_order = NULL; rg_tls_n = rg_tls_ocap = 0;
+  free(rg_pmsg); rg_pmsg = NULL;
+  free(rg_tname); rg_tname = NULL;
+  __atomic_store_n(&th->finished, 1, __ATOMIC_SEQ_CST);
+  rg_futex_wake_all(&th->finished);
+  rg_thread_release((uint64_t)(uintptr_t)th);
+}
+
+static void* rg_thread_start(void* arg) {
+  RgThread* th = (RgThread*)arg;
+  pthread_cleanup_push(rg_thread_cleanup, th);
+  th->entry(th->data);
+  rg_tls_run_dtors();
+  pthread_cleanup_pop(1);
+  return NULL;
+}
+
+/* Starts a detached thread running entry(data); returns its handle (with
+   two references: the thread's and the caller's), or 0 on failure. */
+static uint64_t rg_thread_spawn(Unit (*entry)(uint8_t*), uint8_t* data, uint64_t stack) {
+  RgThread* th = (RgThread*)calloc(1, sizeof(RgThread));
+  if (!th) return 0;
+  th->entry = entry; th->data = data; th->refs = 2;
+  pthread_attr_t attr;
+  pthread_attr_init(&attr);
+  pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+  if (stack == 0) stack = 8u << 20;
+  if (stack < 65536) stack = 65536;
+  stack = (stack + 4095) & ~(uint64_t)4095;
+  pthread_attr_setstacksize(&attr, stack);
+  pthread_t t;
+  int r = pthread_create(&t, &attr, rg_thread_start, th);
+  pthread_attr_destroy(&attr);
+  if (r != 0) { free(th); return 0; }
+  return (uint64_t)(uintptr_t)th;
+}
+static void rg_thread_join(uint64_t h) {
+  RgThread* th = (RgThread*)(uintptr_t)h;
+  while (__atomic_load_n(&th->finished, __ATOMIC_SEQ_CST) == 0) rg_futex_wait(&th->finished, 0, UINT64_MAX);
+}
+static uint8_t rg_thread_is_finished(uint64_t h) {
+  return __atomic_load_n(&((RgThread*)(uintptr_t)h)->finished, __ATOMIC_SEQ_CST) != 0;
+}
+static void rg_thread_set_name(const uint8_t* p, uint64_t n) {
+  free(rg_tname);
+  rg_tname = (char*)malloc(n + 1);
+  if (n) memcpy(rg_tname, p, n);
+  rg_tname[n] = 0;
+  rg_tname_len = n;
+}
+static void rg_sleep_ns(uint64_t ns) {
+  struct timespec ts = { (time_t)(ns / 1000000000ull), (long)(ns % 1000000000ull) };
+  while (nanosleep(&ts, &ts) != 0 && errno == EINTR) {}
+}
+static uint64_t rg_clock_ns(clockid_t c) {
+  struct timespec ts;
+  clock_gettime(c, &ts);
+  return (uint64_t)ts.tv_sec * 1000000000ull + (uint64_t)ts.tv_nsec;
+}
+static uint64_t rg_available_parallelism(void) {
+  long n = sysconf(_SC_NPROCESSORS_ONLN);
+  return n > 0 ? (uint64_t)n : 1;
+}
+
+/* ---- atomics ---- */
+#define RG_ATOMIC_MAX(P, V) ({ __typeof__(*(P)) _o = __atomic_load_n((P), __ATOMIC_SEQ_CST), _v = (V); \
+  while (_o < _v && !__atomic_compare_exchange_n((P), &_o, _v, 1, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST)) {} _o; })
+#define RG_ATOMIC_MIN(P, V) ({ __typeof__(*(P)) _o = __atomic_load_n((P), __ATOMIC_SEQ_CST), _v = (V); \
+  while (_o > _v && !__atomic_compare_exchange_n((P), &_o, _v, 1, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST)) {} _o; })
+
+/* ---- environment / stdin ---- */
+static const uint8_t* rg_arg_ptr(uint64_t i) { return i < (uint64_t)rg_argc ? (const uint8_t*)rg_argv[i] : (const uint8_t*)""; }
+static uint64_t rg_arg_len(uint64_t i) { return i < (uint64_t)rg_argc ? strlen(rg_argv[i]) : 0; }
+static const uint8_t* rg_env_get(const uint8_t* p, uint64_t n) {
+  char buf[512];
+  char* k = n < sizeof buf ? buf : (char*)malloc(n + 1);
+  memcpy(k, p, n); k[n] = 0;
+  const uint8_t* r = (const uint8_t*)getenv(k);
+  if (k != buf) free(k);
+  return r;
+}
+static uint64_t rg_env_count(void) { uint64_t n = 0; while (environ && environ[n]) n++; return n; }
+static const uint8_t* rg_env_entry(uint64_t i) { return (const uint8_t*)environ[i]; }
+static uint8_t rg_stdin_buf[1 << 16];
+static size_t rg_stdin_pos, rg_stdin_end;
+/* Makes buffered stdin data available; returns its length (0 at EOF, -1 on error). */
+static int64_t rg_stdin_fill(void) {
+  if (rg_stdin_pos < rg_stdin_end) return (int64_t)(rg_stdin_end - rg_stdin_pos);
+  ssize_t n;
+  do { n = read(0, rg_stdin_buf, sizeof rg_stdin_buf); } while (n < 0 && errno == EINTR);
+  rg_stdin_pos = 0;
+  rg_stdin_end = n > 0 ? (size_t)n : 0;
+  return n;
+}
+static const uint8_t* rg_stdin_ptr(void) { return rg_stdin_buf + rg_stdin_pos; }
+static void rg_stdin_consume(uint64_t n) { rg_stdin_pos += n; if (rg_stdin_pos > rg_stdin_end) rg_stdin_pos = rg_stdin_end; }
 
 #define rg_unreachable() do { fflush(stdout); fprintf(stderr, "internal error: entered unreachable code (rustgo)\n"); abort(); } while (0)
 

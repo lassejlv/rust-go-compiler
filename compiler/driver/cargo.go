@@ -1,12 +1,11 @@
 package driver
 
 import (
+	"sort"
 	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
-	"sort"
 	"strings"
 
 	"rustgo/compiler/ast"
@@ -220,44 +219,69 @@ func BuildCargo(opts *Options, co *CargoOptions) error {
 	r := resolve.New()
 	r.AddCrate("std", stdCrate)
 	crates := map[string]*Crate{}
+	byKey := map[string]*crateUnit{}
+	for _, u := range units {
+		byKey[u.key] = u
+	}
+	pmMacros := map[string]map[string]*expand.ProcMacro{}
 	var binCrate *Crate
 	for i, u := range units {
 		if u.procMac {
-			// Proc-macro crates are not compiled into the program; their
-			// macros are not supported yet.
-			if opts.Verbose {
-				fmt.Fprintf(os.Stderr, "note: skipping proc-macro crate %s\n", u.name)
+			ms, err := buildProcMacroServer(opts, u, byKey, units)
+			if err != nil {
+				return fmt.Errorf("proc-macro crate %s: %v", u.name, err)
 			}
+			pmMacros[u.key] = ms
+			// a stub crate so that `use pm_crate::macro_name;` resolves
+			stub := r.AddCrate(u.key, &ast.Crate{})
+			stub.Edition = u.edition
+			names := make([]string, 0, len(ms))
+			for n := range ms {
+				names = append(names, n)
+			}
+			sort.Strings(names)
+			for _, n := range names {
+				md := NewDef(DefMod, n, stub.Def)
+				md.Mod = NewModule(md, stub.Root, stub, false)
+				stub.Root.Define(n, TypeNS, &NameBinding{Res: Res{Kind: ResDef, Def: md}})
+			}
+			crates[u.key] = stub
 			continue
 		}
-		dir := filepath.Dir(u.src)
-		c, err := LoadCrateFS(os.DirFS(dir), filepath.Base(u.src), dir+"/")
+		c, err := loadUnitAST(u)
 		if err != nil {
-			return fmt.Errorf("crate %s: %v", u.name, err)
+			return err
 		}
 		if i == len(units)-1 {
 			addMainWrapper(c)
 		}
 		exp.Config = &expand.CrateConfig{Features: u.features}
+		exp.ProcMacros = map[string]*expand.ProcMacro{}
+		for _, k := range u.deps {
+			for n, m := range pmMacros[k] {
+				exp.ProcMacros[n] = m
+			}
+		}
 		if err := exp.ExpandCrate(c, u.key); err != nil {
 			return fmt.Errorf("crate %s: %v", u.name, err)
 		}
 		exp.Config = nil
+		exp.ProcMacros = nil
 		cr := r.AddCrate(u.key, c)
 		cr.Edition = u.edition
 		cr.Externs = map[string]*Crate{}
-		names := make([]string, 0, len(u.deps))
-		for n := range u.deps {
-			names = append(names, n)
-		}
-		sort.Strings(names)
-		for _, n := range names {
+		for _, n := range sortedKeys(u.deps) {
 			if dc := crates[u.deps[n]]; dc != nil {
 				cr.Externs[n] = dc
 			}
 		}
 		crates[u.key] = cr
 		binCrate = cr
+	}
+	for _, ms := range pmMacros {
+		for _, m := range ms {
+			defer m.Server.Close()
+		}
 	}
 	r.ResolveImports()
 	if err := r.Err(); err != nil {

@@ -1,0 +1,6 @@
+Point with 3 fields: x, y, label
+Point { x: 1, y: 2, label: "p" }
+answer = 7
+enter compute [fast]
+exit compute
+compute = 43

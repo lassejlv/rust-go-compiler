@@ -23,6 +23,9 @@ type Expander struct {
 	// Config is the cfg configuration of the crate being expanded (set
 	// before each ExpandCrate call).
 	Config *CrateConfig
+	// ProcMacros are the procedural macros visible to the crate being
+	// expanded, by name.
+	ProcMacros map[string]*ProcMacro
 
 	crate      string
 	crateOrder []string
@@ -201,6 +204,9 @@ func (e *Expander) expandItemInList(it *ast.Item, depth int) ([]*ast.Item, error
 		} else {
 			err = f()
 		}
+		return res, err
+	}
+	if res, ok, err := e.procAttr(it, depth); ok || err != nil {
 		return res, err
 	}
 	if err := e.expandItem(it, depth); err != nil {

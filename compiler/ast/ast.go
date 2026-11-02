@@ -261,6 +261,9 @@ type Item struct {
 	Kind  ItemKind
 	Span  Span
 	ID    NodeID
+	// Tokens are the item's source tokens after its outer attributes
+	// (visibility included); used to feed procedural macros.
+	Tokens []Token
 }
 
 type ItemKind interface{ itemKind() }
