@@ -239,11 +239,29 @@ func (fcx *FnCtxt) revealOpaque(x Ty, sp lexer.Span) Ty {
 		fcx.errorf(sp, "recursive use of opaque type")
 		return TyErr
 	}
+	fcx.resolveClosureSigs(args)
 	fcx.t.CheckInstance(x.Def, args)
 	if h, ok := fcx.t.OpaqueHidden[o]; ok {
 		return h
 	}
 	return TyErr
+}
+
+// resolveClosureSigs resolves (through this body's inference context) the
+// signatures of this body's closures appearing in tys, so that other
+// instances type-checked now see concrete closure signatures.
+func (fcx *FnCtxt) resolveClosureSigs(tys []Ty) {
+	for _, t := range tys {
+		Walk(t, func(x Ty) bool {
+			if x.Kind == TClosure {
+				if ci := fcx.t.Closures[x]; ci != nil && ci.Results == fcx.r {
+					ci.Inputs = fcx.ic.resolveList(ci.Inputs)
+					ci.Output = fcx.ic.resolve(ci.Output)
+				}
+			}
+			return true
+		})
+	}
 }
 
 func sameArgs(a, b []Ty) bool {
@@ -580,6 +598,29 @@ func (fcx *FnCtxt) finishInference() {
 		}
 	}
 	fcx.selectWherePossible()
+	// Last resort: commit ambiguous obligations to their first impl.
+	if fcx.hasPendingInfer() {
+		fcx.ic.pickFirst = true
+		fcx.selectWherePossible()
+		fcx.ic.pickFirst = false
+		for _, ty := range fcx.r.NodeTypes {
+			fcx.defaultVars(ty)
+		}
+		fcx.selectWherePossible()
+	}
+}
+
+func (fcx *FnCtxt) hasPendingInfer() bool {
+	for _, o := range fcx.ic.obligations {
+		if !o.Done && o.Pred != nil {
+			for _, a := range o.Pred.Trait.Args {
+				if fcx.resolve(a).HasInfer() {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 func (fcx *FnCtxt) defaultVars(ty Ty) bool {

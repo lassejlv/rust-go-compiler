@@ -188,7 +188,9 @@ func (ic *InferCtxt) selectTrait(tr *TraitRef, depth int) Selection {
 		if ic.useEnv(tr) {
 			return ic.selectTrait(tr, depth+1)
 		}
-		return Selection{Kind: SelAmbig}
+		if !ic.pickFirst {
+			return Selection{Kind: SelAmbig}
+		}
 	}
 	_ = ambig
 	// Commit the unique candidate, confirming its where clauses so that

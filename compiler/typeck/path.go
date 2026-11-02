@@ -16,7 +16,9 @@ func (fcx *FnCtxt) resolvePath(p *ast.Path, ns Namespace) (resolve.PathResult, e
 // missing ones) given parent args.
 func (fcx *FnCtxt) ownArgs(d *Def, seg *ast.PathSegment, parent []Ty, sp lexer.Span) []Ty {
 	fcx.ac.scope = fcx.curMod()
+	fcx.ac.exprCtx = true
 	args := fcx.ac.genericArgsFor(d, seg, parent, sp, nil)
+	fcx.ac.exprCtx = false
 	for i, a := range args {
 		args[i] = fcx.normalizeInBody(a, sp)
 	}

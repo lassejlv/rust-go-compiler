@@ -15,6 +15,9 @@ type InferCtxt struct {
 	// env holds the (substituted) where-clauses of the body being checked;
 	// they guide inference when impl selection is ambiguous.
 	env []*TraitRef
+	// pickFirst makes ambiguous impl selection commit to the first
+	// candidate (last-resort fallback after inference).
+	pickFirst bool
 }
 
 func newInferCtxt(t *Tcx) *InferCtxt {

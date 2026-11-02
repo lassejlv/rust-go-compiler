@@ -452,6 +452,8 @@ type astConv struct {
 	opaqueFn *Def
 	// subst: instance args applied to Param types produced (bodies).
 	subst []Ty
+	// exprCtx: generic args of value/pattern paths (defaults are inferred).
+	exprCtx bool
 	// valueLookup lets bodies resolve const params / locals in const exprs.
 	valueLookup func(name string) (Ty, bool)
 }
@@ -710,7 +712,7 @@ func (ac *astConv) genericArgsFor(d *Def, seg *ast.PathSegment, prefix []Ty, sp 
 			}
 			continue
 		}
-		if p.Default != nil {
+		if p.Default != nil && !(ac.exprCtx && ac.infer != nil) {
 			// Defaults may refer to earlier params and Self.
 			dac := t.itemConv(d)
 			dt := dac.lowerTy(p.Default)
