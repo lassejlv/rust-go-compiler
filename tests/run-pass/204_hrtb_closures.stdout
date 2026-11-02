@@ -1,0 +1,21 @@
+["alpha", "beta", "gamma"]
+["x", "-", "z"]
+["alpha", "beta", "neg"]
+5 words, longest "jumped"
+ after-colon("key: value here") = Some("value here")
+  first-word("key: value here") = Some("key:")
+         ext("key: value here") = None
+ after-colon("file.tar.gz") = None
+  first-word("file.tar.gz") = Some("file.tar.gz")
+         ext("file.tar.gz") = Some("gz")
+ after-colon("") = None
+  first-word("") = None
+         ext("") = None
+  "123abc" -> rest "abc"
+  "42" -> rest ""
+digits ok = 2
+  "abc123" -> rest "123"
+  "Zed" -> rest ""
+ident ok = 2
+<21> true false
+["a=10", "b=20"]

@@ -1,0 +1,22 @@
+v1.4.2
+app / build 42 true x 2.5
+123--4
+1 + 2 * 3                    = 7
+"abc".len() as i32 - 5       = -2
+vec![1, 2, 3].iter().rev().collect::<Vec<_>>() = [3, 2, 1]
+matches!(Some(3), Some(x) if x > 2) = true
+matches!('q', 'a'..='m' | 'z') = false
+Tok::Op('+') == Tok::Op('+') = true
+["Point.x", "Point.y", "Point.z"]
+["fn", "let", "mut", "impl", "trait", "where", "async", "await"] (8 keywords)
+struct S < T : Clone > { a : Vec < T > }
+a + b * c
+if x { y } else { z }
+[]
+positive nums=1 idents=["x"]
+caught assertion: true
+alpha-beta
+raw "quoted" \n not escaped 27
+[98, 121, 116, 101, 115, 65, 10] 7
+line one continues here
+tab:	end

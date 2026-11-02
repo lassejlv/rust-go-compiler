@@ -1,0 +1,70 @@
+Config { name: "srv", retries: 3, tags: ["a", "b"], .. }
+Config {
+    name: "srv",
+    retries: 3,
+    tags: [
+        "a",
+        "b",
+    ],
+    ..
+}
+{"first": Handle(1, <fd>), "second": Handle(22, <sock>)}
+{
+    "first": Handle(
+        1,
+        <fd>,
+    ),
+    "second": Handle(
+        22,
+        <sock>,
+    ),
+}
+["usr", "lib"] {'x', 'y', 'z'} Opaque { .. } Unit
+[
+    "one",
+]
+{}
+{row0: [1, 2], row1: [3]}
+{
+    row0: [
+        1,
+        2,
+    ],
+}
+Pair { left: Leaf(1), right: Many([Leaf(2), Empty]) }
+Pair {
+    left: Leaf(
+        1,
+    ),
+    right: Many(
+        [
+            Leaf(
+                2,
+            ),
+            Empty,
+        ],
+    ),
+}
+Wrapper { label: "", data: None, map: {}, unit: (), arr: [0, 0, 0] }
+Wrapper {
+    label: "lbl",
+    data: Some(
+        (
+            7,
+            'q',
+        ),
+    ),
+    map: {
+        1: "one",
+        2: "two",
+    },
+    unit: (),
+    arr: [
+        -1,
+        0,
+        1,
+    ],
+}
+(1, "two", [3.0, 4.5], Some(()), None, Ok(5))
+"esc\"aped\n\ttext\\" '\''
+"unicode é ✓ \u{7f} \u{200b}" '\0'

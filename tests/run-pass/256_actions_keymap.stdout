@@ -1,0 +1,15 @@
+Err("empty component in \"ctrl--x\"")
+Err("no key in \"ctrl\"")
+Err("unexpected \"b\" in \"a-b\"")
+ctrl-c        Complete("editor::Copy")     handled=Some(true)
+ctrl-c        None                         handled=None
+ctrl-s        Complete("workspace::Save")  handled=Some(true)
+ctrl-k        Pending                      handled=None
+ctrl-w        Complete("workspace::CloseTab") handled=Some(true)
+ctrl-k        Pending                      handled=None
+x             None                         handled=None
+ctrl-shift-g  Complete("editor::GoToLine") handled=Some(true)
+ctrl-z        Complete("editor::Undo")     handled=Some(false)
+["copied selection", "saved file", "closed tab", "jumped to line 999"]
+true false false
+GoToLine(5) workspace::ToggleSidebar

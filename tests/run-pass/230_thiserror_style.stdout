@@ -1,0 +1,22 @@
+ok: Config { threads: 4, scale: 1.5, name: "fast" }
+error: missing key `threads`
+  [missing=true has_source=false]
+error: invalid integer for `threads`
+  caused by: invalid digit found in string
+  [missing=false has_source=true]
+error: invalid float
+  caused by: invalid float literal
+  [missing=false has_source=true]
+error: i/o failure
+  caused by: io error 13 reading config.ini
+  [missing=false has_source=true]
+error: while loading include: invalid float
+  caused by: invalid float
+    caused by: invalid float literal
+  [missing=false has_source=true]
+error: while loading include: invalid integer for `threads`
+  caused by: invalid integer for `threads`
+    caused by: invalid digit found in string
+  [missing=false has_source=true]
+missing key `k` / Missing { key: "k" }
+plain string error source=true

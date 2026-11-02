@@ -1,0 +1,18 @@
+"42"           decode=Ok(42)                             boxed=Ok(84)                     send=Ok(4)
+" 7 "          decode=Ok(7)                              boxed=Ok(14)                     send=Ok(6)
+""             decode=Err(low: empty input)              boxed=Err(low: empty input)      send=Err(empty input)
+"123456789"    decode=Err(low: too long (9 bytes))       boxed=Err(low: too long (9 bytes)) send=Err(too long (9 bytes))
+"-5"           decode=Err(other: negative: -5)           boxed=Err(other: negative: -5)   send=Ok(4)
+"abc"          decode=Err(parse: invalid digit found in string) boxed=Err(parse: invalid digit found in string) send=Ok(6)
+"�1"           decode=Err(utf8: invalid utf-8 sequence of 1 bytes from index 0) boxed=Err(utf8: invalid utf-8 sequence of 1 bytes from index 0) send=Err(invalid utf-8 sequence of 1 bytes from index 0)
+"13"           decode=Ok(13)                             boxed=Err(unlucky)               send=Ok(4)
+Some(50)
+Some(1)
+None
+Some("C") Some("D") None
+Ok([1, 2, 255])
+Err("number too large to fit in target type")
+Ok(60)
+Err("\"x\": invalid digit found in string")
+Some(3) None
+low: too long (99 bytes) | source is none: true

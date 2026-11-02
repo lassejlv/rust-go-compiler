@@ -454,3 +454,135 @@ func patHasBindings(r *typeck.Results, p ast.Pat) bool {
 	})
 	return found
 }
+
+// patMoves reports whether binding p moves a non-Copy value out of the
+// matched place.
+func (fc *fnGen) patMoves(p ast.Pat) bool {
+	moves := false
+	ast.Walk(p, func(n any) bool {
+		if ip, ok := n.(*ast.IdentPat); ok && fc.r.Paths[ip.ID] == nil {
+			if l := fc.r.Locals[ip.ID]; l != nil && !l.ByRef && !isZST(l.Ty) && !fc.g.tcx.IsCopy(l.Ty) {
+				moves = true
+			}
+		}
+		return !moves
+	})
+	return moves
+}
+
+// patBorrows reports whether p binds anything by reference.
+func (fc *fnGen) patBorrows(p ast.Pat) bool {
+	refs := false
+	ast.Walk(p, func(n any) bool {
+		if ip, ok := n.(*ast.IdentPat); ok {
+			if l := fc.r.Locals[ip.ID]; l != nil && l.ByRef {
+				refs = true
+			}
+		}
+		return !refs
+	})
+	return refs
+}
+
+// bindOwnedPat binds an irrefutable pattern from an owned place and takes
+// care of the parts the pattern does not move out. With a local, its drop
+// flag is cleared when parts were moved and the remainder is dropped at
+// scope end; with now=true (a temporary), the remainder is dropped
+// immediately unless the pattern borrows from it.
+func (fc *fnGen) bindOwnedPat(p ast.Pat, place string, t Ty, l *typeck.Local, now bool) {
+	sc := fc.scopes[len(fc.scopes)-1]
+	mark := len(sc.drops)
+	fc.declarePatLocals(p)
+	var moves []string
+	fc.pbind(p, pplace{s: place, unsized: t.IsUnsized()}, t, &moves, false)
+	mid := len(sc.drops)
+	// the remainder is dropped after the bindings (it was declared first)
+	defer func() {
+		if len(sc.drops) > mid {
+			res := append([]dropEntry(nil), sc.drops[mid:]...)
+			binds := append([]dropEntry(nil), sc.drops[mark:mid]...)
+			sc.drops = append(append(sc.drops[:mark], res...), binds...)
+		}
+	}()
+	if !fc.g.needsDrop(t) {
+		return
+	}
+	if l != nil {
+		if !fc.patMoves(p) {
+			return // the local is dropped whole
+		}
+		fc.line("%s = 0;", fc.allFlags(l))
+	}
+	fc.residualDrops(p, place, t, now && !fc.patBorrows(p))
+}
+
+// residualDrops drops (now) or schedules the drop of every part of place
+// that p does not move out.
+func (fc *fnGen) residualDrops(p ast.Pat, place string, t Ty, now bool) {
+	if !fc.g.needsDrop(t) {
+		return
+	}
+	whole := func(pl string, ty Ty) {
+		if !fc.g.needsDrop(ty) {
+			return
+		}
+		if now {
+			fc.line("%s(&%s);", fc.g.dropFn(ty), pl)
+			return
+		}
+		flag := fc.newName("drf")
+		fc.line("uint8_t %s = 1;", flag)
+		fc.addDrop(pl, flag, ty)
+		fc.line("RG_CS_PUSH(&%s, %s, &%s);", pl, fc.g.dropFn(ty), flag)
+	}
+	if p == nil || !fc.patMoves(p) {
+		whole(place, t)
+		return
+	}
+	fields := func(pats []ast.Pat, prefix string, fts []Ty, idx func(pi int) int, rest bool) {
+		covered := map[int]bool{}
+		if rest {
+			fc.seqFields(pats, len(fts), func(pi, fi int) {
+				covered[fi] = true
+				fc.residualDrops(pats[pi], fmt.Sprintf("%s.f%d", prefix, fi), fts[fi], now)
+			})
+		} else {
+			for pi := range pats {
+				fi := idx(pi)
+				covered[fi] = true
+				fc.residualDrops(pats[pi], fmt.Sprintf("%s.f%d", prefix, fi), fts[fi], now)
+			}
+		}
+		for fi, ft := range fts {
+			if !covered[fi] {
+				whole(fmt.Sprintf("%s.f%d", prefix, fi), ft)
+			}
+		}
+	}
+	switch x := p.(type) {
+	case *ast.ParenPat:
+		fc.residualDrops(x.Pat, place, t, now)
+	case *ast.TuplePat:
+		fields(x.Elems, place, t.Elems, nil, true)
+	case *ast.TupleStructPat:
+		v := fc.r.Variants[x.ID]
+		prefix := place
+		if t.Def.Adt.Kind == AdtEnum {
+			prefix = fc.g.enumPayload(t, place, v.Index)
+		}
+		fields(x.Elems, prefix, fc.g.fieldTypes(t, v.Index), nil, true)
+	case *ast.StructPat:
+		v := fc.r.Variants[x.ID]
+		prefix := place
+		if t.Def.Adt.Kind == AdtEnum {
+			prefix = fc.g.enumPayload(t, place, v.Index)
+		}
+		pats := make([]ast.Pat, len(x.Fields))
+		for i, f := range x.Fields {
+			pats[i] = f.Pat
+		}
+		fields(pats, prefix, fc.g.fieldTypes(t, v.Index), func(pi int) int { return v.FieldIndex(x.Fields[pi].Name.Name) }, false)
+	default:
+		// by-value binding of the whole place (or unsupported shape): moved
+	}
+}

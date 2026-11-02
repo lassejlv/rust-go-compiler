@@ -1,0 +1,13 @@
+Square(4 sides, area=49)
+Tri(3 sides, area=7.5)
+73.5
+2.7386127875258306
+sides total = 7
+Some(81)
+Some(4.0)
+None
+[(-3, "<-3>"), (0, "0"), (5, "<5>"), (12, "<12>")]
+true true
+[2, 1, 2, 255, 255]
+buffer len 10 first 0xab
+6

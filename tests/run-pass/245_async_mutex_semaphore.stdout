@@ -1,0 +1,15 @@
+task0 locked (round 0)
+task0 unlocking
+task1 locked (round 0)
+task1 unlocking
+task2 locked (round 0)
+task2 unlocking
+task0 locked (round 1)
+task0 unlocking
+task1 locked (round 1)
+task1 unlocking
+task2 locked (round 1)
+task2 unlocking
+data: ["0.0", "1.0", "2.0", "0.1", "1.1", "2.1"] polls=20
+start0 start1 end0 start2 end1 start3 end3 end2 start4 end4
+max concurrent=2 permits left=2 polls=17

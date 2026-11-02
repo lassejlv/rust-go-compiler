@@ -1,0 +1,13 @@
+left won: fast finished at 3 (started 0)
+then: slow finished at 8 (started 0)
+t=8
+ok: job finished at 10 (started 8)
+timed out at 14 (cost 10, limit 4)
+ok: job finished at 18 (started 14)
+tick 1 at 20
+tick 2 at 22
+tick 3 at 24
+job: long finished at 25 (started 18)
+ticks=3 final t=25
+ready left 1
+pending loses to 'z'

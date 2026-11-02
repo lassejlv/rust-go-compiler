@@ -1,0 +1,15 @@
+  flaky: attempt 1 failed: transient #1
+  flaky: attempt 2 failed: transient #2
+  flaky: attempt 3 ok 300
+flaky -> Ok(300)
+  broken: attempt 1 failed: always fails (1)
+  broken: attempt 2 failed: always fails (2)
+broken -> Err("broken gave up: always fails (2)")
+factory calls 3
+pipeline(5) = 40
+pipeline2(1) = 76
+apply_twice = 21
+apply_twice sq = 81
+["x:1", "yy:2", "zzz:3"]
+rev -> cba
+dup -> abcabc

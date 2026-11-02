@@ -1,0 +1,19 @@
+borrowed   plain text
+owned      a &lt; b &amp;&amp; c &gt; d
+owned      say &quot;hi&quot;
+borrowed   "one two"
+owned      "lots of space"
+borrowed   "x"
+[1, 5, 10, 15] true
+[2, 5, 10, 12] true
+[2, 5, 10, 12]
+app[borrowed] ["borrowed", "owned"]
+dynamic[owned] ["owned", "owned"] paths=["/usr", "/home/me"]
+1 cat (borrowed)
+2 cats (owned)
+3 cities (owned)
+1 key (borrowed)
+base+more owned len=9
+ab owned
+ok bytes borrowed / bad � byte owned
+eq=true

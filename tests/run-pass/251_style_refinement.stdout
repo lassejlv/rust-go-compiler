@@ -1,0 +1,34 @@
+base sets 6 fields
+idle            bg=Rgba(30, 30, 30, 255) pad=[4.0, 8.0, 4.0, 8.0] text=Rgba(220, 220, 220, 255) opacity=1 same_as_idle=true
+hover           bg=Rgba(50, 50, 60, 255) pad=[4.0, 8.0, 4.0, 8.0] text=Rgba(220, 220, 220, 255) opacity=1 same_as_idle=false
+press           bg=Rgba(10, 10, 80, 255) pad=[5.0, 8.0, 3.0, 8.0] text=Rgba(220, 220, 220, 255) opacity=1 same_as_idle=false
+disabled+hover  bg=Rgba(50, 50, 60, 255) pad=[4.0, 8.0, 4.0, 8.0] text=Rgba(128, 128, 128, 255) opacity=0.5 same_as_idle=false
+Style {
+    display: Flex,
+    width: 120.0,
+    height: 32.0,
+    padding: [
+        4.0,
+        8.0,
+        4.0,
+        8.0,
+    ],
+    background: Rgba(
+        30,
+        30,
+        30,
+        255,
+    ),
+    text_color: Rgba(
+        220,
+        220,
+        220,
+        255,
+    ),
+    font_family: "Sans",
+    opacity: 1.0,
+}
+ab = StyleRefinement { display: None, width: Some(20.0), height: Some(5.0), padding: None, background: None, text_color: None, font_family: Some("Mono"), opacity: None }
+ba width=Some(10.0) height=Some(5.0) font=Some("Mono")
+ab ⊇ b: true ab ⊇ a: false ba ⊇ a: true
+None Sans

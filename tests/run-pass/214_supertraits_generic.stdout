@@ -1,0 +1,15 @@
+[label#1 w=5] Hello
+  (a label with text "Hello")
+[component#2 w=20] <input value="typed">
+[label#3 w=12] Longer label
+  (a label with text "Longer label")
+*[component#9 w=20] <input value="">*
+[component#10 w=20] <input value="x">
+upcast: [component#9 w=20] <input value="">
+component: Input { id: 9, value: "", focused: true } kind=component
+widest: Some(5)
+u16be(48879) -> [190, 239]
+Some(513)
+utf8("hé") -> [104, 195, 169]
+Some("ok")
+None

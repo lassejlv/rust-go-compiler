@@ -1,0 +1,20 @@
+"rust"   -> Rust (rust)
+"RS"     -> Rust (rust)
+"tsx"    -> TypeScript (typescript)
+"Golang" -> Go (go)
+"java"   -> error: invalid Language "java"
+""       -> error: invalid Language ""
+[    rust    ][ typescript ][   python   ][     go     ]
+4 languages, max = Some(Go)
+[Hint, Info, Warning, Error]
+hint < info < warning < error
+Err(ParseEnumError { ty: "Severity", input: "fatal" })
+  Push 5
+  Push 7
+  Add
+  Pop
+  <bad 0x42>
+  Jmp 0
+  Halt
+255 Ok(Add) Err(33)
+48

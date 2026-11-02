@@ -1,0 +1,9 @@
+/echo    -> 200 "hello"
+/count   -> 200 "LOG [/count 200] 4 words"
+/secret  -> 200 "[/secret 200] the payload"
+/secret  -> 401 "[/secret 401] unauthorized"
+/upper   -> 201 "SHOUT"
+/missing -> 404 "no route /missing"
+[3, 22, 5, 4]
+b => sec-2
+a => first

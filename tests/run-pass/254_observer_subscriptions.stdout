@@ -1,0 +1,16 @@
+subscribers: 3
+  (edit notified 3)
+status: "5 chars" edits=1
+subscribers after once: 2 (once fired 1x)
+  (edit notified 2)
+status: "saved to /tmp/a.txt" edits=2
+after dropping log subscription: 1
+  (edit notified 1)
+log: ["Edited { len: 5 }", "Edited { len: 11 }", "Saved(\"/tmp/a.txt\")"]
+status strong=1 weak=1
+  status bar gone; unsubscribing
+subscribers: 0
+subscribers: 0
+temp set len 1
+dropped subscription after emitter was gone: ok
+buffer text "hello world!"

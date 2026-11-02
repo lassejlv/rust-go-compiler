@@ -1,0 +1,15 @@
+strong=1 weak=1
+sums [1300, 1225, 1250, 1275] total 5050
+after threads strong=1
+picked [1, 11, 21] weak now 1
+ptr_eq true
+clone Tracked(shared)
+after make_mut: ptr_eq false a.len 100 b.len 101
+get_mut on b (unique) true
+get_mut on a (has weak) false
+drop Tracked(shared) with 101 items
+upgrade before drop: shared
+drop Tracked(shared) with 100 items
+upgrade after drop: none
+counter 8000 strong 1
+end

@@ -1,0 +1,17 @@
+[[1, 2, 3], [4, 5, 6], [7, 8, 9]]
+[[1], [], [2, 3]]
+[6, 30, 0, 100]
+User{id=1, name="ada", admin=true}
+Post{id=9, author=1, title="Hello", tags=["intro"]}
+Empty{}
+["id", "name", "admin"] ["id", "author", "title", "tags"] []
+schema User (id: u32; name: String; admin: bool)
+schema Post (id: u32; author: u32; title: String; tags: Vec<String>)
+schema Empty ()
+[("width", 10), ("height", 20), ("depth", 31)]
+add(1, 2) = 3 [ok]
+add(-5, 5) = 0 [ok]
+clamp3(15, 0, 10) = 10 [ok]
+neg(7) = -7 [ok]
+answer() = 42 [FAIL]
+A:letters B:letters C:letters One:digits Two:digits Enter:special 

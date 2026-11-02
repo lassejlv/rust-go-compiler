@@ -1,0 +1,21 @@
+Modifiers(CONTROL | SHIFT) bits=0b00000101
+contains ctrl=true alt=false intersects(alt|shift)=true
+Modifiers(0x0)
+Modifiers(CONTROL | ALT | SHIFT | PLATFORM | FUNCTION) is_all=true
+Modifiers(ALT | PLATFORM | FUNCTION)
+Modifiers(SHIFT)
+Modifiers(ALT | PLATFORM | FUNCTION)
+Modifiers(PLATFORM | FUNCTION)
+Modifiers(PLATFORM)
+Some(Modifiers(CONTROL | ALT)) None
+Modifiers(CONTROL | ALT | SHIFT | PLATFORM | FUNCTION)
+Some(Modifiers(SHIFT))
+["ALT", "PLATFORM"]
+    ctrl-shift-p => Modifiers(CONTROL | SHIFT) + "p"
+           cmd-s => Modifiers(PLATFORM) + "s"
+               a => Modifiers(0x0) + "a"
+ fn-alt-ctrl-f12 => Modifiers(CONTROL | ALT | FUNCTION) + "f12"
+Perms(READ | WRITE) Perms(READ | WRITE | EXEC) Perms(READ | EXEC)
+Perms(WRITE | EXEC) false
+[Perms(0x0), Perms(EXEC), Perms(READ), Perms(READ | WRITE)]
+Perms(READ | EXEC)

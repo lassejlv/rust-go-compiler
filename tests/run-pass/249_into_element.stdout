@@ -1,0 +1,25 @@
+<div .root>
+  "static str"
+  "owned string"
+  "42"
+  "3.5"
+  "ada"
+  <button .btn>
+    "OK"
+  <button .btn.disabled>
+    "Cancel"
+  <div .list>
+    <div .item>
+      "0"
+      "ALPHA"
+    <div .item>
+      "1"
+      "BETA"
+    <div .item>
+      "2"
+      "GAMMA"
+    "…and more"
+  "1"
+  "2"
+  "3"
+lines=24

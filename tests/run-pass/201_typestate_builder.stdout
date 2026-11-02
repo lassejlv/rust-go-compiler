@@ -1,0 +1,15 @@
+Post https://example.com/api
+  Accept: text/plain
+  X-Trace: abc
+  <7 bytes body>
+  timeout=500ms
+true
+Get /index
+  timeout=30000ms
+Request { url: "/put", method: Put, headers: [], body: Some("42"), timeout_ms: 30000 }
+db is closed (0 sent)
+[db] opened
+db is open (2 sent)
+[db] closed after 2 messages
+db is closed (2 sent) -> 2
+sizes: 0 0

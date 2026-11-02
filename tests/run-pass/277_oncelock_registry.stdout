@@ -1,0 +1,21 @@
+t0 theme=dark prime=2
+t1 theme=dark prime=13
+t2 theme=dark prime=31
+t3 theme=dark prime=53
+t4 theme=dark prime=73
+t5 theme=dark prime=101
+t6 theme=dark prime=127
+t7 theme=dark prime=151
+init calls = 101 (expect 101)
+config keys ["font", "tab_size", "theme"]
+primes len 50 last 229
+registration winners per key: {"font_size": 1, "theme": 1, "vim_mode": 1}
+  font_size -> FontSize default "14"
+  theme -> Theme default "One Dark"
+  vim_mode -> Vim default "false"
+None
+Ok(())
+Err("second")
+Some("first") "first"
+6 6 6 computed=1
+Some([1, 2, 3]) None

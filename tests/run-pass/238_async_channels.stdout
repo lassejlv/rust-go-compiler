@@ -1,0 +1,21 @@
+producer0 sent 0
+producer0 sent 1
+consumer got 0
+consumer got 1
+producer0 sent 2
+producer0 sent 3
+producer0 done
+consumer got 2
+consumer got 3
+producer1 sent 100
+producer1 sent 101
+consumer got 100
+consumer got 101
+producer1 sent 102
+producer1 sent 103
+producer1 done
+consumer got 102
+consumer got 103
+consumer closed: n=8 sum=412
+odds: odd:1,odd:3,odd:101,odd:103
+polls=14

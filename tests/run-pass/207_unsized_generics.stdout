@@ -1,0 +1,17 @@
+<str slice>
+<owned>
+<3.5>
+<z>
+9 5
+true true true
+id=7 len=4 sum=10
+id=8 len=2 sum=30
+id=9 value=dynamic
+10
+3
+6 12 5
+true false
+Some("rs") Some("gz") None
+13 13
+600
+["A", "B", "C"]

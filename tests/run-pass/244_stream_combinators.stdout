@@ -1,0 +1,7 @@
+[10, 20, 40, 50, 70] polls=8
+[100, 200, 300] polls=5
+sum of squares 91 polls=14
+stream 0 -> ["n0", "n1", "n2"] polls=5
+stream 1 -> ["HELLO", "WORLD"] polls=4
+stream 2 -> [] polls=2
+(Some(20), Some(22), [24, 26, 28])

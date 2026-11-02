@@ -1,0 +1,25 @@
+["root", "root/src", "root/src/lib.rs", "root/src/main.rs", "root/docs"]
+src strong=2 weak=2
+lib parent = Some("src")
+after detach: lib path = src/lib.rs
+["root", "root/docs"]
+drop node root
+drop node docs
+root dropped; src still alive: src
+leaving scope
+drop node src
+drop node lib.rs
+drop node main.rs
+-- widgets
+true true true
+strong=1 weak=3
+drop widget 7 after 3 clicks
+handler after drop: false
+-- peers
+a strong=2 b strong=2
+cycle broken: a strong=2 b strong=1
+drop peer b
+b handle dropped
+drop peer a
+dangling weak upgrade: true
+end

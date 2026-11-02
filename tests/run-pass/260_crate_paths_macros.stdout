@@ -1,0 +1,12 @@
+[Info] starting app v1
+[Debug] debug detail (1, 2)
+[Warn] careful: 42
+std::collections::HashMap
+single
+area 7.00
+area 12.00
+area 6.00
+Rect { w: 1.0, h: 1.0 }
+a=2 b=3 tmp=100
+21 70 3 10
+Some(8) None

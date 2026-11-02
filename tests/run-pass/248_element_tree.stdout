@@ -1,0 +1,36 @@
+== width 400 ==
+Div(col) [0,0 266x76]
+  Text("Title bar") [4,4 72x16]
+  Div(row) [4,22 258x32]
+    Text("left pane") [4,22 72x16]
+    Div(col) [86,22 176x32]
+      Text("a") [86,22 8x16]
+      Text("this text wraps around") [86,38 176x16]
+  Text("status") [4,56 48x16]
+scene: 8 prims, 3 layers
+  Quad { bounds: [0,0 266x76], color: "white" }
+  Text { origin: Point { x: 4.0, y: 4.0 }, text: "Title bar" }
+  Text { origin: Point { x: 4.0, y: 22.0 }, text: "left pane" }
+  Quad { bounds: [86,22 176x32], color: "gray" }
+  Text { origin: Point { x: 86.0, y: 22.0 }, text: "a" }
+  Text { origin: Point { x: 86.0, y: 38.0 }, text: "this text wraps around" }
+  Border { bounds: [4,22 258x32] }
+  Text { origin: Point { x: 4.0, y: 56.0 }, text: "status" }
+== width 200 ==
+Div(col) [0,0 178x92]
+  Text("Title bar") [4,4 72x16]
+  Div(row) [4,22 170x48]
+    Text("left pane") [4,22 72x16]
+    Div(col) [86,22 88x48]
+      Text("a") [86,22 8x16]
+      Text("this text wraps around") [86,38 88x32]
+  Text("status") [4,72 48x16]
+scene: 8 prims, 3 layers
+  Quad { bounds: [0,0 178x92], color: "white" }
+  Text { origin: Point { x: 4.0, y: 4.0 }, text: "Title bar" }
+  Text { origin: Point { x: 4.0, y: 22.0 }, text: "left pane" }
+  Quad { bounds: [86,22 88x48], color: "gray" }
+  Text { origin: Point { x: 86.0, y: 22.0 }, text: "a" }
+  Text { origin: Point { x: 86.0, y: 38.0 }, text: "this text wraps around" }
+  Border { bounds: [4,22 170x48] }
+  Text { origin: Point { x: 4.0, y: 72.0 }, text: "status" }

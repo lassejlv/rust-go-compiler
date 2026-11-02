@@ -1,0 +1,8 @@
+sum = 5000050000
+sum sq mod = 46150000
+max digit sum = 45
+top words: [("the", 6), ("fox", 3), ("brown", 2), ("dog", 2)]
+distinct=14 total=24
+merged ok=true min=-4988 max=4989 median=-11
+grid diag [0, 1, 4, 9, 16, 25, 36, 49]
+hits=1594 log=["t0:500", "t1:334", "t2:250", "t3:200", "t4:167", "t5:143"]

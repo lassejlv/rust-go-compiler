@@ -1,0 +1,17 @@
+[t=  0] zero timer ready immediately at 0
+[t=  1] debounce: event@1 suppressed
+[t=  2] debounce: event@2 suppressed
+[t=  3] fast beat 1
+[t=  5] slow beat 1
+[t=  6] fast beat 2
+[t=  8] debounce: emit event@4
+[t=  9] fast beat 3
+[t= 10] slow beat 2
+[t= 12] fast beat 4
+[t= 14] debounce: emit event@10
+[t= 15] slow beat 3
+[t= 30] debounce: event@30 suppressed
+[t= 35] debounce: emit event@31
+[t= 35] debounce done, last=Some(31)
+[t=100] long timer at 100
+polls=21 jumps=16 end=100

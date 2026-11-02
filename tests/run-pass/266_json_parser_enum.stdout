@@ -1,0 +1,44 @@
+{"authors":[{"emoji":"🦀","name":"Aé"},{"name":"B \"quoted\"\n"}],"empty":{},"features":{"copilot":false,"ratio":-125,"vim":true},"list":[],"name":"zed","nothing":null,"version":[0,150,2]}
+{
+  "authors": [
+    {
+      "emoji": "🦀",
+      "name": "Aé"
+    },
+    {
+      "name": "B \"quoted\"\n"
+    }
+  ],
+  "empty": {},
+  "features": {
+    "copilot": false,
+    "ratio": -125,
+    "vim": true
+  },
+  "list": [],
+  "name": "zed",
+  "nothing": null,
+  "version": [
+    0,
+    150,
+    2
+  ]
+}
+"zed" 150 -125
+null null
+/authors/0/emoji   -> Some("\"🦀\"")
+/authors/1/name    -> Some("\"B \\\"quoted\\\"\\n\"")
+/version/2         -> Some("2")
+/features          -> Some("{\"copilot\":false,\"ratio\":-125,\"vim\":true}")
+/nope              -> None
+                   -> Some("{\"authors\":[{\"emoji\":\"🦀\",\"name\":\"Aé\"},{\"name\":\"B \\\"quoted\\\"\\n\"}],\"empty\":{},\"features\":{\"copilot\":false,\"ratio\":-125,\"vim\":true},\"list\":[],\"name\":\"zed\",\"nothing\":null,\"version\":[0,150,2]}")
+/version/x         -> None
+[1,"two",[3,4]] eq-roundtrip=true
+[1, 2        -> expected ',' or ']' at 5
+{"a" 1}      -> expected ':' at 5
+tru          -> expected true at 0
+"abc         -> unterminated string at 4
+[1,]         -> unexpected ']' at 3
+{} x         -> trailing characters at 3
+"\ud800"     -> lone surrogate at 7
+-            -> bad number "-" at 1

@@ -1,0 +1,24 @@
+#ff0000    -> #ff0000 #ff0000ff -> hsla(0, 100%, 50%, 1.00) -> #ff0000
+#0f0       -> #00ff00 #00ff00ff -> hsla(120, 100%, 50%, 1.00) -> #00ff00
+#1e90ff    -> #1e90ff #1e90ffff -> hsla(210, 100%, 56%, 1.00) -> #1e90ff
+#80808080  -> #80808080 #80808080 -> hsla(0, 0%, 50%, 0.50) -> #80808080
+#ffffff    -> #ffffff #ffffffff -> hsla(0, 0%, 100%, 1.00) -> #ffffff
+#000       -> #000000 #000000ff -> hsla(0, 0%, 0%, 1.00) -> #000000
+#c0ffee    -> #c0ffee #c0ffeeff -> hsla(164, 100%, 88%, 1.00) -> #c0ffee
+ff0000    -> Err(ColorParseError("missing '#': ff0000"))
+#12       -> Err(ColorParseError("bad length 2"))
+#gg0000   -> Err(ColorParseError("bad hex digit in #gg0000"))
+#1234567  -> Err(ColorParseError("bad length 7"))
+base hsla(220, 60%, 50%, 1.00)
+lighten #85a3e0
+darken #142952
+rotate #cc9933
+rotate -90 #33cc4c
+opacity #3366cc80
+blend #bfbfbf
+blend transparent #ff000080
+contrast 000000/ffffff = 21.00
+contrast 777777/ffffff = 4.48
+contrast 1e90ff/000000 = 6.49
+contrast ff0000/00ff00 = 2.91
+#d92626 #d9d926 #26d926 #26d9d9 #2626d9 #d926d9

@@ -1,0 +1,17 @@
+[1, 3, 5, 9]
+a/b/c
+1 + 4 + 9 + 16
+int 7
+int 7
+&int 7
+str "hi"
+Box<str "boxed">
+Rc<int 3>
+[Some(int 1), Nothing, Some(int 3)]
+Box<[Rc<int 4>]>
+Hello, user#42 (User { id: 42 })
+[1; 2; 4] mean=2.3333333333333335
+[1.5; 2.5] mean=2
+[x; y]
+  double 42
+  pfx-21

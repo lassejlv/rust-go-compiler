@@ -1,0 +1,16 @@
+Item { sku: "A-1", qty: 3, price: 9.99, note: None }
+Item { sku: "B-2", qty: 10, price: 0.5, note: Some("bulk, discounted") }
+Item { sku: "C-3", qty: 1, price: 100.0, note: Some("says \"hi\"") }
+Item { sku: "E-5", qty: 2, price: 2.5, note: Some("multi\nline note") }
+Item { sku: "G-7", qty: 4, price: 100.0, note: Some("last") }
+error: line 5: field `qty`: invalid digit found in string
+error: line 9: expected 4 fields, got 2
+total value 539.97
+plain,"with,comma","with ""quote"""
+" padded ","multi
+line",
+roundtrip ok: true
+[(1, ["a", "b", "c"]), (2, ["1", "x\ty", "3"])]
+"a,\"b\nc" -> Err(UnterminatedQuote { line: 1 })
+"a,b\"c\",d" -> Err(QuoteInField { line: 1, col: 4 })
+"\"ok\",\"\"" -> Ok([(1, ["ok", ""])])

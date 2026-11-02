@@ -239,7 +239,7 @@ func (g *Gen) genFunction(inst instance) {
 		l := r.Params[pi]
 		pi++
 		if l.Name == "__arg" {
-			fg.bindPat(p.Pat, fg.localName(l), l.Ty, true)
+			fg.bindOwnedPat(p.Pat, fg.localName(l), l.Ty, l, false)
 		}
 	}
 	v := fg.blockValue(fa.Body, r.RetTy)
@@ -412,7 +412,7 @@ func (g *Gen) genClosure(t Ty) {
 		fg.line("%s = a%d;", fg.localName(l), i)
 		fg.markInit(l)
 		if l.Name == "__arg" {
-			fg.bindPat(ci.Expr.Params[i].Pat, fg.localName(l), l.Ty, true)
+			fg.bindOwnedPat(ci.Expr.Params[i].Pat, fg.localName(l), l.Ty, l, false)
 		}
 	}
 	v := fg.coerceValue(ci.Expr.Body, ci.Output)

@@ -1,0 +1,11 @@
+calls=180 computes=20 hits=160
+computes == distinct keys: true
+["k1:0", "k2:1", "k3:7", "k4:2", "k5:5", "k6:8", "k7:16", "k8:3"]
+thread 0 first five: ["k1:0", "k2:1", "k3:7", "k4:2", "k5:5"]
+arc strong count for k7 (map + local): 2
+old snapshot still Settings { font_size: 12, plugins: ["git"] }
+prev before store font_size=16
+now Settings { font_size: 99, plugins: ["git", "lsp"] } version=5
+two readers: 3 1 try_write=false
+[1, 2, 3, 4] try_read=true
+[1, 2, 3, 4]

@@ -1,0 +1,12 @@
+c1 = c1 5
+total 30 title "Main (30)"
+notified [EntityId(1), EntityId(3), EntityId(1), EntityId(2)]
+["inner3=20", "c1=10"]
+counts {EntityId(1): 2, EntityId(2): 1, EntityId(3): 1}
+upgrade after dropping c1: 10
+gc []
+gc [EntityId(2)]
+panel upgrade: false
+c1 upgrade (still held by panel?): false
+entities left [EntityId(1), EntityId(3)]
+counts {EntityId(1): 0, EntityId(3): 0}

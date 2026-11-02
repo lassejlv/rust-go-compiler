@@ -1,0 +1,14 @@
+sum=7998000 expected=7998000 marks=[0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3]
+try_lock while held: false
+value 5
+try_lock after release: 10
+ticket total=3000 tickets issued=1500
+mask=ffffffffffffff55 ones=60
+Ok(10)
+Err(20)
+20 15
+Ok(1)
+Err(10) 10
+10 99
+3
+global 20 items, first Some(0) last Some(34)

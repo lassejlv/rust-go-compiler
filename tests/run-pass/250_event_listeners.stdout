@@ -1,0 +1,34 @@
+-- click at (10,8) path ["root", "sidebar", "button"]
+root capture mouse
+button bubble mouse(10,8 b0)
+button clicked -> stop
+-- click at (10,8) path ["root", "sidebar", "button"]
+root capture mouse
+button bubble mouse(10,8 b1)
+sidebar bubble mouse(10,8 b1)
+root bubble mouse(10,8 b1)
+-- click at (60,60) path ["root", "editor", "overlay"]
+root capture mouse
+overlay bubble mouse(60,60 b0)
+editor bubble mouse(60,60 b0)
+root bubble mouse(60,60 b0)
+-- click at (60,60) path ["root", "editor", "overlay"]
+root capture mouse
+overlay swallowed right click in capture
+-- click at (40,10) path ["root", "editor"]
+root capture mouse
+editor bubble mouse(40,10 b0)
+root bubble mouse(40,10 b0)
+-- click at (99,99) path ["root", "editor"]
+root capture mouse
+editor bubble mouse(99,99 b0)
+root bubble mouse(99,99 b0)
+-- key a
+root Capture key a
+editor key "a"
+root Bubble key a
+-- key s
+root Capture key s
+editor key "s" +ctrl
+save!
+[("clicks", 1), ("keys", 2)]

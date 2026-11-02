@@ -1,0 +1,14 @@
+base     len= 44 lines=3 depth=3 leaves=8 rc=1
+"The quick brown fox\njumps over\nthe lazy dog."
+insert   len= 48 lines=3 depth=4 leaves=10 rc=1
+"The quick red brown fox\njumps over\nthe lazy dog."
+delete   len= 42 lines=3 depth=5 leaves=9 rc=1
+"The red brown fox\njumps over\nthe lazy dog."
+chars: Some('T') Some('r') None
+big      len= 70 lines=1 depth=19 leaves=20 rc=1
+balanced len= 70 lines=1 depth=4 leaves=14 rc=1
+[0][1][2][3][4][5][6][7][8][9][10][11][12][13][14][15][16][17][18][19]
+shared   len= 70 lines=1 depth=19 leaves=20 rc=2
+edited   len= 72 lines=3 depth=20 leaves=23 rc=1
+orig unchanged: true
+héllo → ünïcode ✓ (17 chars)

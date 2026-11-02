@@ -1,0 +1,17 @@
+w0 step0
+w1 step0
+w2 step0
+w1 step1
+w2 step1
+joined w0 = 10
+w2 step2
+joined w1 = 30
+joined w2 = 60
+summary says total=100
+task 0 done (woken 1x)
+task 1 done (woken 2x)
+task 2 done (woken 3x)
+task 3 done (woken 6x)
+task 4 done (woken 1x)
+polls=18
+printer result=9 wakes=0

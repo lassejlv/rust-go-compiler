@@ -1,0 +1,5 @@
+items=150 sums=[40425, 40425, 40425] expected each=40425
+max queue len <= cap: true (cap 4), closed=true, empty=true
+push after close: Err(Closed((9, 9)))
+pop after close: None
+ping [1, 2, 3, 4, 5] pong [10, 20, 30, 40, 50] after-close None

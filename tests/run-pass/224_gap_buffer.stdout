@@ -1,0 +1,26 @@
+"Hello world" len=11 cursor=11 cap=16
+"Hello, world" cursor=6
+">> Hello, world!"
+del Some('H') Some('e') back Some(' ')
+">>llo, world!" cursor=2
+chars: Some('>') Some(',') None
+---
+fn main() {
+    println!("hi");
+}
+---
+println at 16 -> line/col (1, 4)
+---
+fn main() {
+    eprintln!("hi");
+}
+---
+undid Insert { at: 16, text: "eprintln!" }
+  now "fn main() {\n    (\"hi\");\n}\n"
+undid Delete { at: 16, text: "println!" }
+  now "fn main() {\n    println!(\"hi\");\n}\n"
+undid Insert { at: 12, text: "    println!(\"hi\");\n" }
+  now "fn main() {\n}\n"
+undid Insert { at: 0, text: "fn main() {\n}\n" }
+  now ""
+héllo NEW wörld len=15

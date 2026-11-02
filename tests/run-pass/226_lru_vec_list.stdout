@@ -1,0 +1,22 @@
+None
+None
+None
+order ["c", "b", "a"]
+get a = Some(1)
+order ["a", "c", "b"]
+evicted Some(("b", 2))
+order ["d", "a", "c"] rev ["c", "a", "d"]
+get b = None
+update c: None
+order ["c", "d", "a"] peek c=Some(33)
+evicted Some(("a", 1))
+evicted Some(("d", 4))
+order ["f", "e", "c"] hits=1 misses=1
+fib(60) = 1548008755920
+hits=57 misses=59 cached=[60, 58, 59, 57]
+miss alpha  evicted=None
+miss beta   evicted=None
+hit  alpha
+miss gamma  evicted=Some(("beta", 4))
+miss beta   evicted=Some(("alpha", 5))
+miss alpha  evicted=Some(("gamma", 5))

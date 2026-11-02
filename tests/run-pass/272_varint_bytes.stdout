@@ -1,0 +1,25 @@
+varint                    0 -> [00] -> Ok(0)
+varint                    1 -> [01] -> Ok(1)
+varint                  127 -> [7f] -> Ok(127)
+varint                  128 -> [80 01] -> Ok(128)
+varint                  300 -> [ac 02] -> Ok(300)
+varint                16384 -> [80 80 01] -> Ok(16384)
+varint           4294967295 -> [ff ff ff ff 0f] -> Ok(4294967295)
+varint 18446744073709551615 -> [ff ff ff ff ff ff ff ff ff 01] -> Ok(18446744073709551615)
+zigzag                    0 -> [00] -> Ok(0)
+zigzag                   -1 -> [01] -> Ok(-1)
+zigzag                    1 -> [02] -> Ok(1)
+zigzag                  -64 -> [7f] -> Ok(-64)
+zigzag                   64 -> [80 01] -> Ok(64)
+zigzag -9223372036854775808 -> [ff ff ff ff ff ff ff ff ff 01] -> Ok(-9223372036854775808)
+zigzag  9223372036854775807 -> [fe ff ff ff ff ff ff ff ff 01] -> Ok(9223372036854775807)
+encoded 32 bytes: 03 01 3f f8 00 00 00 00 00 00 02 03 00 00 05 08 c8 01 8f 03 03 06 68 c3 a9 6c 6c 6f ef be ad de
+roundtrip equal: true
+[Circle { r: 1.5 }, Poly([(0, 0), (-3, 4), (100, -200)]), Named("héllo", 3735928559)]
+truncated to  1: unexpected eof: need 1 bytes at 1
+truncated to  5: unexpected eof: need 8 bytes at 2
+truncated to 12: unexpected eof: need 1 bytes at 12
+truncated to 31: unexpected eof: need 4 bytes at 28
+Err(BadTag(9))
+Err(InvalidUtf8)
+Err(VarintTooLong)

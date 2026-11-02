@@ -1,0 +1,23 @@
+#[derive(Debug, Clone)]
+pub struct Point {
+    pub x: f32,
+    pub y: f32,
+    pub label: String,
+}
+
+impl Point {
+    pub fn new(x: f32, y: f32, label: String) -> Self {
+        Self { x, y, label }
+    }
+}
+name      |     value |  count
+----------+-----------+-------
+alpha     |     1.500 |     +3
+b         |   -22.250 |     -7
+gamma-ray |  1000.000 |    +12
+    total                    8
+true "abcdef-12345" len=12
+0,1,4,9,16!
+2 + 3 = 5
+[    1|2    |  3  ]
+[    inline] [inl] [0xff] [0o10] [1.2345e3]

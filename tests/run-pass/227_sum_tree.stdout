@@ -1,0 +1,19 @@
+summary TextSummary { chars: 52, bytes: 53, lines: 4 } height 1
+char   0 -> Some((Chunk("fn main"), CharOffset(0)))
+char   7 -> Some((Chunk("() {\n"), CharOffset(7)))
+char  12 -> Some((Chunk("    let"), CharOffset(12)))
+char  20 -> Some((Chunk(" x = \"é\";"), CharOffset(19)))
+char 100 -> None
+byte  17 -> Some((Chunk("    let"), ByteOffset(12)))
+byte  18 -> Some((Chunk("    let"), ByteOffset(12)))
+byte  19 -> Some((Chunk(" x = \"é\";"), ByteOffset(19)))
+line 0 -> Some("() {\n")
+line 1 -> Some("\n    pr")
+line 2 -> Some("(\"{x}\");\n")
+line 3 -> Some("}\n")
+items [9, 0, 14, 5, -4, 10, 1, 15, 6, -3, 11, 2, 16, 7, -2, 12, 3, 17, 8, -1]
+summary NumSummary { count: Count(20), sum: Sum(126), max: 17 } height 2
+index 7 -> Some((15, Count(7)))
+prefix sum > 40 at Some((15, Sum(35)))
+count 25 -> None
+empty NumSummary { count: Count(0), sum: Sum(0), max: 0 } None

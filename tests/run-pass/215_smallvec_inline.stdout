@@ -1,0 +1,16 @@
+[10, 20, 30] len=3 cap=4 spilled=false
+[10, 20, 30, 40] spilled=false
+[10, 20, 30, 40, 50] cap=8 spilled=true
+[5, 10, 20, 25, 30, 40, 50]
+removed 10 -> [5, 20, 25, 30, 40, 50]
+sorted desc [50, 40, 30, 25, 20, 5] sum=170
+after pops [50]
+["a", "bb", "ccc", "dddd"] spilled=true
+[1, 2, 3, 4]
+popped b
+spilled=true len=3
+drop b
+drop a
+drop c
+drop d
+end

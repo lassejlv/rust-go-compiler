@@ -449,7 +449,7 @@ func (fc *fnGen) letStmt(x *ast.LetStmt) {
 	if isPlaceExpr(x.Init) {
 		fc.bindPatPlace(x.Pat, op.s, it, op)
 	} else {
-		fc.bindPat(x.Pat, op.s, it, true)
+		fc.bindOwnedPat(x.Pat, op.s, it, nil, true)
 	}
 	_ = pt
 }
@@ -569,8 +569,7 @@ func (fc *fnGen) forExpr(x *ast.ForExpr) string {
 	someV := fc.g.tcx.Lang("Some").Variant
 	fc.line("if (!%s) goto %s;", fc.g.enumIs(optTy, n, someV), li.brk)
 	item := fmt.Sprintf("%s.f0", fc.g.enumPayload(optTy, n, someV.Index))
-	fc.declarePatLocals(x.Pat)
-	fc.bindPat(x.Pat, item, info.ItemTy, true)
+	fc.bindOwnedPat(x.Pat, item, info.ItemTy, nil, false)
 	fc.blockValue(x.Body, TyUnit)
 	fc.popScope()
 	fc.line("%s:;", li.cont)

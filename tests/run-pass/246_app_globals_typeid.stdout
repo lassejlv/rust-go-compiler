@@ -1,0 +1,16 @@
+has Theme=true Counter=false
+try Counter = None
+counter = Counter(10)
+new size 16 counter 30
+log: theme changed -> One Dark @ 14
+log: settings observer call #1: Settings { vim_mode: false, tab_size: 4 }
+log: theme changed -> One Dark (modified) @ 16
+log: settings observer call #2: Settings { vim_mode: true, tab_size: 2 }
+log: settings observer call #3: Settings { vim_mode: true, tab_size: 2 }
+removed Some(Counter(30)), has now false
+Theme Settings Vec<u8>
+true
+false
+u8 1
+&str str
+a Theme

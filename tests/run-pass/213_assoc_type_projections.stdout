@@ -1,0 +1,13 @@
+[97, 98, 99] "xy" {1, 2, 3}
+{'a': ["apple", "avocado"], 'b': ["banana", "blueberry"], 'c': ["cherry"]}
+{0: [3, 6, 9], 1: [1, 4, 7, 10], 2: [2, 5, 8]}
+15
+33
+bfs [0, 1, 2, 3, 4, 5]
+bfs [2, 3, 4, 5]
+10
+Some(9)
+"abc"
+34 15 6
+Some(5) Some(8) None
+"hello" "ell"

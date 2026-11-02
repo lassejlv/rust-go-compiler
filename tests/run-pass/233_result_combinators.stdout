@@ -1,0 +1,34 @@
+1 ada  domain=x.org      mgr=Err("user 1 has no manager")   email_len=9
+2 bob  domain=-          mgr=Ok("ADA")                      email_len=0
+3 cy   domain=y.com      mgr=Ok("BOB")                      email_len=8
+4 dee  domain=-          mgr=Err("manager 9 missing")       email_len=9
+Err("no user 42")
+Some(8) None
+None Some(4)
+Some((4, 'c')) None
+Some(4) Some(10)
+5 -2
+true true
+Some("yes") None
+[3]
+take Some(5) then None
+insert 7
+replace Some(7) now Some(8)
+Some([1, 2]) unzip (Some(1), Some("a"))
+Ok(11) Err(4)
+Some(10) Some("boom")
+10 4
+Ok(0)
+Err("10 too big")
+true true
+v=10
+Some(Ok(3))
+Err("x")
+[10]
+"a = 5"          => Ok(("a", 5))
+"b=x"            => Err("b: invalid digit found in string")
+"noeq"           => Err("no '=' in \"noeq\"")
+" = 3"           => Err("empty key")
+"long_key=  -12 " => Ok(("long_key", -12))
+2 ok, 1 err; values [("x", 1), ("z", 3)]
+Some("no '=' in \"y\"")

@@ -1,0 +1,25 @@
+arena len=7 chunks=3
+root
+  a
+    c
+      d
+        root (seen)
+  b
+    c (seen)
+    e
+      f
+root -> ["a", "b"] (visits 2)
+a -> ["c"] (visits 1)
+b -> ["c", "e"] (visits 1)
+c -> ["d"] (visits 2)
+d -> ["root"] (visits 1)
+e -> ["f"] (visits 1)
+f -> [] (visits 1)
+105 21 126 chunks=2
+ways(30) = 53798080
+hits=53 misses=29
+ways(35) = 1132436852
+hits=64 misses=34
+two borrows: 3 1 try_mut_ok=false
+[1, 2, 3, 4] try_mut_ok=false
+cell 30 take 30 after 0

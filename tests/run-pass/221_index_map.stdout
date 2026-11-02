@@ -1,0 +1,13 @@
+{"the": 3, "quick": 1, "brown": 1, "fox": 1, "jumps": 1, "over": 1, "lazy": 1, "dog": 1, "end": 1}
+len=9 the=Some(3) cat=None idx(fox)=Some(3)
+Some(("jumps", 1))
+{"the": 3, "quick": 10, "brown": 1, "fox": 1, "jumps": 1, "over": 1, "lazy": 1, "dog": 1, "end": 1, "new": -1}
+insert existing: Some(1)
+swap_remove brown: Some(1)
+["the", "quick", "new", "fox", "jumps", "over", "lazy", "dog", "end"] ok=true
+shift_remove over: Some(1)
+shift_remove zzz: None
+["the", "quick", "new", "fox", "jumps", "lazy", "dog", "end"] ok=true
+{"quick": 110, "fox": 107, "the": 103, "dog": 101, "end": 101, "jumps": 101, "lazy": 101, "new": 99} ok=true
+[("new", 99), ("lazy", 101)]
+idx(the)=Some(2) idx(dog)=Some(3)

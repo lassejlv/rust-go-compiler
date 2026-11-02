@@ -1,0 +1,16 @@
+div#root flex-col gap=8 w=800px
+  div#titlebar flex-row items-center justify-between p=4 w=100% bg=#2b2d30
+    div
+      "main.rs"
+    div rounded=2 bg=#ffcc00
+      "●"
+  div flex-row gap=4
+    div#sidebar p=8 border=1 w=16rem
+      "files"
+    div#editor p=16 m=4 rounded=6 w=auto
+      "fn main() {}"
+      "// cursor"
+  div#titlebar flex-row items-center justify-between p=0 m=8 gap=12 w=100% bg=#2b2d30
+    div
+      "status"
+last write wins: true

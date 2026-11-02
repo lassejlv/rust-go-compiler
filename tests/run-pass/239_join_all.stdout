@@ -1,0 +1,7 @@
+["c", "a", "e", "b"] polls=6
+[0, 1, 5, 14] polls=5
+30 "left+right" polls=6
+Ok(["item1", "item2", "item7"]) polls=4
+Err("fetch 13 failed") polls=2
+[1, 5, 0] polls=6
+[] polls=1

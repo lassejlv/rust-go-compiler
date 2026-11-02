@@ -1,0 +1,32 @@
+[1, 1] => ok 20
+[1, 2] => error: processing batch [1, 2]
+  alt: processing batch [1, 2]: parsing item text: invalid digit found in string
+  root: invalid digit found in string
+  downcast ParseIntError: InvalidDigit
+  debug:
+processing batch [1, 2]
+
+Caused by:
+    0: parsing item text
+    1: invalid digit found in string
+[3] => error: processing batch [3]
+  alt: processing batch [3]: looking up id 3: item 3 not found
+  root: item 3 not found
+  downcast NotFound id=3
+  debug:
+processing batch [3]
+
+Caused by:
+    0: looking up id 3
+    1: item 3 not found
+[] => error: no ids given
+  alt: no ids given
+  root: no ids given
+  debug:
+no ids given
+[1, 99] => error: id 99 is reserved
+  alt: id 99 is reserved
+  root: id 99 is reserved
+  debug:
+id 99 is reserved
+value was missing

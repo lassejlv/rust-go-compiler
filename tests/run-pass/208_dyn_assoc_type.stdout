@@ -1,0 +1,14 @@
+range(..7) -> [3, 4, 5, 6]
+fib -> [0, 1, 1, 2, 3, 5, 8, 13, 21, 34]
+nums: ["1", "2", "3"]
+chars: ["x", "y", "z"]
+empty: []
+[5, 5]
+["HEY!"]
+len(42) = 2
+parse(42) = Ok(42)
+shout(42) = "42!"
+len(x9) = 2
+parse(x9) = Err("invalid digit found in string")
+shout(x9) = "X9!"
+[0, 10, 20, 30]

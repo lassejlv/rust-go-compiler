@@ -1,0 +1,16 @@
+event Changed(3)
+label rendered "count = 3"
+flushed 2 effects
+event Changed(4)
+label rendered "count = 7"
+flushed 2 effects
+event Changed(5)
+label rendered "count = 12"
+event HitTen
+deferred: resetting counter
+label rendered "count = 0"
+flushed 5 effects
+event Changed(-1)
+label rendered "count = -1"
+flushed 2 effects
+label="count = -1" renders=5 counter=-1 total=11

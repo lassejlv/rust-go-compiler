@@ -1,0 +1,5 @@
+"42 x a b own dyn1 dyn2" (7 writes)
+[4, 4]
+printer: ["i5", "s\"abc\"", "s\"[\"", "i1", "i2", "i3", "s\"]\"", "s\"[\"", "s\"x\"", "s\"yz\"", "s\"]\""]
+summer: Summer(11, 10)
+generic: ["s\"[\"", "i10", "i-3", "s\"]\"", "s\"direct\""]

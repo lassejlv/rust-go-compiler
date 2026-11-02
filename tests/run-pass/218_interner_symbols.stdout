@@ -1,0 +1,12 @@
+[#0, #1, #2, #1, #2, #3, #0, #3, #1]
+unique=4
+    0 let  x2
+    1 x    x3
+    2 y    x2
+    3 z    x2
+Some(#0) None
+x again = #1, same = true
+["let", "x", "y", "z"]
+static:"hello" owned:"hello" eq=true len=5 upper=HELLO
+x,y,z starts_with_x=true
+arc strong count = 2

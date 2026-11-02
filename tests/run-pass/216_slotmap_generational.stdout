@@ -1,0 +1,10 @@
+EntityId(0v1) EntityId(1v1) EntityId(2v1) len=3
+b.me = Some(EntityId(1v1))
+a.hp = 17
+removed Some("b"), again None
+d = EntityId(1v2) (reuses slot), b valid? false d valid? true
+stale get: None
+Some("label-a") Some("label-d") None
+["EntityId(0v1)=a:17", "EntityId(1v2)=d:3"] len=2
+EntityId(2v2) EntityId(3v1)
+WindowId(0v1) WindowId(1v4) ["main", "popup"]
