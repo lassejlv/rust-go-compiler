@@ -424,13 +424,16 @@ func (e *Expander) vecMac(mac *ast.MacCall) ([]ast.TokenTree, error) {
 		return nil, err
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "{ let mut __v = ::std::vec::Vec::with_capacity(%dusize); ", len(args))
+	b.WriteString("::std::vec::from_array([")
 	var tts [][]ast.TokenTree
 	for i, a := range args {
-		fmt.Fprintf(&b, "__v.push($%d); ", i)
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		fmt.Fprintf(&b, "$%d", i)
 		tts = append(tts, a.tts)
 	}
-	b.WriteString("__v }")
+	b.WriteString("])")
 	return tmpl(mac.Span, b.String(), tts...)
 }
 

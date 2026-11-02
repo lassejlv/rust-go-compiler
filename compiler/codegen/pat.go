@@ -319,11 +319,14 @@ func (fc *fnGen) bindPatDeferred(p ast.Pat, place string, t Ty, op operand) []st
 	fc.declarePatLocals(p)
 	var moves []string
 	moved := false
+	var inits []string
+	fc.deferInits = &inits
 	fc.pbind(p, pplace{s: place, unsized: op.unsized || t.IsUnsized()}, t, &moves, false)
+	fc.deferInits = nil
 	if len(moves) > 0 {
 		moved = true
 	}
-	var out []string
+	out := inits
 	if moved && op.flag != "" && op.movable {
 		out = append(out, fmt.Sprintf("%s = 0;", op.flag))
 	}

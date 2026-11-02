@@ -377,6 +377,46 @@ type Module struct {
 	Items  []*Def // defs declared directly here (incl impls)
 	// Pending imports to resolve.
 	Imports []*Import
+	// AnonTraits are traits imported with `use Trait as _`.
+	AnonTraits []*Def
+	traitsInScope map[*Def]bool
+}
+
+// TraitsInScope returns the traits usable for method calls from module m
+// (items and imports of the enclosing block/module chain, globs, plus the
+// given prelude).
+func (m *Module) TraitsInScope(prelude *Module) map[*Def]bool {
+	if m.traitsInScope != nil {
+		return m.traitsInScope
+	}
+	set := map[*Def]bool{}
+	var addMod func(x *Module, seen map[*Module]bool)
+	addMod = func(x *Module, seen map[*Module]bool) {
+		if x == nil || seen[x] {
+			return
+		}
+		seen[x] = true
+		for _, b := range x.Types {
+			if b.Res.Def != nil && b.Res.Def.Kind == DefTrait {
+				set[b.Res.Def] = true
+			}
+		}
+		for _, t := range x.AnonTraits {
+			set[t] = true
+		}
+		for _, g := range x.Globs {
+			addMod(g, seen)
+		}
+	}
+	for x := m; x != nil; x = x.Parent {
+		addMod(x, map[*Module]bool{})
+		if !x.Block {
+			break
+		}
+	}
+	addMod(prelude, map[*Module]bool{})
+	m.traitsInScope = set
+	return set
 }
 
 // Import is a single resolved-or-pending `use` binding.

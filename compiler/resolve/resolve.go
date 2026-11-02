@@ -516,7 +516,13 @@ func (r *Resolver) tryImport(imp *Import, report bool) bool {
 }
 
 func (r *Resolver) bindImport(m *Module, name string, ns Namespace, res Res, sp lexer.Span) {
-	if name == "_" || name == "" {
+	if name == "_" {
+		if res.Def != nil && res.Def.Kind == DefTrait {
+			m.AnonTraits = append(m.AnonTraits, res.Def)
+		}
+		return
+	}
+	if name == "" {
 		return
 	}
 	tbl := m.Types

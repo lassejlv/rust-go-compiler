@@ -108,7 +108,11 @@ func (fcx *FnCtxt) lookupMethod(recv Ty, name string, sp lexer.Span) *pick {
 		}
 	}
 	var traitCands []methodCand
+	inScope := fcx.curMod().TraitsInScope(fcx.t.R.Prelude)
 	for _, tr := range fcx.t.traitsByItem[name] {
+		if !inScope[tr] {
+			continue
+		}
 		item := tr.Trait.Items[name]
 		if item.Kind != DefFn || !item.Fn.HasSelf {
 			continue

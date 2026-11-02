@@ -44,6 +44,9 @@ type fnGen struct {
 	declared map[*typeck.Local]bool
 	// split records locals with per-field drop flags (partial moves).
 	split map[*typeck.Local]map[int]bool
+	// deferInits collects drop-flag initializations of match bindings until
+	// the arm's guard has succeeded.
+	deferInits *[]string
 }
 
 func newFnGen(g *Gen, r *typeck.Results) *fnGen {
@@ -233,6 +236,10 @@ func (fc *fnGen) declLocal(l *typeck.Local) {
 
 func (fc *fnGen) markInit(l *typeck.Local) {
 	if fc.g.needsDrop(l.Ty) {
+		if fc.deferInits != nil {
+			*fc.deferInits = append(*fc.deferInits, fmt.Sprintf("%s = 1;", fc.allFlags(l)))
+			return
+		}
 		fc.line("%s = 1;", fc.allFlags(l))
 	}
 }
@@ -693,8 +700,8 @@ func (fc *fnGen) ifExpr(x *ast.IfExpr, t Ty) string {
 	endL := fc.newName("endif")
 	fc.line("{")
 	fc.ind++
-	fc.pushScope()
 	depth := len(fc.scopes)
+	fc.pushScope()
 	fc.condJump(x.Cond, elseL, depth)
 	v := fc.blockValue(x.Then, t)
 	if res != "" {
@@ -749,8 +756,8 @@ func (fc *fnGen) matchExpr(x *ast.MatchExpr, t Ty) string {
 		next := fc.newName("arm")
 		fc.line("{")
 		fc.ind++
-		fc.pushScope()
 		depth := len(fc.scopes)
+		fc.pushScope()
 		test := fc.patTest(arm.Pat, op.s, st)
 		fc.line("if (!(%s)) goto %s;", test, next)
 		fc.declarePatLocals(arm.Pat)
