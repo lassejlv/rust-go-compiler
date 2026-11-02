@@ -77,6 +77,23 @@ impl<T> Option<T> {
         }
     }
 
+    /// Returns a mutable slice of the contained value, if any.
+    pub fn as_mut_slice(&mut self) -> &mut [T] {
+        match *self {
+            Some(ref mut x) => crate::slice::from_mut(x),
+            None => &mut [],
+        }
+    }
+
+    /// Maps the contained value with `f`, or returns the default value of `U` if `None`.
+    #[inline]
+    pub fn map_or_default<U: Default, F: FnOnce(T) -> U>(self, f: F) -> U {
+        match self {
+            Some(t) => f(t),
+            None => U::default(),
+        }
+    }
+
     /// Returns a slice of the contained value, if any.
     pub fn as_slice(&self) -> &[T] {
         match *self {

@@ -3,7 +3,7 @@
 //! In alternate (`{:#?}`) mode every field is written with one more level of
 //! indentation, which the `Formatter` applies after each newline.
 
-use super::{Debug, Formatter, Result};
+use super::{Debug, Display, Formatter, Result};
 
 /// A struct to help with `fmt::Debug` implementations (`Formatter::debug_struct`).
 #[must_use]
@@ -462,4 +462,32 @@ fn pretty_map_key<K: Debug + ?Sized>(fmt: &mut Formatter<'_>, has_fields: bool, 
 fn pretty_map_key_inner<K: Debug + ?Sized>(fmt: &mut Formatter<'_>, key: &K) -> Result {
     key.fmt(fmt)?;
     fmt.write_str(": ")
+}
+
+/// Creates a type whose `Debug` and `Display` impls are provided with the function `f`.
+pub fn from_fn<F: Fn(&mut Formatter<'_>) -> Result>(f: F) -> FromFn<F> {
+    FromFn(f)
+}
+
+/// Implements `Debug` and `Display` using a function.
+pub struct FromFn<F>(F)
+where
+    F: Fn(&mut Formatter<'_>) -> Result;
+
+impl<F> Debug for FromFn<F>
+where
+    F: Fn(&mut Formatter<'_>) -> Result,
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        (self.0)(f)
+    }
+}
+
+impl<F> Display for FromFn<F>
+where
+    F: Fn(&mut Formatter<'_>) -> Result,
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        (self.0)(f)
+    }
 }

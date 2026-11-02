@@ -130,6 +130,12 @@ impl<T: Copy> Cell<T> {
 }
 
 impl<T: ?Sized> Cell<T> {
+    /// Returns a `&Cell<T>` from a `&mut T`.
+    #[inline]
+    pub fn from_mut(t: &mut T) -> &Cell<T> {
+        unsafe { &*(t as *mut T as *const Cell<T>) }
+    }
+
     /// Returns a raw pointer to the underlying data in this cell.
     #[inline]
     pub const fn as_ptr(&self) -> *mut T {
@@ -709,5 +715,22 @@ impl<T, F: FnOnce() -> T> Deref for LazyCell<T, F> {
     type Target = T;
     fn deref(&self) -> &T {
         LazyCell::force(self)
+    }
+}
+
+impl<T> Cell<[T]> {
+    /// Returns a `&[Cell<T>]` from a `&Cell<[T]>`.
+    #[inline]
+    pub fn as_slice_of_cells(&self) -> &[Cell<T>] {
+        let p = self.as_ptr();
+        unsafe { crate::slice::from_raw_parts(p as *const T as *const Cell<T>, (*p).len()) }
+    }
+}
+
+impl<T, const N: usize> Cell<[T; N]> {
+    /// Returns a `&[Cell<T>; N]` from a `&Cell<[T; N]>`.
+    #[inline]
+    pub fn as_array_of_cells(&self) -> &[Cell<T>; N] {
+        unsafe { &*(self as *const Cell<[T; N]> as *const [Cell<T>; N]) }
     }
 }

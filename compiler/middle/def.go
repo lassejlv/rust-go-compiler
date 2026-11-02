@@ -279,7 +279,11 @@ type Predicate struct {
 func (p *Predicate) Subst(args []Ty) *Predicate {
 	q := &Predicate{Trait: p.Trait.Subst(args), Maybe: p.Maybe}
 	for _, b := range p.Bindings {
-		q.Bindings = append(q.Bindings, Binding{b.Name, Subst(b.Ty, args)})
+		nb := Binding{Name: b.Name, Ty: Subst(b.Ty, args)}
+		for _, a := range b.Args {
+			nb.Args = append(nb.Args, Subst(a, args))
+		}
+		q.Bindings = append(q.Bindings, nb)
 	}
 	return q
 }

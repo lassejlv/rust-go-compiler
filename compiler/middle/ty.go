@@ -87,6 +87,7 @@ func IntTyByName(s string) (IntTy, bool) {
 type Binding struct {
 	Name string
 	Ty   Ty
+	Args []Ty // generic associated type args (`Item<T> = ...`), usually nil
 }
 
 // Ty is an interned type: pointer equality is structural equality.
@@ -516,7 +517,7 @@ func Fold(t Ty, f func(Ty) Ty) Ty {
 				copy(nb, t.Bindings[:i])
 			}
 			if nb != nil {
-				nb[i] = Binding{b.Name, y}
+				nb[i] = Binding{Name: b.Name, Ty: y, Args: b.Args}
 			}
 		}
 		if nb != nil {

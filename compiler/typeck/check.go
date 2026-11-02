@@ -520,7 +520,7 @@ func (fcx *FnCtxt) selectWherePossible() {
 				}
 			}
 			for _, b := range o.Pred.Bindings {
-				n := ic.normalizeBinding(tr, b.Name, 0)
+				n := ic.normalizeBinding(tr, b.Name, 0, b.Args...)
 				if n == nil {
 					v := ic.newVar()
 					for _, st := range fcx.t.AllSupertraits(tr) {

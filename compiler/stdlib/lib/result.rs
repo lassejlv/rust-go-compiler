@@ -105,6 +105,15 @@ impl<T, E> Result<T, E> {
         }
     }
 
+    /// Maps the `Ok` value with `f`, or returns the default value of `U` if `Err`.
+    #[inline]
+    pub fn map_or_default<U: Default, F: FnOnce(T) -> U>(self, f: F) -> U {
+        match self {
+            Ok(t) => f(t),
+            Err(_) => U::default(),
+        }
+    }
+
     /// Returns the provided default (if `Err`), or applies a function to the contained value (if `Ok`).
     #[inline]
     pub fn map_or<U, F: FnOnce(T) -> U>(self, default: U, f: F) -> U {

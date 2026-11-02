@@ -278,6 +278,27 @@ impl OsString {
         self.inner.shrink_to_fit()
     }
 
+    /// Shrinks the capacity with a lower bound.
+    pub fn shrink_to(&mut self, min_capacity: usize) {
+        self.inner.shrink_to(min_capacity)
+    }
+
+    /// Tries to reserve capacity for at least `additional` more elements.
+    pub fn try_reserve(&mut self, additional: usize) -> Result<(), crate::collections::TryReserveError> {
+        self.inner.try_reserve(additional)
+    }
+
+    /// Tries to reserve the minimum capacity for at least `additional` more elements.
+    pub fn try_reserve_exact(&mut self, additional: usize) -> Result<(), crate::collections::TryReserveError> {
+        self.inner.try_reserve_exact(additional)
+    }
+
+    /// Consumes and leaks the `OsString`, returning a mutable reference to the contents.
+    pub fn leak<'a>(self) -> &'a mut OsStr {
+        let b: &'a mut [u8] = self.inner.leak();
+        unsafe { &mut *(b as *mut [u8] as *mut OsStr) }
+    }
+
     /// Converts this `OsString` into a boxed `OsStr`.
     pub fn into_boxed_os_str(self) -> Box<OsStr> {
         let b: Box<[u8]> = self.inner.into_boxed_slice();

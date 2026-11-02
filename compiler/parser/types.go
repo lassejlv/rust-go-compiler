@@ -162,6 +162,19 @@ func (p *Parser) parseGenericArg(ga *ast.GenericArgs) {
 		b.Ty = p.parseType()
 		ga.Bindings = append(ga.Bindings, b)
 		return
+	case isPlainIdent(t) && p.isN(1, "<") && p.gatBindingAhead():
+		// GAT binding `Name<Args> = Type` / `Name<Args>: Bounds`
+		name := p.parseIdentTok()
+		args := p.parseGenericArgs()
+		b := &ast.AssocBinding{Name: name, Args: args}
+		if p.eat("=") {
+			b.Ty = p.parseType()
+		} else {
+			p.expect(":")
+			b.Bounds = p.parseBounds(true)
+		}
+		ga.Bindings = append(ga.Bindings, b)
+		return
 	case isPlainIdent(t) && p.isN(1, ":") && !p.isN(1, "::"):
 		name := p.parseIdentTok()
 		p.next()
@@ -610,4 +623,35 @@ func (p *Parser) parseWhere(g *ast.Generics) {
 			return
 		}
 	}
+}
+
+// gatBindingAhead reports whether `Ident < ... >` at the cursor is followed
+// by `=` or `:` (a generic associated type binding, not a type argument).
+func (p *Parser) gatBindingAhead() bool {
+	depth := 0
+	for i := 1; i < 256; i++ {
+		t := p.peekN(i)
+		switch {
+		case t.Kind == lexer.EOF:
+			return false
+		case t.Is("<"):
+			depth++
+		case t.Is(">"):
+			depth--
+		case t.Is(">>"):
+			depth -= 2
+		case t.Is("->"), t.Is(">="), t.Is(">>="):
+			// not plausible inside the GAT args of a binding
+		case t.Is(";"), t.Is("{"), t.Is("}"):
+			return false
+		}
+		if depth < 0 {
+			return false // `>>` also closed the enclosing list
+		}
+		if depth == 0 {
+			n := p.peekN(i + 1)
+			return n.Is("=") || (n.Is(":") && !n.Is("::"))
+		}
+	}
+	return false
 }

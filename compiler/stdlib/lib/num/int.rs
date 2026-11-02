@@ -786,12 +786,8 @@ macro_rules! __std_int_signed {
             /// Checked addition with an unsigned integer.
             #[inline]
             pub fn checked_add_unsigned(self, rhs: $ut) -> Option<$t> {
-                let r = self.wrapping_add(rhs as $t);
-                if (r < self) != ((rhs as $t) < 0) {
-                    None
-                } else {
-                    Some(r)
-                }
+                let (r, overflow) = self.overflowing_add_unsigned(rhs);
+                if overflow { None } else { Some(r) }
             }
 
             /// Returns the square root of the number, rounded down.
@@ -1133,6 +1129,123 @@ impl u8 {
 macro_rules! __std_int_common_extra {
     ($t:ident) => {
         impl $t {
+            /// Calculates the quotient of Euclidean division, returning whether an overflow occurred.
+            #[inline]
+            pub fn overflowing_div_euclid(self, rhs: $t) -> ($t, bool) {
+                match self.checked_div_euclid(rhs) {
+                    Some(v) => (v, false),
+                    None => {
+                        if rhs == 0 {
+                            overflow_panic("attempt to divide by zero");
+                        }
+                        (self, true)
+                    }
+                }
+            }
+
+            /// Calculates the remainder of Euclidean division, returning whether an overflow occurred.
+            #[inline]
+            pub fn overflowing_rem_euclid(self, rhs: $t) -> ($t, bool) {
+                match self.checked_rem_euclid(rhs) {
+                    Some(v) => (v, false),
+                    None => {
+                        if rhs == 0 {
+                            overflow_panic("attempt to calculate the remainder with a divisor of zero");
+                        }
+                        (0, true)
+                    }
+                }
+            }
+
+            /// Strict integer addition: panics on overflow.
+            #[inline]
+            #[track_caller]
+            pub fn strict_add(self, rhs: $t) -> $t {
+                match self.checked_add(rhs) { Some(v) => v, None => overflow_panic("attempt to add with overflow") }
+            }
+
+            /// Strict integer subtraction: panics on overflow.
+            #[inline]
+            #[track_caller]
+            pub fn strict_sub(self, rhs: $t) -> $t {
+                match self.checked_sub(rhs) { Some(v) => v, None => overflow_panic("attempt to subtract with overflow") }
+            }
+
+            /// Strict integer multiplication: panics on overflow.
+            #[inline]
+            #[track_caller]
+            pub fn strict_mul(self, rhs: $t) -> $t {
+                match self.checked_mul(rhs) { Some(v) => v, None => overflow_panic("attempt to multiply with overflow") }
+            }
+
+            /// Strict integer division: panics on overflow.
+            #[inline]
+            #[track_caller]
+            pub fn strict_div(self, rhs: $t) -> $t {
+                if rhs == 0 {
+                    overflow_panic("attempt to divide by zero");
+                }
+                match self.checked_div(rhs) { Some(v) => v, None => overflow_panic("attempt to divide with overflow") }
+            }
+
+            /// Strict integer remainder: panics on overflow.
+            #[inline]
+            #[track_caller]
+            pub fn strict_rem(self, rhs: $t) -> $t {
+                if rhs == 0 {
+                    overflow_panic("attempt to calculate the remainder with a divisor of zero");
+                }
+                match self.checked_rem(rhs) { Some(v) => v, None => overflow_panic("attempt to calculate the remainder with overflow") }
+            }
+
+            /// Strict Euclidean division: panics on overflow.
+            #[inline]
+            #[track_caller]
+            pub fn strict_div_euclid(self, rhs: $t) -> $t {
+                if rhs == 0 {
+                    overflow_panic("attempt to divide by zero");
+                }
+                match self.checked_div_euclid(rhs) { Some(v) => v, None => overflow_panic("attempt to divide with overflow") }
+            }
+
+            /// Strict Euclidean remainder: panics on overflow.
+            #[inline]
+            #[track_caller]
+            pub fn strict_rem_euclid(self, rhs: $t) -> $t {
+                if rhs == 0 {
+                    overflow_panic("attempt to calculate the remainder with a divisor of zero");
+                }
+                match self.checked_rem_euclid(rhs) { Some(v) => v, None => overflow_panic("attempt to calculate the remainder with overflow") }
+            }
+
+            /// Strict negation: panics on overflow.
+            #[inline]
+            #[track_caller]
+            pub fn strict_neg(self) -> $t {
+                match self.checked_neg() { Some(v) => v, None => overflow_panic("attempt to negate with overflow") }
+            }
+
+            /// Strict shift left: panics if `rhs` is larger than or equal to the number of bits.
+            #[inline]
+            #[track_caller]
+            pub fn strict_shl(self, rhs: u32) -> $t {
+                match self.checked_shl(rhs) { Some(v) => v, None => overflow_panic("attempt to shift left with overflow") }
+            }
+
+            /// Strict shift right: panics if `rhs` is larger than or equal to the number of bits.
+            #[inline]
+            #[track_caller]
+            pub fn strict_shr(self, rhs: u32) -> $t {
+                match self.checked_shr(rhs) { Some(v) => v, None => overflow_panic("attempt to shift right with overflow") }
+            }
+
+            /// Strict exponentiation: panics on overflow.
+            #[inline]
+            #[track_caller]
+            pub fn strict_pow(self, exp: u32) -> $t {
+                match self.checked_pow(exp) { Some(v) => v, None => overflow_panic("attempt to multiply with overflow") }
+            }
+
             /// Unchecked integer addition. Results in undefined behavior on overflow.
             #[inline]
             pub unsafe fn unchecked_add(self, rhs: $t) -> $t {
@@ -1258,6 +1371,40 @@ macro_rules! __std_int_unsigned_extra {
             pub fn overflowing_add_signed(self, rhs: $st) -> ($t, bool) {
                 let (res, overflowed) = self.overflowing_add(rhs as $t);
                 (res, overflowed ^ (rhs < 0))
+            }
+
+            /// Checked subtraction with a signed integer.
+            #[inline]
+            pub fn checked_sub_signed(self, rhs: $st) -> Option<$t> {
+                let (res, overflow) = self.overflowing_sub_signed(rhs);
+                if overflow { None } else { Some(res) }
+            }
+
+            /// Wrapping (modular) subtraction with a signed integer.
+            #[inline]
+            pub fn wrapping_sub_signed(self, rhs: $st) -> $t {
+                self.wrapping_sub(rhs as $t)
+            }
+
+            /// Saturating subtraction with a signed integer.
+            #[inline]
+            pub fn saturating_sub_signed(self, rhs: $st) -> $t {
+                let (res, overflow) = self.overflowing_sub_signed(rhs);
+                if !overflow { res } else if rhs > 0 { 0 } else { $t::MAX }
+            }
+
+            /// Calculates `self - rhs` with a signed `rhs`, returning whether an overflow occurred.
+            #[inline]
+            pub fn overflowing_sub_signed(self, rhs: $st) -> ($t, bool) {
+                let (res, overflow) = self.overflowing_sub(rhs as $t);
+                (res, overflow ^ (rhs < 0))
+            }
+
+            /// Strict addition with a signed integer: panics on overflow.
+            #[inline]
+            #[track_caller]
+            pub fn strict_add_signed(self, rhs: $st) -> $t {
+                match self.checked_add_signed(rhs) { Some(v) => v, None => overflow_panic("attempt to add with overflow") }
             }
 
             /// Returns the bit pattern of `self` reinterpreted as a signed integer of the same size.

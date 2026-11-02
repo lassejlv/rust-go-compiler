@@ -141,6 +141,27 @@ macro_rules! __std_atomic_common {
                 let (old, ok) = unsafe { intrinsics::atomic_cxchg_weak(self.v.get(), current, new) };
                 if ok { Ok(old) } else { Err(old) }
             }
+            /// Creates a new reference to an atomic integer from a pointer.
+            #[inline]
+            pub unsafe fn from_ptr<'a>(ptr: *mut $t) -> &'a Self {
+                &*(ptr as *const Self)
+            }
+            /// Gets atomic access to a `&mut` integer.
+            #[inline]
+            pub fn from_mut(v: &mut $t) -> &mut Self {
+                unsafe { &mut *(v as *mut $t as *mut Self) }
+            }
+            /// Fetches the value, applies a function to it that returns an optional new value, and stores it.
+            pub fn try_update(&self, set_order: Ordering, fetch_order: Ordering, f: impl FnMut($t) -> Option<$t>) -> Result<$t, $t> {
+                self.fetch_update(set_order, fetch_order, f)
+            }
+            /// Fetches the value, applies a function to it that returns a new value, and stores it.
+            pub fn update(&self, set_order: Ordering, fetch_order: Ordering, mut f: impl FnMut($t) -> $t) -> $t {
+                match self.fetch_update(set_order, fetch_order, |x| Some(f(x))) {
+                    Ok(v) => v,
+                    Err(v) => v,
+                }
+            }
             /// Fetches the value, and applies a function to it that returns an optional new value.
             pub fn fetch_update<F>(&self, _set_order: Ordering, _fetch_order: Ordering, f: F) -> Result<$t, $t>
             where

@@ -734,6 +734,21 @@ impl PathBuf {
     pub fn shrink_to_fit(&mut self) {
         self.inner.shrink_to_fit()
     }
+
+    /// Shrinks the capacity with a lower bound.
+    pub fn shrink_to(&mut self, min_capacity: usize) {
+        self.inner.shrink_to(min_capacity)
+    }
+
+    /// Tries to reserve capacity for at least `additional` more elements.
+    pub fn try_reserve(&mut self, additional: usize) -> Result<(), crate::collections::TryReserveError> {
+        self.inner.try_reserve(additional)
+    }
+
+    /// Tries to reserve the minimum capacity for at least `additional` more elements.
+    pub fn try_reserve_exact(&mut self, additional: usize) -> Result<(), crate::collections::TryReserveError> {
+        self.inner.try_reserve_exact(additional)
+    }
 }
 
 fn validate_extension(extension: &OsStr) {

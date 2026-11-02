@@ -356,8 +356,13 @@ impl<K: Ord, V> BTreeMap<K, V> {
     }
 
     /// Creates an iterator that visits all elements in ascending key order and uses a closure to determine if an element should be removed.
-    pub fn extract_if<F>(&mut self, pred: F) -> vec::IntoIter<(K, V)>
+    ///
+    /// NOTE: rustgo extracts eagerly (all matching elements in `range` are
+    /// removed even if the iterator is not exhausted).
+    pub fn extract_if<F, R>(&mut self, range: R, pred: F) -> vec::IntoIter<(K, V)>
     where
+        K: Ord,
+        R: RangeBounds<K>,
         F: FnMut(&K, &mut V) -> bool,
     {
         let mut pred = pred;
@@ -365,7 +370,7 @@ impl<K: Ord, V> BTreeMap<K, V> {
         let mut kept = Vec::with_capacity(self.entries.len());
         let mut it = mem::take(&mut self.entries).into_iter();
         while let Some(mut e) = it.next() {
-            if pred(&e.0, &mut e.1) {
+            if range.contains(&e.0) && pred(&e.0, &mut e.1) {
                 removed.push(e);
             } else {
                 kept.push(e);

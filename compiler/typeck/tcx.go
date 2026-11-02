@@ -189,6 +189,29 @@ func (t *Tcx) BuildImpls() {
 		sort.SliceStable(t.traitImpls[tr], func(i, j int) bool { return t.traitImpls[tr][i].ID < t.traitImpls[tr][j].ID })
 	}
 	t.implsIndexed = true
+	t.checkCoherence()
+}
+
+// checkCoherence reports trait impls without generic parameters that
+// implement the same trait for the same type twice (rustc E0119).
+func (t *Tcx) checkCoherence() {
+	for _, tr := range t.R.Traits {
+		seen := map[string]*Def{}
+		for _, impl := range t.traitImpls[tr] {
+			if impl.Impl.Negative || len(t.Generics(impl).Params) > 0 {
+				continue
+			}
+			key := ""
+			for _, a := range impl.Impl.TraitRef.Args {
+				key += fmt.Sprintf("%p,", a) // types are interned
+			}
+			if prev := seen[key]; prev != nil {
+				t.Errorf(impl.Span, "conflicting implementations of trait `%s` for type `%s` (first at %s)", tr.Name, impl.Impl.TraitRef.Args[0], prev.Span.Lo)
+				continue
+			}
+			seen[key] = impl
+		}
+	}
 }
 
 // TraitImpls returns all impls of a trait.

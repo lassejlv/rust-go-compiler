@@ -89,6 +89,7 @@ type GenericArg struct {
 // AssocBinding is Item = Type (or Item: Bound) inside generic args.
 type AssocBinding struct {
 	Name   Ident
+	Args   *GenericArgs // GAT arguments: `Item<'a, T> = ...` (or nil)
 	Ty     Type
 	Bounds []*Bound
 }

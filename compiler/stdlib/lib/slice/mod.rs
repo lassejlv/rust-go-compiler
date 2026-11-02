@@ -106,6 +106,128 @@ impl<T> [T] {
         }
     }
 
+    /// Removes the subslice corresponding to the given range and returns a reference to it.
+    /// Returns `None` (leaving the slice unchanged) if the range is out of bounds.
+    /// Only ranges of the form `..n` or `n..` are supported, as in the real API.
+    pub fn split_off<'a, R: crate::ops::RangeBounds<usize>>(self: &mut &'a Self, range: R) -> Option<&'a Self> {
+        use crate::ops::Bound;
+        let len = self.len();
+        let s: &'a [T] = *self;
+        match (range.start_bound(), range.end_bound()) {
+            (Bound::Unbounded, Bound::Excluded(&n)) => {
+                if n > len { return None; }
+                let (a, b) = s.split_at(n);
+                *self = b;
+                Some(a)
+            }
+            (Bound::Unbounded, Bound::Included(&n)) => {
+                if n >= len { return None; }
+                let (a, b) = s.split_at(n + 1);
+                *self = b;
+                Some(a)
+            }
+            (Bound::Included(&n), Bound::Unbounded) => {
+                if n > len { return None; }
+                let (a, b) = s.split_at(n);
+                *self = a;
+                Some(b)
+            }
+            (Bound::Excluded(&n), Bound::Unbounded) => {
+                if n >= len { return None; }
+                let (a, b) = s.split_at(n + 1);
+                *self = a;
+                Some(b)
+            }
+            _ => None,
+        }
+    }
+
+    /// Removes the subslice corresponding to the given range and returns a mutable reference to it.
+    pub fn split_off_mut<'a, R: crate::ops::RangeBounds<usize>>(self: &mut &'a mut Self, range: R) -> Option<&'a mut Self> {
+        use crate::ops::Bound;
+        let len = self.len();
+        let (cut, take_front) = match (range.start_bound(), range.end_bound()) {
+            (Bound::Unbounded, Bound::Excluded(&n)) => (n, true),
+            (Bound::Unbounded, Bound::Included(&n)) => (n.wrapping_add(1), true),
+            (Bound::Included(&n), Bound::Unbounded) => (n, false),
+            (Bound::Excluded(&n), Bound::Unbounded) => (n.wrapping_add(1), false),
+            _ => return None,
+        };
+        if cut > len || cut == 0 && matches!(range.end_bound(), Bound::Included(_)) {
+            return None;
+        }
+        let s: &'a mut [T] = crate::mem::take(self);
+        let (a, b) = s.split_at_mut(cut);
+        if take_front {
+            *self = b;
+            Some(a)
+        } else {
+            *self = a;
+            Some(b)
+        }
+    }
+
+    /// Removes the first element of the slice and returns a reference to it.
+    pub fn split_off_first<'a>(self: &mut &'a Self) -> Option<&'a T> {
+        let s: &'a [T] = *self;
+        let (first, rem) = s.split_first()?;
+        *self = rem;
+        Some(first)
+    }
+
+    /// Removes the first element of the slice and returns a mutable reference to it.
+    pub fn split_off_first_mut<'a>(self: &mut &'a mut Self) -> Option<&'a mut T> {
+        let s: &'a mut [T] = crate::mem::take(self);
+        match s.split_first_mut() {
+            Some((first, rem)) => {
+                *self = rem;
+                Some(first)
+            }
+            None => None,
+        }
+    }
+
+    /// Removes the last element of the slice and returns a reference to it.
+    pub fn split_off_last<'a>(self: &mut &'a Self) -> Option<&'a T> {
+        let s: &'a [T] = *self;
+        let (last, rem) = s.split_last()?;
+        *self = rem;
+        Some(last)
+    }
+
+    /// Removes the last element of the slice and returns a mutable reference to it.
+    pub fn split_off_last_mut<'a>(self: &mut &'a mut Self) -> Option<&'a mut T> {
+        let s: &'a mut [T] = crate::mem::take(self);
+        match s.split_last_mut() {
+            Some((last, rem)) => {
+                *self = rem;
+                Some(last)
+            }
+            None => None,
+        }
+    }
+
+    /// Splits the slice into a slice of `N`-element arrays, starting at the end, and a remainder (mutable).
+    #[inline]
+    #[track_caller]
+    pub fn as_rchunks_mut<const N: usize>(&mut self) -> (&mut [T], &mut [[T; N]]) {
+        if N == 0 {
+            crate::rt::panic_str("chunk size must be non-zero", file!(), line!(), column!());
+        }
+        let len = self.len();
+        let n = len / N;
+        let r = len - n * N;
+        let p = self.as_mut_ptr();
+        unsafe { (from_raw_parts_mut(p, r), from_raw_parts_mut(p.add(r) as *mut [T; N], n)) }
+    }
+
+    /// Splits the slice into a slice of `N`-element arrays, assuming that there's no remainder (mutable).
+    #[inline]
+    pub unsafe fn as_chunks_unchecked_mut<const N: usize>(&mut self) -> &mut [[T; N]] {
+        let len = self.len() / N;
+        from_raw_parts_mut(self.as_mut_ptr() as *mut [T; N], len)
+    }
+
     /// Returns the first and all the rest of the elements of the slice, or `None` if it is empty.
     #[inline]
     pub fn split_first(&self) -> Option<(&T, &[T])> {
@@ -377,6 +499,26 @@ impl<T> [T] {
         let len = self.len();
         let p = self.as_mut_ptr();
         (from_raw_parts_mut(p, mid), from_raw_parts_mut(p.add(mid), len - mid))
+    }
+
+    /// Gets a reference to the underlying array if the slice has exactly `N` elements.
+    #[inline]
+    pub fn as_array<const N: usize>(&self) -> Option<&[T; N]> {
+        if self.len() == N {
+            Some(unsafe { &*(self.as_ptr() as *const [T; N]) })
+        } else {
+            None
+        }
+    }
+
+    /// Gets a mutable reference to the underlying array if the slice has exactly `N` elements.
+    #[inline]
+    pub fn as_mut_array<const N: usize>(&mut self) -> Option<&mut [T; N]> {
+        if self.len() == N {
+            Some(unsafe { &mut *(self.as_mut_ptr() as *mut [T; N]) })
+        } else {
+            None
+        }
     }
 
     /// Returns an array reference to the first `N` items in the slice.

@@ -247,6 +247,18 @@ impl str {
         }
     }
 
+    /// Divides one mutable string slice into two at an index, returning `None` if the index is not on a char boundary.
+    #[inline]
+    pub fn split_at_mut_checked(&mut self, mid: usize) -> Option<(&mut str, &mut str)> {
+        if self.is_char_boundary(mid) {
+            let len = self.len();
+            let p = self.as_mut_ptr();
+            unsafe { Some((from_raw_parts_mut(p, mid), from_raw_parts_mut(p.add(mid), len - mid))) }
+        } else {
+            None
+        }
+    }
+
     /// Divides one string slice into two at an index, returning `None` if the index is not on a char boundary.
     #[inline]
     pub fn split_at_checked(&self, mid: usize) -> Option<(&str, &str)> {

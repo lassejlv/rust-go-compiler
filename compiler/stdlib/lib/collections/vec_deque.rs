@@ -245,6 +245,60 @@ impl<T> VecDeque<T> {
         it
     }
 
+    /// Creates an iterator that covers the specified mutable range in the deque.
+    #[track_caller]
+    pub fn range_mut<R: RangeBounds<usize>>(&mut self, range: R) -> IterMut<'_, T> {
+        let r = slice::range(range, self.len);
+        let len = self.len;
+        let mut it = self.iter_mut();
+        let mut i = 0;
+        while i < r.start {
+            it.next();
+            i += 1;
+        }
+        let mut j = len;
+        while j > r.end {
+            it.next_back();
+            j -= 1;
+        }
+        it
+    }
+
+    /// Shrinks the capacity of the deque with a lower bound.
+    pub fn shrink_to(&mut self, min_capacity: usize) {
+        if self.cap > min_capacity && min_capacity >= self.len {
+            if mem::size_of::<T>() != 0 && min_capacity > 0 {
+                self.grow_to(min_capacity);
+            } else if min_capacity == 0 {
+                self.shrink_to_fit();
+            }
+        }
+    }
+
+    /// Tries to reserve capacity for at least `additional` more elements.
+    pub fn try_reserve(&mut self, additional: usize) -> Result<(), crate::collections::TryReserveError> {
+        self.reserve(additional);
+        Ok(())
+    }
+
+    /// Tries to reserve the minimum capacity for at least `additional` more elements.
+    pub fn try_reserve_exact(&mut self, additional: usize) -> Result<(), crate::collections::TryReserveError> {
+        self.reserve_exact(additional);
+        Ok(())
+    }
+
+    /// Removes and returns the first element if the predicate returns `true`.
+    pub fn pop_front_if(&mut self, predicate: impl FnOnce(&mut T) -> bool) -> Option<T> {
+        let first = self.front_mut()?;
+        if predicate(first) { self.pop_front() } else { None }
+    }
+
+    /// Removes and returns the last element if the predicate returns `true`.
+    pub fn pop_back_if(&mut self, predicate: impl FnOnce(&mut T) -> bool) -> Option<T> {
+        let last = self.back_mut()?;
+        if predicate(last) { self.pop_back() } else { None }
+    }
+
     /// Removes the specified range from the deque in bulk, returning all removed elements as an iterator.
     #[track_caller]
     pub fn drain<R: RangeBounds<usize>>(&mut self, range: R) -> Drain<'_, T> {

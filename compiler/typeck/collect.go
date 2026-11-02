@@ -797,6 +797,12 @@ func (ac *astConv) genericArgsFor(d *Def, seg *ast.PathSegment, prefix []Ty, sp 
 			}
 			continue
 		}
+		if p.Const && p.Ast != nil && p.Ast.ConstDefault != nil && !(ac.exprCtx && ac.infer != nil) {
+			// `const N: usize = 1`
+			dac := t.itemConv(d)
+			args = append(args, dac.lowerConstArg(p.Ast.ConstDefault))
+			continue
+		}
 		if p.Default != nil && !(ac.exprCtx && ac.infer != nil) {
 			// Defaults may refer to earlier params and Self.
 			dac := t.itemConv(d)
@@ -1109,7 +1115,11 @@ func (ac *astConv) lowerTraitSeg(d *Def, seg *ast.PathSegment, self Ty, sp lexer
 	if seg.Args != nil {
 		for _, b := range seg.Args.Bindings {
 			if b.Ty != nil {
-				bindings = append(bindings, Binding{Name: b.Name.Name, Ty: ac.lowerTy(b.Ty)})
+				nb := Binding{Name: b.Name.Name, Ty: ac.lowerTy(b.Ty)}
+				if b.Args != nil {
+					nb.Args = ac.gatArgs(&ast.PathSegment{Args: b.Args})
+				}
+				bindings = append(bindings, nb)
 			}
 		}
 	}

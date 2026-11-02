@@ -114,6 +114,14 @@ func (fcx *FnCtxt) checkPatInner(p ast.Pat, expected Ty, bm bindingMode, oc *orC
 		}
 	case *ast.LitPat:
 		lt := fcx.checkExpr(x.Expr, expected)
+		if l, ok := x.Expr.(*ast.LitExpr); ok && l.Kind == ast.LitByteStr {
+			// b"..." patterns also match `&[u8]` scrutinees (unsize)
+			if et := fcx.shallow(expected); et.Kind == TRef && fcx.shallow(et.Elem).Kind == TSlice {
+				if fcx.coerce(x.Expr, lt, expected) {
+					break
+				}
+			}
+		}
 		fcx.demandEq(x.Span, expected, lt)
 	case *ast.RangePat:
 		if x.Lo != nil {

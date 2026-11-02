@@ -243,6 +243,12 @@ impl<T: ?Sized> *const T {
         self as *const u8 as usize
     }
 
+    /// Returns a shared reference to the value behind the pointer (no null check).
+    #[inline]
+    pub unsafe fn as_ref_unchecked<'a>(self) -> &'a T {
+        &*self
+    }
+
     /// Returns `None` if the pointer is null, or else returns a shared reference to the value.
     #[inline]
     pub unsafe fn as_ref<'a>(self) -> Option<&'a T> {
@@ -453,6 +459,12 @@ impl<T: ?Sized> *mut T {
         self as *const u8 as usize
     }
 
+    /// Returns a shared reference to the value behind the pointer (no null check).
+    #[inline]
+    pub unsafe fn as_ref_unchecked<'a>(self) -> &'a T {
+        &*self
+    }
+
     /// Returns `None` if the pointer is null, or else returns a shared reference to the value.
     #[inline]
     pub unsafe fn as_ref<'a>(self) -> Option<&'a T> {
@@ -461,6 +473,12 @@ impl<T: ?Sized> *mut T {
         } else {
             Some(&*self)
         }
+    }
+
+    /// Returns a unique reference to the value behind the pointer (no null check).
+    #[inline]
+    pub unsafe fn as_mut_unchecked<'a>(self) -> &'a mut T {
+        &mut *self
     }
 
     /// Returns `None` if the pointer is null, or else returns a unique reference to the value.

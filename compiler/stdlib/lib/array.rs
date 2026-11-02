@@ -27,6 +27,12 @@ where
     }
 }
 
+/// Creates an array of type `[T; N]` by repeatedly cloning a value.
+#[inline]
+pub fn repeat<T: Clone, const N: usize>(val: T) -> [T; N] {
+    from_fn(|_| val.clone())
+}
+
 /// Converts a reference to `T` into a reference to an array of length 1 (without copying).
 #[inline]
 pub fn from_ref<T>(s: &T) -> &[T; 1] {

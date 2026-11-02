@@ -8,7 +8,9 @@ use crate::intrinsics;
 #[cold]
 #[track_caller]
 pub fn panic_str(msg: &str, file: &str, line: u32, col: u32) -> ! {
-    unsafe { intrinsics::panic_impl_static(msg, file, line, col) }
+    // `msg` is always a string literal here (its payload is `&'static str`).
+    let msg: &'static str = unsafe { &*(msg as *const str) };
+    crate::panicking::begin_panic_static(msg, file, line, col)
 }
 
 /// Panics with a formatted message (`panic!("...", args)`).
@@ -17,10 +19,9 @@ pub fn panic_str(msg: &str, file: &str, line: u32, col: u32) -> ! {
 #[track_caller]
 pub fn panic_fmt(args: fmt::Arguments<'_>, file: &str, line: u32, col: u32) -> ! {
     if let Some(s) = args.as_str() {
-        unsafe { intrinsics::panic_impl_static(s, file, line, col) }
+        crate::panicking::begin_panic_static(s, file, line, col)
     }
-    let s = args.into_string();
-    unsafe { intrinsics::panic_impl(s.as_str(), file, line, col) }
+    crate::panicking::begin_panic_string(args.into_string(), file, line, col)
 }
 
 /// Panics on a failed `assert_eq!` / `assert_ne!`.

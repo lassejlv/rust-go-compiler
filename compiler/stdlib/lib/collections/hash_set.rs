@@ -84,6 +84,17 @@ impl<T, S> HashSet<T, S> {
         self.map.retain(|k, _| f(k));
     }
 
+    /// Creates an iterator which uses a closure to determine if a value should be removed
+    /// (eagerly in rustgo).
+    pub fn extract_if<F>(&mut self, pred: F) -> crate::iter::Map<crate::vec::IntoIter<(T, ())>, fn((T, ())) -> T>
+    where
+        F: FnMut(&T) -> bool,
+    {
+        let mut pred = pred;
+        let f: fn((T, ())) -> T = |(k, _)| k;
+        self.map.extract_if(|k, _| pred(k)).map(f)
+    }
+
     /// Clears the set, removing all values.
     #[inline]
     pub fn clear(&mut self) {

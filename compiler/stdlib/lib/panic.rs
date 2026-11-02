@@ -72,6 +72,10 @@ pub fn resume_unwind(payload: Box<dyn Any + Send>) -> ! {
 pub fn panic_any<M: 'static + Any + Send>(msg: M) -> ! {
     let payload: Box<dyn Any + Send> = Box::new(msg);
     let text = String::from(crate::panicking::payload_as_str(&*payload));
+    if crate::panicking::run_custom_hook(&*payload, file!(), line!(), column!()) {
+        crate::panicking::set_custom_payload(payload);
+        unsafe { intrinsics::panic_resume(text.as_str(), false) }
+    }
     crate::panicking::set_custom_payload(payload);
     unsafe { intrinsics::panic_impl(text.as_str(), file!(), line!(), column!()) }
 }
@@ -125,4 +129,82 @@ impl fmt::Display for Location<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}:{}:{}", self.file, self.line, self.col)
     }
+}
+
+/// A struct providing information about a panic, passed to the panic hook.
+pub struct PanicHookInfo<'a> {
+    payload: &'a (dyn Any + Send),
+    location: &'a Location<'a>,
+}
+
+/// Deprecated alias of [`PanicHookInfo`].
+pub type PanicInfo<'a> = PanicHookInfo<'a>;
+
+impl<'a> PanicHookInfo<'a> {
+    pub(crate) fn new(payload: &'a (dyn Any + Send), location: &'a Location<'a>) -> Self {
+        PanicHookInfo { payload, location }
+    }
+
+    /// Returns the payload associated with the panic.
+    pub fn payload(&self) -> &(dyn Any + Send) {
+        self.payload
+    }
+
+    /// Returns the payload associated with the panic, if it is a string.
+    pub fn payload_as_str(&self) -> Option<&str> {
+        if let Some(s) = self.payload.downcast_ref::<&str>() {
+            Some(s)
+        } else if let Some(s) = self.payload.downcast_ref::<String>() {
+            Some(s.as_str())
+        } else {
+            None
+        }
+    }
+
+    /// Returns information about the location from which the panic originated.
+    pub fn location(&self) -> Option<&Location<'_>> {
+        Some(self.location)
+    }
+
+    /// Returns whether the panic handler is allowed to unwind the stack.
+    pub fn can_unwind(&self) -> bool {
+        true
+    }
+}
+
+impl fmt::Display for PanicHookInfo<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("panicked at ")?;
+        fmt::Display::fmt(self.location, f)?;
+        if let Some(s) = self.payload_as_str() {
+            f.write_str(":\n")?;
+            f.write_str(s)?;
+        }
+        Ok(())
+    }
+}
+
+impl fmt::Debug for PanicHookInfo<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("PanicHookInfo")
+            .field("payload", &crate::panicking::payload_as_str(self.payload))
+            .field("location", &self.location)
+            .field("can_unwind", &true)
+            .finish()
+    }
+}
+
+/// Registers a custom panic hook, replacing the previously registered hook.
+///
+/// NOTE: rustgo runs the hook for panics raised through `panic!`, `assert*!`,
+/// `unwrap`/`expect` and other std panics; panics raised directly by
+/// compiler-generated checks (arithmetic overflow, builtin indexing) are
+/// reported by the runtime without the hook.
+pub fn set_hook(hook: Box<dyn Fn(&PanicHookInfo<'_>) + Sync + Send + 'static>) {
+    crate::panicking::set_hook(hook)
+}
+
+/// Unregisters the current panic hook and returns it, registering the default hook in its place.
+pub fn take_hook() -> Box<dyn Fn(&PanicHookInfo<'_>) + Sync + Send + 'static> {
+    crate::panicking::take_hook()
 }

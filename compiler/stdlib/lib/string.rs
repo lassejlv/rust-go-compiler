@@ -186,6 +186,18 @@ impl String {
         self.vec.reserve_exact(additional)
     }
 
+    /// Tries to reserve capacity for at least `additional` bytes more than the current length.
+    #[inline]
+    pub fn try_reserve(&mut self, additional: usize) -> Result<(), crate::collections::TryReserveError> {
+        self.vec.try_reserve(additional)
+    }
+
+    /// Tries to reserve the minimum capacity for at least `additional` bytes more than the current length.
+    #[inline]
+    pub fn try_reserve_exact(&mut self, additional: usize) -> Result<(), crate::collections::TryReserveError> {
+        self.vec.try_reserve_exact(additional)
+    }
+
     /// Shrinks the capacity of this `String` to match its length.
     #[inline]
     pub fn shrink_to_fit(&mut self) {
@@ -716,11 +728,6 @@ impl From<String> for Vec<u8> {
     }
 }
 
-impl From<String> for crate::rc::Rc<str> {
-    fn from(v: String) -> crate::rc::Rc<str> {
-        crate::rc::Rc::from(v.as_str())
-    }
-}
 
 // ---------------------------------------------------------------------------
 // Iteration

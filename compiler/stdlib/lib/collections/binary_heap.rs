@@ -247,6 +247,21 @@ impl<T> BinaryHeap<T> {
         self.data.reserve(additional);
     }
 
+    /// Shrinks the capacity with a lower bound.
+    pub fn shrink_to(&mut self, min_capacity: usize) {
+        self.data.shrink_to(min_capacity)
+    }
+
+    /// Tries to reserve capacity for at least `additional` more elements.
+    pub fn try_reserve(&mut self, additional: usize) -> Result<(), crate::collections::TryReserveError> {
+        self.data.try_reserve(additional)
+    }
+
+    /// Tries to reserve the minimum capacity for at least `additional` more elements.
+    pub fn try_reserve_exact(&mut self, additional: usize) -> Result<(), crate::collections::TryReserveError> {
+        self.data.try_reserve_exact(additional)
+    }
+
     /// Reserves the minimum capacity for at least `additional` elements more than the current length.
     pub fn reserve_exact(&mut self, additional: usize) {
         self.data.reserve_exact(additional);

@@ -8,7 +8,7 @@ mod float;
 mod impls;
 mod num;
 
-pub use self::builders::{DebugList, DebugMap, DebugSet, DebugStruct, DebugTuple};
+pub use self::builders::{from_fn, DebugList, DebugMap, DebugSet, DebugStruct, DebugTuple, FromFn};
 
 use crate::marker::PhantomData;
 

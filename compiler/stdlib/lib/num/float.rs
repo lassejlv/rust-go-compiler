@@ -216,6 +216,30 @@ macro_rules! __std_float_impl {
                 }
             }
 
+            /// Returns the least number greater than `self`.
+            pub fn next_up(self) -> $t {
+                let sign: $bits = 1 << (crate::mem::size_of::<$bits>() * 8 - 1);
+                let bits = self.to_bits();
+                if self.is_nan() || bits == <$t>::INFINITY.to_bits() {
+                    return self;
+                }
+                let abs = bits & !sign;
+                let next = if abs == 0 { 1 } else if bits == abs { bits + 1 } else { bits - 1 };
+                <$t>::from_bits(next)
+            }
+
+            /// Returns the greatest number less than `self`.
+            pub fn next_down(self) -> $t {
+                let sign: $bits = 1 << (crate::mem::size_of::<$bits>() * 8 - 1);
+                let bits = self.to_bits();
+                if self.is_nan() || bits == <$t>::NEG_INFINITY.to_bits() {
+                    return self;
+                }
+                let abs = bits & !sign;
+                let next = if abs == 0 { sign | 1 } else if bits == abs { bits - 1 } else { bits + 1 };
+                <$t>::from_bits(next)
+            }
+
             /// Raw transmutation to the unsigned integer of the same width.
             #[inline]
             pub fn to_bits(self) -> $bits {
@@ -461,7 +485,9 @@ macro_rules! __std_float_impl {
             /// Returns the cube root of a number.
             #[inline]
             pub fn cbrt(self) -> $t {
-                unsafe { $m::cbrt(self) }
+                // Same algorithms as Rust's libm (correctly rounded for f64),
+                // so results match rustc bit for bit.
+                <$t as CbrtImpl>::cbrt_impl(self)
             }
 
             /// Compute the distance between the origin and a point (`x`, `y`) on the Euclidean plane.
@@ -636,4 +662,151 @@ impl f32 {
     pub const INFINITY: f32 = 1.0 / 0.0;
     /// Negative infinity (−∞).
     pub const NEG_INFINITY: f32 = -1.0 / 0.0;
+}
+
+trait CbrtImpl {
+    fn cbrt_impl(self) -> Self;
+}
+
+impl CbrtImpl for f64 {
+    /// Correctly rounded cube root (port of CORE-MATH via Rust's libm).
+    fn cbrt_impl(self) -> f64 {
+        let x = self;
+        let hf = f64::from_bits;
+        let escale: [f64; 3] = [1.0, hf(0x3ff428a2f98d728b), hf(0x3ff965fea53d6e3d)];
+        let c: [f64; 4] = [hf(0x3fe1b0babccfef9c), hf(0x3fe2c9a3e94d1da5), hf(0xbfc4dc30b1a1ddba), hf(0x3f97a8d3e4ec9b07)];
+        let u0: f64 = hf(0x3fd5555555555555);
+        let u1: f64 = hf(0x3fcc71c71c71c71c);
+        let rsc = [1.0, -1.0, 0.5, -0.5, 0.25, -0.25];
+        let off0: f64 = hf(0x3ca0000000000000);
+        let sig_mask: u64 = (1u64 << 52) - 1;
+        let exp_sat: u32 = 0x7ff;
+
+        let hx: u64 = x.to_bits();
+        let mut mant: u64 = hx & sig_mask;
+        let sign: u64 = hx >> 63;
+        let mut e: u32 = (hx >> 52) as u32 & exp_sat;
+
+        if ((e + 1) & exp_sat) < 2 {
+            let ix: u64 = hx & !(1u64 << 63);
+            if e == exp_sat || ix == 0 {
+                return x + x;
+            }
+            let nz = ix.leading_zeros() - 11;
+            mant <<= nz;
+            mant &= sig_mask;
+            e = e.wrapping_sub(nz - 1);
+        }
+
+        e = e.wrapping_add(3072);
+        let cvt1: u64 = mant | (0x3ffu64 << 52);
+        let mut cvt5: u64 = cvt1;
+        let et: u32 = e / 3;
+        let it: u32 = e % 3;
+        cvt5 += (it as u64) << 52;
+        cvt5 |= sign << 63;
+        let zz: f64 = f64::from_bits(cvt5);
+        let mut isc: u64 = escale[it as usize].to_bits();
+        isc |= sign << 63;
+        let cvt2: u64 = isc;
+        let z: f64 = f64::from_bits(cvt1);
+
+        let r: f64 = 1.0 / z;
+        let rr: f64 = r * rsc[((it as usize) << 1) | sign as usize];
+        let z2: f64 = z * z;
+        let c0: f64 = c[0] + z * c[1];
+        let c2: f64 = c[2] + z * c[3];
+        let mut y: f64 = c0 + z2 * c2;
+        let mut y2: f64 = y * y;
+        let mut h: f64 = y2 * (y * r) - 1.0;
+        y -= (h * y) * (u0 - u1 * h);
+        y *= f64::from_bits(cvt2);
+
+        y2 = y * y;
+        let mut y2l: f64 = y.mul_add(y, -y2);
+        let mut y3: f64 = y2 * y;
+        let mut y3l: f64 = y.mul_add(y2, -y3) + y * y2l;
+        h = ((y3 - zz) + y3l) * rr;
+        let mut dy: f64 = h * (y * u0);
+        let mut y1: f64 = y - dy;
+        dy = (y - y1) - dy;
+
+        let mut ady: f64 = dy.abs();
+        let mut ady0: f64 = (ady - off0).abs();
+        let mut ady1: f64 = (ady - (hf(0x3cb0000000000000) + off0)).abs();
+
+        if ady0 < hf(0x3b40000000000000) || ady1 < hf(0x3b40000000000000) {
+            y2 = y1 * y1;
+            y2l = y1.mul_add(y1, -y2);
+            y3 = y2 * y1;
+            y3l = y1.mul_add(y2, -y3) + y1 * y2l;
+            h = ((y3 - zz) + y3l) * rr;
+            dy = h * (y1 * u0);
+            y = y1 - dy;
+            dy = (y1 - y) - dy;
+            y1 = y;
+            ady = dy.abs();
+            ady0 = (ady - off0).abs();
+            ady1 = (ady - (hf(0x3cb0000000000000) + off0)).abs();
+
+            if ady0 < hf(0x39d0000000000000) || ady1 < hf(0x39d0000000000000) {
+                let azz: f64 = zz.abs();
+                if azz == hf(0x4009b78223aa307c) {
+                    y1 = hf(0x3ff79d15d0e8d59c).copysign(zz);
+                }
+                if azz == hf(0x401a202bfc89ddff) {
+                    y1 = hf(0x3ffde87aa837820f).copysign(zz);
+                }
+            }
+        }
+
+        let mut cvt3: u64 = y1.to_bits();
+        cvt3 = cvt3.wrapping_add(((et.wrapping_sub(342).wrapping_sub(1023)) as u64) << 52);
+        let m0: u64 = cvt3 << 30;
+        let m1 = m0 >> 63;
+
+        if (m0 ^ m1) <= (1u64 << 30) {
+            let mut cvt4: u64 = y1.to_bits();
+            cvt4 = (cvt4 + (164 << 15)) & 0xffffffffffff0000u64;
+            if ((f64::from_bits(cvt4) - y1) - dy).abs() < hf(0x3c30000000000000) || (zz).abs() == 1.0 {
+                cvt3 = (cvt3 + (1u64 << 15)) & 0xffffffffffff0000u64;
+            }
+        }
+        f64::from_bits(cvt3)
+    }
+}
+
+impl CbrtImpl for f32 {
+    /// Cube root (port of FreeBSD's s_cbrtf.c via Rust's libm).
+    fn cbrt_impl(self) -> f32 {
+        let x = self;
+        const B1: u32 = 709958130;
+        const B2: u32 = 642849266;
+        let x1p24 = f32::from_bits(0x4b800000);
+        let mut r: f64;
+        let mut t: f64;
+        let mut ui: u32 = x.to_bits();
+        let mut hx: u32 = ui & 0x7fffffff;
+        if hx >= 0x7f800000 {
+            return x + x;
+        }
+        if hx < 0x00800000 {
+            if hx == 0 {
+                return x;
+            }
+            ui = (x * x1p24).to_bits();
+            hx = ui & 0x7fffffff;
+            hx = hx / 3 + B2;
+        } else {
+            hx = hx / 3 + B1;
+        }
+        ui &= 0x80000000;
+        ui |= hx;
+        t = f32::from_bits(ui) as f64;
+        r = t * t * t;
+        t = t * (x as f64 + x as f64 + r) / (x as f64 + r + r);
+        r = t * t * t;
+        t = t * (x as f64 + x as f64 + r) / (x as f64 + r + r);
+        t as f32
+    }
 }

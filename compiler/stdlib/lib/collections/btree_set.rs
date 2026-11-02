@@ -88,6 +88,19 @@ impl<T> BTreeSet<T> {
         let mut f = f;
         self.map.retain(|k, _| f(k));
     }
+
+    /// Creates an iterator that visits elements in `range` in ascending order and uses a
+    /// closure to determine if an element should be removed (eagerly in rustgo).
+    pub fn extract_if<F, R>(&mut self, range: R, pred: F) -> crate::iter::Map<crate::vec::IntoIter<(T, ())>, fn((T, ())) -> T>
+    where
+        T: Ord,
+        R: RangeBounds<T>,
+        F: FnMut(&T) -> bool,
+    {
+        let mut pred = pred;
+        let f: fn((T, ())) -> T = |(k, _)| k;
+        self.map.extract_if(range, |k, _| pred(k)).map(f)
+    }
 }
 
 impl<T: Ord> BTreeSet<T> {

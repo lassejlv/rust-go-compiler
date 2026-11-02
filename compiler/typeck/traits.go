@@ -1,6 +1,8 @@
 package typeck
 
 import (
+	"fmt"
+	"os"
 	"rustgo/compiler/lexer"
 	. "rustgo/compiler/middle"
 )
@@ -50,7 +52,7 @@ func (ic *InferCtxt) evaluate(p *Predicate, depth int) SelKind {
 		return sel.Kind
 	}
 	for _, b := range p.Bindings {
-		n := ic.normalizeBinding(p.Trait, b.Name, depth)
+		n := ic.normalizeBinding(p.Trait, b.Name, depth, b.Args...)
 		if n == nil {
 			return SelAmbig
 		}
@@ -67,10 +69,14 @@ func (ic *InferCtxt) evaluate(p *Predicate, depth int) SelKind {
 
 // normalizeBinding normalizes <tr as Trait>::name, looking through
 // supertraits for the trait declaring the assoc type.
-func (ic *InferCtxt) normalizeBinding(tr *TraitRef, name string, depth int) Ty {
+func (ic *InferCtxt) normalizeBinding(tr *TraitRef, name string, depth int, gat ...Ty) Ty {
 	for _, st := range ic.t.AllSupertraits(tr) {
 		if it, ok := st.Trait.Trait.Items[name]; ok && it.Kind == DefAssocTy {
-			return ic.normalizeProjection(st.Trait, ic.resolveList(st.Args), name, depth)
+			args := ic.resolveList(st.Args)
+			if len(gat) > 0 {
+				args = append(args, ic.resolveList(gat)...)
+			}
+			return ic.normalizeProjection(st.Trait, args, name, depth)
 		}
 	}
 	return nil
@@ -78,7 +84,15 @@ func (ic *InferCtxt) normalizeBinding(tr *TraitRef, name string, depth int) Ty {
 
 // selectTrait finds the source of a trait impl. On a unique impl match the
 // impl's trait ref is unified with tr (committing inference).
-func (ic *InferCtxt) selectTrait(tr *TraitRef, depth int) Selection {
+// traceSelect (RUSTGO_TRACE_SELECT=1) logs trait selection to stderr.
+var traceSelect = os.Getenv("RUSTGO_TRACE_SELECT") != ""
+
+func (ic *InferCtxt) selectTrait(tr *TraitRef, depth int) (res Selection) {
+	if traceSelect {
+		defer func() {
+			fmt.Fprintf(os.Stderr, "%*sselect %s %v => %d\n", depth*2, "", tr.Trait.Name, ic.resolveList(tr.Args), res.Kind)
+		}()
+	}
 	if depth > maxSelectDepth {
 		return Selection{Kind: SelAmbig}
 	}
@@ -203,6 +217,9 @@ func (ic *InferCtxt) selectTrait(tr *TraitRef, depth int) Selection {
 		ic.rollback(s)
 		if !ok {
 			continue
+		}
+		if traceSelect {
+			fmt.Fprintf(os.Stderr, "%*s  candidate impl at %s\n", depth*2, "", impl.Span.Lo)
 		}
 		cands = append(cands, impl)
 		candArgs = append(candArgs, iargs)
@@ -341,7 +358,7 @@ func (ic *InferCtxt) confirmImpl(impl *Def, args []Ty, depth int) {
 			continue
 		}
 		for _, b := range sp.Bindings {
-			if n := ic.normalizeBinding(sp.Trait, b.Name, depth+1); n != nil {
+			if n := ic.normalizeBinding(sp.Trait, b.Name, depth+1, b.Args...); n != nil {
 				bt := b.Ty
 				if bt.HasProj() {
 					bt = ic.tryNormalize(bt)
