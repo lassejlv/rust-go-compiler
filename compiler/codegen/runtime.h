@@ -66,6 +66,7 @@ RG_GLOBAL __thread int rg_caller_tracked;
 RG_GLOBAL __thread int rg_is_main;
 RG_GLOBAL __thread char* rg_tname;          /* thread name (NULL: "main" / "<unnamed>") */
 RG_GLOBAL __thread size_t rg_tname_len;
+RG_GLOBAL __thread void* rg_altstack;     /* sigaltstack for stack overflow reports */
 /* the payload message of the last caught panic of this thread */
 RG_GLOBAL __thread char* rg_pmsg;
 RG_GLOBAL __thread size_t rg_pmsg_len;
@@ -102,6 +103,50 @@ static void rg_cs_restore(RgCleanup* base, size_t n) { if (base != rg_cs) { rg_c
 static void rg_tls_run_dtors(void);
 static void rg_atexit(void) { rg_tls_run_dtors(); }
 
+/* Stack overflow detection (like Rust's runtime): a SIGSEGV/SIGBUS whose
+ * address lies in the guard area below the current thread's stack prints
+ * "thread '<name>' (<tid>) has overflowed its stack" and aborts. */
+static void rg_stack_overflow_handler(int sig, siginfo_t* si, void* uc) {
+  (void)uc;
+  uintptr_t addr = (uintptr_t)si->si_addr;
+  pthread_attr_t a;
+  if (pthread_getattr_np(pthread_self(), &a) == 0) {
+    void* lo = 0; size_t sz = 0, guard = 0;
+    pthread_attr_getstack(&a, &lo, &sz);
+    pthread_attr_getguardsize(&a, &guard);
+    pthread_attr_destroy(&a);
+    uintptr_t l = (uintptr_t)lo;
+    if (guard < 4096) guard = 4096;
+    if (addr + guard + (1u << 20) >= l && addr < l + 4096) {
+      char buf[256];
+      const char* name = rg_tname ? rg_tname : (rg_is_main ? "main" : "<unnamed>");
+      int nl = rg_tname ? (int)rg_tname_len : (int)strlen(name);
+      int n = snprintf(buf, sizeof buf, "\nthread '%.*s' (%ld) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n", nl, name, (long)syscall(SYS_gettid));
+      if (n > 0) { ssize_t w = write(2, buf, (size_t)n); (void)w; }
+      signal(SIGABRT, SIG_DFL);
+      abort();
+    }
+  }
+  signal(sig, SIG_DFL);
+  raise(sig);
+}
+
+static void rg_install_stack_guard(void) {
+  stack_t ss;
+  ss.ss_size = 64 * 1024;
+  ss.ss_sp = malloc(ss.ss_size);
+  ss.ss_flags = 0;
+  rg_altstack = ss.ss_sp;
+  if (ss.ss_sp && sigaltstack(&ss, NULL) == 0) {
+    struct sigaction sa;
+    memset(&sa, 0, sizeof sa);
+    sa.sa_sigaction = rg_stack_overflow_handler;
+    sa.sa_flags = SA_SIGINFO | SA_ONSTACK;
+    sigaction(SIGSEGV, &sa, NULL);
+    sigaction(SIGBUS, &sa, NULL);
+  }
+}
+
 static void rg_init(int argc, char** argv) {
   rg_argc = argc; rg_argv = argv;
   rg_is_main = 1;
@@ -109,6 +154,7 @@ static void rg_init(int argc, char** argv) {
   atexit(rg_atexit);
   /* like Rust's runtime: writes to closed pipes fail with EPIPE instead of killing the process */
   signal(SIGPIPE, SIG_IGN);
+  rg_install_stack_guard();
 }
 
 static void rg_flush_stdout(void) { fflush(stdout); }
@@ -316,10 +362,16 @@ static void rg_thread_cleanup(void* arg) {
 
 static void* rg_thread_start(void* arg) {
   RgThread* th = (RgThread*)arg;
+  rg_install_stack_guard(); /* per-thread alternate signal stack */
   pthread_cleanup_push(rg_thread_cleanup, th);
   th->entry(th->data);
   rg_tls_run_dtors();
   pthread_cleanup_pop(1);
+  if (rg_altstack) {
+    stack_t ss; memset(&ss, 0, sizeof ss); ss.ss_flags = SS_DISABLE;
+    sigaltstack(&ss, NULL);
+    free(rg_altstack); rg_altstack = NULL;
+  }
   return NULL;
 }
 
