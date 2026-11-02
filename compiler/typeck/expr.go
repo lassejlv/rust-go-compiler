@@ -882,6 +882,18 @@ func (fcx *FnCtxt) checkField(x *ast.FieldExpr) Ty {
 	bt := fcx.checkExpr(x.X, nil)
 	steps := fcx.autoderef(bt, x.Span)
 	name := x.Name.Name
+	// An inaccessible (private) field is skipped and autoderef continues,
+	// like rustc: `r.value` on a `Ref<Node>` reaches `Node::value`, not the
+	// private field of `Ref`. If no accessible field exists, fall back to the
+	// first inaccessible one.
+	privStep, privFi := -1, -1
+	use := func(i, fi int) Ty {
+		t := steps[i].ty
+		v := t.Def.Adt.Variants[0]
+		fcx.addAdjust(x.X, adjustmentsFor(steps, i)...)
+		fcx.r.Fields[x.ID] = FieldRes{Index: fi, Union: t.Def.Adt.Kind == AdtUnion}
+		return fcx.normalizeInBody(Subst(v.Fields[fi].Ty, t.Args), x.Span)
+	}
 	for i, st := range steps {
 		t := st.ty
 		switch t.Kind {
@@ -892,9 +904,13 @@ func (fcx *FnCtxt) checkField(x *ast.FieldExpr) Ty {
 			fcx.t.AdtFields(t.Def)
 			v := t.Def.Adt.Variants[0]
 			if fi := v.FieldIndex(name); fi >= 0 {
-				fcx.addAdjust(x.X, adjustmentsFor(steps, i)...)
-				fcx.r.Fields[x.ID] = FieldRes{Index: fi, Union: t.Def.Adt.Kind == AdtUnion}
-				return fcx.normalizeInBody(Subst(v.Fields[fi].Ty, t.Args), x.Span)
+				if i+1 < len(steps) && !fcx.fieldAccessible(t.Def, v.Fields[fi]) {
+					if privStep < 0 {
+						privStep, privFi = i, fi
+					}
+					continue
+				}
+				return use(i, fi)
 			}
 		case TTuple:
 			for fi := range t.Elems {
@@ -905,12 +921,43 @@ func (fcx *FnCtxt) checkField(x *ast.FieldExpr) Ty {
 				}
 			}
 		case TInfer:
+			if privStep >= 0 {
+				return use(privStep, privFi)
+			}
 			fcx.errorf(x.Span, "type annotations needed: cannot access field `%s` of unknown type", name)
 			return TyErr
 		}
 	}
+	if privStep >= 0 {
+		return use(privStep, privFi)
+	}
 	fcx.errorf(x.Name.Span, "no field `%s` on type `%s`", name, fcx.resolve(bt))
 	return TyErr
+}
+
+// fieldAccessible reports whether field f of ADT adt is visible from the
+// body being checked. Private fields are visible in the ADT's (normal)
+// module and its descendants; pub(crate)/pub(in ..) fields within the crate.
+func (fcx *FnCtxt) fieldAccessible(adt *Def, f *FieldDef) bool {
+	switch f.Vis {
+	case ast.VisPub:
+		return true
+	case ast.VisCrate, ast.VisRestricted:
+		return fcx.def == nil || adt.Crate == fcx.def.Crate
+	}
+	if fcx.def == nil || adt.Scope == nil || fcx.def.Scope == nil {
+		return true
+	}
+	if adt.Crate != fcx.def.Crate {
+		return false
+	}
+	target := adt.Scope.Normal
+	for m := fcx.def.Scope; m != nil; m = m.Parent {
+		if m == target || m.Normal == target {
+			return true
+		}
+	}
+	return false
 }
 
 func itoa(i int) string {

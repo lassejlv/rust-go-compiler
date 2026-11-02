@@ -1,0 +1,10 @@
+last 5 1
+while-let: count 1 borrow_mut ok true
+for: count 1
+loop: count inside 2
+loop: count 1
+ref field 15 1
+after mut 30
+sum 60
+guard 42 tag 7 get 41
+outer inner

@@ -592,7 +592,7 @@ func (fc *fnGen) loopExpr(x *ast.LoopExpr, t Ty) string {
 	fc.line("for (;;) {")
 	fc.ind++
 	fc.pushScope()
-	li.contDepth = len(fc.scopes)
+	li.contDepth = len(fc.scopes) - 1 // continue also drops this iteration's bindings
 	fc.blockValue(x.Body, TyUnit)
 	fc.popScope()
 	fc.line("%s:;", li.cont)
@@ -616,7 +616,7 @@ func (fc *fnGen) whileExpr(x *ast.WhileExpr) string {
 	fc.line("for (;;) {")
 	fc.ind++
 	fc.pushScope()
-	li.contDepth = len(fc.scopes)
+	li.contDepth = len(fc.scopes) - 1 // continue also drops this iteration's bindings
 	fc.condJump(x.Cond, li.brk, li.depth)
 	fc.blockValue(x.Body, TyUnit)
 	fc.popScope()
@@ -643,7 +643,7 @@ func (fc *fnGen) forExpr(x *ast.ForExpr) string {
 	fc.line("for (;;) {")
 	fc.ind++
 	fc.pushScope()
-	li.contDepth = len(fc.scopes)
+	li.contDepth = len(fc.scopes) - 1 // continue also drops this iteration's bindings
 	next := fc.callResolved(info.Next.Def, info.Next.Args, []string{"&" + it}, optTy)
 	n := fc.spill(next, optTy)
 	someV := fc.g.tcx.Lang("Some").Variant
