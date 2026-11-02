@@ -1,0 +1,9 @@
+looking up 1
+found 1
+dropping inner during unwind
+looking up 2
+found 2
+dropping inner during unwind
+looking up 3
+dropping inner during unwind
+dropping guard during unwind

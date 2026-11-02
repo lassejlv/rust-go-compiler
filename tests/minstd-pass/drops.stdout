@@ -1,0 +1,17 @@
+consume 2
+drop 2
+inner
+drop 3
+drop 4
+drop 6
+first 5
+drop 7
+reassigned 8
+got 9
+drop 9
+consume 10
+drop 10
+end
+drop 8
+drop 5
+drop 1
