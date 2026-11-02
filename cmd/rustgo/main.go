@@ -7,6 +7,8 @@
 package main
 
 import (
+	"runtime/debug"
+	"runtime/pprof"
 	"fmt"
 	"os"
 	"os/exec"
@@ -36,6 +38,15 @@ options:
 }
 
 func main() {
+	// The compiler is short-lived: trade memory for less GC time.
+	debug.SetGCPercent(800)
+	if p := os.Getenv("RUSTGO_CPUPROFILE"); p != "" {
+		f, err := os.Create(p)
+		if err == nil {
+			pprof.StartCPUProfile(f)
+			defer pprof.StopCPUProfile()
+		}
+	}
 	args := os.Args[1:]
 	if len(args) == 0 {
 		usage()

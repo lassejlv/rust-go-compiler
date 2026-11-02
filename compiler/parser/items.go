@@ -66,7 +66,7 @@ func (p *Parser) parseItemAfterAttrs(lo lexer.Pos, attrs []*ast.Attr) *ast.Item 
 		it.Span = p.span(lo)
 		it.ID = ast.NewID()
 		if p.idx > start && p.idx <= len(p.toks) {
-			it.Tokens = append([]lexer.Token(nil), p.toks[start:p.idx]...)
+			it.Tokens = p.toks[start:p.idx:p.idx]
 		}
 		return it
 	}
