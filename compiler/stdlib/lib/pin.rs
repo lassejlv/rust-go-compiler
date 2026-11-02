@@ -127,3 +127,9 @@ impl<T: ?Sized> From<Box<T>> for Pin<Box<T>> {
         Pin { __pointer: boxed }
     }
 }
+
+/// Support for the `pin!` macro.
+#[doc(hidden)]
+pub fn __pin<T>(r: &mut T) -> Pin<&mut T> {
+    Pin { __pointer: r }
+}

@@ -13,7 +13,7 @@ func init() {
 		return tmpl(mac.Span, "&raw mut $0", mac.Args)
 	})
 	registerBuiltin("pin", func(e *Expander, mac *ast.MacCall) ([]ast.TokenTree, error) {
-		return tmpl(mac.Span, "unsafe { ::std::pin::Pin::new_unchecked(&mut { $0 }) }", mac.Args)
+		return tmpl(mac.Span, "::std::pin::__pin(&mut { $0 })", mac.Args)
 	})
 	registerBuiltin("offset_of", func(e *Expander, mac *ast.MacCall) ([]ast.TokenTree, error) {
 		parts := splitTop(mac.Args, ",")
