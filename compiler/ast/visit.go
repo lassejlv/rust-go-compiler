@@ -271,6 +271,15 @@ func walkExpr(e Expr, v Visitor) {
 	case *CastExpr:
 		Walk(x.X, v)
 		Walk(x.Ty, v)
+	case *AsmExpr:
+		for _, op := range x.Operands {
+			if op.In != nil {
+				Walk(op.In, v)
+			}
+			if op.Out != nil && op.Out != op.In {
+				Walk(op.Out, v)
+			}
+		}
 	case *BlockExpr:
 		Walk(x.Block, v)
 	case *IfExpr:

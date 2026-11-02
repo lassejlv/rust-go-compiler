@@ -189,6 +189,11 @@ func (p *Parser) parseMacCall() *ast.MacCall {
 func (p *Parser) parseMacStmt(attrs []*ast.Attr) ast.Stmt {
 	lo := p.lo()
 	mac := p.parseMacCall()
+	if isAsmMac(mac) {
+		var e ast.Expr = p.parseAsm(mac, p.eb(lo))
+		setExprAttrs(e, attrs)
+		return p.finishExprStmt(e)
+	}
 	if (mac.Delim == '{' && !p.is(".") && !p.is("?")) || p.is(";") || p.atBlockEnd() {
 		if p.eat(";") {
 			return &ast.MacStmt{Attrs: attrs, Mac: mac, Semi: true}

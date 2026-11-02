@@ -78,7 +78,8 @@ var builtinAttrMacros = map[string]bool{
 // macro; imports of these (`use core::prelude::v1::derive;`) are accepted.
 func IsBuiltinMacro(name string) bool {
 	_, ok := builtins[name]
-	return ok || builtinAttrMacros[name]
+	// asm! is parsed directly into ast.AsmExpr
+	return ok || builtinAttrMacros[name] || name == "asm"
 }
 
 // ---------------------------------------------------------------------------

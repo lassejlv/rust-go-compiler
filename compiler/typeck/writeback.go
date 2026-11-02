@@ -480,6 +480,15 @@ func (w *capWalker) expr(e ast.Expr, ctx useCtx) {
 		} else {
 			w.expr(x.X, usePlace)
 		}
+	case *ast.AsmExpr:
+		for _, op := range x.Operands {
+			if op.Out != nil {
+				w.expr(op.Out, usePlaceMut)
+			}
+			if op.In != nil && op.In != op.Out {
+				w.expr(op.In, useValue)
+			}
+		}
 	case *ast.CastExpr:
 		w.expr(x.X, useValue)
 	case *ast.BlockExpr:

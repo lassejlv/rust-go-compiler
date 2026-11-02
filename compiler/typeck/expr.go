@@ -80,6 +80,8 @@ func (fcx *FnCtxt) checkExprKind(e ast.Expr, expected Ty) Ty {
 		return fcx.checkIndex(x)
 	case *ast.RefExpr:
 		return fcx.checkRef(x, expected)
+	case *ast.AsmExpr:
+		return fcx.checkAsm(x)
 	case *ast.CastExpr:
 		target := fcx.lowerTy(x.Ty)
 		var hint Ty
@@ -1235,4 +1237,34 @@ func isPlaceExprTy(e ast.Expr) bool {
 		return x.Op == ast.UnDeref
 	}
 	return false
+}
+
+// checkAsm type-checks asm! operands: inputs are values, outputs places.
+func (fcx *FnCtxt) checkAsm(x *ast.AsmExpr) Ty {
+	for _, op := range x.Operands {
+		switch op.Kind {
+		case "sym":
+			fcx.checkExpr(op.In, nil)
+			continue
+		}
+		if op.In != nil {
+			t := fcx.checkExpr(op.In, nil)
+			if st := fcx.shallow(t); st.Kind == TInfer && st.Sub == 1 {
+				// unsuffixed integer literal inputs default like rustc
+				fcx.ic.unify(st, TyI32)
+			}
+		}
+		if op.Out != nil {
+			if op.Out != op.In {
+				fcx.checkExpr(op.Out, nil)
+			}
+			fcx.markMutPlace(op.Out)
+		}
+	}
+	for _, o := range x.Options {
+		if o == "noreturn" {
+			return TyNever
+		}
+	}
+	return TyUnit
 }

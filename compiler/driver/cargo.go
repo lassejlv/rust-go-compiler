@@ -555,9 +555,11 @@ func (bs *buildState) runBuildScript(u *crateUnit) error {
 		"CARGO_CFG_TARGET_OS=linux", "CARGO_CFG_TARGET_ARCH=x86_64", "CARGO_CFG_TARGET_FAMILY=unix",
 		"CARGO_CFG_UNIX=", "CARGO_CFG_TARGET_POINTER_WIDTH=64", "CARGO_CFG_TARGET_ENDIAN=little",
 		"CARGO_CFG_TARGET_ENV=gnu", "CARGO_CFG_TARGET_VENDOR=unknown", "CARGO_CFG_TARGET_HAS_ATOMIC=8,16,32,64,ptr",
-		"CARGO_CFG_PANIC=unwind", "CARGO_CFG_DEBUG_ASSERTIONS=", "CARGO_ENCODED_RUSTFLAGS=--cfg\x1frustix_use_libc", "CARGO=cargo",
-		"CARGO_CFG_RUSTIX_USE_LIBC=",
+		"CARGO_CFG_PANIC=unwind", "CARGO_CFG_DEBUG_ASSERTIONS=", "CARGO_ENCODED_RUSTFLAGS="+encodedCfgFlags(), "CARGO=cargo",
 	)
+	for _, c := range globalCfgs {
+		env = append(env, "CARGO_CFG_"+strings.ToUpper(c)+"=")
+	}
 	for _, f := range u.features {
 		env = append(env, "CARGO_FEATURE_"+strings.ToUpper(strings.ReplaceAll(f, "-", "_"))+"=1")
 	}
@@ -607,4 +609,17 @@ func (bs *buildState) runBuildScript(u *crateUnit) error {
 // globalCfgs are passed to every crate (like RUSTFLAGS="--cfg ..."):
 // rustix's default linux_raw backend needs inline assembly, which we don't
 // support, so select its libc backend.
-var globalCfgs = []string{"rustix_use_libc"}
+var globalCfgs = func() []string {
+	if os.Getenv("RUSTGO_RUSTIX_RAW") != "" {
+		return nil // try rustix's linux_raw (asm!) backend
+	}
+	return []string{"rustix_use_libc"}
+}()
+
+func encodedCfgFlags() string {
+	var parts []string
+	for _, c := range globalCfgs {
+		parts = append(parts, "--cfg", c)
+	}
+	return strings.Join(parts, "\x1f")
+}

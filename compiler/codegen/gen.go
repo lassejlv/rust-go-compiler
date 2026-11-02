@@ -30,6 +30,7 @@ type Gen struct {
 	vtdefs  strings.Builder // vtable definitions
 	statics strings.Builder
 	locs    map[string]string // track_caller locations (locStatic)
+	usesAsm bool              // asm! present (see Program.UsesAsm)
 	// scalarConsts caches literal renderings of scalar const items.
 	scalarConsts map[string]string
 	fns          chunkBuf // function bodies (one chunk per function)
@@ -155,12 +156,13 @@ func (g *Gen) GenerateProgram(mainDef *Def) (prog *Program, err error) {
 	fmt.Fprintf(&m, "  %s();\n", mainName)
 	m.WriteString("  rg_flush_stdout();\n  return 0;\n}\n")
 	return &Program{
-		types:  g.fwd.String() + g.defs.String(),
-		protos: g.protos.String(),
-		data:   g.statics.String() + g.vtdefs.String(),
-		fns:    g.fns.String(),
-		fnEnds: g.fns.ends,
-		main:   m.String(),
+		types:   g.fwd.String() + g.defs.String(),
+		protos:  g.protos.String(),
+		data:    g.statics.String() + g.vtdefs.String(),
+		fns:     g.fns.String(),
+		fnEnds:  g.fns.ends,
+		main:    m.String(),
+		UsesAsm: g.usesAsm,
 	}, nil
 }
 

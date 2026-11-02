@@ -153,6 +153,7 @@ impl<T> Option<T> {
 
     /// Returns the contained `Some` value or computes it from a closure.
     #[inline]
+    #[track_caller]
     pub fn unwrap_or_else<F: FnOnce() -> T>(self, f: F) -> T {
         match self {
             Some(x) => x,

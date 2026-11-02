@@ -130,6 +130,18 @@ func (rw *rewriter) expr(e Expr) Expr {
 		x.X = rw.expr(x.X)
 	case *CastExpr:
 		x.X = rw.expr(x.X)
+	case *AsmExpr:
+		for _, op := range x.Operands {
+			same := op.Out == op.In
+			if op.In != nil {
+				op.In = rw.expr(op.In)
+			}
+			if same {
+				op.Out = op.In
+			} else if op.Out != nil {
+				op.Out = rw.expr(op.Out)
+			}
+		}
 	case *BlockExpr:
 		rw.block(x.Block)
 	case *IfExpr:

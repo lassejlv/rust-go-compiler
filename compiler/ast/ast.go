@@ -995,3 +995,24 @@ type MacPat struct {
 	PatBase
 	Mac *MacCall
 }
+
+// AsmExpr is `asm!(template, operands..., options(...))` (x86-64, Intel
+// syntax templates).
+type AsmExpr struct {
+	ExprBase
+	Template   string // joined template strings (separated by "\n")
+	Operands   []*AsmOperand
+	Options    []string
+	ClobberABI []string
+}
+
+// AsmOperand is one operand of asm!.
+type AsmOperand struct {
+	Name     string // `name = in(reg) x` (or "")
+	Kind     string // in, out, lateout, inout, inlateout, const, sym
+	Reg      string // register class (reg, reg_abcd, xmm_reg, ...) or explicit register
+	Explicit bool   // Reg is an explicit register ("rax")
+	In       Expr   // input value (in/inout/const) or symbol path (sym)
+	Out      Expr   // output place (out/lateout/inout x => y); nil for `_`
+	Span     Span
+}

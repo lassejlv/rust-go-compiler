@@ -354,6 +354,9 @@ func compileC(opts *Options, prog *codegen.Program) error {
 	if opts.Release {
 		cflags = append(cflags, "-DRG_NO_OVERFLOW_CHECKS")
 	}
+	if prog.UsesAsm {
+		cflags = append(cflags, "-masm=intel") // Rust asm! templates are Intel syntax
+	}
 	libs := append([]string{"-lm", "-lpthread"}, opts.LinkArgs...)
 	units := prog.Units(unitCount(prog.FnBytes()))
 	if len(units) == 1 {

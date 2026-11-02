@@ -713,6 +713,9 @@ func (p *Parser) parsePathStartExpr(r restr) ast.Expr {
 		p.next()
 		g := p.parseDelimGroup()
 		mac := &ast.MacCall{Path: path, Delim: g.Delim, Args: g.Inner, Span: p.span(lo)}
+		if isAsmMac(mac) {
+			return p.parseAsm(mac, p.eb(lo))
+		}
 		return &ast.MacCallExpr{ExprBase: p.eb(lo), Mac: mac}
 	}
 	if p.is("{") && r&rNoStruct == 0 {

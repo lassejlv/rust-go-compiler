@@ -38,6 +38,9 @@ type Program struct {
 	fns    string // function definitions
 	fnEnds []int  // end offsets of the function definitions in fns
 	main   string // int main(...)
+	// UsesAsm: the program contains asm! (Rust's Intel-syntax templates:
+	// compile with -masm=intel)
+	UsesAsm bool
 }
 
 // Source returns the program as one translation unit.

@@ -272,6 +272,12 @@ func (fc *fnGen) operand(e ast.Expr) operand {
 			// ensure place
 		}
 		return val(fc.addrOf(inner))
+	case *ast.AsmExpr:
+		fc.asm(x)
+		if t != nil && t.Kind == TNever {
+			return val(fc.dummy(t))
+		}
+		return val(fc.unit())
 	case *ast.CastExpr:
 		return val(fc.cast(x, t))
 	case *ast.BlockExpr:

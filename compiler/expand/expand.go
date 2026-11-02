@@ -1001,6 +1001,22 @@ func (e *Expander) expandExpr(x ast.Expr, depth int) (ast.Expr, error) {
 		x.Index, err = e.expandExpr(x.Index, depth)
 	case *ast.RefExpr:
 		x.X, err = e.expandExpr(x.X, depth)
+	case *ast.AsmExpr:
+		for _, op := range x.Operands {
+			same := op.Out == op.In
+			if op.In != nil {
+				if op.In, err = e.expandExpr(op.In, depth); err != nil {
+					return nil, err
+				}
+			}
+			if same {
+				op.Out = op.In
+			} else if op.Out != nil {
+				if op.Out, err = e.expandExpr(op.Out, depth); err != nil {
+					return nil, err
+				}
+			}
+		}
 	case *ast.CastExpr:
 		if x.X, err = e.expandExpr(x.X, depth); err != nil {
 			return nil, err

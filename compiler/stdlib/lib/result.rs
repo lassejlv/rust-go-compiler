@@ -306,6 +306,7 @@ impl<T, E> Result<T, E> {
 
     /// Returns the contained `Ok` value or computes it from a closure.
     #[inline]
+    #[track_caller]
     pub fn unwrap_or_else<F: FnOnce(E) -> T>(self, op: F) -> T {
         match self {
             Ok(t) => t,
