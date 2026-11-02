@@ -331,6 +331,7 @@ func (g *Gen) genConstFn(name string, d *Def, args []Ty) {
 		g.fatalf("%s", g.tcx.Err())
 	}
 	fg := newFnGen(g, r)
+	fg.inConst = true
 	fg.retTy = r.RetTy
 	sig := fmt.Sprintf("static %s %s(void)", g.ctype(r.RetTy), name)
 	fmt.Fprintf(&g.protos, "%s;\n", sig)

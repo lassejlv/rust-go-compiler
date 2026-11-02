@@ -3,6 +3,7 @@ package codegen
 import (
 	"fmt"
 	"math"
+	"math/big"
 	"strconv"
 	"strings"
 
@@ -251,6 +252,20 @@ func (fc *fnGen) operand(e ast.Expr) operand {
 			fmt.Fprintf(&fc.g.statics, "static %s %s = %s;\n", fc.g.ctype(it), name, v)
 			return val("(&" + name + ")")
 		}
+		if it := fc.ty(x.X); !x.Mut && len(fc.r.Adjust[x.X.GetID()]) == 0 && !it.IsUnsized() && !fc.g.needsDrop(it) &&
+			((fc.inConst && !isPlaceExpr(x.X)) || fc.promotableDyn(x.X)) {
+			// constant borrow of a value computed at run time (const
+			// paths, const-fn results): static storage, (re)initialized
+			// with the same value on each evaluation
+			name := fc.newName("prom")
+			fc.g.defineByValue(it)
+			fmt.Fprintf(&fc.g.statics, "static %s %s;\n", fc.g.ctype(it), name)
+			v := fc.value(x.X)
+			if !isZST(it) {
+				fc.line("%s = %s;", name, v)
+			}
+			return val("(&" + name + ")")
+		}
 		inner := fc.adjusted(x.X)
 		if x.Mut {
 			// ensure place
@@ -400,10 +415,22 @@ func cFloat(f float64) string {
 	return fmt.Sprintf("(%s)", strconv.FormatFloat(f, 'x', -1, 64))
 }
 
+// u128Const renders a decimal 128-bit literal as a C constant expression.
+func u128Const(dec string) string {
+	b, ok := new(big.Int).SetString(dec, 10)
+	if !ok {
+		return fmt.Sprintf("rg_u128_from_str(%q)", dec)
+	}
+	mask := new(big.Int).SetUint64(^uint64(0))
+	lo := new(big.Int).And(b, mask).Uint64()
+	hi := new(big.Int).Rsh(b, 64).Uint64()
+	return fmt.Sprintf("(((unsigned __int128)%dULL << 64) | (unsigned __int128)%dULL)", hi, lo)
+}
+
 func intLit(x *ast.LitExpr, t Ty, ct string) string {
 	if x.Big != "" {
 		// 128-bit literal from decimal text
-		return fmt.Sprintf("((%s)rg_u128_from_str(%q))", ct, x.Big)
+		return fmt.Sprintf("((%s)%s)", ct, u128Const(x.Big))
 	}
 	v := x.IntVal
 	switch t.IntKind() {
@@ -500,7 +527,7 @@ func (fc *fnGen) unaryOperand(x *ast.UnaryExpr, t Ty) operand {
 	case ast.UnNeg:
 		if lit, ok := unparen(x.X).(*ast.LitExpr); ok && lit.Kind == ast.LitInt && t.Kind == TInt && len(fc.r.Adjust[x.X.GetID()]) == 0 {
 			if lit.Big != "" {
-				return operand{s: fmt.Sprintf("((%s)(0 - (unsigned __int128)rg_u128_from_str(%q)))", fc.ctype(t), lit.Big), ty: t}
+				return operand{s: fmt.Sprintf("((%s)(0 - %s))", fc.ctype(t), u128Const(lit.Big)), ty: t}
 			}
 			return operand{s: fmt.Sprintf("((%s)(0 - (unsigned __int128)%dULL))", fc.ctype(t), lit.IntVal), ty: t}
 		}
@@ -1207,6 +1234,44 @@ func (fc *fnGen) promotable(e ast.Expr) bool {
 		return vr != nil && vr.Kind == typeck.VUnitCtor
 	}
 	return false
+}
+
+// promotableDyn reports whether e is a constant expression involving const
+// items (which rustc promotes, but whose value we compute at run time).
+func (fc *fnGen) promotableDyn(e ast.Expr) bool {
+	hasConst := false
+	var ok func(e ast.Expr) bool
+	ok = func(e ast.Expr) bool {
+		if fc.promotable(e) {
+			return true
+		}
+		switch x := e.(type) {
+		case *ast.ParenExpr:
+			return ok(x.X)
+		case *ast.PathExpr:
+			vr := fc.r.Paths[x.ID]
+			if vr != nil && vr.Kind == typeck.VConst {
+				hasConst = true
+				return true
+			}
+		case *ast.TupleExpr:
+			for _, el := range x.Elems {
+				if !ok(el) {
+					return false
+				}
+			}
+			return true
+		case *ast.ArrayExpr:
+			for _, el := range x.Elems {
+				if !ok(el) || len(fc.r.Adjust[el.GetID()]) > 0 {
+					return false
+				}
+			}
+			return true
+		}
+		return false
+	}
+	return ok(e) && hasConst
 }
 
 // constC renders a promotable constant expression as a C constant.

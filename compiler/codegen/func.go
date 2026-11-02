@@ -47,6 +47,9 @@ type fnGen struct {
 	// deferInits collects drop-flag initializations of match bindings until
 	// the arm's guard has succeeded.
 	deferInits *[]string
+	// inConst is set while generating a const item's initializer: every
+	// shared borrow of a temporary is promoted to static storage.
+	inConst bool
 }
 
 func newFnGen(g *Gen, r *typeck.Results) *fnGen {
@@ -370,6 +373,62 @@ func (fc *fnGen) stmt(s ast.Stmt) {
 	}
 }
 
+// extendsTemps reports whether a let initializer borrows a temporary in an
+// extending position (`&e`, inside struct/tuple/array literals, casts,
+// ctor calls or block tails), which lives until the end of the block.
+func (fc *fnGen) extendsTemps(e ast.Expr) bool {
+	switch x := e.(type) {
+	case *ast.RefExpr:
+		return true
+	case *ast.ParenExpr:
+		return fc.extendsTemps(x.X)
+	case *ast.CastExpr:
+		return fc.extendsTemps(x.X)
+	case *ast.TupleExpr:
+		for _, el := range x.Elems {
+			if fc.extendsTemps(el) {
+				return true
+			}
+		}
+	case *ast.ArrayExpr:
+		for _, el := range x.Elems {
+			if fc.extendsTemps(el) {
+				return true
+			}
+		}
+	case *ast.StructExpr:
+		for _, f := range x.Fields {
+			if f.Expr != nil && fc.extendsTemps(f.Expr) {
+				return true
+			}
+		}
+	case *ast.CallExpr:
+		pe, ok := unparen(x.Fn).(*ast.PathExpr)
+		if !ok {
+			return false
+		}
+		vr := fc.r.Paths[pe.ID]
+		// std's pin! helper stands in for rustc's `Pin { pointer: &mut {..} }`
+		if vr == nil || vr.Kind != typeck.VFn || (vr.Def.Kind != DefStruct && vr.Def.Kind != DefVariant && vr.Def.Name != "__pin") {
+			return false
+		}
+		for _, a := range x.Args {
+			if fc.extendsTemps(a) {
+				return true
+			}
+		}
+	case *ast.BlockExpr:
+		if x.Block != nil {
+			if t := blockTail(x.Block); t != nil {
+				return fc.extendsTemps(t)
+			}
+		}
+	case *ast.IfExpr, *ast.MatchExpr:
+		return true // conservative
+	}
+	return false
+}
+
 func isPlaceExpr(e ast.Expr) bool {
 	switch x := e.(type) {
 	case *ast.PathExpr, *ast.FieldExpr, *ast.IndexExpr:
@@ -413,9 +472,22 @@ func (fc *fnGen) letStmt(x *ast.LetStmt) {
 		fc.popScope()
 		return
 	}
+	// temporaries of the initializer die at the end of the statement unless
+	// their lifetime is extended by a borrow in an extending position
+	temps := !isPlaceExpr(x.Init) && !fc.extendsTemps(x.Init)
 	if ip, ok := x.Pat.(*ast.IdentPat); ok && ip.Sub == nil && x.Else == nil {
 		if l := fc.r.Locals[ip.ID]; l != nil && !l.ByRef {
-			v := fc.value(x.Init)
+			var v string
+			if temps {
+				fc.pushScope()
+				v = fc.value(x.Init)
+				if !isSimple(v) {
+					v = fc.spill(v, fc.aty(x.Init))
+				}
+				fc.popScope()
+			} else {
+				v = fc.value(x.Init)
+			}
 			fc.declLocal(l)
 			if !isZST(l.Ty) {
 				fc.line("%s = %s;", fc.localName(l), v)
@@ -433,8 +505,14 @@ func (fc *fnGen) letStmt(x *ast.LetStmt) {
 	if isPlaceExpr(x.Init) {
 		op = fc.placeOp(x.Init)
 	} else {
+		if temps {
+			fc.pushScope()
+		}
 		v := fc.value(x.Init)
 		p, _ := fc.materializeNoDrop(v, it)
+		if temps {
+			fc.popScope()
+		}
 		op = operand{s: p, place: true, ty: it}
 	}
 	fc.declarePatLocals(x.Pat)
