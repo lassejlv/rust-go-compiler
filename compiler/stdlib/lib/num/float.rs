@@ -336,7 +336,7 @@ macro_rules! __std_float_impl {
             pub fn round_ties_even(self) -> $t {
                 let f = self.floor();
                 let d = self - f;
-                if d < 0.5 {
+                let r = if d < 0.5 {
                     f
                 } else if d > 0.5 {
                     f + 1.0
@@ -344,7 +344,9 @@ macro_rules! __std_float_impl {
                     f
                 } else {
                     f + 1.0
-                }
+                };
+                // rounding to nearest never changes the sign (-0.4 -> -0.0)
+                r.copysign(self)
             }
 
             /// Returns the integer part of `self`.
