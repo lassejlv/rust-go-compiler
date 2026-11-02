@@ -1,0 +1,4 @@
+/rustgo
+*.out
+/tests/out/
+/build/
