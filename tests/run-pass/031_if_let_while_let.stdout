@@ -1,0 +1,15 @@
+using 8 threads
+none branch
+popped 4
+popped 3
+popped 2
+popped 1
+stack empty: true
+number 5
+word apple
+number -2
+end token at 3
+chain len = 21, last few = [8, 4, 2, 1]
+1a 2b 3c 
+ok and big: 7
+binding with range: 3

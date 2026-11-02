@@ -1,0 +1,25 @@
+c = a
+c as u8 = 97
+c as u32 = 97
+char::from(66) = B
+next char = b
+is_alphabetic: true false
+is_numeric: true false
+is_ascii_digit: true
+is_alphanumeric: true false
+is_whitespace: true true
+is_uppercase: true false
+is_lowercase: true
+to_ascii_uppercase: M
+to_ascii_lowercase: m
+to_digit: Some(7) Some(15)
+from_digit: Some('5')
+is_ascii_punctuation: true
+ABCDE
+hash = 2558980
+digit value = 8
+byte literal: 65
+char compare: true true
+len_utf8: 1 2
+unicode char: é 233
+escaped: '\n' '\'' 'x'

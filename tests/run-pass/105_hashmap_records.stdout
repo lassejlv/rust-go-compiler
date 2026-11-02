@@ -1,0 +1,15 @@
+  A100   keyboard     $ 49.99 x10
+  B200   mouse        $ 19.50 x3
+  C300   monitor      $189.00 x2
+order #1 ok, total $119.48
+order failed: not enough monitor (have 2, want 3)
+order failed: unknown sku Z999
+order #2 ok, total $228.00
+order failed: not enough mouse (have 0, want 1)
+  A100   keyboard     $ 49.99 x8
+  B200   mouse        $ 19.50 x0
+  C300   monitor      $189.00 x1
+order 99 total: None
+order ids: [1, 2]
+units sold: [("B200", 3), ("A100", 2), ("C300", 1)]
+inventory value: $588.92

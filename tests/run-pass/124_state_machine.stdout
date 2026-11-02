@@ -1,0 +1,31 @@
+Coin(25)   Idle -> Idle
+Select(9)  Idle -> Idle
+Select(1)  Idle -> Selecting { item: 1 }
+Coin(100)  Selecting { item: 1 } -> Paying { item: 1, paid: 100 }
+Coin(50)   Paying { item: 1, paid: 100 } -> Dispensing { item: 1, change: 25 }
+Done       Dispensing { item: 1, change: 25 } -> Idle
+Select(3)  Idle -> Selecting { item: 3 }
+Select(2)  Selecting { item: 3 } -> Selecting { item: 2 }
+Coin(100)  Selecting { item: 2 } -> Paying { item: 2, paid: 100 }
+Cancel     Paying { item: 2, paid: 100 } -> Idle
+Select(3)  Idle -> Selecting { item: 3 }
+Coin(75)   Selecting { item: 3 } -> Dispensing { item: 3, change: 0 }
+Done       Dispensing { item: 3, change: 0 } -> Idle
+Kick       Idle -> OutOfOrder
+Select(1)  OutOfOrder -> OutOfOrder
+Repair     OutOfOrder -> Idle
+Done       Idle -> Idle
+--- log ---
+ 0: ignored Coin(25) in Idle
+ 1: invalid item 9
+ 2: selected 1 costing 125
+ 3: dispensed 1 with change 25
+ 4: selected 3 costing 75
+ 5: selected 2 costing 200
+ 6: refund 100
+ 7: selected 3 costing 75
+ 8: dispensed 3 with change 0
+ 9: machine kicked!
+10: ignored Done in Idle
+bank = 200
+final state = Idle, idle? true

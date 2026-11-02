@@ -1,0 +1,8 @@
+red = #ff0000
+teal = #008080, inverted = #ff7f7f
+components: 0 128 128
+100 m = 328.08 ft
+I am a unit struct
+Vec2(1, 2) + Vec2(10, 20) = Vec2(11, 22)
+eq: true
+total = Vec2(2, 8)

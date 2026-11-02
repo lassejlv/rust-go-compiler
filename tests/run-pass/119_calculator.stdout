@@ -1,0 +1,17 @@
+1 + 2 * 3                = 7
+(1 + 2) * 3              = 9
+2 ^ 3 ^ 2                = 512
+-2 ^ 2                   = 4
+10 / 4 - 1.5             = 1
+x * x + 2 * x + 1        = 16
+2 * pi * x               = 18.84954
+1000 * (1 + rate) ^ 10   = 1628.894627
+((((7))))                = 7
+--5                      = 5
+1 / (x - 3)              ! division by zero
+4 +                      ! unexpected end of input
+3 $ 4                    ! unexpected '$' at 2
+(1 + 2                   ! unexpected end of input
+y + 1                    ! unknown variable 'y'
+1 2                      ! unexpected token Num(2.0)
+[Ident("a1"), Plus, LParen, Num(2.5), Star, Ident("b"), RParen]

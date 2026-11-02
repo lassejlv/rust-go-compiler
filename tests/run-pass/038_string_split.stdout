@@ -1,0 +1,25 @@
+words = ["the", "quick", "brown", "fox", "jumps", "over", "the", "lazy", "dog"]
+word count = 9
+split(' ') count = 12 -> ["the", "quick", "", "brown", "fox", "jumps", "over", "", "", "the", "lazy", "dog"]
+field 0 = name
+field 1 = age
+field 2 = city
+splitn: Some("key") Some("value=more")
+split_once: Some(("key", "value=more"))
+rsplit_once: Some(("key=value", "more"))
+split_once none: None
+1: line1
+2: line2
+3: line3
+skipping "x"
+total = 55
+floats = [1.5, 2.25, 3.0]
+multi = ["a", "b", "c", "d"]
+split_terminator = ["a", "b", "c"]
+rsplit = ["3", "2", "1"]
+by_str = ["one", "two", "three"]
+empty_parts = ["", "a", "", "b", ""]
+parsed: true x 18446744073709551615
+parse err: true
+parse neg: Ok(-12)
+parse plus: Ok(12)

@@ -1,0 +1,11 @@
+Just(10) Nothing
+5 -1
+true false
+Just(1)
+eq: true
+left 12
+right "abc"
+left -4
+sum=10 depth=4 leaves=4
+float sum=0.75
+Node(Leaf(0.5), Leaf(0.25))

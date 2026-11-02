@@ -1,0 +1,17 @@
+apply = 15
+apply fn item = 42
+apply_twice = 18
+log = [0, 1, 4, 9, 16]
+sum = 5050
+consumed: treasure!
+consumed: literal
+apply_dyn = 9
+apply_dyn capture = 6
+apply_mut_ref = 15
+c = 10
+fn pointer = [2, 4, 6]
+closure as fn pointer = [0, 1, 2]
+add(7, 3) = 10
+sub(7, 3) = 4
+mul(7, 3) = 21
+max(7, 3) = 7

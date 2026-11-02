@@ -1,0 +1,11 @@
+Cons(1, Cons(2, Cons(3, Nil)))
+sum = 6
+str = 1 -> 2 -> 3
+nil = empty
+stack = [25, 16, 9, 4, 1] len 5
+peek = Some(25)
+pop = Some(-1)
+reversed = [1, 4, 9, 16]
+1 4 9 16 | len 0
+pop empty = None
+big total = 49995000

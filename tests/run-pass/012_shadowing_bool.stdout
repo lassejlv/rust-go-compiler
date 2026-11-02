@@ -1,0 +1,18 @@
+inner x = 12
+outer x = 6
+shadowed type: 43
+t && f = false
+t || f = true
+!t = false
+t ^ f = true
+t & t = true
+f | f = false
+t == f = false
+t != f = true
+check(false)
+r = false
+check(true)
+r2 = true
+in_range = true
+bool as int: 1 0
+cmp: true false true false

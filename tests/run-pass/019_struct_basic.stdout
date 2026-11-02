@@ -1,0 +1,8 @@
+p = (3, -4)
+q = (10, 2)
+manhattan = 13
+Alice (30) <alice@example.com>
+Bob (25) <template@example.com>
+destructured: x=3 y=-4
+px = 10
+sum = (9, 12)

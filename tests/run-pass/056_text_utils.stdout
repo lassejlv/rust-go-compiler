@@ -1,0 +1,12 @@
+The Quick Brown Fox
+four three two one
+rle: 3a1b2c5d1e -> aaabccddddde
+rle long: 12z
+vowels: 9
+anagram: true false
+ 1| Rust is a multi-paradigm,      |
+ 2| general-purpose programming    |
+ 3| language that emphasizes       |
+ 4| performance, type safety, and  |
+ 5| concurrency.                   |
+parseHttpResponseCode

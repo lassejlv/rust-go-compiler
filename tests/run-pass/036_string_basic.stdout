@@ -1,0 +1,17 @@
+empty: '' len=0 is_empty=true
+s = abcdef len = 6
+literal literal from into
+joined = literal from literal
+acc = xyz
+Hello, Ferris!
+len of greeting = 13
+acc = xyz!, cloned = xyz
+num = 42, f = 2.5, sum len = 5
+line one
+line two
+abcdef
+C:\path\no\escape
+she said "hi"
+eq: true true
+with_capacity len = 0
+utf len bytes = 6, chars = 5

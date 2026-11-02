@@ -1,0 +1,26 @@
+Ferris is 7 years old
+    Ferris|7   |
+a b a b
+second first
+1 2 1
+1 mixed 2
+{literal braces} and {5}
+{}
+[       3.142]
+[  3.14159265]
+[      3.14]
+format! -> x-9 (len 3)
+write! -> 1+2=3
+[1, 2, 3]
+0 [1, 2, 3] 4
+debug_str = "hi" (len 4)
+["x", "y"] has 2 items; first=x
+[   42]
+via format_args
+0: [  a   ]
+1: [  bb  ]
+2: [ ccc  ]
+5 squared is 25
+    1|2    |  3  |    4|
+manual newline
+one, two, three

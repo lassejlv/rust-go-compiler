@@ -1,0 +1,24 @@
+-1i32 as u32 = 4294967295
+-1i32 as u8 = 255
+-1i32 as i64 = -1
+300 as u8 = 44
+200u8 as i8 = -56
+3.99 as i32 = 3
+-3.99 as i32 = -3
+1e20 as i32 = 2147483647
+-1.5 as u8 = 0
+f64::NAN as i32 = 0
+7 as f64 / 2 = 3.5
+u64 max as f64 = 18446744073709552000
+i64 as i32 truncation: 5
+char as u32 = 65
+u8 as char = a
+usize from i32: 5
+arr[idx] = 40
+i32 from usize: -7
+1<<63 as i64 = -9223372036854775808
+f32 as f64: 0.10000000149011612
+f64 as f32: 0.1
+i8 -> u16: 65535
+u16 -> i8: -1
+bool as i32: 2

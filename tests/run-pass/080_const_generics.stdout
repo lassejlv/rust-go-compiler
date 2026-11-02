@@ -1,0 +1,16 @@
+push 10 -> true
+push 11 -> true
+push 12 -> true
+push 13 -> true
+push 14 -> false
+push 15 -> false
+capacity 4 contents [10, 11, 12, 13]
+sum3 = 6
+sum5 = 150
+first_last = ('a', 'd')
+dot = 32
+a = [[1, 2, 3], [4, 5, 6]]
+t = [[1, 4], [2, 5], [3, 6]]
+a * t = [[14, 32], [32, 77]]
+t * a = [[17, 22, 27], [22, 29, 36], [27, 36, 45]]
+from_fn = [0, 1, 4]

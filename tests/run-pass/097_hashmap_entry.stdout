@@ -1,0 +1,13 @@
+   the: 4
+   dog: 2
+   fox: 2
+     a: 1
+ brown: 1
+len 2: ["hi", "yo"]
+len 3: ["hey", "sup"]
+len 5: ["hello", "howdy"]
+stock: [("apple", 12), ("kiwi", 7), ("pear", 0)]
+char counts: [('a', 5), ('b', 2), ('r', 2), ('c', 1), ('d', 1)]
+longest collatz under 10000: (6171, 262)
+cached 27 -> 112
+by grade: [(90, ["amy", "cy"]), (85, ["bo", "ed"]), (70, ["di"])]

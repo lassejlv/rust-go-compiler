@@ -1,0 +1,13 @@
+rest after '=': " 42 ;"
+words = ["let", "answer", "=", "42", ";"]
+found 'the' at 0..3
+found 'the' at 15..18
+found 'the' at 28..31
+longest = much longer one
+first_of = x
+pair max = 20
+pair max str = pear
+split_pair = ("key", "value")
+split_pair none = ("novalue", "")
+split_pair utf8 = ("a", "b")
+static lifetime

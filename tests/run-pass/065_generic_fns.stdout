@@ -1,0 +1,15 @@
+largest i32 = 100
+largest f64 = 1.5
+largest char = y
+largest String = zucchini
+show_all = <1><2><3>
+show_all = <a><b>
+debug_pair = (1 & "x")
+debug_pair = ([1] & Some(2.5))
+swap = ("one", 1)
+count = 3
+count = 0
+identity = 5 str
+sum i32 = 10
+sum f64 = 0.75
+turbofish = 9

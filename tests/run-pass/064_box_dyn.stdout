@@ -1,0 +1,15 @@
+Circle(r=1)            area=   3.142 perimeter=  6.283
+Rect(3x4)              area=  12.000 perimeter= 14.000
+Triangle(3, 4, 5)      area=   6.000 perimeter= 12.000
+Rect(2x2)              area=   4.000 perimeter=  8.000
+Triangle(2, 2, 2)      area=   1.732 perimeter=  6.000
+total area = 26.874
+after scaling:
+  Circle(r=2) -> 12.566
+  Rect(6x8) -> 48.000
+  Triangle(6, 8, 10) -> 24.000
+  Rect(4x4) -> 16.000
+  Triangle(4, 4, 4) -> 6.928
+sorted: Triangle(4, 4, 4), Circle(r=2), Rect(4x4), Triangle(6, 8, 10), Rect(6x8)
+biggest = Rect(6x8)
+single = Circle(r=0.5) 0.7854

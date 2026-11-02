@@ -1,0 +1,13 @@
+n = 7
+n = 70
+r1 = 70, r2 = 70, sum = 140
+double ref = 70
+auto deref add = 71
+longest = much longer
+v = [1, 2, 3, 1, 4, 9], sum = 20
+a = 2, b = 1
+balance = 120
+arr = [2, 5, 10]
+arr = [99, 5, 10]
+refs: left right (pair still usable: left)
+eq through ref: true

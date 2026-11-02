@@ -1,0 +1,21 @@
+Fahrenheit(212.0)
+Fahrenheit(-40.0)
+Rgb { r: 51, g: 102, b: 153 }
+336699
+ok Even(4)
+err 7 is odd
+Ok(Even(10))
+Int(42)
+Text("hi")
+Flag(true)
+abc 7 3
+4294967295
+true
+Ok(-5)
+Err("out of range integral type conversion attempted")
+xyz
+[65, 66]
+boxed
+65
+Some('A')
+Ok('B')

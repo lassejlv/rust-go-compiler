@@ -1,0 +1,15 @@
+Config { name: "", retries: 0, verbose: false, ratio: 0.0, tags: [], limit: None }
+Config { name: "prod", retries: 3, verbose: false, ratio: 0.0, tags: [], limit: None }
+c2 tags = [], c3 tags = ["cloned"]
+c2 == c3: false
+Server { host: "localhost", port: 8080 }
+localhost:9000
+mode = Idle, other = Running
+p = Pixel { r: 10, g: 220, b: 128 }
+q = Pixel { r: 10, g: 220, b: 128 }
+bright = Pixel { r: 60, g: 255, b: 178 }
+default pixel = Pixel { r: 0, g: 0, b: 0 }
+array of copies: 3
+defaults: (0, 0.0, false, '\0', "")
+vec default = [], option default = None
+original = ["a", "b"], copy = ["a!", "b"]

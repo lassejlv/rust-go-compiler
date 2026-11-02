@@ -675,6 +675,7 @@ type BlockExpr struct {
 	Block *Block
 	Label string // 'label: { ... }
 	Const bool   // const { }
+	Async bool   // async { } / async move { } (parse only)
 }
 
 // IfExpr: Cond may contain LetExpr (if let / let chains joined by &&).

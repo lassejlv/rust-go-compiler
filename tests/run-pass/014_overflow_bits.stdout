@@ -1,0 +1,27 @@
+wrapping_add: 4
+wrapping_sub: 254
+wrapping_mul: 44
+checked_add ok: Some(255)
+checked_add overflow: None
+checked_sub: None
+checked_div by zero: None
+saturating_add: 255
+saturating_sub: 0
+overflowing_add: (4, true)
+i32 wrapping: -2147483648
+i64 wrapping_neg: -9223372036854775808
+x & y = 10000010
+x | y = 11101110
+x ^ y = 1101100
+!x = 4294967093
+!0i32 = -1
+x << 4 = 3232
+x >> 3 = 25
+-16i32 >> 2 = -4
+0x80000000u32 >> 31 = 1
+1u64 << 50 = 1125899906842624
+rotate_left = 24
+swap_bytes = 78563412
+flags = 00100001
+popcount(0xDEADBEEF) = 24
+fnv1a(hello) = a430d84680aabd0b

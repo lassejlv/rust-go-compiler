@@ -1,0 +1,25 @@
+total words: 70
+distinct words: 26
+top 8:
+ 1. it        10 **********
+ 2. of        10 **********
+ 3. the       10 **********
+ 4. was       10 **********
+ 5. age        2 **
+ 6. before     2 **
+ 7. epoch      2 **
+ 8. had        2 **
+hapax legomena (14): belief best darkness despair everything foolishness hope incredulity light nothing spring winter wisdom worst
+len  2: ["it", "of", "us", "we"]
+len  3: ["age", "had", "the", "was"]
+len  4: ["best", "hope"]
+len  5: ["epoch", "light", "times", "worst"]
+len  6: ["before", "belief", "season", "spring", "winter", "wisdom"]
+len  7: ["despair", "nothing"]
+len  8: ["darkness"]
+len 10: ["everything"]
+len 11: ["foolishness", "incredulity"]
+bigram 'it was' x10
+bigram 'was the' x10
+top letters: e:35 t:29 s:28 i:23 o:22
+average word length: 3.714

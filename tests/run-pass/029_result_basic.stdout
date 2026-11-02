@@ -1,0 +1,22 @@
+ok: 5
+error: division by zero
+error: overflow
+ok: 1000000
+Ok(4.0)
+Err(NegativeSqrt(-4.0))
+is_ok = true, is_err = false
+map = Ok(6)
+map_err = Err(3)
+unwrap_or = 0
+unwrap_or_else = 300
+ok() = Some(3), err() = Some("bad")
+and_then = Ok(30)
+unwrap = 3
+expect_err = bad
+parsed 1
+parse error: invalid digit found in string
+parsed 3
+all = Ok([4, 5, 6])
+bad is_err = true
+if let ok: 3
+if let err: division by zero

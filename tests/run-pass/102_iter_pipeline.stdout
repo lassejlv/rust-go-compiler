@@ -1,0 +1,12 @@
+parsed 8 of 10 lines
+errors: ["db@120", "net@140"]
+auth  count=1 worst=1 span=121..121
+db    count=3 worst=3 span=105..150
+net   count=4 worst=3 span=100..140
+numbers in messages: [10, 0, 0, 1, 230, 512, 5, 3]
+gaps: [5, 5, 10, 1, 9, 10, 10]
+max gap after ts Some((140, 10))
+first warn after error: Some("retrying in 5s")
+level summary: IWIEIWEI
+total words: 23
+longest message: "timeout after 3 retries"

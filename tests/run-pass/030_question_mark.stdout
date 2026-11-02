@@ -1,0 +1,14 @@
+"42" -> ok 42
+" 7 " -> ok 7
+"-5" -> negative value: -5
+"5000" -> 5000 exceeds 1000
+"abc" -> parse error: invalid digit found in string
+"" -> parse error: cannot parse integer from empty string
+sum = Some(6)
+sum failed: negative value: -2
+Some('R') None
+Some(3) None
+parse_pair("3, 4") = Ok((3, 4))
+parse_pair("10,x") = Err("invalid digit found in string")
+parse_pair("5") = Err("missing second")
+parse_pair("") = Err("cannot parse integer from empty string")

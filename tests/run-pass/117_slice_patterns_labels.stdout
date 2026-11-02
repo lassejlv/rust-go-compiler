@@ -1,0 +1,19 @@
+[] -> empty
+[1] -> one: 1
+[1, 2] -> two: 1 2
+[4, 5, 4] -> bookends 4
+[1, 2, 3, 4, 5] -> first 1 middle [2, 3, 4] last 5
+sum_rec = 21
+["get", "a"] -> GET a
+["set", "b", "2"] -> SET b=2
+["del", "x", "y"] -> DEL x,y
+["del"] -> unknown del
+["ping"] -> unknown ping
+[] -> no command
+a=10 b=20 rest=[30, 40]
+penultimate = 30
+found 42 at Some((1, 1))
+count = 9
+first n with n^2 > 500: 23
+labeled block: big first
+pairs = [(3, 7), (4, 7), (5, 7), (6, 7), (7, 7)]

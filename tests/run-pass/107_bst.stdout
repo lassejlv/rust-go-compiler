@@ -1,0 +1,21 @@
+duplicate insert 40: false
+size = 10, height = 4
+inorder = [20, 30, 35, 40, 45, 50, 60, 65, 70, 80]
+preorder = [50, 30, 20, 40, 35, 45, 70, 60, 65, 80]
+min = Some(20), max = Some(80)
+contains 45 = true
+contains 55 = false
+contains 80 = true
+contains 10 = false
+        80
+    70
+            65
+        60
+50
+            45
+        40
+            35
+    30
+        20
+empty: min=None height=0 inorder=[]
+skewed height = 6

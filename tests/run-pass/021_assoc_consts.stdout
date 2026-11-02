@@ -1,0 +1,14 @@
+area = 12.5664
+circumference = 12.5664
+unit area = 3.14159
+PI = 3.14159
+-40C = -40F
+0C = 32F
+37C = 98.6F
+100C = 212F
+212F = 100C
+id = 1000
+id = 1001
+id = 1002
+i32::MAX via assoc = 2147483647
+u8::BITS = 8

@@ -1,0 +1,13 @@
+moved 3 North -> (0, 3)
+moved 2 East -> (2, 3)
+moved 1 South -> (2, 2)
+moved 4 West -> (-2, 2)
+moved 2 North -> (-2, 4)
+final direction: East
+is west: false
+status values: 1 0 99
+status debug: Banned
+North is vertical
+East is horizontal
+South is vertical
+West is horizontal

@@ -1,0 +1,17 @@
+flat_map words: ["the", "cat", "a", "quick", "dog", "hi"]
+flatten: [1, 2, 3, 4, 5]
+owned flatten: [1, 2, 3, 4, 5]
+pairs i<=j: [(1, 1), (1, 2), (1, 3), (2, 2), (2, 3), (3, 3)]
+fold sum: 55
+fold product: 1307674368000
+fold string: a/b/c
+fold reverse: [5, 4, 3, 2, 1]
+fold max: 9
+reduce product: Some(120)
+reduce empty: None
+scan prefix sums: [1, 3, 6, 10]
+flat_map chars: ['a', 'b', 'c', 'd']
+try_fold: Some(6)
+try_fold overflow: None
+matrix total: 21
+vowels=3 consonants=7

@@ -1,0 +1,5 @@
+ib first=Some(3) last=Some(4) size=3
+empty last = None
+w first=Some("ALPHA") get(1)=Some("OMEGA") get(5)=None
+neighbors of 0: [4, 1]
+walk: [3, 4, 0, 1, 2, 3, 4]

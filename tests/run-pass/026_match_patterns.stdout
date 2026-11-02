@@ -1,0 +1,19 @@
+child of 5
+teen of 15
+round adult 30
+adult of 33
+Num(0) => zero
+Num(-4) => negative 4
+Num(9) => num 9
+Add(Num(0), Num(7)) => just (num 7)
+Add(Num(3), Num(0)) => just (num 3)
+Add(Num(3), Num(4)) => const 7
+Add(Neg(Num(1)), Num(4)) => complex add
+Neg(Neg(Num(2))) => double neg of (num 2)
+Neg(Num(8)) => neg of (num 8)
+y=0 and z negative: -3
+first = 1, last = 5
+a=2 b=3 rest=[4, 5]
+odd 3 named three
+ref binding: 5
+maybe = Some(11)

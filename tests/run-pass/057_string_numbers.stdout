@@ -1,0 +1,22 @@
+0 -> bin 0 oct 0 hex 0 b36 0
+10 -> bin 1010 oct 12 hex a b36 a
+255 -> bin 11111111 oct 377 hex ff b36 73
+1000 -> bin 1111101000 oct 1750 hex 3e8 b36 rs
+123456789 -> bin 111010110111100110100010101 oct 726746425 hex 75bcd15 b36 21i3v9
+from_str_radix ff = Ok(255)
+from_str_radix -101 = Ok(-5)
+from_str_radix zz = Ok(1295)
+from_str_radix bad = true
+digit_sum(987654321) = 45
+0 -> 0
+999 -> 999
+1000 -> 1,000
+1234567 -> 1,234,567
+-9876543210 -> -9,876,543,210
+1=I 4=IV 9=IX 14=XIV 40=XL 90=XC 400=CD 1994=MCMXCIV 2024=MMXXIV 3999=MMMCMXCIX 
+reversed number: 54321
+armstrong numbers: [153, 370, 371, 407]
+char::from_digit: Some('7') Some('b')
+i8 parse overflow: Err("number too large to fit in target type")
+u32 parse negative: Err("invalid digit found in string")
+to_string on bool/char: true q

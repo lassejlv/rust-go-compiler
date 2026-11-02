@@ -1,0 +1,20 @@
+vec: [1, 2, 3, 4, 5]
+string from chars: hi!
+string from strs: abcd
+string from Strings: 01234
+hashmap keys sorted: ["one", "three", "two"]
+hashmap get two: Some(2)
+hashset len: 3
+btreemap: {'e': 3, 'h': 4, 'l': 2, 'o': 0}
+btreeset: {'i', 'm', 'p', 's'}
+vecdeque: [1, 2, 3]
+result ok: Ok([1, 2])
+result err: Err("bad")
+option: Some(['1', '2', '3'])
+option sum: Some(6)
+boxed slice: [1, 2, 3]
+inspect: total=100 seen=[1, 2, 3, 4]
+grouped: [('a', ["apple", "avocado"]), ('b', ["beet"]), ('c', ["carrot", "cucumber"])]
+turbofish collect: [1, 3, 2]
+extend from iter: [0, 1, 4, 9]
+chunked: [[1, 2, 3], [4, 5, 6], [7]]

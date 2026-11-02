@@ -1,0 +1,11 @@
+quicksort:  [-5, 0, 3, 3, 9, 10, 27, 27, 38, 43, 82]
+merge_sort: [-5, 0, 3, 3, 9, 10, 27, 27, 38, 43, 82]
+insertion:  [-5, 0, 3, 3, 9, 10, 27, 27, 38, 43, 82] (36 shifts)
+heap_sort:  [-5, 0, 3, 3, 9, 10, 27, 27, 38, 43, 82]
+counting:   [0, 3, 3, 5, 17, 200, 255]
+insertion f64: [-1.25, 0.0, 2.0, 3.5]
+random sample: [451, -92, -365, 74, 210, 357, 76, -423]
+all agree with std sort: true true true
+min -500 max 499 median -2
+checksum 318791718
+empty ok: [] []

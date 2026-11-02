@@ -1,0 +1,19 @@
+deploy  p=5 d=15
+test    p=5 d=60
+review  p=2 d=10
+write   p=2 d=30
+lunch   p=1 d=45
+deploy vs test: less
+eq ignoring name: true
+max: lunch
+t1 == t2: true
+t1 < t3: true
+t3 > t2: true
+cmp t1 t2: Some(Equal)
+reverse: Greater
+then: Greater
+is_lt: true
+desc: [5, 4, 3, 2, 1]
+by Reverse(x%3): [5, 2, 4, 1, 3]
+max_by: Some("cccc")
+min_by_key: Some("b")

@@ -1,0 +1,17 @@
+chars: H e l l o ,   W ö r l d !
+bytes: 72 101 108 108 111 44 32 87 195 182 114 108 100 33
+len bytes = 14, len chars = 13
+non-ascii 'ö' at byte 8
+reversed = !dlröW ,olleH
+nth(4) = Some('o')
+last = Some('!')
+uppercase count = 2
+as_bytes[0..5] = [72, 101, 108, 108, 111]
+from_utf8 = Rust
+lossy = Hi
+digit sum = 10
+i=4 m=1 p=2 s=4 
+capitalized = Hello World
+emoji len = 6, chars = ['a', '🦀', 'b']
+is_char_boundary(2) = false
+byte string = [98, 121, 116, 101, 115]

@@ -1,0 +1,22 @@
+sorted: [1, 2, 3, 3, 5, 5, 5, 7, 8, 9]
+dedup: [1, 2, 3, 5, 7, 8, 9]
+reversed: [9, 8, 7, 5, 3, 2, 1]
+sort desc: [9, 8, 7, 5, 3, 2, 1]
+sort_by_key abs: [0, -1, 2, 3, -3, -4]
+sort_unstable: [-4, -3, -1, 0, 2, 3]
+binary_search 2: Ok(4)
+binary_search 1: Err(4)
+binary_search -10: Err(0)
+floats: [-1.0, 0.0, 2.5, 3.75]
+by name: ["Adam", "Bob", "Mia", "Zoe"]
+  Mia grade=90 age=19
+  Zoe grade=90 age=20
+  Adam grade=85 age=22
+  Bob grade=70 age=22
+by age then name: Mia(19) Zoe(20) Adam(22) Bob(22)
+words: ["Apple", "Banana", "apple", "banana", "cherry"]
+by len (stable): ["Apple", "apple", "Banana", "banana", "cherry"]
+dedup consecutive: [1, 2, 3, 1]
+dedup_by_key: [10, 20, 30]
+is sorted: true
+chars sorted: ginorst

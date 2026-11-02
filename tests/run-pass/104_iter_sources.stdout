@@ -1,0 +1,17 @@
+repeat: ["ab", "ab", "ab"]
+once: [5, 6]
+successors: [1, 3, 9, 27, 81, 243, 729, 2187]
+collatz 6: [6, 3, 10, 5, 16, 8, 4, 2, 1]
+from_fn fib: [0, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89]
+from_fn counter: [1, 4, 9]
+repeat_with: [7, 7]
+empty: []
+iter::zip: [('x', 1), ('y', 2), ('z', 3)]
+cycle: ababa
+array map: [100, 200, 300]
+sum of squares 385 square of sum 3025 diff 2640
+first 10 primes: [2, 3, 5, 7, 11, 13, 17, 19, 23, 29]
+triangle numbers < 60: [1, 3, 6, 10, 15, 21, 28, 36, 45, 55]
+char ranges: abcdeXYZ
+harmonic 4: 2.0833
+pythagorean triples: [(3, 4, 5), (5, 12, 13), (6, 8, 10), (8, 15, 17), (9, 12, 15), (12, 16, 20)]

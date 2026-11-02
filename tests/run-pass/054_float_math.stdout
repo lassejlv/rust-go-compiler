@@ -1,0 +1,32 @@
+mean = 5
+std_dev = 2
+  converged after 6 iterations
+newton sqrt(2) = 1.414213562373
+  converged after 15 iterations
+newton sqrt(1e6) = 1000.000000
+f32 sum = 0.3
+f32 product = 0.020000001
+f32 -> f64 = 0.30000001192092896
+1.1^10 = 2.5937424601000023
+clamp: 1 0 0.5
+round: 1 2 -1 -2
+fract: 0.75
+recip: 0.25
+to_degrees: 90.0000
+hypot: 5
+mul_add: 7
+max of list: 9
+min of list: 2
+parse: Ok(3.25) Ok(1000.0) Ok(-0.5)
+parse inf: Ok(inf)
+parse bad: true
+ -40.0C =  -40.0F
+   0.0C =   32.0F
+  36.6C =   97.9F
+ 100.0C =  212.0F
+3 x 19.99 = 59.97
+0.1 x10 = 0.9999999999999999 (== 1.0: false)
+total_cmp ordering: Less
+to_bits: 3ff0000000000000
+from_bits: 2
+integer powers: 0.25 1000000000000000

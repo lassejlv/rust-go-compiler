@@ -1,0 +1,14 @@
+int 5
+str of 5 bytes
+vec[int 1; int 2; int 3]
+some(int 7)
+vec[some(int 1); none]
+none
+QUIET!!
+42!!
+X!!
+42
+2.5
+abab
+palindrome: true words: 7
+palindrome: false

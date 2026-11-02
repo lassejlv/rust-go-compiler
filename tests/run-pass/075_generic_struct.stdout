@@ -1,0 +1,12 @@
+[10|20|30|40> len=4 peek=Some(40)
+pop=Some(40) pop=Some(30)
+Stack { items: [10, 20] }
+[x|y>
+larger=9 swapped=Pair { a: 9, b: 3 }
+larger f64 = 2.5
+answer => 42
+answer => <84>
+(a[b]{c}) balanced: true
+(] balanced: false
+(( balanced: false
+{[()()]} balanced: true

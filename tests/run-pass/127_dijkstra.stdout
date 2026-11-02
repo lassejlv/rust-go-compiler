@@ -1,0 +1,16 @@
+A -> A:   0 via A
+A -> B:   4 via A-B
+A -> C:   2 via A-C
+A -> D:   9 via A-C-E-D
+A -> E:   5 via A-C-E
+A -> F:  20 via A-C-E-D-F
+A -> G:  21 via A-C-E-D-F-G
+A -> H: unreachable
+max-heap peek = Some(9), len = 6
+max-heap order = [9, 8, 5, 3, 2, 1]
+task p1 also urgent
+task p1 urgent
+task p2 normal
+task p3 low
+into_sorted_vec = ["alpha", "bravo", "charlie", "delta"]
+top 3 letters = g=4, a=3, m=2

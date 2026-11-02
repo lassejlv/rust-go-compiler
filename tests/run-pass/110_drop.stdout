@@ -1,0 +1,57 @@
+create a
+create b
+create c
+end of inner scope
+drop c
+drop b
+create d
+consuming d
+drop d
+after consume
+create e
+drop e
+after explicit drop
+create temp-in-fn
+create returned
+drop temp-in-fn
+got returned
+create p1
+create p2
+create v1
+create v2
+create v3
+removed v2
+drop v1
+drop v3
+vec dropped
+create opt
+drop opt
+slot is_none = true
+create old
+create new
+drop old
+reassigned to new
+create boxed
+box moved: boxed
+create underscore
+drop underscore
+after let _
+enter level0
+  enter level1
+    enter level2
+    exit level
+  exit level
+exit level
+create shadow1
+shadowed: shadow1-2
+end of main
+drop shadow1-2
+drop shadow1
+drop boxed
+drop new
+drop v2
+drop Pair(p1, p2)
+drop p1
+drop p2
+drop returned
+drop a

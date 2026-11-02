@@ -1,0 +1,23 @@
+by year: [1979, 1995, 1996, 2009, 2016, 2017, 2021]
+  Alien    8.5
+  Coco     8.4
+  Heat     8.3
+  Up       8.3
+  Fargo    8.1
+  Dune     8.0
+  Arrival  7.9
+  crime   1996 Fargo
+  crime   1995 Heat
+  family  2017 Coco
+  family  2009 Up
+  scifi   2021 Dune
+  scifi   2016 Arrival
+  scifi   1979 Alien
+titles by len then reverse alpha: ["Up", "Heat", "Dune", "Coco", "Fargo", "Alien", "Arrival"]
+by reversed title: ["Dune", "Arrival", "Alien", "Coco", "Fargo", "Up", "Heat"]
+non-negatives first by abs: [0, 3, 4, -1, -2, -5]
+floats desc: [10.0, 3.25, 2.5, -0.5]
+best per genre: [("crime", "Heat"), ("family", "Coco"), ("scifi", "Alien")]
+argsort by year desc: [6, 5, 2, 4, 3, 1, 0]
+evens then odds: [2, 4, 1, 3, 5]
+top 3 ratings x10: [85, 84, 83]

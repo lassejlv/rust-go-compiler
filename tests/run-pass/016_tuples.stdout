@@ -1,0 +1,12 @@
+1 2.5 c str true
+lo = -3, hi = 12
+47 = 5 * 9 + 2
+pair = (15, 40)
+nested = 5
+sum = 15
+x = 100, z = 300
+unit debug = ()
+tuple debug = (1, "two", 3.0)
+single = (5,)
+eq = false, lt = true
+m = 3

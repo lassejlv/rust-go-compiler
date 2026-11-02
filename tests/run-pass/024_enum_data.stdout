@@ -1,0 +1,9 @@
+circle: 7.069
+rectangle: 13.500
+triangle: 6.000
+point: 0.000
+total area: 26.569
+move to 3,-1 <- Move { x: 3, y: -1 }
+write 'hello' <- Write("hello")
+color 10 20 30 <- ChangeColor(10, 20, 30)
+quit <- Quit

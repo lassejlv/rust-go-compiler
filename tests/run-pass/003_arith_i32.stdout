@@ -1,0 +1,17 @@
+a + b = 22
+a - b = 12
+a * b = 85
+a / b = 3
+a % b = 2
+-a / b = -3
+-a % b = -2
+a / -b = -3
+precedence: 11
+parens: -5
+c = -29
+abs = 29
+pow = 1024
+min/max = 5 17
+rem_euclid = 2
+div_euclid = -3
+signum = -1 0 1

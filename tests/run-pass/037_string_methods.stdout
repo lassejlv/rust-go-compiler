@@ -1,0 +1,28 @@
+[Hello, Wonderful World!]
+[Hello, Wonderful World!  ]
+[  Hello, Wonderful World!]
+upper: HELLO, WONDERFUL WORLD!
+lower: hello, wonderful world!
+contains 'World': true
+contains 'world': false
+contains char: true
+starts_with Hello: true
+ends_with '!': true
+replace: Hell0, W0nderful W0rld!
+replacen: Hell_, W_nderful World!
+find World: Some(17)
+find z: None
+rfind o: Some(18)
+repeat: abababab
+trim_matches: abc
+trim_start_matches: 123
+strip_prefix: Some("1.2.3")
+strip_suffix: None
+eq_ignore_ascii_case: true
+is_empty: true false
+char count: 23
+matches count: 3
+to_ascii_uppercase: MIXED CASE 123
+make_ascii_uppercase: HELLO
+trim_end_matches: path
+parse after trim: 78

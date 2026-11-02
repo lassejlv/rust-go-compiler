@@ -1,0 +1,8 @@
+Hi, I'm RX-42 (Robot { serial: 42 }) tag=#42:RX-42
+Hello there, Ada here (Human { first: "Ada" }) tag=#3:Ada
++----------+
+| Robot 42 |
++----------+
+["#42:RX-42", "#3:Ada"]
+Hi, I'm RX-7 / name=RX-7
+Hello there, Linus here / name=Linus

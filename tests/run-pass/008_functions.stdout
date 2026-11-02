@@ -1,0 +1,9 @@
+add = 5
+square = 144
+n = 9
+n = 9
+early_return(-5) = 0
+early_return(5) = 50
+swapped = 2 1
+is_even(4) = true, is_even(7) = false
+nested = 10

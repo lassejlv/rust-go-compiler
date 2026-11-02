@@ -1,0 +1,18 @@
+shared = [1, 2, 3, 4, 5], count = 3
+two immutable borrows: 5 1
+after retain = [1, 3, 5]
+transfer 30: true
+transfer 500: false
+  alice has 71
+  bob has 80
+total = 151
+cell counter = 3
+cell replace old = 3, new = 100
+path = root/usr/local
+path = root/bin
+root children = ["usr", "bin"]
+usr strong = 2, weak = 1
+orphan parent alive: false
+fib(80) = 23416728348467685
+memo size = 79
+try_borrow_mut while borrowed: true

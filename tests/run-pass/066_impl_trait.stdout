@@ -1,0 +1,10 @@
+[42]
+[text]
+[3.5]
+[label-7]
+total_len = 5
+evens = [0, 2, 4, 6, 8]
+sum of squares = 14
+speaker: meow meow
+adder: 15
+chained = [4, 6, 8]

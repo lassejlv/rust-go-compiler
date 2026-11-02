@@ -1,0 +1,21 @@
+0 -> zero
+2 -> small
+7 -> medium
+42 -> large
+-5 -> negative
+1000 -> huge
+95A 85B 72C 64D 10F 
+1 2 Fizz 4 Buzz Fizz 7 8 Fizz Buzz 11 Fizz 13 14 FizzBuzz 
+(0, 0) -> origin
+(5, 0) -> positive x-axis
+(-2, 0) -> negative x-axis
+(0, 3) -> y-axis
+(4, 4) -> diagonal
+(1, 2) -> quadrant I
+(-1, 5) -> elsewhere
+'a' -> vowel
+'x' -> consonant
+'9' -> digit
+' ' -> space
+'?' -> other
+bool match = 1

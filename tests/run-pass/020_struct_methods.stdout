@@ -1,0 +1,9 @@
+area = 28, perimeter = 22
+square area = 9, is_square = true
+r can hold s: true
+s can hold r: false
+scaled: 8x14 area = 112
+tuple = (8, 14)
+counter = 3
+counter = 4
+ufcs area = 9

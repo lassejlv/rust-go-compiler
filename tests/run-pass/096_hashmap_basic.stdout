@@ -1,0 +1,22 @@
+len = 3
+get blue = Some(10)
+get pink = None
+contains red = true
+replaced old blue = Some(10), new = 25
+green = 35
+removed red = Some(50), len = 2
+remove missing = None
+keys = ["blue", "green", "yellow"]
+values = [1, 25, 35]
+  green -> 35
+  blue -> 25
+  yellow -> 1
+total = 61
+doubled = [("blue", 50), ("green", 70), ("yellow", 2)]
+id 3 = three
+id 0 = zero
+id 7 missing
+after retain = [(1, "one"), (3, "three")]
+tuple key lookup = Some('x') None
+is_empty = true
+from array = a=1,b=2

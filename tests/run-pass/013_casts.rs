@@ -1,0 +1,30 @@
+fn main() {
+    let a: i32 = -1;
+    println!("-1i32 as u32 = {}", a as u32);
+    println!("-1i32 as u8 = {}", a as u8);
+    println!("-1i32 as i64 = {}", a as i64);
+    println!("300 as u8 = {}", 300i32 as u8);
+    println!("200u8 as i8 = {}", 200u8 as i8);
+    println!("3.99 as i32 = {}", 3.99f64 as i32);
+    println!("-3.99 as i32 = {}", -3.99f64 as i32);
+    println!("1e20 as i32 = {}", 1e20f64 as i32);
+    println!("-1.5 as u8 = {}", -1.5f64 as u8);
+    println!("f64::NAN as i32 = {}", f64::NAN as i32);
+    println!("7 as f64 / 2 = {}", 7 as f64 / 2.0);
+    println!("u64 max as f64 = {}", u64::MAX as f64);
+    println!("i64 as i32 truncation: {}", 0x1_0000_0005i64 as i32);
+    println!("char as u32 = {}", 'A' as u32);
+    println!("u8 as char = {}", 97u8 as char);
+    println!("usize from i32: {}", 5i32 as usize);
+    let idx: usize = 3;
+    let arr = [10, 20, 30, 40, 50];
+    println!("arr[idx] = {}", arr[idx]);
+    println!("i32 from usize: {}", (idx as i32) - 10);
+    let big: u64 = 1 << 63;
+    println!("1<<63 as i64 = {}", big as i64);
+    println!("f32 as f64: {}", 0.1f32 as f64);
+    println!("f64 as f32: {}", 0.1f64 as f32);
+    println!("i8 -> u16: {}", (-1i8) as u16);
+    println!("u16 -> i8: {}", 65535u16 as i8);
+    println!("bool as i32: {}", true as i32 + true as i32);
+}

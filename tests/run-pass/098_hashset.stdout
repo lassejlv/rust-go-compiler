@@ -1,0 +1,19 @@
+duplicate 3
+duplicate 1
+a = [1, 2, 3, 4, 5] (len 5)
+union = [1, 2, 3, 4, 5, 6, 7]
+intersection = [4, 5]
+a - b = [1, 2, 3]
+symmetric diff = [1, 2, 3, 6, 7]
+contains 3: true, contains 9: false
+remove 3: true, remove 3 again: false
+small subset of a: true, of b: true
+b superset of small: true
+disjoint: true
+unique words: ["and", "bat", "cat", "hat", "the"]
+common letters: ['l', 'o']
+all letters: ['d', 'e', 'h', 'l', 'o', 'r', 'w']
+dupes in order: [1, 5, 3, 5]
+unique points: [(0, 0), (1, 2), (2, 1)]
+retain even: [2, 4]
+extended: [2, 4, 10, 20]

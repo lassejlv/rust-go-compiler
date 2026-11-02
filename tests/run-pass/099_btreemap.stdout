@@ -1,0 +1,28 @@
+{"apple": 7, "banana": 4, "cherry": 9, "fig": 1, "pear": 3}
+  apple = 7
+  banana = 4
+  cherry = 9
+  fig = 1
+  pear = 3
+first = Some(("apple", 7))
+last = Some(("pear", 3))
+get fig = Some(1)
+range b..f = [("banana", 4), ("cherry", 9)]
+keys = ["apple", "banana", "cherry", "fig", "grape", "pear"]
+values = [7, 4, 9, 11, 2, 3]
+after remove = {"banana": 4, "cherry": 9, "fig": 11, "grape": 2, "pear": 3}
+1969: moon landing, woodstock
+1989: web proposed, berlin wall
+1991: linux
+after 1980: [1989, 1991]
+reversed keys: [1991, 1989, 1969]
+counts: d1 e1 h1 l3 o2 r1 w1
+set = {1, 3, 5, 7, 9}
+set range 3..=7 = [3, 5, 7]
+first = Some(1), last = Some(9)
+intersection = [3, 5]
+union = [1, 3, 4, 5, 7, 9]
+pop_first = Some(1), now {3, 5, 7, 9}
+amy  [95, 85] avg 90.0
+max  [60] avg 60.0
+zed  [70, 80] avg 75.0

@@ -1,0 +1,34 @@
+fn main() {
+    let s = "  Hello, Wonderful World!  ";
+    println!("[{}]", s.trim());
+    println!("[{}]", s.trim_start());
+    println!("[{}]", s.trim_end());
+    let t = s.trim();
+    println!("upper: {}", t.to_uppercase());
+    println!("lower: {}", t.to_lowercase());
+    println!("contains 'World': {}", t.contains("World"));
+    println!("contains 'world': {}", t.contains("world"));
+    println!("contains char: {}", t.contains('W'));
+    println!("starts_with Hello: {}", t.starts_with("Hello"));
+    println!("ends_with '!': {}", t.ends_with('!'));
+    println!("replace: {}", t.replace("o", "0"));
+    println!("replacen: {}", t.replacen('o', "_", 2));
+    println!("find World: {:?}", t.find("World"));
+    println!("find z: {:?}", t.find('z'));
+    println!("rfind o: {:?}", t.rfind('o'));
+    println!("repeat: {}", "ab".repeat(4));
+    println!("trim_matches: {}", "xxabcxx".trim_matches('x'));
+    println!("trim_start_matches: {}", "000123".trim_start_matches('0'));
+    println!("strip_prefix: {:?}", "v1.2.3".strip_prefix("v"));
+    println!("strip_suffix: {:?}", "file.rs".strip_suffix(".txt"));
+    println!("eq_ignore_ascii_case: {}", "HeLLo".eq_ignore_ascii_case("hello"));
+    println!("is_empty: {} {}", "".is_empty(), t.is_empty());
+    println!("char count: {}", t.chars().count());
+    println!("matches count: {}", t.matches('o').count());
+    println!("to_ascii_uppercase: {}", "mixed Case 123".to_ascii_uppercase());
+    let mut owned = String::from("hello");
+    owned.make_ascii_uppercase();
+    println!("make_ascii_uppercase: {}", owned);
+    println!("trim_end_matches: {}", "path///".trim_end_matches('/'));
+    println!("parse after trim: {}", " 77 ".trim().parse::<i32>().unwrap() + 1);
+}

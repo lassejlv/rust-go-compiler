@@ -1,0 +1,20 @@
+count after create = 1
+count with 3 services = 4
+service 1 uses shared (level 3)
+service 2 uses shared (level 3)
+service 3 uses shared (level 3)
+count in scope = 5, ptr_eq = true
+count after scope = 4
+count after drop services = 1
+a count = 1
+a count after b = 2
+a count after c = 3
+sum c = 19
+a count after c dropped = 2
+sum b = 18
+b = Cons(3, Cons(5, Cons(10, Nil)))
+immutable text / 14 / count 2
+make_mut unique = 6
+make_mut cloned-on-write: unique = 60, other = 6
+try_unwrap = Ok(6)
+deref len = 3, sum = 6

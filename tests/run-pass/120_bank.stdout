@@ -1,0 +1,21 @@
+deposit carol 99.99          ok $99.99
+withdraw bob 20.00           ERR account 101 needs $20.00 but has $12.50
+withdraw bob 2.50            ok $10.00
+transfer alice->bob 123.45   ok 
+transfer bob->999            ERR account 999 not found
+deposit -5                   ERR invalid amount
+withdraw frozen carol        ERR account 102 is frozen
+transfer alice->carol        ERR account 102 is frozen
+#100 alice       $381.25
+      deposit       $500.00
+      to #101       $123.45
+      interest        $4.70
+#101 bob         $135.11
+      deposit        $12.50
+      withdraw        $2.50
+      from #100     $123.45
+      interest        $1.66
+#102 carol        $99.99 [FROZEN]
+      deposit        $99.99
+total holdings $616.35
+richest Some((100, "alice"))

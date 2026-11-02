@@ -1,0 +1,26 @@
+Name       Department       Salary Rating  Bar
+====================================================
+Alice      Engineering     $125000   4.80  ##########
+Bob        Marketing        $72000   3.90  ########..
+Charlotte  Engineering      $98000   4.25  #########.
+Dan        Sales            $61000   2.50  #####.....
+Eve        Sales            $88500   4.00  ########..
+----------------------------------------------------
+Total                      $444500
+Average                    88900.0
+
+        Per department        
+Engineering.............223000
+    members: Alice, Charlotte
+Marketing................72000
+    members: Bob
+Sales...................149500
+    members: Dan, Eve
+
+Top performer: Alice (4.8)
+Percentages:
+      Alice:  28.1%
+        Bob:  16.2%
+  Charlotte:  22.0%
+        Dan:  13.7%
+        Eve:  19.9%

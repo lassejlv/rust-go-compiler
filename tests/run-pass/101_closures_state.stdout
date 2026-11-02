@@ -1,0 +1,25 @@
+emit greet:
+  [greet] >> hello world
+  [greet] length 5
+emit bye:
+  [bye] SEE YOU
+emit none:
+sum squares to 10 = 385
+sum squares to 20 = 2870
+sum squares to 10 = 385
+sum squares to 10 = 385
+sum squares to 30 = 9455
+sum squares to 20 = 2870
+cache hits = 3
+  attempt 1 failed: timeout #1
+  attempt 2 failed: timeout #2
+  succeeded on attempt 3
+retry result = Ok(300)
+  attempt 1 failed: always
+  attempt 2 failed: always
+retry result = Err("always")
+recorded count = 3
+history = [5, 7, 9]
+asc: [-7, -2, 1, 3, 5]
+desc: [5, 3, 1, -2, -7]
+abs: [1, -2, 3, 5, -7]

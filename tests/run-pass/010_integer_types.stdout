@@ -1,0 +1,15 @@
+u8: 200 + 55 = 255
+i64: 3298534883328
+u32: 4000000000
+usize: 24690
+i8 min: -128
+i16 max: 32767
+u64 max: 18446744073709551615
+u8::MAX = 255, i32::MIN = -2147483648, i64::MAX = 9223372036854775807
+u16::MAX = 65535, usize::MAX = 18446744073709551615
+u32 division: 3 1
+i64 negative: -9000000000
+count_ones(255u8) = 8
+leading_zeros(1u32) = 31
+trailing_zeros(48u32) = 4
+isqrt-ish: 1000

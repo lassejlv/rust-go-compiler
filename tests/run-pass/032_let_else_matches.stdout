@@ -1,0 +1,16 @@
+exec Push(3)
+exec Push(4)
+exec Add
+exec Print
+  stack = [7]
+  bad number: x
+skip "push x"
+skip ""
+skip "jump 5"
+exec Push(10)
+exec Pop
+exec Print
+  stack = [7]
+vowels = 5
+pushes = 2, negative pushes = 1
+matches range: true false

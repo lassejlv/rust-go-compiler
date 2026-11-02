@@ -1,0 +1,11 @@
+MAX_POINTS = 100000
+GREETING = hi there
+PRIMES = [2, 3, 5, 7, 11]
+sum primes = 28
+week seconds = 604800
+LANGUAGE = Rust
+SQ = 144
+LOCAL = -7
+counter = 4
+lookup b = 2, z = 0
+arr len = 9

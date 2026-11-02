@@ -1,0 +1,9 @@
+square with 4 sides, size 2: area 4.000
+triangle with 3 sides, size 2: area 1.732
+total = 5.732
+sides: 4 3
+zeros in ints: 2
+zeros in floats: 1
+[0, 0, 0] [0.0, 0.0]
+i32::zero() = 0
+from_str: Ok(17)

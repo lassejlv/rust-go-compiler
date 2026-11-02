@@ -1,0 +1,10 @@
+Rex the dog, 4 years old (id 400)
+a Roadster from 2008 (id 2008)
+square area = 9
+circle area = 12
+sum = 21
+21.double() = 42
+"ab".double() = abab
+chained = 20
+ufcs = Rex the dog, 4 years old
+qualified = 2008

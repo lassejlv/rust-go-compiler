@@ -1,0 +1,21 @@
+new: [] len=0 empty=true
+after push: [10, 20, 30] len=3
+v[1] = 20
+after set: [10, 25, 30]
+pop = Some(30)
+after pop: [10, 25]
+after insert: [5, 10, 15, 25]
+removed 10 -> [5, 15, 25]
+first = Some(5), last = Some(25)
+get(1) = Some(15), get(9) = None
+contains 25: true, contains 99: false
+w=[1, 2, 3] z=[0, 0, 0, 0, 0] s=["a", "a", "a"]
+total = 6
+squares = [0, 1, 4, 9, 16]
+modified = [100, 1, 4, 9, -1]
+swap_remove 1 -> [100, -1, 4, 9]
+cleared len = 0
+pop empty = None
+eq = true
+nested = [[1], [2, 3], []] len = 3
+to_vec [7, 8, 9], collect [1, 2, 3, 4]

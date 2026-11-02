@@ -1,0 +1,17 @@
+names: ["carol", "alice", "bob", "alice", "dave", "bob"]
+unique sorted: ["alice", "bob", "carol", "dave"]
+upper: ALICE, BOB, CAROL, DAVE
+lens: [5, 3, 5, 4]
+long: ["alice", "carol", "dave"]
+initials: abcd
+refs contains bob: true
+carol at Some(2)
+unique words in order: ["the", "cat", "sat", "on", "mat"]
+1. alice
+2. bob
+3. carol
+4. dave
+total chars: 17
+owned: ["zed", "bob", "carol", "dave"], original: ["alice", "bob", "carol", "dave"]
+longest: carol
+csv: "alice","bob","carol","dave"

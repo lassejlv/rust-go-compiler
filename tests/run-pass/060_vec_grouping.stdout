@@ -1,0 +1,19 @@
+east:
+  widget    22 x   2.50 =    55.00
+  gizmo      1 x  99.99 =    99.99
+  total 154.99
+north:
+  widget    10 x   2.50 =    25.00
+  gadget     7 x  10.00 =    70.00
+  gizmo      2 x  99.99 =   199.98
+  total 294.98
+south:
+  widget     5 x   2.50 =    12.50
+  gadget     3 x  10.00 =    30.00
+  total 42.50
+products: ["gadget", "gizmo", "widget"]
+units per product: [("widget", 37), ("gadget", 10), ("gizmo", 3)]
+big orders: 4, small orders: 3
+even-index regions: [(0, "north"), (2, "north"), (4, "south"), (6, "north")]
+labels: ["north/widget", "south/gadget", "north/gadget", "east/widget", "south/widget", "east/gizmo", "north/gizmo"]
+units: [10, 3, 7, 22, 5, 1, 2]

@@ -1,0 +1,18 @@
+{"deps":{"nested":[1,[2,[3,-42.5]]],"none":null,"ok":true},"name":"rustgo","quote":"say \"hi\"
+","tags":["compiler","go","rust"],"version":1.5}
+depth = 5
+sum = -35
+keys = ["deps", "name", "quote", "tags", "version"]
+tags = ["compiler","go","rust"]
+debug name = Some(Str("rustgo"))
+roundtrip equal = true
+[1, 2      -> Some("bad array at 5")
+{"a" 1}    -> Some("expected ':' at 5")
+tru        -> Some("bad literal at 0")
+[1,]       -> Some("unexpected ']' at 3")
+"open      -> Some("unterminated string")
+12 34      -> Some("trailing data at 3")
+-          -> Some("bad number \"-\": invalid float literal")
+[]
+{}
+-0.5

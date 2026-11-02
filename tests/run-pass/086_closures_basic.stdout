@@ -1,0 +1,20 @@
+add = 5
+square = 49
+hello from closure
+scale = 15
+factor still usable = 3
+  inc -> 1
+  inc -> 2
+  inc -> 3
+count = 3
+moved Ferris
+moved Ferris
+v = [1, 2, 3, 4, 5]
+block = 25
+compose = 6
+above = [5, 8]
+total = 16
+len = 8 and s = borrowed
+pair = (1.5, "x")
+fn array = 11 20
+lcg = [74, 53, 96, 70, 34]

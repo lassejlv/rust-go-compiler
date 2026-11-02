@@ -1,0 +1,12 @@
+counter: [1, 2, 3, 4, 5]
+manual: Some(1) Some(2) Some(3) None
+zip/skip/map/filter sum: 18
+fib: [0, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377]
+first fib > 1e6: 1346269
+even fib sum: 4613732
+3... 2... 1... liftoff!
+cells: [(0, 0), (1, 0), (2, 0), (0, 1), (1, 1), (2, 1)]
+count: 6
+last: Some(4)
+max via fold: 9
+by_ref: [1, 2, 3] then [4, 5, 6, 7, 8, 9, 10]

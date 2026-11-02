@@ -1,0 +1,32 @@
+map: Some(16)
+map none: None
+and_then: Some(1)
+filter: None
+or: Some(9)
+or_else: Some(10)
+xor: Some(1)
+zip: Some((1, "one"))
+ok_or: Err("missing")
+ok_or some: Ok(4)
+map_or: 104
+map_or_else: -1
+unwrap_or: 5
+is_some_and: true
+as_ref len: Some(5)
+as_deref: Some("hello")
+still have s: Some("hello")
+manager of 1: None
+manager of 2: Some("ceo")
+manager of 3: Some("cto")
+manager of 4: None
+parse_positive("12") = Some(12)
+parse_positive("0") = None
+parse_positive("-3") = None
+parse_positive("abc") = None
+parse_positive("7") = Some(7)
+flatten: Some(3)
+total = 4
+collect with None: None
+collect all Some: Some([1, 2])
+get_or_insert: 42 Some(42)
+user debug: Some(User { name: "dev", manager_id: Some(2) })

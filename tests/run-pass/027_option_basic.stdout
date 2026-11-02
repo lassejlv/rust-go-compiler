@@ -1,0 +1,22 @@
+find 15: Some(2)
+find 99: None
+23 at index 4
+safe_div(10, 3) = Some(3)
+safe_div(10, 0) = None
+unwrap = 5
+unwrap_or = -1
+unwrap_or_default = 0
+unwrap_or_else = 77
+expect = 3
+is_some/is_none: true true
+zero
+positive 5
+negative -3
+nothing
+slot = None
+slot = Some("filled")
+slot len = 6
+taken = Some("filled"), slot = None
+old = Some(3), new = Some(4)
+x == Some("hi"): true
+Some(1) < Some(2): true, None < Some(0): true

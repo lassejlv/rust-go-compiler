@@ -1,0 +1,14 @@
+sum vec = 10
+sum range = 5050
+sum mapped = 14
+avg = Some(2.5)
+avg empty = None
+unique = [3, 1, 2, 4]
+unique chars = ['m', 'i', 's', 'p']
+pairwise = [(1, 4), (4, 9), (9, 16)]
+apply_all = [11, 21, 31]
+apply_all strs = ["aaa", "bbb"]
+generic_max = Some(8)
+generic_max f = Some(2.25)
+generic_max empty = None
+generic_max chars = Some('o')

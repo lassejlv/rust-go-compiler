@@ -1,0 +1,7 @@
+Hello, Alice!
+HELLO, ALICE!
+Ahoy, matey!
+AHOY, MATEY!
+count=0 empty=true describe=none
+count=1 empty=false describe=one
+count=3 empty=false describe=3 items

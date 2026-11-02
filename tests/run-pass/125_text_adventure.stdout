@@ -1,0 +1,50 @@
+Hall: items [], exits [east north]
+> go down
+  You can't go Down from here.
+> e
+  Kitchen: items [], exits [down west]
+> d
+  The cellar door is locked.
+> w
+  Hall: items [], exits [east north]
+> n
+  Library: items [book, key], exits [south west]
+> take key
+  Taken key.
+> take sword
+  No sword here.
+> use book
+  You don't have book.
+> take book
+  Taken book.
+> use book
+  You read about hidden treasure below the kitchen.
+> w
+  Garden: items [shovel], exits [east]
+> get shovel
+  Taken shovel.
+> e
+  Library: items [], exits [south west]
+> s
+  Hall: items [], exits [east north]
+> east
+  Kitchen: items [], exits [down west]
+> use key
+  Click! The cellar door unlocks.
+> dance
+  I don't understand 'dance'.
+> down
+  Cellar: items [treasure], exits [up]
+> look
+  Cellar: items [treasure], exits [up]
+> take treasure
+  Taken treasure.
+*** You found the treasure! ***
+> i
+  You carry: ["key", "book", "shovel", "treasure"]
+> up
+  Kitchen: items [], exits [down west]
+final score: 165
+left in Library: []
+left in Cellar: []
+left in Garden: []

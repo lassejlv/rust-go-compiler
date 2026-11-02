@@ -1,0 +1,20 @@
+first word = hello
+first word of literal = single
+&s[0..5] = hello
+&s[6..] = world program
+&s[..=4] = hello
+middle = cdef
+as_str len = 19
+owned slice = world
+utf slice = Grü
+get(0..4) = Some("Grü")
+get(0..3) = None
+cmp: true true true
+cmp len: true
+String vs &str: true
+sorted = ["Alpha", "Echo", "bravo", "charlie", "delta"]
+case-insensitive = ["Alpha", "bravo", "charlie", "delta", "Echo"]
+longest = program
+roundtrip = abc
+char_slice = ['b', 'c']
+after world = program

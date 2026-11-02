@@ -1,0 +1,11 @@
+dist = 5
+square: perimeter 8 area 4
+tri: perimeter 12 area 6
+points: [Point { x: 0.0, y: 0.0 }, Point { x: 3.0, y: 4.0 }, Point { x: 3.0, y: 0.0 }]
+tick 1
+double_tick 3
+triple 6
+HELLO!
+(hello)
+(direct)
+UNIT = 1

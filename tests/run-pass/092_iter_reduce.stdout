@@ -1,0 +1,28 @@
+sum = 16
+product = 13608
+count = 7
+count positive = 4
+min = Some(-7), max = Some(9)
+max position = Some(2)
+rposition = Some(4)
+any negative = true
+all < 10 = true
+all on empty = true
+find > 5 = Some(9)
+find_map = Some(-200)
+last = Some(-7)
+nth(2) = Some(9), nth(20) = None
+min_by_key abs = Some(0)
+max_by_key abs = Some(9)
+biggest = Cedar
+smallest (first of ties) = Brook
+largest area = Cedar
+densest = Brook (3750.0/km2)
+total pop = 1190000
+total area = 471.75
+float sum = 0.6000000000000001
+float product = 12
+float max = 8.25
+empty: sum=0 max=None count=0
+iter eq = true, iter lt = true
+is sorted = false

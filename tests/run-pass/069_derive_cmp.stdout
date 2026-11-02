@@ -1,0 +1,20 @@
+Clubs < Spades: true
+Hearts == Hearts: true
+max suit: Hearts
+  Card { rank: 2, suit: Clubs }
+  Card { rank: 2, suit: Spades }
+  Card { rank: 10, suit: Clubs }
+  Card { rank: 10, suit: Hearts }
+  Card { rank: 14, suit: Diamonds }
+max card: Card { rank: 14, suit: Diamonds }
+min card: Card { rank: 2, suit: Clubs }
+a < b: true, a == a: true, a != b: true
+cmp: Less Greater Equal
+Version(1, 2, 3) < Version(1, 10, 0): true
+partial_cmp: Some(Less)
+priorities: [Low, Medium(1), Medium(5), High { urgent: false }, High { urgent: true }]
+Medium(9) < High: true
+tuples sorted: [(1, "z"), (2, "a"), (2, "b")]
+strings: true
+clamp: 10
+vec cmp: true

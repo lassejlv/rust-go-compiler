@@ -1,0 +1,17 @@
+>> hello
+removed '>' -> > hello
+popped Some('o') -> > hell
+truncated -> > he
+cleared -> '' true
+retain -> abcd
+from chars -> rust
+concat -> abcdef
+join -> x, y, z
+0-1-2-3-4-end
+1^2 + 2^2 + 3^2 + 4^2 = 30
+Zebra
+drained 'hello ' rest 'world'
+replace_range -> aXYZc
+split_off -> head|tail
+extend -> extended!
+==========

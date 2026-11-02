@@ -1,0 +1,15 @@
+deque = [-1, 0, 1, 2] len 4
+front = Some(-1), back = Some(2)
+pop_front = Some(-1), pop_back = Some(2)
+deque = [0, 1]
+rotate_left 2 = [5, 6, 7, 0, 1]
+rotate_right 1 = [1, 5, 6, 7, 0]
+d[1] = 5, get(10) = None
+contains 6: true
+mapped = [10, 50, 60, 70, 0]
+sliding sums = [4, 12, 27, 39, 54, 81]
+josephus order = [3, 6, 2, 7, 5, 1, 4]
+bfs distance = Some(15)
+bfs blocked = None
+total via slices = 19
+into vec = [1, 5, 6, 7, 0]

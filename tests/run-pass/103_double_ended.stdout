@@ -1,0 +1,22 @@
+next Some(1), next_back Some(6)
+next Some(2), next_back Some(5)
+remaining [3, 4]
+range next_back Some(10) Some(1)
+range rest count 8
+rfind even: Some(6)
+rev skip: [5, 3, 1]
+rev chain: [8, 7, 2, 1]
+rev zip: [6, 10, 12, 12, 10, 6]
+rev map enumerate: [(0, 36), (1, 25), (2, 16)]
+nth_back(1): Some(5)
+rfold: 654321
+len: 6, exact size after skip: 4
+"racecar" palindrome? true
+"A man, a plan, a canal: Panama" palindrome? true
+"hello" palindrome? false
+"" palindrome? true
+"ab" palindrome? false
+stressed reversed is desserts
+bytes rev: [99, 98, 97]
+rsplit take 2: ["d", "c"]
+reconstructed: 9876

@@ -1,0 +1,9 @@
+add5(10) = 15
+times3(10) = 30
+add pow other = 5 1024 0
+compose = 18
+compose types = <81>
+counters: 1 2 3 | 1
+accumulator = 85
+pipeline(4) = 93
+adders = [101, 102, 103]

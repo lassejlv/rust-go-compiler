@@ -1,0 +1,13 @@
+added, weight now 3.5
+added, weight now 3.75
+added, weight now 9.75
+error: anvil is too heavy for hero
+added, weight now 10.25
+added, weight now 11.25
+items: 5
+calories: 345
+strongest: sword Weapon(12)
+first: Item { name: "hammer", weight: 3.5, category: Tool }
+first is tool: true
+Item { name: "apple", weight: 0.25, category: Food { calories: 95 } }
+owner hero capacity 20

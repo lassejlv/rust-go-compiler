@@ -1,0 +1,24 @@
+caesar +3: Khoor, Zruog! abc
+caesar -3: Hello, World! xyz
+rot13 twice: Hello, World! xyz
+vigenere: Lxfopv ef rnhr!
+vigenere decrypt: Attack at dawn!
+"Racecar" -> true
+"Was it a car or a cat I saw?" -> true
+"No lemon, no melon" -> true
+"palindrome" -> false
+"" -> true
+"x" -> true
+longest palindrome in babad: bab
+longest palindrome in forgeeksskeegfor: geeksskeeg
+longest palindrome in abacdfgdcaba: aba
+longest palindrome in a: a
+longest palindrome in abcd: a
+edit_distance(kitten, sitting) = 3
+edit_distance(flaw, lawn) = 2
+edit_distance(, abc) = 3
+edit_distance(rust, rust) = 0
+edit_distance(intention, execution) = 5
+kmp: [2, 9]
+kmp overlapping: [0, 1, 2, 3]
+kmp none: []

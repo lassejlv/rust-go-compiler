@@ -1,0 +1,49 @@
+Person {
+    name: "Ann",
+    age: 41,
+    address: Address {
+        street: "Main St 1",
+        zip: 12345,
+    },
+    phones: [
+        "555-1234",
+        "555-9876",
+    ],
+    nickname: None,
+}
+[
+    Login {
+        user: "ann",
+        ok: true,
+    },
+    Logout(
+        7,
+    ),
+    Tick,
+]
+Pair(
+    1,
+    2,
+)
+(
+    1,
+    "two",
+)
+Some(
+    Some(
+        3,
+    ),
+)
+[]
+[
+    [
+        1,
+        2,
+    ],
+    [
+        3,
+        4,
+    ],
+]
+5
+"str"

@@ -1,0 +1,21 @@
+ann is 31
+ben is 25
+cat is 47
+zip with infinite: [(1, 'a'), (2, 'b'), (3, 'c')]
+chain: [1, 2, 3, 10, 20]
+chain3: [1, 2, 7, 8, 100]
+rev: ["dan", "cat", "ben", "ann"]
+take 2: ["ann", "ben"]
+skip 2: ["cat", "dan"]
+take_while odd: [1, 3, 5]
+skip_while odd: [6, 7, 9, 2]
+step_by 7: [0, 7, 14, 21, 28]
+every other: ["ann", "cat"]
+partial dot: 50
+partition: [0, 2, 4, 6, 8] [1, 3, 5, 7, 9]
+unzip: [1, 2] ['a', 'b']
+rev enumerate: [(0, 'z'), (1, 'y'), (2, 'x')]
+enumerate rev: [(2, 'z'), (1, 'y'), (0, 'x')]
+skip/step/take: [11, 21, 31]
+interleave: hWeOlRlLoD
+cycle: [1, 2, 3, 1, 2, 3, 1]

@@ -1,0 +1,17 @@
+a + b = Vec2 { x: 4.0, y: 1.0 }
+a - b = Vec2 { x: -2.0, y: 3.0 }
+a * 3 = Vec2 { x: 3.0, y: 6.0 }
+2 * b = Vec2 { x: 6.0, y: -2.0 }
+-a = Vec2 { x: -1.0, y: -2.0 }
+dot = 1
+len = 5
+combo = Vec2 { x: 3.0, y: 2.5 }
+eq = true
+i * i = Complex { re: -1, im: 0 }
+z + i = Complex { re: 2, im: 4 }
+&z + &i = Complex { re: 2, im: 4 }
+z^1 = 2 + 3i
+z^2 = -5 + 12i
+z^3 = -46 + 9i
+z^4 = -119 + -120i
+sum = Vec2 { x: 4.5, y: 1.5 }

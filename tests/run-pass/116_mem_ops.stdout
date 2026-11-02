@@ -1,0 +1,15 @@
+swap ints: a=2 b=1
+swap strings: right left
+vec swap: [4, 2, 3, 1]
+swap across split: [3, 2, 4, 1]
+flushed [1, 2, 3], remaining []
+old label first, new label second
+taken Buffer { data: [], label: "second" }, left Buffer { data: [], label: "" }
+moved out items [7, 8]
+state now Empty
+option take: Some(5) None
+string take: 'temp' ''
+sorted [1, 2, 3], original now []
+size_of: u8=1 u32=4 u64=8 f64=8 char=4 bool=1
+replaced row [0, 0, 0], grid [[9, 9, 9], [0, 0, 0]]
+fib via replace: (55, 89)
