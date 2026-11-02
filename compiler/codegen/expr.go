@@ -762,6 +762,9 @@ func (fc *fnGen) cast(x *ast.CastExpr, t Ty) string {
 	from := fc.aty(x.X)
 	v := fc.value(x.X)
 	ct := fc.ctype(t)
+	if from == t {
+		return v
+	}
 	switch {
 	case from.Kind == TFloat && t.Kind == TInt:
 		return fmt.Sprintf("RG_F2I(%s, %s, %s, %s)", ct, v, intMinStr(t), intMaxStr(t))

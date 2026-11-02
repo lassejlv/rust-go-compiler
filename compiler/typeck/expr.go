@@ -88,7 +88,17 @@ func (fcx *FnCtxt) checkExprKind(e ast.Expr, expected Ty) Ty {
 				hint = tt
 			}
 		}
-		fcx.checkExpr(x.X, hint)
+		st := fcx.structurally(fcx.checkExpr(x.X, hint))
+		switch st.Kind {
+		case TRef, TAdt, TFnDef, TClosure:
+			// casts that are coercions (unsizing, reborrows, fn pointers)
+			s := fcx.ic.snapshot()
+			prev := append([]Adjustment(nil), fcx.r.Adjust[x.X.GetID()]...)
+			if !fcx.coerce(x.X, st, target) {
+				fcx.ic.rollback(s)
+				fcx.r.Adjust[x.X.GetID()] = prev
+			}
+		}
 		fcx.casts = append(fcx.casts, x)
 		return target
 	case *ast.BlockExpr:
@@ -184,6 +194,28 @@ func (fcx *FnCtxt) checkExprKind(e ast.Expr, expected Ty) Ty {
 		}
 		if elem == nil {
 			elem = fcx.ic.newVar()
+			// several distinct closures: their common type is a fn pointer
+			if len(x.Elems) > 1 {
+				allClosures := true
+				var first *ast.ClosureExpr
+				for _, el := range x.Elems {
+					ce, ok := unparen(el).(*ast.ClosureExpr)
+					if !ok || len(ce.Params) != len(firstClosure(x.Elems).Params) {
+						allClosures = false
+						break
+					}
+					if first == nil {
+						first = ce
+					}
+				}
+				if allClosures {
+					ins := make([]Ty, len(first.Params))
+					for i := range ins {
+						ins[i] = fcx.ic.newVar()
+					}
+					elem = FnPtr(ins, fcx.ic.newVar(), false)
+				}
+			}
 		}
 		for _, el := range x.Elems {
 			fcx.checkExprCoerce(el, elem)
@@ -1157,4 +1189,12 @@ func (fcx *FnCtxt) checkTry(x *ast.TryExpr) Ty {
 	}
 	fcx.errorf(x.Span, "the `?` operator can only be applied to values of type `Option` or `Result` (found `%s`)", fcx.resolve(t))
 	return TyErr
+}
+
+func firstClosure(es []ast.Expr) *ast.ClosureExpr {
+	ce, _ := unparen(es[0]).(*ast.ClosureExpr)
+	if ce == nil {
+		return &ast.ClosureExpr{}
+	}
+	return ce
 }

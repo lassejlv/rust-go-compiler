@@ -390,10 +390,26 @@ func (fcx *FnCtxt) selectWherePossible() {
 				if o.Proj.Kind == TOpaque {
 					args := ic.resolveList(o.Proj.Args)
 					ok := true
+					onlyNumeric := true
 					for _, a := range args {
 						if a.HasInfer() {
 							ok = false
+							Walk(a, func(x Ty) bool {
+								if x.Kind == TInfer && x.Sub == 0 {
+									onlyNumeric = false
+								}
+								return true
+							})
 						}
+					}
+					if !ok && onlyNumeric {
+						// numeric literals: apply the integer/float fallback
+						// now so the hidden type can be revealed
+						for _, a := range args {
+							fcx.defaultVars(a)
+						}
+						args = ic.resolveList(o.Proj.Args)
+						ok = true
 					}
 					if ok {
 						h := fcx.revealOpaque(Opaque(o.Proj.Def, args, o.Proj.Index), o.Span)
