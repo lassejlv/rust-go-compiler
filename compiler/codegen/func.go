@@ -100,6 +100,9 @@ func (fc *fnGen) emitScopeDrops(s *scope) {
 		d := s.drops[i]
 		fc.line("%s", fc.dropCode(d))
 	}
+	if len(s.drops) > 0 {
+		fc.line("RG_CS_POP(%d);", len(s.drops))
+	}
 }
 
 // dropCode renders the conditional drop of an entry.
@@ -221,6 +224,7 @@ func (fc *fnGen) declLocal(l *typeck.Local) {
 		}
 		s := fc.scopes[len(fc.scopes)-1]
 		s.drops = append(s.drops, dropEntry{place: fc.localName(l), flag: fc.flagName(l), ty: l.Ty, local: l})
+		fc.line("RG_CS_PUSH(&%s, %s, &%s);", fc.localName(l), fc.g.dropFn(l.Ty), fc.flagName(l))
 	}
 }
 
@@ -277,6 +281,7 @@ func (fc *fnGen) materialize(v string, t Ty) (string, string) {
 		flag := "d" + n
 		fc.line("uint8_t %s = 1;", flag)
 		fc.addDrop(n, flag, t)
+		fc.line("RG_CS_PUSH(&%s, %s, &%s);", n, fc.g.dropFn(t), flag)
 		return n, flag
 	}
 	return n, ""
@@ -655,6 +660,9 @@ func (fc *fnGen) dropsString(depth int) string {
 		for j := len(s.drops) - 1; j >= 0; j-- {
 			d := s.drops[j]
 			parts = append(parts, fc.dropCode(d))
+		}
+		if len(s.drops) > 0 {
+			parts = append(parts, fmt.Sprintf("RG_CS_POP(%d);", len(s.drops)))
 		}
 	}
 	return strings.Join(parts, " ")

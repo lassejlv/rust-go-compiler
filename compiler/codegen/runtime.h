@@ -29,11 +29,29 @@ static void rg_write_stderr(const uint8_t* p, uint64_t n) { fflush(stdout); if (
 __attribute__((noreturn)) static void rg_exit(int32_t code) { fflush(stdout); exit(code); }
 __attribute__((noreturn)) static void rg_abort(void) { fflush(stdout); abort(); }
 
+/* cleanup stack for unwinding on panic */
+typedef struct { void* p; void (*f)(void*); uint8_t* flag; } RgCleanup;
+static RgCleanup rg_cs[1 << 18];
+static size_t rg_csn;
+static int rg_panicking;
+#define RG_CS_PUSH(P, F, FL) do { if (rg_csn < (1 << 18)) rg_cs[rg_csn] = (RgCleanup){ (void*)(P), (void (*)(void*))(F), (FL) }; rg_csn++; } while (0)
+#define RG_CS_POP(N) (rg_csn -= (N))
+
 __attribute__((noreturn, cold)) static void rg_panic_raw(const char* msg, uint64_t mlen, const char* file, uint64_t flen, uint32_t line, uint32_t col) {
   fflush(stdout);
   fprintf(stderr, "\nthread 'main' panicked at %.*s:%u:%u:\n%.*s\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
           (int)flen, file, line, col, (int)mlen, msg);
   fflush(stderr);
+  if (rg_panicking) { fprintf(stderr, "thread 'main' panicked while processing panic. aborting.\n"); abort(); }
+  rg_panicking = 1;
+  while (rg_csn > 0) {
+    rg_csn--;
+    if (rg_csn < (1 << 18)) {
+      RgCleanup c = rg_cs[rg_csn];
+      if (*c.flag) { *c.flag = 0; c.f(c.p); }
+    }
+  }
+  fflush(stdout);
   exit(101);
 }
 

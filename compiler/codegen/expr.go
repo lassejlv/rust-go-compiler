@@ -519,8 +519,10 @@ func (fc *fnGen) binary(x *ast.BinaryExpr, t Ty) string {
 			fc.line("if (!%s) {", res)
 		}
 		fc.ind++
+		fc.pushScope()
 		r := fc.value(x.R)
 		fc.line("%s = %s;", res, r)
+		fc.popScope()
 		fc.ind--
 		fc.line("}")
 		return res
