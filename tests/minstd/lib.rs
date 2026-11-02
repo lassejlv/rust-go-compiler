@@ -81,7 +81,10 @@ pub mod fmt {
     pub type Result = crate::result::Result<(), Error>;
     pub struct Error;
     pub struct Arguments { s: String }
-    impl Arguments { pub fn new(s: String) -> Arguments { Arguments { s: s } } }
+    impl Arguments {
+        pub fn new(s: String) -> Arguments { Arguments { s: s } }
+        pub fn new_const(s: &'static str) -> Arguments { Arguments { s: String::from(s) } }
+    }
     pub struct Formatter { buf: String }
     impl Formatter {
         pub fn new() -> Formatter { Formatter { buf: String::new() } }
