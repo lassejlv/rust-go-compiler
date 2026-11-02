@@ -13,6 +13,7 @@ type dropEntry struct {
 	place string
 	flag  string
 	ty    Ty
+	local *typeck.Local
 }
 
 type scope struct {
@@ -41,6 +42,8 @@ type fnGen struct {
 	capIndex map[*typeck.Local]int
 	retTy    Ty
 	declared map[*typeck.Local]bool
+	// split records locals with per-field drop flags (partial moves).
+	split map[*typeck.Local]map[int]bool
 }
 
 func newFnGen(g *Gen, r *typeck.Results) *fnGen {
@@ -95,8 +98,96 @@ func (fc *fnGen) popScopeNoDrop() { fc.scopes = fc.scopes[:len(fc.scopes)-1] }
 func (fc *fnGen) emitScopeDrops(s *scope) {
 	for i := len(s.drops) - 1; i >= 0; i-- {
 		d := s.drops[i]
-		fc.line("if (%s) { %s = 0; %s(&%s); }", d.flag, d.flag, fc.g.dropFn(d.ty), d.place)
+		fc.line("%s", fc.dropCode(d))
 	}
+}
+
+// dropCode renders the conditional drop of an entry.
+func (fc *fnGen) dropCode(d dropEntry) string {
+	if d.local != nil && len(fc.split[d.local]) > 0 {
+		var parts []string
+		base := fc.flagName(d.local)
+		fts := fc.fieldTys(d.ty)
+		for i, ft := range fts {
+			if !fc.g.needsDrop(ft) {
+				continue
+			}
+			if fc.split[d.local][i] {
+				f := fmt.Sprintf("%s_%d", base, i)
+				parts = append(parts, fmt.Sprintf("if (%s) { %s = 0; %s(&%s.f%d); }", f, f, fc.g.dropFn(ft), d.place, i))
+			} else {
+				parts = append(parts, fmt.Sprintf("if (%s) %s(&%s.f%d);", base, fc.g.dropFn(ft), d.place, i))
+			}
+		}
+		parts = append(parts, base+" = 0;")
+		return strings.Join(parts, " ")
+	}
+	return fmt.Sprintf("if (%s) { %s = 0; %s(&%s); }", d.flag, d.flag, fc.g.dropFn(d.ty), d.place)
+}
+
+// fieldTys returns the field types of a struct or tuple type.
+func (fc *fnGen) fieldTys(t Ty) []Ty {
+	if t.Kind == TTuple {
+		return t.Elems
+	}
+	return fc.g.fieldTypes(t, 0)
+}
+
+// splittable reports whether a local's type can have per-field flags.
+func (fc *fnGen) splittable(t Ty) bool {
+	if t.Kind == TTuple {
+		return true
+	}
+	return t.Kind == TAdt && t.Def.Adt.Kind == AdtStruct && fc.g.dropImpl(t) == nil && t.Def.LangItem != "manually_drop"
+}
+
+// computeSplit finds locals whose fields are accessed by value-able paths
+// and gives them per-field drop flags.
+func (fc *fnGen) computeSplit(body any) {
+	fc.split = map[*typeck.Local]map[int]bool{}
+	ast.Walk(body, func(n any) bool {
+		fe, ok := n.(*ast.FieldExpr)
+		if !ok {
+			return true
+		}
+		base := unparen(fe.X)
+		pe, ok := base.(*ast.PathExpr)
+		if !ok || len(fc.r.Adjust[fe.X.GetID()]) > 0 {
+			return true
+		}
+		vr := fc.r.Paths[pe.ID]
+		if vr == nil || vr.Kind != typeck.VLocal {
+			return true
+		}
+		l := vr.Local
+		if !fc.g.needsDrop(l.Ty) || !fc.splittable(l.Ty) {
+			return true
+		}
+		ft := fc.r.NodeTypes[fe.ID]
+		if ft == nil || !fc.g.needsDrop(ft) {
+			return true
+		}
+		fr, ok := fc.r.Fields[fe.ID]
+		if !ok {
+			return true
+		}
+		if fc.split[l] == nil {
+			fc.split[l] = map[int]bool{}
+		}
+		fc.split[l][fr.Index] = true
+		return true
+	})
+}
+
+// allFlags returns "df = df_0 = ..." for chained assignment.
+func (fc *fnGen) allFlags(l *typeck.Local) string {
+	s := fc.flagName(l)
+	for i := range fc.fieldTys(l.Ty) {
+		if fc.split[l][i] {
+			s += fmt.Sprintf(" = %s_%d", fc.flagName(l), i)
+		}
+	}
+	return s
 }
 
 // emitDropsFrom emits drops for scopes[depth:] (innermost first).
@@ -125,13 +216,17 @@ func (fc *fnGen) declLocal(l *typeck.Local) {
 	fc.line("%s %s;", fc.ctype(l.Ty), fc.localName(l))
 	if fc.g.needsDrop(l.Ty) {
 		fc.line("uint8_t %s = 0;", fc.flagName(l))
-		fc.addDrop(fc.localName(l), fc.flagName(l), l.Ty)
+		for i := range fc.split[l] {
+			fc.line("uint8_t %s_%d = 0;", fc.flagName(l), i)
+		}
+		s := fc.scopes[len(fc.scopes)-1]
+		s.drops = append(s.drops, dropEntry{place: fc.localName(l), flag: fc.flagName(l), ty: l.Ty, local: l})
 	}
 }
 
 func (fc *fnGen) markInit(l *typeck.Local) {
 	if fc.g.needsDrop(l.Ty) {
-		fc.line("%s = 1;", fc.flagName(l))
+		fc.line("%s = 1;", fc.allFlags(l))
 	}
 }
 
@@ -154,7 +249,7 @@ func (fc *fnGen) localPlace(l *typeck.Local) (string, string) {
 	}
 	flag := ""
 	if fc.g.needsDrop(l.Ty) {
-		flag = fc.flagName(l)
+		flag = fc.allFlags(l)
 	}
 	return fc.localName(l), flag
 }
@@ -559,7 +654,7 @@ func (fc *fnGen) dropsString(depth int) string {
 		s := fc.scopes[i]
 		for j := len(s.drops) - 1; j >= 0; j-- {
 			d := s.drops[j]
-			parts = append(parts, fmt.Sprintf("if (%s) { %s = 0; %s(&%s); }", d.flag, d.flag, fc.g.dropFn(d.ty), d.place))
+			parts = append(parts, fc.dropCode(d))
 		}
 	}
 	return strings.Join(parts, " ")

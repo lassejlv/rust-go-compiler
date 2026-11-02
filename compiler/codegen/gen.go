@@ -223,6 +223,7 @@ func (g *Gen) genFunction(inst instance) {
 		g.fatalf("%s", g.tcx.Err())
 	}
 	fg := newFnGen(g, r)
+	fg.computeSplit(d.Fn.Ast.Body)
 	var params []string
 	for i, pt := range r.ParamTys {
 		params = append(params, fmt.Sprintf("%s p%d", g.ctype(pt), i))
@@ -355,6 +356,7 @@ func (g *Gen) genClosure(t Ty) {
 	name := g.closureFns[t]
 	g.defineByValue(t)
 	fg := newFnGen(g, ci.Results)
+	fg.computeSplit(ci.Expr.Body)
 	fg.closure = ci
 	fg.capIndex = map[*typeck.Local]int{}
 	for i, c := range ci.Captures {

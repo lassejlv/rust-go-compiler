@@ -61,6 +61,7 @@ pub mod string {
     pub struct String { ptr: *mut u8, len: usize, cap: usize }
     impl String {
         pub fn new() -> String { String { ptr: 0 as *mut u8, len: 0, cap: 0 } }
+        pub fn from(s: &str) -> String { let mut r = String::new(); r.push_str(s); r }
         pub fn push_str(&mut self, s: &str) {
             let n = unsafe { crate::intrinsics::str_len(s) };
             if self.len + n > self.cap {
@@ -128,4 +129,5 @@ pub mod prelude {
     pub use crate::result::Result::{self, Ok, Err};
     pub use crate::string::String;
     pub use crate::iter::{Iterator, IntoIterator};
+    pub use crate::ops::{Fn, FnMut, FnOnce, Drop};
 }

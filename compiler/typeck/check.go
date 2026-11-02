@@ -475,9 +475,12 @@ func (fcx *FnCtxt) checkFn() {
 	if fn.Body == nil {
 		return // intrinsic / extern / required trait method
 	}
-	ins, out := fcx.instantiateSig(d, fcx.inst.Args, d.Span)
 	// Declared opaque types of this very function become inference vars.
 	sig := fcx.t.FnSig(d)
+	ins := make([]Ty, len(sig.Inputs))
+	for i, in := range sig.Inputs {
+		ins[i] = fcx.normalizeInBody(Subst(in, fcx.inst.Args), d.Span)
+	}
 	declOut := Subst(sig.Output, fcx.inst.Args)
 	var opaques []Ty
 	if declOut.HasOpaque() {
@@ -489,8 +492,8 @@ func (fcx *FnCtxt) checkFn() {
 			}
 			return nil
 		})
-		out = fcx.normalizeInBody(declOut, d.Span)
 	}
+	out := fcx.normalizeInBody(declOut, d.Span)
 	fcx.retTy = out
 	fcx.r.RetTy = out
 	fcx.r.ParamTys = ins

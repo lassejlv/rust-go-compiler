@@ -206,7 +206,15 @@ func (fc *fnGen) operand(e ast.Expr) operand {
 	case *ast.FieldExpr:
 		base := fc.asPlace(fc.adjusted(x.X))
 		fr := fc.r.Fields[x.ID]
-		return operand{s: fmt.Sprintf("%s.f%d", base.s, fr.Index), place: true, flag: base.flag, movable: base.movable, ty: t}
+		flag := base.flag
+		if pe, ok := unparen(x.X).(*ast.PathExpr); ok && len(fc.r.Adjust[x.X.GetID()]) == 0 {
+			if vr := fc.r.Paths[pe.ID]; vr != nil && vr.Kind == typeck.VLocal && fc.split[vr.Local][fr.Index] && fc.capIndex[vr.Local] == 0 {
+				if _, captured := fc.capIndex[vr.Local]; !captured {
+					flag = fmt.Sprintf("%s_%d", fc.flagName(vr.Local), fr.Index)
+				}
+			}
+		}
+		return operand{s: fmt.Sprintf("%s.f%d", base.s, fr.Index), place: true, flag: flag, movable: base.movable, ty: t}
 	case *ast.IndexExpr:
 		return fc.indexOperand(x, t)
 	case *ast.RefExpr:
@@ -605,7 +613,9 @@ func (fc *fnGen) storeTo(l ast.Expr, v string) {
 			p, flag := fc.localPlace(vr.Local)
 			if flag != "" {
 				tmp := fc.spill(v, t)
-				fc.line("if (%s) %s(&%s);", flag, fc.g.dropFn(t), p)
+				if _, captured := fc.capIndex[vr.Local]; !captured {
+					fc.line("%s", fc.dropCode(dropEntry{place: p, flag: fc.flagName(vr.Local), ty: t, local: vr.Local}))
+				}
 				fc.line("%s = %s; %s = 1;", p, tmp, flag)
 				return
 			}
@@ -616,6 +626,12 @@ func (fc *fnGen) storeTo(l ast.Expr, v string) {
 	if fc.g.needsDrop(t) {
 		tmp := fc.spill(v, t)
 		op := fc.placeOp(l)
+		if strings.Contains(op.flag, "_") && !strings.Contains(op.flag, "=") {
+			// re-initializing a field of a partially moved local
+			fc.line("if (%s) %s(&%s);", op.flag, fc.g.dropFn(t), op.s)
+			fc.line("%s = %s; %s = 1;", op.s, tmp, op.flag)
+			return
+		}
 		ptr := fc.spill("&"+op.s, Ptr(t, true))
 		fc.line("%s(%s);", fc.g.dropFn(t), ptr)
 		fc.line("*%s = %s;", ptr, tmp)
