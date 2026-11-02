@@ -135,25 +135,13 @@ func (g *Gen) Generate(mainDef *Def) (out string, err error) {
 	b.WriteString("\n/* ---- functions ---- */\n")
 	b.WriteString(g.fns.String())
 	// main
-	ret := g.tcx.ResultsFor(mainDef, nil)
 	b.WriteString("int main(int argc, char** argv) {\n  rg_init(argc, argv);\n")
 	for _, s := range g.staticInit {
 		b.WriteString("  " + s + "\n")
 	}
-	if ret != nil && ret.RetTy != nil && ret.RetTy.Kind == TAdt && ret.RetTy.Def == g.tcx.LangOpt("Result") {
-		fmt.Fprintf(&b, "  %s r = %s();\n", g.ctype(ret.RetTy), mainName)
-		errV := g.tcx.Lang("Err").Variant
-		fmt.Fprintf(&b, "  if (r.tag == %d) { %s }\n", errV.Disc, g.mainErrReport(ret.RetTy))
-	} else {
-		fmt.Fprintf(&b, "  %s();\n", mainName)
-	}
+	fmt.Fprintf(&b, "  %s();\n", mainName)
 	b.WriteString("  rg_flush_stdout();\n  return 0;\n}\n")
 	return b.String(), nil
-}
-
-// mainErrReport prints `Error: {e:?}` and exits 1 for main returning Err.
-func (g *Gen) mainErrReport(rt Ty) string {
-	return "rg_flush_stdout(); rg_write_stderr((const uint8_t*)\"Error: <main returned Err>\\n\", 27); exit(1);"
 }
 
 type cgError struct{ msg string }

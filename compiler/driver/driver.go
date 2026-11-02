@@ -125,6 +125,7 @@ func Frontend(opts *Options) (*typeck.Tcx, *Def, error) {
 	if err != nil {
 		return nil, nil, err
 	}
+	entry := addMainWrapper(userCrate)
 	t1 := time.Now()
 	exp := expand.New()
 	if err := exp.ExpandCrate(stdCrate, "std"); err != nil {
@@ -143,7 +144,7 @@ func Frontend(opts *Options) (*typeck.Tcx, *Def, error) {
 	}
 	tcx := typeck.NewTcx(r)
 	var mainDef *Def
-	if b := user.Root.Lookup("main", ValueNS); b != nil && b.Res.Def != nil && b.Res.Def.Kind == DefFn {
+	if b := user.Root.Lookup(entry, ValueNS); b != nil && b.Res.Def != nil && b.Res.Def.Kind == DefFn {
 		mainDef = b.Res.Def
 	}
 	if mainDef == nil {
@@ -156,6 +157,28 @@ func Frontend(opts *Options) (*typeck.Tcx, *Def, error) {
 		fmt.Fprintf(os.Stderr, "parse %v, expand %v, resolve %v\n", t1.Sub(t0), t2.Sub(t1), time.Since(t2))
 	}
 	return tcx, mainDef, nil
+}
+
+// addMainWrapper adds an entry point that reports `Err` from a main
+// returning Result (like std's Termination impl). Returns the entry name.
+func addMainWrapper(c *ast.Crate) string {
+	for _, it := range c.Items {
+		fn, ok := it.Kind.(*ast.FnItem)
+		if !ok || it.Name.Name != "main" || fn.Decl.Output == nil {
+			continue
+		}
+		if tt, ok := fn.Decl.Output.(*ast.TupleType); ok && len(tt.Elems) == 0 {
+			return "main"
+		}
+		src := `fn __rustgo_main() { match main() { ::std::result::Result::Ok(_) => {}, ::std::result::Result::Err(e) => { eprintln!("Error: {:?}", e); ::std::process::exit(1) } } }`
+		wc, err := parser.ParseCrate(lexer.AddFile("<main-wrapper>", src), src)
+		if err != nil {
+			return "main"
+		}
+		c.Items = append(c.Items, wc.Items...)
+		return "__rustgo_main"
+	}
+	return "main"
 }
 
 func relPrefix(input string) string {
