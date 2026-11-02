@@ -196,7 +196,9 @@ func (fcx *FnCtxt) canUnsize(src, dst Ty) bool {
 			}
 			return false
 		}
-		if src.Kind == TInfer || src.IsUnsized() {
+		// {integer}/{float} are sized: the `T: Trait` obligation is resolved
+		// after literal fallback (`&1` as `&dyn Display`)
+		if src.Kind == TInfer && src.Sub != 1 && src.Sub != 2 || src.IsUnsized() {
 			return false
 		}
 		if dst.Def == nil {

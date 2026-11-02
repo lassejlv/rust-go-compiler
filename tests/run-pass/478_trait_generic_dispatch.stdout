@@ -1,0 +1,15 @@
+total 9.250
+true
+sq(4.00) -> sq(16.00) same=false
+tri(3.00) -> tri(12.00) same=false
+sq(2.25) -> sq(9.00) same=false
+Some(("sq", 4.0))
+true
+true
+false
+Tri(3.0, 2.0)
+A+BC
+X+YZ
+6 3.75
+<1><two><3.5><c><str><sq(4.00)>
+[0, 2, 4, 6, 8] [0, 4, 16, 36, 64]
