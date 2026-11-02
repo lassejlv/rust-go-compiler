@@ -91,12 +91,10 @@ pub struct Location<'a> {
 impl<'a> Location<'a> {
     /// Returns the source location of the caller of this function.
     ///
-    /// NOTE: rustgo does not implement `#[track_caller]` propagation yet, so
-    /// this reports an unknown location.
     #[track_caller]
     #[inline]
     pub const fn caller() -> &'static Location<'static> {
-        &UNKNOWN_LOCATION
+        unsafe { crate::intrinsics::caller_location() }
     }
 
     /// Returns the name of the source file.

@@ -102,6 +102,18 @@ func (fc *fnGen) intrinsic(d *Def, args []Ty, v []string, ret Ty, sp ast.Span) s
 			return "1"
 		}
 		return "0"
+	case "caller_location":
+		// &'static Location of our caller (track_caller) or of this call
+		here := "&" + fc.g.locStatic(sp)
+		if fc.trackCaller {
+			return fmt.Sprintf("((%s)(__loc ? __loc : %s))", ct(ret), here)
+		}
+		return fmt.Sprintf("((%s)%s)", ct(ret), here)
+	case "caller_location_tracked":
+		if fc.trackCaller {
+			return "((uint8_t)(__loc != 0 && __loc_tracked))"
+		}
+		return "((uint8_t)0)"
 	case "type_name":
 		s := rustcTypeName(arg(0))
 		return fmt.Sprintf("((Fat){ (void*)%s, %d })", cString(s), len(s))

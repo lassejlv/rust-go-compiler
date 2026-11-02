@@ -941,6 +941,45 @@ pub mod x86_64 {
         let _ = (p, strategy);
     }
 
+    /// Result of the `cpuid` instruction.
+    #[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+    pub struct CpuidResult {
+        /// EAX register.
+        pub eax: u32,
+        /// EBX register.
+        pub ebx: u32,
+        /// ECX register.
+        pub ecx: u32,
+        /// EDX register.
+        pub edx: u32,
+    }
+
+    extern "C" {
+        fn rustgo_cpuid(leaf: u32, sub: u32, out: *mut u32);
+    }
+
+    /// Returns the result of the `cpuid` instruction for a given `leaf` (`EAX`)
+    /// and `sub_leaf` (`ECX`).
+    #[inline]
+    pub fn __cpuid_count(leaf: u32, sub_leaf: u32) -> CpuidResult {
+        let mut out = [0u32; 4];
+        unsafe { rustgo_cpuid(leaf, sub_leaf, out.as_mut_ptr()) };
+        CpuidResult { eax: out[0], ebx: out[1], ecx: out[2], edx: out[3] }
+    }
+
+    /// See [`__cpuid_count`].
+    #[inline]
+    pub fn __cpuid(leaf: u32) -> CpuidResult {
+        __cpuid_count(leaf, 0)
+    }
+
+    /// Returns the highest-supported `leaf` (`EAX`) and sub-leaf (`ECX`) `cpuid` values.
+    #[inline]
+    pub fn __get_cpuid_max(leaf: u32) -> (u32, u32) {
+        let CpuidResult { eax, ebx, .. } = __cpuid(leaf);
+        (eax, ebx)
+    }
+
     /// Hint to the processor that the code sequence is a spin-wait loop.
     #[inline]
     pub unsafe fn _mm_pause() {}

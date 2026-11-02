@@ -55,6 +55,12 @@ typedef struct { void* p; void (*f)(void*); uint8_t* flag; } RgCleanup;
 RG_GLOBAL __thread RgCleanup* rg_cs;
 RG_GLOBAL __thread size_t rg_csn, rg_cscap;
 RG_GLOBAL __thread int rg_panicking;
+/* #[track_caller]: the caller stores the call's location (a pointer to a
+ * core::panic::Location) right before the call; `tracked` says it was
+ * propagated from a track_caller caller rather than being the call site. */
+typedef struct { Fat file; uint32_t line, col; } RgLoc;
+RG_GLOBAL __thread const RgLoc* rg_caller_loc;
+RG_GLOBAL __thread int rg_caller_tracked;
 RG_GLOBAL __thread int rg_is_main;
 RG_GLOBAL __thread char* rg_tname;          /* thread name (NULL: "main" / "<unnamed>") */
 RG_GLOBAL __thread size_t rg_tname_len;

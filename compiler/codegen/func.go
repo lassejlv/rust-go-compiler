@@ -47,6 +47,8 @@ type fnGen struct {
 	// deferInits collects drop-flag initializations of match bindings until
 	// the arm's guard has succeeded.
 	deferInits *[]string
+	// trackCaller: generating a #[track_caller] fn (has __loc).
+	trackCaller bool
 	// inConst is set while generating a const item's initializer: every
 	// shared borrow of a temporary is promoted to static storage.
 	inConst bool

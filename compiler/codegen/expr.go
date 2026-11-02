@@ -1,6 +1,7 @@
 package codegen
 
 import (
+	"rustgo/compiler/lexer"
 	"fmt"
 	"math"
 	"math/big"
@@ -553,6 +554,11 @@ func (fc *fnGen) unaryOperand(x *ast.UnaryExpr, t Ty) operand {
 }
 
 func (fc *fnGen) loc(sp ast.Span) string {
+	if fc.trackCaller {
+		// implicit panics in a #[track_caller] fn report its caller
+		f := cString(fileNameOf(sp))
+		return fmt.Sprintf("(__loc ? (const char*)__loc->file.ptr : %s), (__loc ? __loc->line : %d), (__loc ? __loc->col : %d)", f, sp.Lo.Line, sp.Lo.Col)
+	}
 	return fmt.Sprintf("%s, %d, %d", cString(fileNameOf(sp)), sp.Lo.Line, sp.Lo.Col)
 }
 
@@ -572,12 +578,12 @@ func (fc *fnGen) binary(x *ast.BinaryExpr, t Ty) string {
 		if x.Op >= ast.BinEq {
 			l := fc.addrOf(fc.adjusted(x.L))
 			r := fc.addrOf(fc.adjusted(x.R))
-			v := fc.callResolved(c.Def, c.Args, []string{l, r}, TyBool)
+			v := fc.callResolvedSpan(c.Def, c.Args, []string{l, r}, TyBool, x.Span)
 			return fc.spill(v, TyBool)
 		}
 		l := fc.spillIfNeeded(fc.value(x.L), fc.aty(x.L))
 		r := fc.value(x.R)
-		return fc.spill(fc.callResolved(c.Def, c.Args, []string{l, r}, t), t)
+		return fc.spill(fc.callResolvedSpan(c.Def, c.Args, []string{l, r}, t, x.Span), t)
 	}
 	switch x.Op {
 	case ast.BinAnd, ast.BinOr:
@@ -732,7 +738,7 @@ func (fc *fnGen) assignOp(x *ast.AssignOpExpr) {
 		r := fc.value(x.R)
 		r = fc.spillIfNeeded(r, fc.aty(x.R))
 		l := fc.addrOf(fc.adjusted(x.L))
-		fc.line("%s;", fc.callResolved(c.Def, c.Args, []string{l, r}, TyUnit))
+		fc.line("%s;", fc.callResolvedSpan(c.Def, c.Args, []string{l, r}, TyUnit, x.Span))
 		return
 	}
 	t := fc.aty(x.L)
@@ -805,7 +811,7 @@ func (fc *fnGen) indexOperand(x *ast.IndexExpr, t Ty) operand {
 	idx := fc.value(x.Index)
 	mut := c.Def.Name == "index_mut"
 	rt := Ref(t, mut)
-	v := fc.spill(fc.callResolved(c.Def, c.Args, []string{recv, idx}, rt), rt)
+	v := fc.spill(fc.callResolvedSpan(c.Def, c.Args, []string{recv, idx}, rt, bracketSpan(x)), rt)
 	if t.IsUnsized() {
 		return operand{s: v, unsized: true, ty: t}
 	}
@@ -1102,7 +1108,7 @@ func (fc *fnGen) methodCall(x *ast.MethodCallExpr, t Ty) string {
 		return fc.finishCall(fmt.Sprintf("%s(%s)", fp, strings.Join(all, ", ")), t)
 	}
 	all := append([]string{recv}, args...)
-	return fc.finishCall(fc.callResolvedSpan(c.Def, c.Args, all, t, x.Span), t)
+	return fc.finishCall(fc.callResolvedSpan(c.Def, c.Args, all, t, x.Method.Span), t)
 }
 
 // callResolved builds a call expression to a (possibly trait) function.
@@ -1143,6 +1149,24 @@ func (fc *fnGen) callResolvedSpan(d *Def, args []Ty, vals []string, ret Ty, sp a
 		return fc.intrinsic(d, args, vals, ret, sp)
 	}
 	name := fc.g.fnName(d, args)
+	if hasTrackCaller(d) {
+		// pass our location (or the one we were given) after evaluating
+		// the arguments, which may make tracked calls themselves
+		var b strings.Builder
+		b.WriteString("({ ")
+		as := make([]string, len(vals))
+		for i, v := range vals {
+			as[i] = fc.newName("tca")
+			fmt.Fprintf(&b, "__auto_type %s = %s; ", as[i], v)
+		}
+		if fc.trackCaller {
+			b.WriteString("rg_caller_loc = __loc; rg_caller_tracked = 1; ")
+		} else {
+			fmt.Fprintf(&b, "rg_caller_loc = &%s; rg_caller_tracked = 0; ", fc.g.locStatic(sp))
+		}
+		fmt.Fprintf(&b, "%s(%s); })", name, strings.Join(as, ", "))
+		return b.String()
+	}
 	return fmt.Sprintf("%s(%s)", name, strings.Join(vals, ", "))
 }
 
@@ -1225,23 +1249,59 @@ func (fc *fnGen) promotable(e ast.Expr) bool {
 		}
 	case *ast.TupleExpr:
 		for _, el := range x.Elems {
-			if !fc.promotable(el) {
+			if !fc.promotable(el) || !fc.constAdjOK(el) {
 				return false
 			}
 		}
 		return true
 	case *ast.ArrayExpr:
 		for _, el := range x.Elems {
-			if !fc.promotable(el) || len(fc.r.Adjust[el.GetID()]) > 0 {
+			if !fc.promotable(el) || !fc.constAdjOK(el) {
 				return false
 			}
 		}
 		return true
+	case *ast.RefExpr:
+		// nested borrows in constant tables: `&[(c, &['a', 'b'])]`
+		if x.Mut || len(fc.r.Adjust[x.X.GetID()]) > 0 {
+			return false
+		}
+		if _, isArr := unparen(x.X).(*ast.ArrayExpr); !isArr {
+			if _, isTup := unparen(x.X).(*ast.TupleExpr); !isTup {
+				return false
+			}
+		}
+		return fc.promotable(x.X)
 	case *ast.PathExpr:
 		vr := fc.r.Paths[x.ID]
 		return vr != nil && vr.Kind == typeck.VUnitCtor
 	}
 	return false
+}
+
+// constAdjOK reports whether the adjustments of an element of a constant
+// aggregate can be applied in a C static initializer: none, or a borrowed
+// array unsized to a slice reference.
+func (fc *fnGen) constAdjOK(e ast.Expr) bool {
+	adj := fc.r.Adjust[e.GetID()]
+	if len(adj) == 0 {
+		return true
+	}
+	if _, isRef := unparen(e).(*ast.RefExpr); !isRef {
+		return false
+	}
+	last := adj[len(adj)-1]
+	if last.Kind != typeck.AdjUnsize || last.Target == nil || last.Target.Kind != TRef || last.Target.Elem.Kind != TSlice {
+		return false
+	}
+	for _, a := range adj {
+		switch a.Kind {
+		case typeck.AdjDeref, typeck.AdjBorrow, typeck.AdjUnsize:
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // promotableDyn reports whether e is a constant expression involving const
@@ -1335,6 +1395,20 @@ func (fc *fnGen) constC(e ast.Expr) string {
 		}
 		fc.g.defineByValue(t)
 		return fmt.Sprintf("((%s){ { %s } })", fc.g.ctype(t), strings.Join(vs, ", "))
+	case *ast.RefExpr:
+		// static storage for the borrowed constant; an array borrowed as
+		// a slice becomes a constant fat pointer
+		it := fc.ty(x.X)
+		inner := fc.constC(x.X)
+		name := fc.newName("prom")
+		fc.g.defineByValue(it)
+		fmt.Fprintf(&fc.g.statics, "static %s %s = %s;\n", fc.g.ctype(it), name, inner)
+		if adj := fc.r.Adjust[x.ID]; len(adj) > 0 && it.Kind == TArray {
+			target := adj[len(adj)-1].Target
+			fc.g.defineByValue(target)
+			return fmt.Sprintf("((%s){ (void*)%s.a, %d })", fc.ctype(target), name, fc.g.arrayLen(it))
+		}
+		return "(&" + name + ")"
 	}
 	return fc.value(e)
 }
@@ -1353,4 +1427,31 @@ func (fc *fnGen) dynFat(v string, t Ty) string {
 		t = fts[0]
 	}
 	return v
+}
+
+// bracketSpan is the span rustc reports for an overloaded index operation:
+// starting at the `[` after the indexed expression.
+func bracketSpan(x *ast.IndexExpr) ast.Span {
+	sp := x.Span
+	hi := x.X.GetSpan().Hi
+	f := hi.File
+	if f < 0 || f >= len(lexer.Files) {
+		return sp
+	}
+	src := lexer.Files[f].Src
+	off, col, line := hi.Off, hi.Col, hi.Line
+	for off < len(src) && src[off] != '[' {
+		if src[off] == '\n' {
+			line++
+			col = 1
+		} else {
+			col++
+		}
+		off++
+	}
+	if off >= len(src) {
+		return sp
+	}
+	sp.Lo = lexer.Pos{File: f, Off: off, Line: line, Col: col}
+	return sp
 }

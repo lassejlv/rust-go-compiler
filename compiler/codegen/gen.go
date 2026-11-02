@@ -29,6 +29,7 @@ type Gen struct {
 	protos  strings.Builder // prototypes
 	vtdefs  strings.Builder // vtable definitions
 	statics strings.Builder
+	locs    map[string]string // track_caller locations (locStatic)
 	fns     chunkBuf // function bodies (one chunk per function)
 
 	types        map[Ty]*typeInfo
@@ -225,6 +226,11 @@ func (g *Gen) genFunction(inst instance) {
 	}
 	fg := newFnGen(g, r)
 	fg.computeSplit(d.Fn.Ast.Body)
+	if hasTrackCaller(d) {
+		// the caller stored its location right before calling us
+		fg.trackCaller = true
+		fg.line("const RgLoc* __loc = rg_caller_loc; int __loc_tracked = rg_caller_tracked;")
+	}
 	var params []string
 	for i, pt := range r.ParamTys {
 		params = append(params, fmt.Sprintf("%s p%d", g.ctype(pt), i))
@@ -419,6 +425,46 @@ func (g *Gen) initArrayCtors() (calls []string) {
 		}
 	}
 	return calls
+}
+
+// hasTrackCaller reports #[track_caller] on a fn (or on the trait method an
+// impl method implements).
+func hasTrackCaller(d *Def) bool {
+	if d == nil {
+		return false
+	}
+	for _, a := range d.Attrs {
+		if a.Path == "track_caller" {
+			return true
+		}
+	}
+	if d.Parent != nil && d.Parent.Kind == DefImpl && d.Parent.Impl != nil && d.Parent.Impl.TraitRef != nil {
+		if td, ok := d.Parent.Impl.TraitRef.Trait.Trait.Items[d.Name]; ok && td != d {
+			for _, a := range td.Attrs {
+				if a.Path == "track_caller" {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// locStatic returns a static core::panic::Location for a source position.
+func (g *Gen) locStatic(sp lexer.Span) string {
+	file := lexer.FileName(sp.Lo.File)
+	key := fmt.Sprintf("%s:%d:%d", file, sp.Lo.Line, sp.Lo.Col)
+	if n, ok := g.locs[key]; ok {
+		return n
+	}
+	g.fnN++
+	name := fmt.Sprintf("rgloc%d", g.fnN)
+	if g.locs == nil {
+		g.locs = map[string]string{}
+	}
+	g.locs[key] = name
+	fmt.Fprintf(&g.statics, "static RgLoc %s = { { (void*)%s, %d }, %d, %d };\n", name, cString(file), len(file), sp.Lo.Line, sp.Lo.Col)
+	return name
 }
 
 // closureFn returns the C function implementing a closure type's body.

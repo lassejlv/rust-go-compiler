@@ -9,6 +9,10 @@ extern "rust-intrinsic" {
     pub fn align_of_val<T: ?Sized>(p: *const T) -> usize;
     pub fn needs_drop<T: ?Sized>() -> bool;
     pub fn type_name<T: ?Sized>() -> &'static str;
+    // ---- #[track_caller]
+    pub fn caller_location() -> &'static crate::panic::Location<'static>;
+    /// Whether our caller was itself #[track_caller] (location propagated).
+    pub fn caller_location_tracked() -> bool;
 
     // ---- heap memory (size is never 0)
     pub fn alloc(size: usize, align: usize) -> *mut u8;

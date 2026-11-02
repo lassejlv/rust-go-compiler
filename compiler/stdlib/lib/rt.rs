@@ -3,6 +3,20 @@
 use crate::fmt;
 use crate::intrinsics;
 
+/// The panic location: when called (via `panic!`) from a #[track_caller]
+/// function such as `Option::unwrap`, its caller's location, as in rustc;
+/// otherwise the `panic!` site passed explicitly.
+#[inline(always)]
+#[track_caller]
+fn caller_or<'a>(file: &'a str, line: u32, col: u32) -> (&'a str, u32, u32) {
+    if unsafe { intrinsics::caller_location_tracked() } {
+        let l = unsafe { intrinsics::caller_location() };
+        (l.file(), l.line(), l.column())
+    } else {
+        (file, line, col)
+    }
+}
+
 /// Panics with a plain message (`panic!()` without format arguments, `assert!`).
 #[inline(never)]
 #[cold]
@@ -10,6 +24,7 @@ use crate::intrinsics;
 pub fn panic_str(msg: &str, file: &str, line: u32, col: u32) -> ! {
     // `msg` is always a string literal here (its payload is `&'static str`).
     let msg: &'static str = unsafe { &*(msg as *const str) };
+    let (file, line, col) = caller_or(file, line, col);
     crate::panicking::begin_panic_static(msg, file, line, col)
 }
 
@@ -18,6 +33,7 @@ pub fn panic_str(msg: &str, file: &str, line: u32, col: u32) -> ! {
 #[cold]
 #[track_caller]
 pub fn panic_fmt(args: fmt::Arguments<'_>, file: &str, line: u32, col: u32) -> ! {
+    let (file, line, col) = caller_or(file, line, col);
     if let Some(s) = args.as_str() {
         crate::panicking::begin_panic_static(s, file, line, col)
     }
