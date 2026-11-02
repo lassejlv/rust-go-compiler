@@ -347,6 +347,7 @@ func (fcx *FnCtxt) checkCall(x *ast.CallExpr, expected Ty) Ty {
 			if d.Kind == DefFn {
 				variadic = fcx.t.FnSig(d).Variadic
 			}
+			fcx.nextHints = fcx.expectedInputs(ins, out, expected)
 			fcx.checkArgs(x.Args, ins, variadic, x.Span)
 			callee := &Callee{Kind: kind, Def: d, Args: t.Args}
 			fcx.r.Callees[x.ID] = callee
@@ -400,6 +401,11 @@ func (fcx *FnCtxt) checkCall(x *ast.CallExpr, expected Ty) Ty {
 
 // checkArgs checks call arguments against parameter types (closures last).
 func (fcx *FnCtxt) checkArgs(args []ast.Expr, ins []Ty, variadic bool, sp lexer.Span) {
+	hints := fcx.nextHints
+	fcx.nextHints = nil
+	saved := fcx.argHints
+	fcx.argHints = hints
+	defer func() { fcx.argHints = saved }()
 	if len(args) != len(ins) && !(variadic && len(args) >= len(ins)) {
 		fcx.errorf(sp, "this function takes %d arguments but %d were supplied", len(ins), len(args))
 	}
@@ -413,6 +419,21 @@ func (fcx *FnCtxt) checkArgs(args []ast.Expr, ins []Ty, variadic bool, sp lexer.
 				fcx.selectWherePossible()
 			}
 			if i < len(ins) {
+				if ce, ok := unparen(a).(*ast.ClosureExpr); ok && i < len(fcx.argHints) && fcx.argHints[i] != nil {
+					if eins, _ := fcx.expectedClosureSig(ins[i]); eins == nil {
+						if hins, _ := fcx.expectedClosureSig(fcx.argHints[i]); hins != nil {
+							ct := fcx.checkClosure(ce, fcx.argHints[i])
+							fcx.record(ce.ID, ct)
+							if a != ce {
+								fcx.record(a.GetID(), ct)
+							}
+							if !fcx.coerce(a, ct, ins[i]) {
+								fcx.errorf(a.GetSpan(), "mismatched types: expected `%s`, found `%s`", fcx.resolve(ins[i]), fcx.resolve(ct))
+							}
+							continue
+						}
+					}
+				}
 				fcx.checkExprCoerce(a, ins[i])
 			} else {
 				fcx.checkExpr(a, nil)
@@ -546,3 +567,17 @@ func (fcx *FnCtxt) checkStructExpr(x *ast.StructExpr, expected Ty) Ty {
 }
 
 func isUnion(t Ty) bool { return t.Kind == TAdt && t.Def.Adt.Kind == AdtUnion }
+
+// expectedInputs derives hint types for arguments from the expected
+// result type (without committing inference).
+func (fcx *FnCtxt) expectedInputs(ins []Ty, out, expected Ty) []Ty {
+	if expected == nil {
+		return nil
+	}
+	s := fcx.ic.snapshot()
+	defer fcx.ic.rollback(s)
+	if !fcx.ic.unify(out, expected) {
+		return nil
+	}
+	return fcx.ic.resolveList(ins)
+}

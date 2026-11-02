@@ -711,6 +711,11 @@ func (r *Resolver) ResolvePath(m *Module, segs []string, global bool, ns Namespa
 			return PathResult{Res: cur, Consumed: i}, nil
 		}
 		d := cur.Def
+		if segs[i] == "super" && d.Mod != nil && (d.Kind == DefMod || d.Kind == DefCrate) {
+			cur = defRes(d.Mod.ParentModule().Def)
+			i++
+			continue
+		}
 		switch d.Kind {
 		case DefMod, DefCrate:
 			b := d.Mod.Lookup(segs[i], nsFor(i))

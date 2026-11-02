@@ -66,7 +66,7 @@ func attrLang(a *ast.Attr) (string, bool) {
 func (p *itemPrinter) attrs(attrs []*ast.Attr, ind string) {
 	for _, a := range attrs {
 		switch a.Path {
-		case "doc", "inline", "track_caller", "must_use", "non_exhaustive", "cold", "rustc_coerce_unsized", "derive":
+		case "doc", "inline", "track_caller", "must_use", "non_exhaustive", "cold", "rustc_coerce_unsized", "derive", "default":
 			continue
 		}
 		if name, ok := attrLang(a); ok && p.harness {
@@ -362,7 +362,19 @@ func (p *itemPrinter) item(it *ast.Item, ind string) {
 			}
 			tr = neg + ast.PathString(k.Trait) + " for "
 		}
-		p.w("%s%simpl%s %s%s%s {\n", ind, u, p.generics(k.Generics), tr, ast.TypeString(k.SelfTy), p.where(k.Generics))
+		gens := p.generics(k.Generics)
+		if p.harness && k.Trait != nil && ast.PathString(k.Trait) == "Drop" && len(k.Generics.Params) > 0 {
+			// Like the real library: dropping a container does not use
+			// borrows held by its elements.
+			for _, gp := range k.Generics.Params {
+				if gp.Kind == ast.GPType {
+					gens = strings.Replace(gens, gp.Name.Name, "#[may_dangle] "+gp.Name.Name, 1)
+					u = "unsafe "
+					break
+				}
+			}
+		}
+		p.w("%s%simpl%s %s%s%s {\n", ind, u, gens, tr, ast.TypeString(k.SelfTy), p.where(k.Generics))
 		saved := p.trait
 		if k.Trait == nil {
 			p.trait = "<" + strings.SplitN(ast.TypeString(k.SelfTy), "<", 2)[0] + ">"
@@ -417,7 +429,7 @@ func (p *itemPrinter) item(it *ast.Item, ind string) {
 
 // harnessPrelude supplies what rustc's no_core mode needs on top of our
 // lang items (Copy for primitives, unsizing, receivers, panic hooks).
-const harnessPrelude = `#![feature(no_core, lang_items, rustc_attrs, auto_traits, negative_impls, unboxed_closures, fundamental, never_type, intrinsics, arbitrary_self_types, const_trait_impl, decl_macro)]
+const harnessPrelude = `#![feature(no_core, lang_items, rustc_attrs, auto_traits, negative_impls, unboxed_closures, fundamental, never_type, intrinsics, arbitrary_self_types, const_trait_impl, decl_macro, dropck_eyepatch)]
 #![no_core]
 #![rustc_coherence_is_core]
 #![allow(unused, dead_code, internal_features, incomplete_features, improper_ctypes_definitions, unconditional_recursion, non_camel_case_types)]
@@ -465,6 +477,17 @@ mod __harness {
     #[lang = "panic_const_shl_overflow"] pub fn p8() -> ! { loop {} }
     #[lang = "panic_const_div_by_zero"] pub fn p9() -> ! { loop {} }
     #[lang = "panic_const_rem_by_zero"] pub fn p10() -> ! { loop {} }
+    // Box<F> implements the Fn traits (built into the rustgo compiler).
+    impl<Args: crate::marker::Tuple, F: crate::ops::FnOnce<Args> + ?Sized> crate::ops::FnOnce<Args> for crate::boxed::Box<F> {
+        type Output = <F as crate::ops::FnOnce<Args>>::Output;
+        extern "rust-call" fn call_once(self, args: Args) -> Self::Output { loop {} }
+    }
+    impl<Args: crate::marker::Tuple, F: crate::ops::FnMut<Args> + ?Sized> crate::ops::FnMut<Args> for crate::boxed::Box<F> {
+        extern "rust-call" fn call_mut(&mut self, args: Args) -> Self::Output { <F as crate::ops::FnMut<Args>>::call_mut(&mut **self, args) }
+    }
+    impl<Args: crate::marker::Tuple, F: crate::ops::Fn<Args> + ?Sized> crate::ops::Fn<Args> for crate::boxed::Box<F> {
+        extern "rust-call" fn call(&self, args: Args) -> Self::Output { <F as crate::ops::Fn<Args>>::call(&**self, args) }
+    }
     macro_rules! copy_impls { ($($t:ty)*) => { $( impl Copy for $t {} )* } }
     copy_impls! { i8 i16 i32 i64 i128 isize u8 u16 u32 u64 u128 usize f32 f64 bool char }
     impl<T: ?Sized> Copy for &T {}
@@ -513,5 +536,134 @@ func TestRustcTypeCheck(t *testing.T) {
 			lines = lines[:400]
 		}
 		t.Fatalf("rustc rejected the expanded library (%s):\n%s", file, strings.Join(lines, "\n"))
+	}
+}
+
+// hoistBlockItems moves items declared inside function bodies to the
+// enclosing item list (the AST printer cannot print nested items).
+func hoistBlockItems(items []*ast.Item) []*ast.Item {
+	var extra []*ast.Item
+	var visit func(n any)
+	visit = func(n any) {
+		ast.Walk(n, func(x any) bool {
+			if st, ok := x.(*ast.ItemStmt); ok && st.Item != nil {
+				switch st.Item.Kind.(type) {
+				case *ast.MacroRulesItem, *ast.MacCallItem:
+				default:
+					extra = append(extra, st.Item)
+				}
+			}
+			return true
+		})
+	}
+	for _, it := range items {
+		switch k := it.Kind.(type) {
+		case *ast.FnItem:
+			if k.Body != nil {
+				visit(k.Body)
+			}
+		case *ast.ImplItem:
+			for _, ii := range k.Items {
+				if f, ok := ii.Kind.(*ast.FnItem); ok && f.Body != nil {
+					visit(f.Body)
+				}
+			}
+		case *ast.ModItem:
+			k.Items = hoistBlockItems(k.Items)
+		}
+	}
+	return append(items, extra...)
+}
+
+// TestRustcTypeCheckPrograms type-checks every tests/run-pass program,
+// expanded by our expander, against the rustc-checked library. Failures are
+// reported per program (some are expected: moving out of a `Box` with `*b`
+// needs the compiler's builtin box support, which the rustc harness lacks).
+func TestRustcTypeCheckPrograms(t *testing.T) {
+	if os.Getenv("RUSTGO_STD_RUSTC_CHECK") == "" {
+		t.Skip("set RUSTGO_STD_RUSTC_CHECK=1 to type-check the test programs with rustc")
+	}
+	rustc, err := exec.LookPath("rustc")
+	if err != nil {
+		t.Skip("rustc not found")
+	}
+	dir := os.Getenv("RUSTGO_STD_RUSTC_OUT")
+	if dir == "" {
+		dir = t.TempDir()
+	}
+	e := expand.New()
+	c, err := LoadCrate(lexer.AddFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.ExpandCrate(c, "std"); err != nil {
+		t.Fatal(err)
+	}
+	p := &itemPrinter{harness: true}
+	p.items(c.Items, "", true)
+	src := strings.ReplaceAll(harnessPrelude+p.b.String(), "::std::", "crate::")
+	stdFile := filepath.Join(dir, "std_expanded.rs")
+	rmeta := filepath.Join(dir, "libstd.rmeta")
+	if err := os.WriteFile(stdFile, []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(rustc, "--edition", "2021", "--crate-type", "lib", "--crate-name", "std", "--emit=metadata", "-o", rmeta, stdFile)
+	cmd.Env = append(os.Environ(), "RUSTC_BOOTSTRAP=1")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("library does not type-check:\n%s", out)
+	}
+	progs, _ := filepath.Glob("../../tests/run-pass/*.rs")
+	if pat := os.Getenv("RUSTGO_STD_RUSTC_PROGS"); pat != "" {
+		var keep []string
+		for _, pr := range progs {
+			if strings.Contains(pr, pat) {
+				keep = append(keep, pr)
+			}
+		}
+		progs = keep
+	}
+	failed := 0
+	for _, prog := range progs {
+		data, err := os.ReadFile(prog)
+		if err != nil {
+			t.Fatal(err)
+		}
+		uc, err := parserParseCrate(prog, string(data))
+		if err != nil {
+			t.Errorf("%s: parse: %v", prog, err)
+			continue
+		}
+		if err := e.ExpandCrate(uc, "main"); err != nil {
+			t.Errorf("%s: expand: %v", prog, err)
+			continue
+		}
+		uc.Items = hoistBlockItems(uc.Items)
+		up := &itemPrinter{}
+		up.b.WriteString("#![feature(no_core, lang_items, unboxed_closures, never_type)]\n#![no_core]\n#![allow(unused, dead_code, non_snake_case, non_camel_case_types, unused_must_use, internal_features)]\nextern crate std;\n")
+		up.items(uc.Items, "", false)
+		usrc := up.b.String()
+		usrc = strings.Replace(usrc, "extern crate std;\n", "extern crate std;\nextern crate std as core;\nextern crate std as alloc;\n", 1)
+		// Every module sees the std prelude.
+		usrc = regexp.MustCompile(`(?m)^extern crate std;\n`).ReplaceAllString(usrc, "extern crate std;\n#[allow(unused_imports)]\nuse std::prelude::rust_2021::*;\n")
+		usrc = regexp.MustCompile(`(?m)^(\s*)((pub(\(crate\))? )?mod \w+ \{)\n`).ReplaceAllString(usrc, "$1$2\n$1    #[allow(unused_imports)]\n$1    use std::prelude::rust_2021::*;\n")
+		base := strings.TrimSuffix(filepath.Base(prog), ".rs")
+		ufile := filepath.Join(dir, base+"_expanded.rs")
+		if err := os.WriteFile(ufile, []byte(usrc), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		cmd := exec.Command(rustc, "--edition", "2021", "--crate-type", "lib", "--crate-name", "prog_"+base, "--emit=metadata",
+			"-o", filepath.Join(dir, base+".rmeta"), "--extern", "std="+rmeta, ufile)
+		cmd.Env = append(os.Environ(), "RUSTC_BOOTSTRAP=1")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			failed++
+			lines := strings.Split(string(out), "\n")
+			if len(lines) > 60 {
+				lines = lines[:60]
+			}
+			t.Logf("%s: rustc errors:\n%s", base, strings.Join(lines, "\n"))
+		}
+	}
+	if failed > 0 {
+		t.Errorf("%d of %d programs failed to type-check against the library", failed, len(progs))
 	}
 }

@@ -31,6 +31,9 @@ type FnCtxt struct {
 	casts []*ast.CastExpr
 	// closure exprs in order of appearance
 	closureExprs []*ast.ClosureExpr
+	// argument type hints from the expected call result type
+	nextHints []Ty
+	argHints  []Ty
 }
 
 type loopCtx struct {

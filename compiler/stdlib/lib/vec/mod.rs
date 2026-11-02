@@ -39,6 +39,21 @@ pub fn from_elem<T: Clone>(elem: T, n: usize) -> Vec<T> {
     v
 }
 
+/// Creates a `Vec` from an array literal, moving the elements. An
+/// array-based `vec![a, b, c]` expansion (`::std::vec::from_array([a, b, c])`)
+/// keeps the expected element type flowing into the elements, so unsizing
+/// coercions such as `Box<T>` -> `Box<dyn Trait>` work as with rustc.
+#[inline]
+pub fn from_array<T, const N: usize>(arr: [T; N]) -> Vec<T> {
+    let mut v = Vec::with_capacity(N);
+    let src = mem::ManuallyDrop::new(arr);
+    unsafe {
+        intrinsics::copy_nonoverlapping(&*src as *const [T; N] as *const T, v.ptr, N);
+        v.len = N;
+    }
+    v
+}
+
 #[inline]
 fn is_zst<T>() -> bool {
     mem::size_of::<T>() == 0
@@ -811,13 +826,7 @@ impl<T: Clone, const N: usize> From<&mut [T; N]> for Vec<T> {
 
 impl<T, const N: usize> From<[T; N]> for Vec<T> {
     fn from(s: [T; N]) -> Vec<T> {
-        let mut v = Vec::with_capacity(N);
-        let src = mem::ManuallyDrop::new(s);
-        unsafe {
-            intrinsics::copy_nonoverlapping(&*src as *const [T; N] as *const T, v.ptr, N);
-            v.len = N;
-        }
-        v
+        from_array(s)
     }
 }
 

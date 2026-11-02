@@ -410,6 +410,26 @@ func (fcx *FnCtxt) checkBinary(x *ast.BinaryExpr, expected Ty) Ty {
 	}
 	isShift := x.Op == ast.BinShl || x.Op == ast.BinShr
 	isBit := x.Op == ast.BinBitAnd || x.Op == ast.BinBitOr || x.Op == ast.BinBitXor
+	if ls.Kind == TRef && fcx.isBuiltinArith(fcx.shallow(ls.Elem)) {
+		// &int op int / &int op &int: builtin on the dereferenced values
+		rt := fcx.checkExpr(x.R, nil)
+		rs := fcx.structurally(rt)
+		rinner := rs
+		if rs.Kind == TRef {
+			rinner = fcx.shallow(rs.Elem)
+		}
+		if fcx.isBuiltinArith(rinner) {
+			fcx.addAdjust(x.L, Adjustment{Kind: AdjDeref, Target: ls.Elem})
+			if rs.Kind == TRef {
+				fcx.addAdjust(x.R, Adjustment{Kind: AdjDeref, Target: rs.Elem})
+			}
+			if !isShift && !fcx.ic.unify(ls.Elem, rinner) {
+				fcx.errorf(x.Span, "cannot apply `%s` to `%s` and `%s`", x.Op, fcx.resolve(lt), fcx.resolve(rt))
+			}
+			return fcx.shallow(ls.Elem)
+		}
+		return fcx.overloadedBinary(x, lt, rt, false)
+	}
 	builtinL := fcx.isBuiltinArith(ls) || (isBit && ls.Kind == TBool)
 	if builtinL {
 		var hint Ty = ls
@@ -418,6 +438,10 @@ func (fcx *FnCtxt) checkBinary(x *ast.BinaryExpr, expected Ty) Ty {
 		}
 		rt := fcx.checkExpr(x.R, hint)
 		rs := fcx.structurally(rt)
+		if rs.Kind == TRef && fcx.isBuiltinArith(fcx.shallow(rs.Elem)) {
+			fcx.addAdjust(x.R, Adjustment{Kind: AdjDeref, Target: rs.Elem})
+			rs = fcx.shallow(rs.Elem)
+		}
 		if fcx.isBuiltinArith(rs) || (isBit && rs.Kind == TBool) {
 			if isShift {
 				if !rs.IsInteger() || !ls.IsInteger() {
@@ -727,7 +751,7 @@ func (fcx *FnCtxt) checkRef(x *ast.RefExpr, expected Ty) Ty {
 	var hint Ty
 	if expected != nil {
 		et := fcx.shallow(expected)
-		if (et.Kind == TRef || et.Kind == TPtr) && !et.Elem.IsUnsized() {
+		if (et.Kind == TRef || et.Kind == TPtr) && (!et.Elem.IsUnsized() || et.Elem.Kind == TDyn) {
 			hint = et.Elem
 		}
 	}

@@ -14,6 +14,24 @@ func (fcx *FnCtxt) expectedClosureSig(expected Ty) ([]Ty, Ty) {
 	switch et.Kind {
 	case TFnPtr:
 		return et.Elems, et.Ret
+	case TDyn:
+		if et.Def != nil && (et.Def.LangItem == "fn" || et.Def.LangItem == "fn_mut" || et.Def.LangItem == "fn_once") && len(et.Args) > 0 {
+			var out Ty
+			for _, b := range et.Bindings {
+				if b.Name == "Output" {
+					out = b.Ty
+				}
+			}
+			if a := fcx.shallow(et.Args[0]); a.Kind == TTuple {
+				return a.Elems, out
+			}
+		}
+	case TRef:
+		return fcx.expectedClosureSig(et.Elem)
+	case TAdt:
+		if et.Def.LangItem == "owned_box" {
+			return fcx.expectedClosureSig(et.Args[0])
+		}
 	case TInfer:
 		var ins []Ty
 		var out Ty

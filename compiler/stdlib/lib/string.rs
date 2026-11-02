@@ -554,13 +554,6 @@ impl AddAssign<&str> for String {
     }
 }
 
-impl AddAssign<char> for String {
-    #[inline]
-    fn add_assign(&mut self, other: char) {
-        self.push(other);
-    }
-}
-
 impl AsRef<str> for String {
     #[inline]
     fn as_ref(&self) -> &str {

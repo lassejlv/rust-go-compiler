@@ -185,6 +185,9 @@ func (fc *fnGen) computeSplit(body any) {
 // allFlags returns "df = df_0 = ..." for chained assignment.
 func (fc *fnGen) allFlags(l *typeck.Local) string {
 	s := fc.flagName(l)
+	if len(fc.split[l]) == 0 {
+		return s
+	}
 	for i := range fc.fieldTys(l.Ty) {
 		if fc.split[l][i] {
 			s += fmt.Sprintf(" = %s_%d", fc.flagName(l), i)

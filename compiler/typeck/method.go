@@ -220,7 +220,7 @@ func (fcx *FnCtxt) lookupMethod(recv Ty, name string, sp lexer.Span) *pick {
 					fcx.ic.rollback(s)
 					continue
 				}
-				if fcx.shallow(targs[0]).Kind == TInfer {
+				if st := fcx.shallow(targs[0]); st.Kind == TInfer && st.Sub == 0 {
 					fcx.ic.rollback(s)
 					continue
 				}
