@@ -54,7 +54,11 @@ func (ic *InferCtxt) evaluate(p *Predicate, depth int) SelKind {
 		if n == nil {
 			return SelAmbig
 		}
-		if !ic.unify(n, b.Ty) {
+		bt := b.Ty
+		if bt.HasProj() {
+			bt = ic.tryNormalize(bt)
+		}
+		if !ic.unify(n, bt) {
 			return SelNone
 		}
 	}
@@ -311,7 +315,11 @@ func (ic *InferCtxt) confirmImpl(impl *Def, args []Ty, depth int) {
 		}
 		for _, b := range sp.Bindings {
 			if n := ic.normalizeBinding(sp.Trait, b.Name, depth+1); n != nil {
-				ic.unify(n, b.Ty)
+				bt := b.Ty
+				if bt.HasProj() {
+					bt = ic.tryNormalize(bt)
+				}
+				ic.unify(n, bt)
 			}
 		}
 	}

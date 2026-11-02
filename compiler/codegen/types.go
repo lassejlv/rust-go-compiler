@@ -526,6 +526,9 @@ func (g *Gen) vtableEntry(concrete, dyn Ty, m vtMethod) string {
 	// callable itself.
 	ln := m.def.Parent.LangItem
 	if ln == "fn" || ln == "fn_mut" || ln == "fn_once" {
+		if ln == "fn_once" && dyn.Def != nil && dyn.Def.LangItem == "fn_once" {
+			return "(void*)" + g.callOnceThunk(concrete)
+		}
 		return "(void*)" + g.callableThunk(concrete)
 	}
 	// skip generic methods and methods requiring Self: Sized
@@ -598,6 +601,40 @@ func (g *Gen) callableThunk(t Ty) string {
 	}
 	fmt.Fprintf(&g.protos, "static %s %s(%s);\n", g.ctype(out), name, strings.Join(ps, ", "))
 	fmt.Fprintf(&g.fns, "static %s %s(%s) { return %s(%s); }\n", g.ctype(out), name, strings.Join(ps, ", "), callee, strings.Join(as, ", "))
+	return name
+}
+
+// callOnceThunk is the `dyn FnOnce` call slot: the call consumes the
+// callable, so after an Fn/FnMut-kind closure returns (or unwinds) its
+// environment is dropped. (FnOnce-kind closure bodies drop their own
+// environment.)
+func (g *Gen) callOnceThunk(t Ty) string {
+	if t.Kind != TClosure || !g.needsDrop(t) {
+		return g.callableThunk(t)
+	}
+	ci := g.tcx.Closures[t]
+	if ci == nil || ci.Kind == 2 {
+		return g.callableThunk(t)
+	}
+	key := "oncethunk|" + t.Key()
+	if name, ok := g.vtables[key]; ok {
+		return name
+	}
+	g.fnN++
+	name := fmt.Sprintf("thunk%d", g.fnN)
+	g.vtables[key] = name
+	cf := g.closureFn(t)
+	ps := []string{"void* self"}
+	as := []string{fmt.Sprintf("(%s*)self", g.ctype(t))}
+	for i, in := range ci.Inputs {
+		ps = append(ps, fmt.Sprintf("%s a%d", g.ctype(in), i))
+		as = append(as, fmt.Sprintf("a%d", i))
+	}
+	drop := g.dropFn(t)
+	rt := g.ctype(ci.Output)
+	fmt.Fprintf(&g.protos, "static %s %s(%s);\n", rt, name, strings.Join(ps, ", "))
+	fmt.Fprintf(&g.fns, "static %s %s(%s) { uint8_t fl = 1; RG_CS_PUSH(self, %s, &fl); %s r = %s(%s); fl = 0; RG_CS_POP(1); %s(self); return r; }\n",
+		rt, name, strings.Join(ps, ", "), drop, rt, cf, strings.Join(as, ", "), drop)
 	return name
 }
 

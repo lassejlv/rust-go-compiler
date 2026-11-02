@@ -497,7 +497,11 @@ func (fcx *FnCtxt) selectWherePossible() {
 					n = v
 				}
 				n = fcx.normalizeInBody(n, o.Span)
-				if !ic.unify(n, b.Ty) {
+				bt := b.Ty
+				if bt.HasProj() {
+					bt = fcx.normalizeInBody(bt, o.Span)
+				}
+				if !ic.unify(n, bt) {
 					fcx.errorf(o.Span, "type mismatch: expected `%s` to be `%s`", fcx.resolve(b.Ty), fcx.resolve(n))
 				}
 			}

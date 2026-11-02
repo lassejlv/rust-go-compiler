@@ -219,6 +219,12 @@ func (fcx *FnCtxt) analyzeCaptures() {
 			case u.mut:
 				c.ByRef = true
 				c.Mut = true
+			case l.Ty != nil && l.Ty.Kind == TRef && !l.Ty.Mut:
+				// A shared reference that is only read is captured by
+				// copy (rustc captures the reborrowed `*r` and truncates
+				// it to `r` by value), so the closure does not borrow the
+				// enclosing frame's local and may outlive it.
+				c.ByRef = false
 			default:
 				c.ByRef = true
 			}
@@ -276,6 +282,27 @@ func (w *capWalker) isCopy(t Ty) bool {
 
 // adjustCtx computes the context in which an expression itself is used,
 // given its adjustments.
+// declInputs returns the declared (generic) input types of a called fn.
+func (w *capWalker) declInputs(c *Callee) []Ty {
+	if c == nil || c.Def == nil || c.Def.Kind != DefFn {
+		return nil
+	}
+	return w.fcx.t.FnSig(c.Def).Inputs
+}
+
+// argCtx is the use context of a call argument: a `&mut` value passed
+// where the callee declares a reference parameter is implicitly
+// reborrowed (a mutable use of the place) rather than moved.
+func (w *capWalker) argCtx(a ast.Expr, decl []Ty, i int) useCtx {
+	if i >= len(decl) || decl[i] == nil || decl[i].Kind != TRef {
+		return useValue
+	}
+	if t := w.fcx.r.NodeTypes[a.GetID()]; t != nil && t.Kind == TRef && t.Mut {
+		return usePlaceMut
+	}
+	return useValue
+}
+
 func (w *capWalker) adjustCtx(e ast.Expr, ctx useCtx) useCtx {
 	adj := w.fcx.r.Adjust[e.GetID()]
 	for _, a := range adj {
@@ -409,13 +436,15 @@ func (w *capWalker) expr(e ast.Expr, ctx useCtx) {
 			}
 		}
 		w.expr(x.Fn, fc)
-		for _, a := range x.Args {
-			w.expr(a, useValue)
+		decl := w.declInputs(r.Callees[x.ID])
+		for i, a := range x.Args {
+			w.expr(a, w.argCtx(a, decl, i))
 		}
 	case *ast.MethodCallExpr:
-		w.expr(x.Receiver, useValue)
-		for _, a := range x.Args {
-			w.expr(a, useValue)
+		decl := w.declInputs(r.Callees[x.ID])
+		w.expr(x.Receiver, w.argCtx(x.Receiver, decl, 0))
+		for i, a := range x.Args {
+			w.expr(a, w.argCtx(a, decl, i+1))
 		}
 	case *ast.RefExpr:
 		if x.Mut {

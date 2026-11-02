@@ -66,6 +66,9 @@ func (fcx *FnCtxt) checkMethodCall(x *ast.MethodCallExpr, expected Ty) Ty {
 		}
 		ins = ins[1:]
 	}
+	// resolve what the receiver determines (e.g. `Box<T>: AsRef<?U>`)
+	// before arguments and the result are coerced against expectations
+	fcx.selectWherePossible()
 	fcx.checkArgs(x.Args, ins, false, x.Span)
 	kind := CallFn
 	if p.virtual {

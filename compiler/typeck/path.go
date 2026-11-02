@@ -91,7 +91,9 @@ func (fcx *FnCtxt) resolveValuePath(qself *ast.QSelf, p *ast.Path, sp lexer.Span
 			return nil, TyErr
 		}
 		fcx.ac.scope = fcx.curMod()
+		fcx.ac.exprCtx = res.Kind == ResDef
 		base := fcx.ac.resToTy(res, baseSeg, sp)
+		fcx.ac.exprCtx = false
 		base = fcx.ac.assocTypeOn(base, segs[pr.Consumed:len(segs)-1], sp)
 		return fcx.typeRelativeValue(fcx.normalizeInBody(base, sp), last, sp, expected)
 	}
@@ -113,7 +115,12 @@ func (fcx *FnCtxt) resolveValuePath(qself *ast.QSelf, p *ast.Path, sp lexer.Span
 		return fcx.traitItemValue(&TraitRef{Trait: res.Def, Args: args}, last, sp)
 	}
 	fcx.ac.scope = fcx.curMod()
-	base := fcx.normalizeInBody(fcx.ac.resToTy(res, baseSeg, sp), sp)
+	// omitted defaulted params of a named type are inferred
+	// (`HashMap::with_hasher(..)`), but `Self` keeps the impl's types
+	fcx.ac.exprCtx = res.Kind == ResDef
+	baseRaw := fcx.ac.resToTy(res, baseSeg, sp)
+	fcx.ac.exprCtx = false
+	base := fcx.normalizeInBody(baseRaw, sp)
 	return fcx.typeRelativeValue(base, last, sp, expected)
 }
 
@@ -499,7 +506,10 @@ func (fcx *FnCtxt) resolveStructPath(qself *ast.QSelf, p *ast.Path, sp lexer.Spa
 				}
 			}
 			fcx.ac.scope = fcx.curMod()
-			base = fcx.normalizeInBody(fcx.ac.resToTy(res, segs[len(segs)-1], sp), sp)
+			fcx.ac.exprCtx = res.Kind == ResDef // `S { .. }` infers omitted params
+			bt := fcx.ac.resToTy(res, segs[len(segs)-1], sp)
+			fcx.ac.exprCtx = false
+			base = fcx.normalizeInBody(bt, sp)
 		} else if len(segs)-pr.Consumed == 1 {
 			fcx.ac.scope = fcx.curMod()
 			base = fcx.normalizeInBody(fcx.ac.resToTy(pr.Res, segs[pr.Consumed-1], sp), sp)
