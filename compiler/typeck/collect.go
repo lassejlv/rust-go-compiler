@@ -104,7 +104,7 @@ func (t *Tcx) Generics(d *Def) *Generics {
 					t.paramOf[pd] = gp
 					t.synthetic[x.ID] = gp.Index
 					g.Params = append(g.Params, gp)
-					return false
+					return true // nested impl Trait in its bounds are params too
 				case *ast.FnPtrType:
 					return false
 				}
@@ -171,7 +171,7 @@ func (t *Tcx) Generics(d *Def) *Generics {
 							g.Predicates = append(g.Predicates, pr)
 						}
 					}
-					return false
+					return true
 				case *ast.FnPtrType:
 					return false
 				}

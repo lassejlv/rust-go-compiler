@@ -82,12 +82,19 @@ func (fcx *FnCtxt) resolveValuePath(qself *ast.QSelf, p *ast.Path, sp lexer.Span
 		return fcx.valueFromRes(res, segs, sp, expected)
 	}
 	// type-relative
-	if len(segs)-pr.Consumed != 1 {
-		fcx.errorf(sp, "unsupported path `%s`", ast.PathString(p))
-		return nil, TyErr
-	}
 	last := segs[len(segs)-1]
 	baseSeg := segs[pr.Consumed-1]
+	if len(segs)-pr.Consumed > 1 {
+		// T::Assoc::item: resolve the associated types first
+		if res.Kind == ResDef && res.Def.Kind == DefTrait {
+			fcx.errorf(sp, "unsupported path `%s`", ast.PathString(p))
+			return nil, TyErr
+		}
+		fcx.ac.scope = fcx.curMod()
+		base := fcx.ac.resToTy(res, baseSeg, sp)
+		base = fcx.ac.assocTypeOn(base, segs[pr.Consumed:len(segs)-1], sp)
+		return fcx.typeRelativeValue(fcx.normalizeInBody(base, sp), last, sp, expected)
+	}
 	if res.Kind == ResDef && res.Def.Kind == DefTrait {
 		g := fcx.t.Generics(res.Def)
 		self := fcx.ic.newVar()
