@@ -789,6 +789,9 @@ func (ac *astConv) resToTy(res Res, seg *ast.PathSegment, sp lexer.Span) Ty {
 		return ac.sub(ac.selfTy)
 	case ResDef:
 		d := res.Def
+		if (d.Kind == DefMod || d.Kind == DefCrate) && resolve.IsPrimName(seg.Ident.Name) {
+			return primTy(seg.Ident.Name)
+		}
 		switch d.Kind {
 		case DefStruct, DefEnum, DefUnion:
 			return Adt(d, ac.genericArgsFor(d, seg, nil, sp, nil))

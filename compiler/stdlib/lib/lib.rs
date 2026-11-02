@@ -44,7 +44,6 @@ pub mod error;
 pub mod hint;
 pub mod rt;
 pub mod tuple;
-pub mod primitive;
 pub mod f32;
 pub mod f64;
 pub mod prelude;

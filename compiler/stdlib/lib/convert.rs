@@ -290,7 +290,14 @@ impl From<char> for u128 {
 
 /// The error type returned when a checked integral type conversion fails.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub struct TryFromIntError(pub(crate) ());
+pub struct TryFromIntError(pub(crate) crate::num::IntErrorKind);
+
+impl TryFromIntError {
+    /// Outputs the detailed cause of the conversion failing.
+    pub const fn kind(&self) -> &crate::num::IntErrorKind {
+        &self.0
+    }
+}
 
 impl fmt::Display for TryFromIntError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -316,8 +323,10 @@ macro_rules! __std_convert_try_from_int {
                     let x = u as $dst;
                     if (x as $src) == u && ((x < (0 as $dst)) == (u < (0 as $src))) {
                         Ok(x)
+                    } else if u < (0 as $src) {
+                        Err(TryFromIntError(crate::num::IntErrorKind::NegOverflow))
                     } else {
-                        Err(TryFromIntError(()))
+                        Err(TryFromIntError(crate::num::IntErrorKind::PosOverflow))
                     }
                 }
             }

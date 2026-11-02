@@ -90,12 +90,16 @@ func (fcx *FnCtxt) resolveValuePath(qself *ast.QSelf, p *ast.Path, sp lexer.Span
 		g := fcx.t.Generics(res.Def)
 		self := fcx.ic.newVar()
 		var args []Ty
-		if baseSeg.Args != nil || len(g.Params) > 1 {
+		if baseSeg.Args != nil {
 			fcx.ac.scope = fcx.curMod()
 			tr, _ := fcx.ac.lowerTraitSeg(res.Def, baseSeg, self, sp)
 			args = tr.Args
 		} else {
+			// omitted trait params are inferred in expressions
 			args = []Ty{self}
+			for len(args) < len(g.Params) {
+				args = append(args, fcx.ic.newVar())
+			}
 		}
 		return fcx.traitItemValue(&TraitRef{Trait: res.Def, Args: args}, last, sp)
 	}

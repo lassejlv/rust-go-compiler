@@ -44,7 +44,8 @@ func (fcx *FnCtxt) checkPatInner(p ast.Pat, expected Ty, bm bindingMode, oc *orC
 	// Identifiers that resolve to unit structs/variants/consts act as paths.
 	if ip, ok := p.(*ast.IdentPat); ok && !ip.ByRef && !ip.Mut && ip.Sub == nil {
 		if vr, ty, ok := fcx.identPatAsPath(ip); ok {
-			expected = fcx.peelForPat(p, expected, &bm, true)
+			isRefConst := vr.Kind == VConst && fcx.shallow(ty).Kind == TRef
+			expected = fcx.peelForPat(p, expected, &bm, isRefConst)
 			fcx.r.Paths[ip.ID] = vr
 			fcx.record(p.GetID(), expected)
 			fcx.demandEq(ip.Span, expected, ty)
