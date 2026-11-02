@@ -230,7 +230,7 @@ impl fmt::Debug for BorrowError {
 
 impl fmt::Display for BorrowError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Display::fmt("already mutably borrowed", f)
+        fmt::Display::fmt("RefCell already mutably borrowed", f)
     }
 }
 
@@ -248,7 +248,7 @@ impl fmt::Debug for BorrowMutError {
 
 impl fmt::Display for BorrowMutError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Display::fmt("already borrowed", f)
+        fmt::Display::fmt("RefCell already borrowed", f)
     }
 }
 
@@ -257,13 +257,13 @@ impl crate::error::Error for BorrowMutError {}
 #[inline(never)]
 #[track_caller]
 fn panic_already_borrowed() -> ! {
-    crate::rt::panic_str("already borrowed: BorrowMutError", file!(), line!(), column!())
+    crate::rt::panic_str("RefCell already borrowed", file!(), line!(), column!())
 }
 
 #[inline(never)]
 #[track_caller]
 fn panic_already_mutably_borrowed() -> ! {
-    crate::rt::panic_str("already mutably borrowed: BorrowError", file!(), line!(), column!())
+    crate::rt::panic_str("RefCell already mutably borrowed", file!(), line!(), column!())
 }
 
 impl<T> RefCell<T> {

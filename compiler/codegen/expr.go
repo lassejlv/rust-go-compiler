@@ -463,6 +463,9 @@ func (fc *fnGen) pathOperand(x *ast.PathExpr, t Ty) operand {
 		if d.InTrait() {
 			d, args = fc.resolveAssocConst(d, args)
 		}
+		if lit, ok := fc.g.scalarConstLit(d, args, t); ok {
+			return operand{s: lit, ty: t}
+		}
 		if fc.g.constCached(d, t) && !fc.inConst {
 			// a place in the const's static cache: `&CONST[..]` and
 			// `&CONST.field` borrow 'static data (rvalue promotion)
@@ -1454,4 +1457,44 @@ func bracketSpan(x *ast.IndexExpr) ast.Span {
 	}
 	sp.Lo = lexer.Pos{File: f, Off: off, Line: line, Col: col}
 	return sp
+}
+
+// scalarConstLit renders an integer/bool/char const item as a C literal
+// when its value is known at compile time (no accessor call per use).
+func (g *Gen) scalarConstLit(d *Def, args []Ty, t Ty) (string, bool) {
+	switch t.Kind {
+	case TInt, TBool, TChar:
+	default:
+		return "", false
+	}
+	key := typeck.InstKey(d, args)
+	if lit, ok := g.scalarConsts[key]; ok {
+		return lit, lit != ""
+	}
+	g.scalarConsts[key] = ""
+	n, ok := g.tcx.ScalarConst(d, args)
+	if !ok {
+		return "", false
+	}
+	var lit string
+	switch {
+	case t.Kind == TBool:
+		lit = "((uint8_t)" + n.String() + ")"
+	case t.Kind == TChar:
+		lit = "((uint32_t)" + n.String() + "U)"
+	case t.Kind == TInt && (t.IntKind() == I128 || t.IntKind() == U128):
+		u := new(big.Int).Set(n)
+		if u.Sign() < 0 {
+			u.Add(u, new(big.Int).Lsh(big.NewInt(1), 128))
+		}
+		lit = fmt.Sprintf("((%s)%s)", g.ctype(t), u128Const(u.String()))
+	default:
+		if n.Sign() < 0 {
+			lit = fmt.Sprintf("((%s)(%sLL))", g.ctype(t), n.String())
+		} else {
+			lit = fmt.Sprintf("((%s)%sULL)", g.ctype(t), n.String())
+		}
+	}
+	g.scalarConsts[key] = lit
+	return lit, true
 }

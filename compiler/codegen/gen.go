@@ -30,7 +30,9 @@ type Gen struct {
 	vtdefs  strings.Builder // vtable definitions
 	statics strings.Builder
 	locs    map[string]string // track_caller locations (locStatic)
-	fns     chunkBuf          // function bodies (one chunk per function)
+	// scalarConsts caches literal renderings of scalar const items.
+	scalarConsts map[string]string
+	fns          chunkBuf // function bodies (one chunk per function)
 
 	types        map[Ty]*typeInfo
 	typeN        int
@@ -69,6 +71,7 @@ func New(tcx *typeck.Tcx) *Gen {
 		vtables:        map[string]string{},
 		nicheCache:     map[Ty]*nicheLayout{},
 		statics_:       map[*Def]string{},
+		scalarConsts:   map[string]string{},
 	}
 }
 
@@ -131,6 +134,10 @@ func (g *Gen) GenerateProgram(mainDef *Def) (prog *Program, err error) {
 		}
 	}()
 	mainName := g.fnName(mainDef, nil)
+	if d := g.tcx.R.StdPath("rt::runtime_panic"); d != nil && d.Kind == DefFn {
+		rp := g.fnName(d, nil)
+		g.staticInit = append([]string{fmt.Sprintf("rg_std_panic = (void (*)(Fat, Fat, uint32_t, uint32_t, uint8_t))%s;", rp)}, g.staticInit...)
+	}
 	ctors := g.initArrayCtors()
 	g.drain()
 	g.staticInit = append(g.staticInit, ctors...) // after every static's init
@@ -406,8 +413,8 @@ func (g *Gen) initArrayCtors() (calls []string) {
 		}
 		section := ""
 		for _, a := range d.Attrs {
-			if a.Path == "link_section" && len(a.Tokens) >= 2 {
-				section = strings.Trim(a.Tokens[1].Tok.Text, "\"")
+			if a.Path == "link_section" {
+				section = attrStringValue(a)
 			}
 		}
 		if !strings.Contains(section, "init_array") && !strings.Contains(section, ".ctors") {
@@ -588,3 +595,23 @@ func sortedKeys(m map[string]string) []string {
 }
 
 var _ = ast.NewID
+
+// attrStringValue returns the string of `#[name = "value"]` (looking through
+// macro-fragment groups around the value).
+func attrStringValue(a *ast.Attr) string {
+	var find func(ts []ast.TokenTree) string
+	find = func(ts []ast.TokenTree) string {
+		for _, t := range ts {
+			if t.Delim == 0 && t.Tok.Kind == lexer.Str {
+				return strings.Trim(t.Tok.Text, "\"")
+			}
+			if t.Delim != 0 {
+				if v := find(t.Inner); v != "" {
+					return v
+				}
+			}
+		}
+		return ""
+	}
+	return find(a.Tokens)
+}

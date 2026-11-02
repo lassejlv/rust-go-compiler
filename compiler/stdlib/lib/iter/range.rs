@@ -79,6 +79,20 @@ macro_rules! __std_step_narrow {
                     }
                 }
                 #[inline]
+                fn forward(start: $t, n: usize) -> $t {
+                    if Step::forward_checked(start, n).is_none() && crate::intrinsics::overflow_checks() {
+                        crate::rt::panic_str("attempt to add with overflow", file!(), line!(), column!());
+                    }
+                    start.wrapping_add(n as $t)
+                }
+                #[inline]
+                fn backward(start: $t, n: usize) -> $t {
+                    if Step::backward_checked(start, n).is_none() && crate::intrinsics::overflow_checks() {
+                        crate::rt::panic_str("attempt to subtract with overflow", file!(), line!(), column!());
+                    }
+                    start.wrapping_sub(n as $t)
+                }
+                #[inline]
                 unsafe fn forward_unchecked(start: $t, n: usize) -> $t {
                     start.wrapping_add(n as $t)
                 }
@@ -120,6 +134,20 @@ impl Step for u128 {
         start.checked_sub(n as u128)
     }
     #[inline]
+    fn forward(start: u128, n: usize) -> u128 {
+        if Step::forward_checked(start, n).is_none() && crate::intrinsics::overflow_checks() {
+            crate::rt::panic_str("attempt to add with overflow", file!(), line!(), column!());
+        }
+        start.wrapping_add(n as u128)
+    }
+    #[inline]
+    fn backward(start: u128, n: usize) -> u128 {
+        if Step::backward_checked(start, n).is_none() && crate::intrinsics::overflow_checks() {
+            crate::rt::panic_str("attempt to subtract with overflow", file!(), line!(), column!());
+        }
+        start.wrapping_sub(n as u128)
+    }
+    #[inline]
     unsafe fn forward_unchecked(start: u128, n: usize) -> u128 {
         start.wrapping_add(n as u128)
     }
@@ -150,6 +178,20 @@ impl Step for i128 {
     #[inline]
     fn backward_checked(start: i128, n: usize) -> Option<i128> {
         start.checked_sub(n as i128)
+    }
+    #[inline]
+    fn forward(start: i128, n: usize) -> i128 {
+        if Step::forward_checked(start, n).is_none() && crate::intrinsics::overflow_checks() {
+            crate::rt::panic_str("attempt to add with overflow", file!(), line!(), column!());
+        }
+        start.wrapping_add(n as i128)
+    }
+    #[inline]
+    fn backward(start: i128, n: usize) -> i128 {
+        if Step::backward_checked(start, n).is_none() && crate::intrinsics::overflow_checks() {
+            crate::rt::panic_str("attempt to subtract with overflow", file!(), line!(), column!());
+        }
+        start.wrapping_sub(n as i128)
     }
     #[inline]
     unsafe fn forward_unchecked(start: i128, n: usize) -> i128 {

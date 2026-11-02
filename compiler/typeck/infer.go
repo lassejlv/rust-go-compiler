@@ -15,6 +15,10 @@ type InferCtxt struct {
 	// env holds the (substituted) where-clauses of the body being checked;
 	// they guide inference when impl selection is ambiguous.
 	env []*TraitRef
+	// evalCache memoizes evaluate() by canonical query (see canonicalKey).
+	evalCache map[string]SelKind
+	// normNest counts nested tryNormalize calls (recursion bound).
+	normNest int
 	// envBindings: associated-type bindings of where-clauses
 	// (`I: IntoIterator<Item = (K, V)>`), for normalizing in generic bodies.
 	envBindings []*Predicate
@@ -243,6 +247,14 @@ func (ic *InferCtxt) tryNormalize(t Ty) Ty {
 	if t == nil || !t.HasProj() {
 		return t
 	}
+	// normalization can re-enter selection (impl where-clauses with
+	// projections, e.g. typenum's recursive arithmetic impls): bound the
+	// nesting so it can't recurse without limit
+	if ic.normNest > maxSelectDepth {
+		return t
+	}
+	ic.normNest++
+	defer func() { ic.normNest-- }()
 	return Fold(t, func(x Ty) Ty {
 		if !x.HasProj() {
 			return x
@@ -252,7 +264,7 @@ func (ic *InferCtxt) tryNormalize(t Ty) Ty {
 			for i, a := range x.Args {
 				args[i] = ic.tryNormalize(ic.resolve(a))
 			}
-			if n := ic.normalizeProjection(x.Def, args, x.Name, 0); n != nil {
+			if n := ic.normalizeProjection(x.Def, args, x.Name, ic.normNest); n != nil {
 				return ic.tryNormalize(n)
 			}
 			return Projection(x.Def, args, x.Name)

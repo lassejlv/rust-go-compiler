@@ -77,6 +77,23 @@ pub(crate) fn slice_end_index_overflow_fail() -> ! {
     crate::rt::panic_str("attempted to index slice up to maximum usize", file!(), line!(), column!())
 }
 
+/// Panics for an out-of-range slice index (rustc 1.99 messages).
+#[inline(never)]
+#[track_caller]
+pub(crate) fn slice_index_fail(start: usize, end: usize, len: usize) -> ! {
+    if start > len {
+        slice_start_index_len_fail(start, len);
+    }
+    if end > len {
+        slice_end_index_len_fail(end, len);
+    }
+    if start > end {
+        slice_index_order_fail(start, end);
+    }
+    // Only reachable for inclusive ranges with `end == len`.
+    slice_end_index_len_fail(end, len)
+}
+
 #[inline]
 unsafe fn sub_ptr<T>(slice: *const [T], start: usize, end: usize) -> *const [T] {
     let p = intrinsics::slice_ptr(slice);
@@ -166,22 +183,16 @@ impl<T> SliceIndex<[T]> for Range<usize> {
     #[inline]
     #[track_caller]
     fn index(self, slice: &[T]) -> &[T] {
-        let len = slice.len();
-        if self.start > self.end {
-            slice_index_order_fail(self.start, self.end);
-        } else if self.end > len {
-            slice_end_index_len_fail(self.end, len);
+        if self.start > self.end || self.end > slice.len() {
+            slice_index_fail(self.start, self.end, slice.len());
         }
         unsafe { &*self.get_unchecked(slice as *const [T]) }
     }
     #[inline]
     #[track_caller]
     fn index_mut(self, slice: &mut [T]) -> &mut [T] {
-        let len = slice.len();
-        if self.start > self.end {
-            slice_index_order_fail(self.start, self.end);
-        } else if self.end > len {
-            slice_end_index_len_fail(self.end, len);
+        if self.start > self.end || self.end > slice.len() {
+            slice_index_fail(self.start, self.end, slice.len());
         }
         unsafe { &mut *self.get_unchecked_mut(slice as *mut [T]) }
     }
@@ -244,7 +255,7 @@ impl<T> SliceIndex<[T]> for RangeFrom<usize> {
     fn index(self, slice: &[T]) -> &[T] {
         let len = slice.len();
         if self.start > len {
-            slice_start_index_len_fail(self.start, len);
+            slice_index_fail(self.start, len, len);
         }
         unsafe { &*self.get_unchecked(slice as *const [T]) }
     }
@@ -253,7 +264,7 @@ impl<T> SliceIndex<[T]> for RangeFrom<usize> {
     fn index_mut(self, slice: &mut [T]) -> &mut [T] {
         let len = slice.len();
         if self.start > len {
-            slice_start_index_len_fail(self.start, len);
+            slice_index_fail(self.start, len, len);
         }
         unsafe { &mut *self.get_unchecked_mut(slice as *mut [T]) }
     }
@@ -316,18 +327,30 @@ impl<T> SliceIndex<[T]> for RangeInclusive<usize> {
     #[inline]
     #[track_caller]
     fn index(self, slice: &[T]) -> &[T] {
-        if self.end == usize::MAX {
-            slice_end_index_overflow_fail();
+        let RangeInclusive { mut start, mut end, exhausted } = self;
+        let len = slice.len();
+        if end < len {
+            end = end + 1;
+            start = if exhausted { end } else { start };
+            if start <= end {
+                return unsafe { &*(start..end).get_unchecked(slice as *const [T]) };
+            }
         }
-        (self.start..self.end + 1).index(slice)
+        slice_index_fail(start, end, len)
     }
     #[inline]
     #[track_caller]
     fn index_mut(self, slice: &mut [T]) -> &mut [T] {
-        if self.end == usize::MAX {
-            slice_end_index_overflow_fail();
+        let RangeInclusive { mut start, mut end, exhausted } = self;
+        let len = slice.len();
+        if end < len {
+            end = end + 1;
+            start = if exhausted { end } else { start };
+            if start <= end {
+                return unsafe { &mut *(start..end).get_unchecked_mut(slice as *mut [T]) };
+            }
         }
-        (self.start..self.end + 1).index_mut(slice)
+        slice_index_fail(start, end, len)
     }
 }
 
@@ -361,23 +384,27 @@ impl<T> SliceIndex<[T]> for RangeToInclusive<usize> {
     }
 }
 
-/// Converts a pair of bounds to a `Range`, returning `None` on overflow.
+/// Converts a pair of bounds to a `Range`, returning `None` when indexing would panic.
 #[inline]
 pub(crate) fn bounds_into_range(len: usize, (start, end): (Bound<usize>, Bound<usize>)) -> Option<Range<usize>> {
-    let start = match start {
-        Bound::Included(start) => start,
-        Bound::Excluded(start) => start.checked_add(1)?,
-        Bound::Unbounded => 0,
-    };
     let end = match end {
-        Bound::Included(end) => end.checked_add(1)?,
+        Bound::Included(end) if end >= len => return None,
+        Bound::Included(end) => end + 1,
+        Bound::Excluded(end) if end > len => return None,
         Bound::Excluded(end) => end,
         Bound::Unbounded => len,
+    };
+    let start = match start {
+        Bound::Excluded(start) if start >= end => return None,
+        Bound::Excluded(start) => start + 1,
+        Bound::Included(start) if start > end => return None,
+        Bound::Included(start) => start,
+        Bound::Unbounded => 0,
     };
     Some(start..end)
 }
 
-/// Converts a pair of bounds to a `Range` without overflow checks.
+/// Converts a pair of bounds to a `Range` without bounds checks.
 #[inline]
 pub(crate) fn bounds_into_range_unchecked(len: usize, (start, end): (Bound<usize>, Bound<usize>)) -> Range<usize> {
     let start = match start {
@@ -393,25 +420,23 @@ pub(crate) fn bounds_into_range_unchecked(len: usize, (start, end): (Bound<usize
     start..end
 }
 
-/// Converts a pair of bounds to a `Range`, panicking on overflow.
+/// Converts a pair of bounds to a `Range`, panicking when out of bounds.
 #[inline]
 #[track_caller]
 pub(crate) fn bounds_into_slice_range(len: usize, (start, end): (Bound<usize>, Bound<usize>)) -> Range<usize> {
-    let start = match start {
-        Bound::Included(start) => start,
-        Bound::Excluded(start) => match start.checked_add(1) {
-            Some(s) => s,
-            None => crate::rt::panic_str("attempted to index slice from after maximum usize", file!(), line!(), column!()),
-        },
-        Bound::Unbounded => 0,
-    };
     let end = match end {
-        Bound::Included(end) => match end.checked_add(1) {
-            Some(e) => e,
-            None => slice_end_index_overflow_fail(),
-        },
+        Bound::Included(end) if end >= len => slice_index_fail(0, end, len),
+        Bound::Included(end) => end + 1,
+        Bound::Excluded(end) if end > len => slice_index_fail(0, end, len),
         Bound::Excluded(end) => end,
         Bound::Unbounded => len,
+    };
+    let start = match start {
+        Bound::Excluded(start) if start >= end => slice_index_fail(start, end, len),
+        Bound::Excluded(start) => start + 1,
+        Bound::Included(start) if start > end => slice_index_fail(start, end, len),
+        Bound::Included(start) => start,
+        Bound::Unbounded => 0,
     };
     start..end
 }
@@ -467,26 +492,14 @@ impl<T, I: SliceIndex<[T]>> IndexMut<I> for [T] {
 #[track_caller]
 pub fn range<R: crate::ops::RangeBounds<usize>>(range: R, len: usize) -> Range<usize> {
     let start = match range.start_bound() {
-        Bound::Included(&start) => start,
-        Bound::Excluded(&start) => match start.checked_add(1) {
-            Some(s) => s,
-            None => crate::rt::panic_str("attempted to index slice from after maximum usize", file!(), line!(), column!()),
-        },
-        Bound::Unbounded => 0,
+        Bound::Included(&s) => Bound::Included(s),
+        Bound::Excluded(&s) => Bound::Excluded(s),
+        Bound::Unbounded => Bound::Unbounded,
     };
     let end = match range.end_bound() {
-        Bound::Included(&end) => match end.checked_add(1) {
-            Some(e) => e,
-            None => slice_end_index_overflow_fail(),
-        },
-        Bound::Excluded(&end) => end,
-        Bound::Unbounded => len,
+        Bound::Included(&e) => Bound::Included(e),
+        Bound::Excluded(&e) => Bound::Excluded(e),
+        Bound::Unbounded => Bound::Unbounded,
     };
-    if start > end {
-        slice_index_order_fail(start, end);
-    }
-    if end > len {
-        slice_end_index_len_fail(end, len);
-    }
-    Range { start, end }
+    bounds_into_slice_range(len, (start, end))
 }

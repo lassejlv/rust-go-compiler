@@ -13,6 +13,8 @@ extern "rust-intrinsic" {
     pub fn caller_location() -> &'static crate::panic::Location<'static>;
     /// Whether our caller was itself #[track_caller] (location propagated).
     pub fn caller_location_tracked() -> bool;
+    /// true unless compiled with --release (integer overflow checks on)
+    pub fn overflow_checks() -> bool;
 
     // ---- heap memory (size is never 0)
     pub fn alloc(size: usize, align: usize) -> *mut u8;

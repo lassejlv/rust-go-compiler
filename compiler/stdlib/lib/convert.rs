@@ -301,7 +301,13 @@ impl TryFromIntError {
 
 impl fmt::Display for TryFromIntError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.pad("out of range integral type conversion attempted")
+        use crate::num::IntErrorKind;
+        let msg = match self.0 {
+            IntErrorKind::NegOverflow => "number too small to fit in target type",
+            IntErrorKind::Zero => "number would be zero for non-zero type",
+            _ => "number too large to fit in target type",
+        };
+        f.pad(msg)
     }
 }
 

@@ -11,7 +11,7 @@ pub use self::adapters::{
 };
 pub use self::range::Step;
 pub use self::sources::{
-    empty, from_fn, once, once_with, repeat, repeat_n, repeat_with, successors, zip, Empty, FromFn, Once, OnceWith, Repeat,
+    chain, empty, from_fn, once, once_with, repeat, repeat_n, repeat_with, successors, zip, Empty, FromFn, Once, OnceWith, Repeat,
     RepeatN, RepeatWith, Successors,
 };
 pub use self::traits::{

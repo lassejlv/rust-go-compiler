@@ -102,6 +102,9 @@ func (fc *fnGen) intrinsic(d *Def, args []Ty, v []string, ret Ty, sp ast.Span) s
 			return "1"
 		}
 		return "0"
+	case "overflow_checks":
+		// debug vs --release (#[rustc_inherit_overflow_checks] in std)
+		return "((uint8_t)RG_OVERFLOW_CHECKS)"
 	case "caller_location":
 		// &'static Location of our caller (track_caller) or of this call
 		here := "&" + fc.g.locStatic(sp)

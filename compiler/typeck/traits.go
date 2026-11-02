@@ -5,6 +5,7 @@ import (
 	"os"
 	"rustgo/compiler/lexer"
 	. "rustgo/compiler/middle"
+	"strings"
 )
 
 // Obligation is a pending trait predicate or projection equality.
@@ -44,7 +45,25 @@ func (ic *InferCtxt) isLang(d *Def, name string) bool {
 
 // evaluate checks whether a predicate holds (without committing bindings).
 // Returns SelImpl/SelBuiltin/SelObject (holds), SelAmbig, or SelNone.
-func (ic *InferCtxt) evaluate(p *Predicate, depth int) SelKind {
+func (ic *InferCtxt) evaluate(p *Predicate, depth int) (res SelKind) {
+	// evaluation doesn't commit anything: cache by the canonical form of
+	// the query (inference variables renumbered by first appearance), so
+	// recursive impl trees (typenum) aren't re-explored exponentially
+	if len(p.Bindings) == 0 {
+		if key, ok := ic.canonicalKey(p.Trait); ok {
+			if k, hit := ic.evalCache[key]; hit {
+				return k
+			}
+			defer func() {
+				if res != SelAmbig {
+					if ic.evalCache == nil {
+						ic.evalCache = map[string]SelKind{}
+					}
+					ic.evalCache[key] = res
+				}
+			}()
+		}
+	}
 	s := ic.snapshot()
 	defer ic.rollback(s)
 	sel := ic.selectTrait(p.Trait, depth)
@@ -87,7 +106,70 @@ func (ic *InferCtxt) normalizeBinding(tr *TraitRef, name string, depth int, gat 
 // traceSelect (RUSTGO_TRACE_SELECT=1) logs trait selection to stderr.
 var traceSelect = os.Getenv("RUSTGO_TRACE_SELECT") != ""
 
-func (ic *InferCtxt) selectTrait(tr *TraitRef, depth int) (res Selection) {
+func (ic *InferCtxt) selectTrait(tr *TraitRef, depth int) Selection {
+	// fully concrete trait refs have environment-independent answers:
+	// cache them globally (typenum-style recursive impls are exponential
+	// otherwise)
+	args := ic.resolveList(tr.Args)
+	key, cacheable := concreteKey(tr.Trait, args, "")
+	t := ic.t
+	if cacheable {
+		if sel, ok := t.selCache[key]; ok {
+			return sel
+		}
+		if t.selActive[key] {
+			return Selection{Kind: SelAmbig} // cycle
+		}
+		t.selActive[key] = true
+		defer delete(t.selActive, key)
+	}
+	sel := ic.selectTraitUncached(&TraitRef{Trait: tr.Trait, Args: args}, depth)
+	if cacheable && sel.Kind != SelAmbig {
+		ok := true
+		for _, a := range sel.Args {
+			if a = ic.resolve(a); a.HasInfer() {
+				ok = false
+			}
+		}
+		if ok {
+			sel.Args = ic.resolveList(sel.Args)
+			t.selCache[key] = sel
+		}
+	}
+	return sel
+}
+
+// concreteKey identifies a trait ref (plus an optional assoc item name)
+// whose args contain neither inference variables nor type parameters.
+func concreteKey(trait *Def, args []Ty, name string) (string, bool) {
+	var b strings.Builder
+	fmt.Fprintf(&b, "%p", trait)
+	for _, a := range args {
+		if a == nil || a.HasInfer() || a.HasParam() || a.HasError() {
+			return "", false
+		}
+		// a closure's signature (and an opaque's hidden type) may still be
+		// under inference although the type itself looks concrete
+		volatile := false
+		Walk(a, func(x Ty) bool {
+			if x.Kind == TClosure || x.Kind == TOpaque {
+				volatile = true
+			}
+			return !volatile
+		})
+		if volatile {
+			return "", false
+		}
+		fmt.Fprintf(&b, ",%p", a) // types are interned
+	}
+	if name != "" {
+		b.WriteString("::")
+		b.WriteString(name)
+	}
+	return b.String(), true
+}
+
+func (ic *InferCtxt) selectTraitUncached(tr *TraitRef, depth int) (res Selection) {
 	if traceSelect {
 		defer func() {
 			fmt.Fprintf(os.Stderr, "%*sselect %s %v => %d\n", depth*2, "", tr.Trait.Name, ic.resolveList(tr.Args), res.Kind)
@@ -99,6 +181,9 @@ func (ic *InferCtxt) selectTrait(tr *TraitRef, depth int) (res Selection) {
 	t := ic.t
 	args := ic.resolveList(tr.Args)
 	for i, a := range args {
+		if a == nil {
+			return Selection{Kind: SelAmbig} // malformed (e.g. missing const arg)
+		}
 		if a.HasProj() {
 			args[i] = ic.tryNormalize(a)
 		}
@@ -387,7 +472,19 @@ func (ic *InferCtxt) matchImpl(impl *Def, tr *TraitRef, depth int) ([]Ty, bool, 
 func (ic *InferCtxt) confirmImpl(impl *Def, args []Ty, depth int) {
 	g := ic.t.Generics(impl)
 	for _, p := range g.Predicates {
-		if p.Maybe || len(p.Bindings) == 0 {
+		if p.Maybe {
+			continue
+		}
+		if len(p.Bindings) == 0 {
+			// `I: Idx` with I an integer literal's variable: a unique
+			// impl fixes its type (`v[1]` with Index<I: Idx> → usize)
+			sp := p.Subst(args)
+			if len(sp.Trait.Args) == 0 || sp.Trait.Args[0] == nil {
+				continue
+			}
+			if self := ic.shallow(sp.Trait.Args[0]); self.Kind == TInfer && self.Sub != 0 {
+				ic.selectTrait(sp.Trait, depth+1)
+			}
 			continue
 		}
 		sp := p.Subst(args)
@@ -563,6 +660,29 @@ func (ic *InferCtxt) builtinFn(tr *TraitRef, self Ty, depth int) (Selection, boo
 // normalizeProjection computes <args[0] as trait<args[1:]>>::name, or nil
 // if it cannot (yet) be determined.
 func (ic *InferCtxt) normalizeProjection(trait *Def, args []Ty, name string, depth int) Ty {
+	args = ic.resolveList(args)
+	key, cacheable := concreteKey(trait, args, name)
+	t := ic.t
+	if cacheable {
+		if n, ok := t.projCache[key]; ok {
+			return n
+		}
+		if t.projActive[key] {
+			return nil
+		}
+		t.projActive[key] = true
+		defer delete(t.projActive, key)
+	}
+	n := ic.normalizeProjectionUncached(trait, args, name, depth)
+	if cacheable && n != nil {
+		if r := ic.resolve(n); !r.HasInfer() {
+			t.projCache[key] = r
+		}
+	}
+	return n
+}
+
+func (ic *InferCtxt) normalizeProjectionUncached(trait *Def, args []Ty, name string, depth int) Ty {
 	if depth > maxSelectDepth {
 		return nil
 	}
@@ -812,4 +932,40 @@ func (t *Tcx) IsObjectMethod(d *Def, dyn Ty) bool {
 		}
 	}
 	return false
+}
+
+// canonicalKey renders a trait ref with its inference variables replaced by
+// numbered placeholders (types are interned, so the canonical form's
+// pointers identify it). Closures and opaques are excluded: their
+// signatures/hidden types may still change.
+func (ic *InferCtxt) canonicalKey(tr *TraitRef) (string, bool) {
+	vars := map[Ty]Ty{}
+	volatile := false
+	var b strings.Builder
+	fmt.Fprintf(&b, "%p", tr.Trait)
+	if ic.pickFirst {
+		b.WriteString("!")
+	}
+	for _, a := range tr.Args {
+		a = ic.resolve(a)
+		if a == nil {
+			return "", false
+		}
+		c := Fold(a, func(x Ty) Ty {
+			switch x.Kind {
+			case TInfer:
+				if v, ok := vars[x]; ok {
+					return v
+				}
+				v := CanonicalVar(len(vars), x.Sub)
+				vars[x] = v
+				return v
+			case TClosure, TOpaque:
+				volatile = true
+			}
+			return nil
+		})
+		fmt.Fprintf(&b, ",%p", c)
+	}
+	return b.String(), !volatile
 }

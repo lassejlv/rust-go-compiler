@@ -1139,7 +1139,7 @@ func (ac *astConv) lowerTraitSeg(d *Def, seg *ast.PathSegment, self Ty, sp lexer
 // lowerBound lowers a trait bound on self into a predicate (nil for
 // lifetime bounds and ?Sized).
 func (ac *astConv) lowerBound(b *ast.Bound, self Ty) *Predicate {
-	if b.Lifetime != "" || b.Path == nil {
+	if b.Lifetime != "" || b.Path == nil || self == nil {
 		return nil
 	}
 	tr, binds := ac.lowerTraitPath(b.Path, self, b.Span)

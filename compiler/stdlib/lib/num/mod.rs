@@ -145,7 +145,7 @@ pub(crate) fn ascii_digit_value(b: u8, radix: u32) -> Option<u32> {
 #[inline(never)]
 pub(crate) fn from_str_radix_panic(radix: u32) -> ! {
     crate::rt::panic_fmt(
-        format_args!("from_str_radix_int: must lie in the range `[2, 36]` - found {}", radix),
+        format_args!("from_ascii_bytes_radix: radix must lie in the range `[2, 36]` - found {}", radix),
         file!(),
         line!(),
         column!(),

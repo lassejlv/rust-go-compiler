@@ -86,3 +86,15 @@ pub fn panic_bounds_check(index: usize, len: usize, file: &str, line: u32, col: 
 pub fn main_result<T: crate::process::Termination>(result: T) -> i32 {
     result.report().to_i32()
 }
+
+/// Entry point for panics raised by the C runtime (bounds checks, integer
+/// overflow, division by zero): goes through the panic hook like rustc's
+/// `panic_bounds_check` / `panic_const_*`. `msg` is copied unless static.
+#[inline(never)]
+#[cold]
+pub fn runtime_panic(msg: &'static str, file: &'static str, line: u32, col: u32, is_static: bool) -> ! {
+    if is_static {
+        crate::panicking::begin_panic_static(msg, file, line, col)
+    }
+    crate::panicking::begin_panic_string(crate::string::String::from(msg), file, line, col)
+}

@@ -1882,3 +1882,26 @@ func IsPrimInt(s string) bool {
 	_, ok := IntTyByName(s)
 	return ok && !strings.HasPrefix(s, "f")
 }
+
+// ScalarConst evaluates a const item of integer/bool/char type at compile
+// time (args: its parent's generic args for associated consts). Codegen
+// emits such constants as literals.
+func (t *Tcx) ScalarConst(d *Def, args []Ty) (*big.Int, bool) {
+	ev := &constEval{t: t}
+	v, ok := ev.itemConst(d, args)
+	if !ok || v == nil {
+		return nil, false
+	}
+	switch v.k {
+	case cvBool:
+		if v.b {
+			return big.NewInt(1), true
+		}
+		return big.NewInt(0), true
+	}
+	n, ok := intOf(v)
+	if !ok || n == nil {
+		return nil, false
+	}
+	return n, true
+}

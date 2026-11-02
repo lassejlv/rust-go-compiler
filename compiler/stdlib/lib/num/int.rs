@@ -469,6 +469,9 @@ macro_rules! __std_int_common {
             /// Raises self to the power of `exp`, using exponentiation by squaring.
             #[inline]
             pub fn pow(self, mut exp: u32) -> $t {
+                if !crate::intrinsics::overflow_checks() {
+                    return self.wrapping_pow(exp);
+                }
                 if exp == 0 {
                     return 1;
                 }
@@ -478,7 +481,7 @@ macro_rules! __std_int_common {
                     if (exp & 1) == 1 {
                         acc = match acc.checked_mul(base) {
                             Some(v) => v,
-                            None => overflow_panic("attempt to multiply with overflow"),
+                            None => overflow_panic("attempt to exponentiate with overflow"),
                         };
                         if exp == 1 {
                             return acc;
@@ -487,7 +490,7 @@ macro_rules! __std_int_common {
                     exp /= 2;
                     base = match base.checked_mul(base) {
                         Some(v) => v,
-                        None => overflow_panic("attempt to multiply with overflow"),
+                        None => overflow_panic("attempt to exponentiate with overflow"),
                     };
                 }
             }
@@ -654,10 +657,10 @@ macro_rules! __std_int_signed {
             #[inline]
             pub fn abs(self) -> $t {
                 if self < 0 {
-                    if self == $t::MIN {
+                    if self == $t::MIN && crate::intrinsics::overflow_checks() {
                         overflow_panic("attempt to negate with overflow");
                     }
-                    -self
+                    self.wrapping_neg()
                 } else {
                     self
                 }
@@ -905,6 +908,7 @@ macro_rules! __std_int_unsigned {
             pub fn next_power_of_two(self) -> $t {
                 match self.checked_next_power_of_two() {
                     Some(v) => v,
+                    None if !crate::intrinsics::overflow_checks() => 0,
                     None => overflow_panic("attempt to add with overflow"),
                 }
             }
@@ -1243,7 +1247,7 @@ macro_rules! __std_int_common_extra {
             #[inline]
             #[track_caller]
             pub fn strict_pow(self, exp: u32) -> $t {
-                match self.checked_pow(exp) { Some(v) => v, None => overflow_panic("attempt to multiply with overflow") }
+                match self.checked_pow(exp) { Some(v) => v, None => overflow_panic("attempt to exponentiate with overflow") }
             }
 
             /// Unchecked integer addition. Results in undefined behavior on overflow.

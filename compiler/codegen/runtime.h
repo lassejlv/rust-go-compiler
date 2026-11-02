@@ -59,6 +59,8 @@ RG_GLOBAL __thread int rg_panicking;
  * core::panic::Location) right before the call; `tracked` says it was
  * propagated from a track_caller caller rather than being the call site. */
 typedef struct { Fat file; uint32_t line, col; } RgLoc;
+/* std's entry point for runtime-raised panics (installed by main) */
+RG_GLOBAL void (*rg_std_panic)(Fat msg, Fat file, uint32_t line, uint32_t col, uint8_t is_static);
 RG_GLOBAL __thread const RgLoc* rg_caller_loc;
 RG_GLOBAL __thread int rg_caller_tracked;
 RG_GLOBAL __thread int rg_is_main;
@@ -191,12 +193,21 @@ __attribute__((noreturn, cold)) static void rg_panic_resume(Fat msg, uint8_t is_
 }
 
 __attribute__((noreturn, cold)) static void rg_panic_str(const char* msg, const char* file, uint32_t line, uint32_t col) {
+  if (rg_std_panic && !rg_panicking) {
+    /* through std (panic hooks, payload types) */
+    rg_std_panic((Fat){ (void*)msg, strlen(msg) }, (Fat){ (void*)file, strlen(file) }, line, col, 1);
+    abort();
+  }
   rg_panic_full(msg, strlen(msg), file, strlen(file), line, col, 1);
 }
 
 __attribute__((noreturn, cold)) static void rg_panic_bounds(uint64_t idx, uint64_t len, const char* file, uint32_t line, uint32_t col) {
   char buf[128];
   int n = snprintf(buf, sizeof buf, "index out of bounds: the len is %llu but the index is %llu", (unsigned long long)len, (unsigned long long)idx);
+  if (rg_std_panic && !rg_panicking) {
+    rg_std_panic((Fat){ (void*)buf, (uint64_t)n }, (Fat){ (void*)file, strlen(file) }, line, col, 0);
+    abort();
+  }
   rg_panic_raw(buf, n, file, strlen(file), line, col);
 }
 
@@ -397,6 +408,11 @@ static void rg_stdin_consume(uint64_t n) { rg_stdin_pos += n; if (rg_stdin_pos >
 static void rg_drop_noop(void* p) { (void)p; }
 
 /* ---- checked arithmetic (debug-mode semantics) ---- */
+#ifdef RG_NO_OVERFLOW_CHECKS
+#define RG_OVERFLOW_CHECKS 0
+#else
+#define RG_OVERFLOW_CHECKS 1
+#endif
 #ifdef RG_NO_OVERFLOW_CHECKS
 /* release profile: integer arithmetic wraps, shift amounts are masked
  * (division by zero and MIN/-1 still panic, as in rustc) */

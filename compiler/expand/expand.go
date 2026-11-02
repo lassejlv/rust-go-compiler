@@ -790,6 +790,7 @@ func (e *Expander) expandStmts(stmts []ast.Stmt, depth int) ([]ast.Stmt, error) 
 		}
 	}
 	out := make([]ast.Stmt, 0, len(stmts))
+	emptySemi := -1 // len(out) when a `m!();` expanded to nothing
 	for i, s := range stmts {
 		last := i == len(stmts)-1
 		switch s := s.(type) {
@@ -848,6 +849,11 @@ func (e *Expander) expandStmts(stmts []ast.Stmt, depth int) ([]ast.Stmt, error) 
 			if err != nil {
 				return nil, err
 			}
+			if len(res) == 0 && s.Semi && !s.ImplicitSemi {
+				// `m!();` expanding to nothing still ends the block
+				// with a statement
+				emptySemi = len(out)
+			}
 			out = append(out, res...)
 		default:
 			out = append(out, s)
@@ -855,7 +861,7 @@ func (e *Expander) expandStmts(stmts []ast.Stmt, depth int) ([]ast.Stmt, error) 
 	}
 	// `#[cfg(a)] { x } #[cfg(b)] { y }`: when the statements after a
 	// block-like expression were all removed, it is the block's tail
-	if len(out) > 0 && len(out) < len(stmts) {
+	if len(out) > 0 && len(out) < len(stmts) && emptySemi != len(out) {
 		if es, ok := out[len(out)-1].(*ast.ExprStmt); ok && es.ImplicitSemi && out[len(out)-1] != stmts[len(stmts)-1] {
 			es.Semi = false
 			es.ImplicitSemi = false
@@ -888,6 +894,9 @@ func (e *Expander) expandMacStmt(s *ast.MacStmt, last bool, depth int) ([]ast.St
 	if s.Semi && len(out) > 0 {
 		if es, ok := out[len(out)-1].(*ast.ExprStmt); ok {
 			es.Semi = true
+			// a braced `m! { .. }` statement: may still become the tail
+			// if what follows it is configured out or expands to nothing
+			es.ImplicitSemi = s.ImplicitSemi
 		}
 	}
 	return out, nil

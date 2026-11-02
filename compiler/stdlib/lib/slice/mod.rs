@@ -65,7 +65,7 @@ impl crate::error::Error for GetDisjointMutError {}
 #[inline(never)]
 #[track_caller]
 fn split_at_fail(mid: usize, len: usize) -> ! {
-    crate::rt::panic_fmt(format_args!("mid > len ({mid} > {len})"), file!(), line!(), column!())
+    crate::rt::panic_fmt(format_args!("mid > len"), file!(), line!(), column!())
 }
 
 #[inline(never)]
@@ -1288,7 +1288,7 @@ impl<T> [T] {
         let (a, b) = (self.len(), src.len());
         if a != b {
             crate::rt::panic_fmt(
-                format_args!("source slice length ({b}) does not match destination slice length ({a})"),
+                format_args!("copy_from_slice: source slice length ({b}) does not match destination slice length ({a})"),
                 file!(),
                 line!(),
                 column!(),

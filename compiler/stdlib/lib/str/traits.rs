@@ -91,9 +91,6 @@ impl Default for &mut str {
 
 #[inline(never)]
 #[track_caller]
-fn str_index_overflow_fail() -> ! {
-    crate::rt::panic_str("attempted to index str up to maximum usize", file!(), line!(), column!())
-}
 
 impl SliceIndex<str> for RangeFull {
     type Output = str;
@@ -267,18 +264,30 @@ impl SliceIndex<str> for RangeInclusive<usize> {
     #[inline]
     #[track_caller]
     fn index(self, slice: &str) -> &str {
-        if self.end == usize::MAX {
-            str_index_overflow_fail();
+        let RangeInclusive { mut start, mut end, exhausted } = self;
+        let len = slice.len();
+        if end < len {
+            end = end + 1;
+            start = if exhausted { end } else { start };
+            if start <= end && slice.is_char_boundary(start) && slice.is_char_boundary(end) {
+                return unsafe { &*(start..end).get_unchecked(slice as *const str) };
+            }
         }
-        (self.start..self.end + 1).index(slice)
+        slice_error_fail(slice, start, end)
     }
     #[inline]
     #[track_caller]
     fn index_mut(self, slice: &mut str) -> &mut str {
-        if self.end == usize::MAX {
-            str_index_overflow_fail();
+        let RangeInclusive { mut start, mut end, exhausted } = self;
+        let len = slice.len();
+        if end < len {
+            end = end + 1;
+            start = if exhausted { end } else { start };
+            if start <= end && slice.is_char_boundary(start) && slice.is_char_boundary(end) {
+                return unsafe { &mut *(start..end).get_unchecked_mut(slice as *mut str) };
+            }
         }
-        (self.start..self.end + 1).index_mut(slice)
+        slice_error_fail(slice, start, end)
     }
 }
 

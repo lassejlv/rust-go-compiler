@@ -405,6 +405,12 @@ func ConstVal(v uint64) Ty { return intern(&TyS{Kind: TConst, Val: v}) }
 var inferCounter int
 var inferMu sync.Mutex
 
+// CanonicalVar is the n-th placeholder for inference variables in a
+// canonicalized query (never unified; only used as a cache key).
+func CanonicalVar(n int, kind uint8) Ty {
+	return intern(&TyS{Kind: TInfer, Index: -(n + 1), Sub: kind})
+}
+
 // NewInfer creates a fresh inference variable (kind 0 general, 1 int, 2 float).
 func NewInfer(kind uint8) Ty {
 	inferMu.Lock()

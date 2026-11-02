@@ -12,7 +12,7 @@ abc 7 3
 4294967295
 true
 Ok(-5)
-Err("out of range integral type conversion attempted")
+Err("number too small to fit in target type")
 xyz
 [65, 66]
 boxed

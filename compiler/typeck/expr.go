@@ -1185,9 +1185,14 @@ func (fcx *FnCtxt) checkTry(x *ast.TryExpr) Ty {
 		// identity conversion if the types unify trivially
 		oe := fcx.shallow(outErr)
 		se := fcx.shallow(t.Args[1])
-		if oe == se || oe.Kind == TInfer {
-			fcx.ic.unify(outErr, t.Args[1])
+		if oe == se {
 			return t.Args[0]
+		}
+		if oe.Kind == TInfer {
+			// like rustc, convert with From and let other uses decide the
+			// error type (e.g. a closure's later `io::Result::Ok(..)`);
+			// identity if nothing does
+			fcx.tryErrFallback = append(fcx.tryErrFallback, [2]Ty{outErr, t.Args[1]})
 		}
 		from := fcx.t.Lang("from")
 		info.From = &Callee{Kind: CallFn, Def: from.Trait.Items["from"], Args: []Ty{outErr, t.Args[1]}}

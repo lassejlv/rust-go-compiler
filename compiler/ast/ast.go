@@ -527,6 +527,9 @@ type MacStmt struct {
 	Attrs []*Attr
 	Mac   *MacCall
 	Semi  bool
+	// ImplicitSemi: a braced invocation with no `;` that is not at the end
+	// of its block (see ExprStmt.ImplicitSemi).
+	ImplicitSemi bool
 }
 
 type EmptyStmt struct{}

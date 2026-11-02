@@ -34,6 +34,12 @@ type Tcx struct {
 	implsBuilt   bool
 	implsIndexed bool // BuildImpls finished (traitImpls/inherent complete)
 
+	// Caches for fully concrete selections / projections (traits.go).
+	selCache   map[string]Selection
+	selActive  map[string]bool
+	projCache  map[string]Ty
+	projActive map[string]bool
+
 	// quiet > 0 suppresses error reporting (speculative generic checks).
 	quiet     int
 	quietErrs int
@@ -66,6 +72,10 @@ func NewTcx(r *resolve.Resolver) *Tcx {
 		paramOf:      map[*Def]*GenericParamDef{},
 		synthetic:    map[ast.NodeID]int{},
 		results:      map[string]*Results{},
+		selCache:     map[string]Selection{},
+		selActive:    map[string]bool{},
+		projCache:    map[string]Ty{},
+		projActive:   map[string]bool{},
 		inProgress:   map[string]bool{},
 		OpaqueHidden: map[Ty]Ty{},
 		Closures:     map[Ty]*ClosureInfo{},

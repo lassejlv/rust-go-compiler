@@ -403,6 +403,18 @@ func (bs *buildState) compileProgram(units []*crateUnit, binIdx int) (*codegen.P
 		exp.Config = &expand.CrateConfig{Features: u.features, Cfgs: append(append([]string{}, u.cfgs...), globalCfgs...), Env: cargoEnv(u)}
 		exp.Externs = u.deps
 		exp.ProcMacros = map[string]*expand.ProcMacro{}
+		// proc macros of direct deps, plus those a dependency re-exports
+		// from its own deps (`pub use ctor_proc_macro::ctor;`); direct
+		// ones win on name clashes
+		for _, k := range sortedKeys(u.deps) {
+			if du := bs.byKey[u.deps[k]]; du != nil {
+				for _, kk := range sortedKeys(du.deps) {
+					for n, m := range bs.pmMacros[du.deps[kk]] {
+						exp.ProcMacros[n] = m
+					}
+				}
+			}
+		}
 		for _, k := range u.deps {
 			for n, m := range bs.pmMacros[k] {
 				exp.ProcMacros[n] = m
@@ -416,7 +428,10 @@ func (bs *buildState) compileProgram(units []*crateUnit, binIdx int) (*codegen.P
 		exp.ProcMacros = nil
 		cr := r.AddCrate(u.key, c)
 		cr.Edition = u.edition
-		cr.Externs = map[string]*Crate{}
+		if cr.Externs == nil {
+			// (may already hold `extern crate x as y;` aliases)
+			cr.Externs = map[string]*Crate{}
+		}
 		for _, n := range sortedKeys(u.deps) {
 			if dc := crates[u.deps[n]]; dc != nil {
 				cr.Externs[n] = dc

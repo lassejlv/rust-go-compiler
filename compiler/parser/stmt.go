@@ -196,7 +196,7 @@ func (p *Parser) parseMacStmt(attrs []*ast.Attr) ast.Stmt {
 		if p.atBlockEnd() {
 			return &ast.MacStmt{Attrs: attrs, Mac: mac, Semi: false}
 		}
-		return &ast.MacStmt{Attrs: attrs, Mac: mac, Semi: true}
+		return &ast.MacStmt{Attrs: attrs, Mac: mac, Semi: true, ImplicitSemi: true}
 	}
 	var e ast.Expr = &ast.MacCallExpr{ExprBase: p.eb(lo), Mac: mac}
 	e = p.parsePostfix(e, lo)

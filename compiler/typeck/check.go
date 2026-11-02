@@ -9,6 +9,11 @@ import (
 
 // FnCtxt checks one body instance.
 type FnCtxt struct {
+	// tryErrFallback: (error type var, source error type) pairs from `?`
+	tryErrFallback [][2]Ty
+	// relBaseIsParam: the type-relative path being resolved started at a
+	// type parameter (see resolveValuePath).
+	relBaseIsParam bool
 	// methodNode is the method call being probed (for methodHint).
 	methodNode ast.NodeID
 	t          *Tcx
@@ -724,6 +729,14 @@ func (fcx *FnCtxt) finishInference() {
 		}
 	}
 	fcx.selectWherePossible()
+	// `?` into a still-unknown error type: if nothing else decided it,
+	// the conversion is the identity
+	for _, p := range fcx.tryErrFallback {
+		if fcx.ic.isUnresolvedVar(p[0]) {
+			fcx.ic.unify(p[0], p[1])
+		}
+	}
+	fcx.selectWherePossible()
 	// Never-type fallback: diverging variables default to ().
 	for _, v := range fcx.diverging {
 		if fcx.ic.isUnresolvedVar(v) {
@@ -757,6 +770,9 @@ func (fcx *FnCtxt) hasPendingInfer() bool {
 }
 
 func (fcx *FnCtxt) defaultVars(ty Ty) bool {
+	if ty == nil {
+		return false
+	}
 	ty = fcx.resolve(ty)
 	if !ty.HasInfer() {
 		return false

@@ -295,8 +295,8 @@ pub(crate) unsafe fn alloc_array<T>(n: usize) -> *mut T {
         return align as *mut T;
     }
     let total = match size.checked_mul(n) {
-        Some(t) => t,
-        None => capacity_overflow(),
+        Some(t) if t <= isize::MAX as usize => t,
+        _ => capacity_overflow(),
     };
     intrinsics::alloc(total, align) as *mut T
 }
@@ -327,8 +327,8 @@ pub(crate) unsafe fn realloc_array<T>(p: *mut T, old_n: usize, new_n: usize) -> 
         return align as *mut T;
     }
     let total = match size.checked_mul(new_n) {
-        Some(t) => t,
-        None => capacity_overflow(),
+        Some(t) if t <= isize::MAX as usize => t,
+        _ => capacity_overflow(),
     };
     intrinsics::realloc(p as *mut u8, size * old_n, align, total) as *mut T
 }

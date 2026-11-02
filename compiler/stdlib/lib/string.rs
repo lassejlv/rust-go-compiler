@@ -162,8 +162,11 @@ impl String {
     #[track_caller]
     pub fn extend_from_within<R: RangeBounds<usize>>(&mut self, src: R) {
         let r = crate::slice::range(src, self.len());
-        if !self.is_char_boundary(r.start) || !self.is_char_boundary(r.end) {
+        if !self.is_char_boundary(r.start) {
             crate::rt::panic_str("assertion failed: self.is_char_boundary(start)", file!(), line!(), column!());
+        }
+        if !self.is_char_boundary(r.end) {
+            crate::rt::panic_str("assertion failed: self.is_char_boundary(end)", file!(), line!(), column!());
         }
         self.vec.extend_from_within(r);
     }
@@ -264,11 +267,11 @@ impl String {
     #[track_caller]
     pub fn remove(&mut self, idx: usize) -> char {
         let len = self.len();
-        if idx >= len {
-            crate::rt::panic_str("cannot remove a char from the end of a string", file!(), line!(), column!());
-        }
-        if !self.is_char_boundary(idx) {
+        if idx > len || !self.is_char_boundary(idx) {
             str::slice_error_fail(self.as_str(), idx, len);
+        }
+        if idx == len {
+            crate::rt::panic_str("cannot remove a char from the end of a string", file!(), line!(), column!());
         }
         let (ch, n) = str::decode_at(self.as_str(), idx);
         unsafe {
@@ -400,10 +403,10 @@ impl String {
     {
         let r = crate::slice::range(range, self.len());
         if !self.is_char_boundary(r.start) {
-            crate::rt::panic_str("assertion failed: self.is_char_boundary(n)", file!(), line!(), column!());
+            crate::rt::panic_str("start of range should be a character boundary", file!(), line!(), column!());
         }
         if !self.is_char_boundary(r.end) {
-            crate::rt::panic_str("assertion failed: self.is_char_boundary(n)", file!(), line!(), column!());
+            crate::rt::panic_str("end of range should be a character boundary", file!(), line!(), column!());
         }
         let mut out = String::with_capacity(self.len() - (r.end - r.start) + replace_with.len());
         out.push_str(unsafe { self.get_unchecked(0..r.start) });

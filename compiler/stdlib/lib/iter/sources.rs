@@ -1,6 +1,6 @@
 //! Functions creating iterators.
 
-use super::adapters::Zip;
+use super::adapters::{Chain, Zip};
 use super::traits::{DoubleEndedIterator, ExactSizeIterator, FusedIterator, IntoIterator, Iterator};
 use crate::fmt;
 use crate::marker::PhantomData;
@@ -316,4 +316,13 @@ where
     B: IntoIterator,
 {
     a.into_iter().zip(b)
+}
+
+/// Converts the arguments to iterators and links them together, in a chain.
+pub fn chain<A, B>(a: A, b: B) -> Chain<A::IntoIter, B::IntoIter>
+where
+    A: IntoIterator,
+    B: IntoIterator<Item = A::Item>,
+{
+    a.into_iter().chain(b)
 }

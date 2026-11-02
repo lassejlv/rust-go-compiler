@@ -65,34 +65,55 @@ pub(crate) unsafe fn from_raw_parts_mut<'a>(p: *mut u8, len: usize) -> &'a mut s
 #[track_caller]
 pub(crate) fn slice_error_fail(s: &str, begin: usize, end: usize) -> ! {
     let len = s.len();
-    let trunc_len = if len > 256 { s.floor_char_boundary(256) } else { len };
-    let s_trunc = unsafe { s.get_unchecked(0..trunc_len) };
-    let ellipsis = if trunc_len < len { "[...]" } else { "" };
-    if begin > len || end > len {
-        let oob_index = if begin > len { begin } else { end };
+    // 1. begin is OOB.
+    if begin > len {
         crate::rt::panic_fmt(
-            format_args!("byte index {oob_index} is out of bounds of `{s_trunc}`{ellipsis}"),
+            format_args!("start byte index {begin} is out of bounds for string of length {len}"),
             file!(),
             line!(),
             column!(),
         );
     }
+    // 2. end is OOB.
+    if end > len {
+        crate::rt::panic_fmt(
+            format_args!("end byte index {end} is out of bounds for string of length {len}"),
+            file!(),
+            line!(),
+            column!(),
+        );
+    }
+    // 3. range is backwards.
     if begin > end {
+        crate::rt::panic_fmt(format_args!("byte range starts at {begin} but ends at {end}"), file!(), line!(), column!());
+    }
+    // 4. begin is inside a character.
+    if !s.is_char_boundary(begin) {
+        let floor = s.floor_char_boundary(begin);
+        let (ch, ch_len) = decode_at(s, floor);
+        let range = floor..floor + ch_len;
         crate::rt::panic_fmt(
-            format_args!("begin <= end ({begin} <= {end}) when slicing `{s_trunc}`{ellipsis}"),
+            format_args!("start byte index {begin} is not a char boundary; it is inside {ch:?} (bytes {range:?} of string)"),
             file!(),
             line!(),
             column!(),
         );
     }
-    let index = if !s.is_char_boundary(begin) { begin } else { end };
-    let char_start = s.floor_char_boundary(index);
-    let (ch, ch_len) = decode_at(s, char_start);
-    let char_end = char_start + ch_len;
+    // 5. end is inside a character.
+    if !s.is_char_boundary(end) {
+        let floor = s.floor_char_boundary(end);
+        let (ch, ch_len) = decode_at(s, floor);
+        let range = floor..floor + ch_len;
+        crate::rt::panic_fmt(
+            format_args!("end byte index {end} is not a char boundary; it is inside {ch:?} (bytes {range:?} of string)"),
+            file!(),
+            line!(),
+            column!(),
+        );
+    }
+    // 6. end is OOB and the range is inclusive (end == len).
     crate::rt::panic_fmt(
-        format_args!(
-            "byte index {index} is not a char boundary; it is inside {ch:?} (bytes {char_start}..{char_end}) of `{s_trunc}`{ellipsis}"
-        ),
+        format_args!("end byte index {end} is out of bounds for string of length {len}"),
         file!(),
         line!(),
         column!(),

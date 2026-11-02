@@ -121,6 +121,12 @@ func (fcx *FnCtxt) resolveValuePath(qself *ast.QSelf, p *ast.Path, sp lexer.Span
 	baseRaw := fcx.ac.resToTy(res, baseSeg, sp)
 	fcx.ac.exprCtx = false
 	base := fcx.normalizeInBody(baseRaw, sp)
+	// `T::item` with T a type parameter (or Self in a trait): only T's
+	// bounds apply, even if the substituted type has an inherent item
+	// of that name (`F::from_bits` with F = f32)
+	fcx.relBaseIsParam = (res.Kind == ResDef && res.Def != nil && res.Def.Kind == DefTyParam) ||
+		(res.Kind == ResSelfTy && res.Def != nil && res.Def.Kind == DefTrait)
+	defer func() { fcx.relBaseIsParam = false }()
 	return fcx.typeRelativeValue(base, last, sp, expected)
 }
 
@@ -232,6 +238,12 @@ func (fcx *FnCtxt) typeRelativeValue(base Ty, seg *ast.PathSegment, sp lexer.Spa
 			return nil, TyErr
 		}
 	}
+	if fcx.relBaseIsParam {
+		fcx.relBaseIsParam = false
+		if v, t, ok := fcx.envTraitItem(b, seg, sp); ok {
+			return v, t
+		}
+	}
 	// inherent impls
 	if item, implArgs := fcx.findInherentItem(b, name, false); item != nil {
 		switch item.Kind {
@@ -250,30 +262,19 @@ func (fcx *FnCtxt) typeRelativeValue(base Ty, seg *ast.PathSegment, sp lexer.Spa
 	// where-clauses on this type first (`E::from_error_kind(..)` with
 	// `E: ParseError<I>` fixes the trait args; in monomorphized bodies the
 	// env holds the substituted bounds)
-	var envRef *TraitRef
-	for _, e := range fcx.ic.env {
-		if fcx.resolve(e.Args[0]) != fcx.resolve(b) {
-			continue
-		}
-		for _, st := range fcx.t.AllSupertraits(e) {
-			if it, ok := st.Trait.Trait.Items[name]; ok && (it.Kind == DefFn || it.Kind == DefConst) {
-				if envRef != nil && !sameArgs(envRef.Args, st.Args) {
-					envRef = nil
-					goto noEnv
-				}
-				envRef = st
-			}
-		}
+	if v, t, ok := fcx.envTraitItem(b, seg, sp); ok {
+		return v, t
 	}
-	if envRef != nil {
-		return fcx.traitItemValue(&TraitRef{Trait: envRef.Trait, Args: append([]Ty{}, envRef.Args...)}, seg, sp)
-	}
-noEnv:
 	var best *TraitRef
 	var bestKind SelKind
+	inScope := fcx.curMod().TraitsInScope(fcx.t.R.Prelude)
 	for _, tr := range fcx.t.traitsByItem[name] {
 		it := tr.Trait.Items[name]
 		if it.Kind != DefFn && it.Kind != DefConst {
+			continue
+		}
+		// like methods, `Type::item` only sees traits in scope
+		if !inScope[tr] && !fcx.traitInScopeOfImpl(tr) {
 			continue
 		}
 		g := fcx.t.Generics(tr)
@@ -697,4 +698,42 @@ func (fcx *FnCtxt) expectedInputs(ins []Ty, out, expected Ty) []Ty {
 		return nil
 	}
 	return fcx.ic.resolveList(ins)
+}
+
+// envTraitItem resolves `T::name` through a unique where-clause on T (in
+// monomorphized bodies the env holds the substituted bounds).
+func (fcx *FnCtxt) envTraitItem(b Ty, seg *ast.PathSegment, sp lexer.Span) (*ValueRes, Ty, bool) {
+	name := seg.Ident.Name
+	var envRef *TraitRef
+	for _, e := range fcx.ic.env {
+		if fcx.resolve(e.Args[0]) != fcx.resolve(b) {
+			continue
+		}
+		for _, st := range fcx.t.AllSupertraits(e) {
+			if it, ok := st.Trait.Trait.Items[name]; ok && (it.Kind == DefFn || it.Kind == DefConst) {
+				if envRef != nil && !sameArgs(envRef.Args, st.Args) {
+					return nil, nil, false
+				}
+				envRef = st
+			}
+		}
+	}
+	if envRef == nil {
+		return nil, nil, false
+	}
+	v, t := fcx.traitItemValue(&TraitRef{Trait: envRef.Trait, Args: append([]Ty{}, envRef.Args...)}, seg, sp)
+	return v, t, true
+}
+
+// traitInScopeOfImpl: inside `impl Trait for X`, Trait counts as in scope.
+func (fcx *FnCtxt) traitInScopeOfImpl(tr *Def) bool {
+	for d := fcx.def; d != nil; d = d.Parent {
+		if d.Kind == DefImpl && d.Impl != nil && d.Impl.TraitRef != nil && d.Impl.TraitRef.Trait == tr {
+			return true
+		}
+		if d.Kind == DefTrait && d == tr {
+			return true
+		}
+	}
+	return false
 }
