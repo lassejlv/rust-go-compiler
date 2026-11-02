@@ -465,6 +465,12 @@ func (fc *fnGen) unaryOperand(x *ast.UnaryExpr, t Ty) operand {
 			return operand{s: "(*" + inner.s + ".f0)", place: true, flag: inner.flag, movable: inner.movable, ty: t}
 		}
 	case ast.UnNeg:
+		if lit, ok := unparen(x.X).(*ast.LitExpr); ok && lit.Kind == ast.LitInt && t.Kind == TInt && len(fc.r.Adjust[x.X.GetID()]) == 0 {
+			if lit.Big != "" {
+				return operand{s: fmt.Sprintf("((%s)(0 - (unsigned __int128)rg_u128_from_str(%q)))", fc.ctype(t), lit.Big), ty: t}
+			}
+			return operand{s: fmt.Sprintf("((%s)(0 - (unsigned __int128)%dULL))", fc.ctype(t), lit.IntVal), ty: t}
+		}
 		v := fc.value(x.X)
 		if t.Kind == TInt && t.IsSigned() {
 			return operand{s: fmt.Sprintf("RG_NEG(%s, %s, %s)", fc.ctype(t), v, fc.loc(x.Span)), ty: t}

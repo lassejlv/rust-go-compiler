@@ -177,11 +177,17 @@ func (ic *InferCtxt) selectTrait(tr *TraitRef, depth int) Selection {
 	}
 	if len(cands) == 0 {
 		if self.Kind == TInfer {
+			if ic.useEnv(tr) {
+				return ic.selectTrait(tr, depth+1)
+			}
 			return Selection{Kind: SelAmbig}
 		}
 		return Selection{Kind: SelNone}
 	}
 	if len(cands) > 1 {
+		if ic.useEnv(tr) {
+			return ic.selectTrait(tr, depth+1)
+		}
 		return Selection{Kind: SelAmbig}
 	}
 	_ = ambig
@@ -190,6 +196,54 @@ func (ic *InferCtxt) selectTrait(tr *TraitRef, depth int) Selection {
 	iargs, _, _ := ic.matchImpl(cands[0], tr, depth)
 	ic.confirmImpl(cands[0], iargs, depth)
 	return Selection{Kind: SelImpl, Impl: cands[0], Args: ic.resolveList(iargs)}
+}
+
+// useEnv unifies tr with a unique matching where-clause of the current
+// body (if any) and reports whether that made progress.
+func (ic *InferCtxt) useEnv(tr *TraitRef) bool {
+	if len(ic.env) == 0 || !hasInferArgs(ic, tr) {
+		return false
+	}
+	var match *TraitRef
+	for _, e := range ic.env {
+		if e.Trait != tr.Trait || !ic.probeUnifyList(e.Args, tr.Args) {
+			continue
+		}
+		if match != nil && !sameArgs(match.Args, e.Args) {
+			return false
+		}
+		match = e
+	}
+	if match == nil {
+		return false
+	}
+	ic.unifyList(match.Args, tr.Args)
+	return hasInferArgsChanged(ic, tr)
+}
+
+func hasInferArgs(ic *InferCtxt, tr *TraitRef) bool {
+	for _, a := range tr.Args {
+		if ic.resolve(a).HasInfer() {
+			return true
+		}
+	}
+	return false
+}
+
+func hasInferArgsChanged(ic *InferCtxt, tr *TraitRef) bool {
+	for _, a := range tr.Args {
+		if ic.resolve(a) != a {
+			return true
+		}
+	}
+	return false
+}
+
+func (ic *InferCtxt) probeUnifyList(a, b []Ty) bool {
+	s := ic.snapshot()
+	ok := ic.unifyList(a, b)
+	ic.rollback(s)
+	return ok
 }
 
 // matchImpl unifies an impl's trait ref with tr and checks its where clauses.

@@ -89,6 +89,16 @@ func (t *Tcx) newFnCtxt(def *Def, args []Ty) *FnCtxt {
 	fcx.ac.subst = args
 	fcx.ac.infer = func() Ty { return fcx.ic.newVar() }
 	fcx.modStack = []*Module{def.Scope}
+	for _, p := range fcx.t.Generics(def).Predicates {
+		if p.Maybe || p.Trait.Trait.LangItem == "sized" {
+			continue
+		}
+		tr := p.Trait.Subst(args)
+		for i, a := range tr.Args {
+			tr.Args[i] = t.Normalize(a)
+		}
+		fcx.ic.env = append(fcx.ic.env, tr)
+	}
 	fcx.scopes = []map[string]*Local{{}}
 	return fcx
 }

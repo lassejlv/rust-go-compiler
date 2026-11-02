@@ -12,6 +12,9 @@ type InferCtxt struct {
 	// pending obligations (owned by FnCtxt but stored here so selection can
 	// add nested ones)
 	obligations []*Obligation
+	// env holds the (substituted) where-clauses of the body being checked;
+	// they guide inference when impl selection is ambiguous.
+	env []*TraitRef
 }
 
 func newInferCtxt(t *Tcx) *InferCtxt {

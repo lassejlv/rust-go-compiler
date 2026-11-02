@@ -9,6 +9,11 @@ use crate::ops::{Deref, DerefMut};
 use crate::slice;
 use crate::vec;
 
+#[inline(always)]
+fn log2_fast(x: usize) -> usize {
+    (usize::BITS - x.leading_zeros() - 1) as usize
+}
+
 /// A priority queue implemented with a binary heap (a max-heap).
 pub struct BinaryHeap<T> {
     data: Vec<T>,
@@ -157,9 +162,6 @@ impl<T: Ord> BinaryHeap<T> {
             return;
         }
         let tail_len = self.len() - start;
-        fn log2_fast(x: usize) -> usize {
-            (usize::BITS - x.leading_zeros() - 1) as usize
-        }
         let better_to_rebuild = if start < tail_len {
             true
         } else if self.len() <= 2048 {
