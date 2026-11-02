@@ -34,6 +34,9 @@ type FnCtxt struct {
 	// argument type hints from the expected call result type
 	nextHints []Ty
 	argHints  []Ty
+	// diverging: inference variables that received a `!` value; they fall
+	// back to `()` (never-type fallback).
+	diverging []Ty
 }
 
 type loopCtx struct {
@@ -670,6 +673,13 @@ func (fcx *FnCtxt) finishInference() {
 		}
 		if !changed {
 			break
+		}
+	}
+	fcx.selectWherePossible()
+	// Never-type fallback: diverging variables default to ().
+	for _, v := range fcx.diverging {
+		if fcx.ic.isUnresolvedVar(v) {
+			fcx.ic.unify(v, TyUnit)
 		}
 	}
 	fcx.selectWherePossible()

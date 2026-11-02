@@ -359,7 +359,7 @@ func TestFormatArgsBasic(t *testing.T) {
 
 func TestFormatArgsNoArgs(t *testing.T) {
 	got := expandExprSrc(t, "", `format_args!("hi {{x}}\n")`)
-	want := `::std::fmt::Arguments::new(::std::string::String::from("hi {x}\n"))`
+	want := `::std::fmt::Arguments::new_const("hi {x}\n")`
 	if got != want {
 		t.Errorf("got %s want %s", got, want)
 	}
@@ -470,8 +470,8 @@ func TestPrintMacros(t *testing.T) {
 		`::std::io::_print(::std::fmt::Arguments::new({ let mut __fmt = ::std::fmt::Formatter::new(); match (&1,) { (__arg0,) => { __fmt.write_str("a");`,
 		`__fmt.write_str("b"); __fmt.set_spec`,
 		`let _ = ::std::fmt::Display::fmt(__arg0, &mut __fmt); __fmt.write_str("\n"); }`,
-		`::std::io::_print(::std::fmt::Arguments::new(::std::string::String::from("\n")));`,
-		`::std::io::_eprint(::std::fmt::Arguments::new(::std::string::String::from("c")));`,
+		`::std::io::_print(::std::fmt::Arguments::new_const("\n"));`,
+		`::std::io::_eprint(::std::fmt::Arguments::new_const("c"));`,
 		`::std::io::_eprint(::std::fmt::Arguments::new({ let mut __fmt = ::std::fmt::Formatter::new(); match (&x,)`,
 		`let s = ::std::fmt::format(::std::fmt::Arguments::new({`,
 	)
@@ -486,7 +486,7 @@ func TestWriteMacros(t *testing.T) {
 	got = expandExprSrc(t, "", `writeln!(self.out, "v={}", x)`)
 	contains(t, got, "(self.out).write_fmt(", `__fmt.write_str("v=")`, `__fmt.write_str("\n")`)
 	got = expandExprSrc(t, "", `writeln!(f)`)
-	if got != `f.write_fmt(::std::fmt::Arguments::new(::std::string::String::from("\n")))` {
+	if got != `f.write_fmt(::std::fmt::Arguments::new_const("\n"))` {
 		t.Errorf("writeln!(f): %s", got)
 	}
 	got = expandExprSrc(t, "", `write!(&mut s, "x")`)
@@ -507,10 +507,10 @@ func TestPanicMacros(t *testing.T) {
 		`::std::rt::panic_str("internal error: entered unreachable code", "test.rs", 4, 5);`,
 		`__fmt.write_str("internal error: entered unreachable code: x=");`,
 		`::std::rt::panic_str("not yet implemented", "test.rs", 6, 5);`,
-		`::std::rt::panic_fmt(::std::fmt::Arguments::new(::std::string::String::from("not yet implemented: later")), "test.rs", 7, 5);`,
+		`::std::rt::panic_fmt(::std::fmt::Arguments::new_const("not yet implemented: later"), "test.rs", 7, 5);`,
 		`::std::rt::panic_str("not implemented", "test.rs", 8, 5);`,
 		`__fmt.write_str("not implemented: nope ");`,
-		`::std::rt::panic_fmt(::std::fmt::Arguments::new(::std::string::String::from("plain")), "test.rs", 10, 5);`,
+		`::std::rt::panic_fmt(::std::fmt::Arguments::new_const("plain"), "test.rs", 10, 5);`,
 	)
 	mustErr(t, `fn main() { panic!(msg); }`, "format argument must be a string literal")
 }
@@ -590,7 +590,7 @@ func TestDbg(t *testing.T) {
 	b := fnBody(t, c, "main")
 	contains(t, b,
 		`let a = match (x * 2) { tmp => { ::std::io::_eprint(::std::fmt::Arguments::new({ let mut __fmt = ::std::fmt::Formatter::new(); match (&(&tmp),) { (__arg0,) => { __fmt.write_str("[test.rs:2:13] x * 2 = "); __fmt.set_spec(' ', 0u8, 4u32, `+specNone+`, `+specNone+`); let _ = ::std::fmt::Debug::fmt(__arg0, &mut __fmt); __fmt.write_str("\n"); }, }; __fmt.into_string() })); tmp }, };`,
-		`::std::io::_eprint(::std::fmt::Arguments::new(::std::string::String::from("[test.rs:3:5]\n")));`,
+		`::std::io::_eprint(::std::fmt::Arguments::new_const("[test.rs:3:5]\n"));`,
 		`let (p, q) = (match 1 { tmp =>`,
 		`"[test.rs:4:18] 1 = "`,
 		`"[test.rs:4:18] y = "`,

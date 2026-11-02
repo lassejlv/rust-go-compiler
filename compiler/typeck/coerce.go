@@ -18,6 +18,9 @@ func (fcx *FnCtxt) coerce(e ast.Expr, from, to Ty) bool {
 	}
 	if a.Kind == TNever {
 		fcx.addAdjust(e, Adjustment{Kind: AdjNeverToAny, Target: to})
+		if b.Kind == TInfer && b.Sub == 0 {
+			fcx.diverging = append(fcx.diverging, b)
+		}
 		return true
 	}
 	if a.Kind == TInfer || b.Kind == TInfer {

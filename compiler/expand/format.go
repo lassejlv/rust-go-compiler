@@ -407,7 +407,7 @@ func buildFormatArgs(sp lexer.Span, in *formatInput) ([]ast.TokenTree, error) {
 		for _, pc := range pieces {
 			lit += pc.Lit
 		}
-		return tmpl(sp, "::std::fmt::Arguments::new(::std::string::String::from("+rustStr(lit)+"))")
+		return tmpl(sp, "::std::fmt::Arguments::new_const("+rustStr(lit)+")")
 	}
 
 	var argTTs [][]ast.TokenTree
