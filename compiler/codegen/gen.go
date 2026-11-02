@@ -82,7 +82,7 @@ func (g *Gen) fnName(d *Def, args []Ty) string {
 	g.fnN++
 	name := fmt.Sprintf("f%d_%s", g.fnN, cIdent(d.Name))
 	if d.Intrinsic == "" && d.Fn != nil && d.Fn.Extern {
-		name = d.Name // libc
+		name = "rgx_" + cIdent(d.Name) // foreign fn, declared with an asm label
 	}
 	g.fnNames[key] = name
 	g.fnQueue = append(g.fnQueue, instance{def: d, args: args})
@@ -197,7 +197,8 @@ func (g *Gen) genFunction(inst instance) {
 		return
 	}
 	if d.Fn.Extern && d.Intrinsic == "" {
-		return // libc function: declared in runtime.h
+		g.genForeignDecl(name, d, inst.args)
+		return
 	}
 	if d.Intrinsic != "" {
 		g.genIntrinsicFn(name, d, inst.args)
@@ -249,6 +250,33 @@ func joinParams(ps []string) string {
 		return "void"
 	}
 	return strings.Join(ps, ", ")
+}
+
+// genForeignDecl declares a foreign (extern "C") function under a private
+// C name bound to the real symbol with an asm label, so that its Rust
+// signature never conflicts with system headers.
+func (g *Gen) genForeignDecl(name string, d *Def, args []Ty) {
+	ins, out := g.tcx.InstantiateFnSig(d, args)
+	var ps []string
+	for _, in := range ins {
+		g.defineByValue(in)
+		ps = append(ps, g.ctype(in))
+	}
+	if g.tcx.FnSig(d).Variadic {
+		ps = append(ps, "...")
+	}
+	ret := "void"
+	if !isZST(out) {
+		g.defineByValue(out)
+		ret = g.ctype(out)
+	}
+	sym := d.Name
+	for _, a := range d.Attrs {
+		if a.Path == "link_name" && len(a.Tokens) >= 2 {
+			sym = a.Tokens[1].Tok.Text
+		}
+	}
+	fmt.Fprintf(&g.protos, "extern %s %s(%s) __asm__(%q);\n", ret, name, joinParams(ps), sym)
 }
 
 // genCtorFn emits a constructor function for a tuple struct/variant.
