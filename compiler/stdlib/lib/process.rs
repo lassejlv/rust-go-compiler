@@ -19,9 +19,9 @@ pub fn abort() -> ! {
     }
 }
 
-/// Returns the OS-assigned process identifier associated with this process (not available: 0).
+/// Returns the OS-assigned process identifier associated with this process.
 pub fn id() -> u32 {
-    0
+    unsafe { intrinsics::process_id() }
 }
 
 /// This type represents the status code the current process can return to its parent.

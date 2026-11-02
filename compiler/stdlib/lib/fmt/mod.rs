@@ -51,6 +51,8 @@ pub enum Sign {
 #[derive(Clone)]
 pub struct Arguments<'a> {
     s: crate::string::String,
+    // the format string when it has no arguments (see `as_str`)
+    lit: Option<&'static str>,
     _marker: PhantomData<&'a ()>,
 }
 
@@ -58,13 +60,19 @@ impl<'a> Arguments<'a> {
     /// Creates `Arguments` from already formatted text (used by `format_args!`).
     #[inline]
     pub fn new(s: crate::string::String) -> Arguments<'a> {
-        Arguments { s, _marker: PhantomData }
+        Arguments { s, lit: None, _marker: PhantomData }
+    }
+
+    /// Creates `Arguments` for a format string without arguments (`as_str` returns it).
+    #[inline]
+    pub fn new_const(s: &'static str) -> Arguments<'a> {
+        Arguments { s: crate::string::String::from(s), lit: Some(s), _marker: PhantomData }
     }
 
     /// Gets the formatted string, if it has no arguments to be formatted at runtime.
     #[inline]
     pub fn as_str(&self) -> Option<&'static str> {
-        None
+        self.lit
     }
 
     /// The formatted text.
@@ -340,6 +348,23 @@ impl<'a> Formatter<'a> {
         } else {
             s
         };
+        match self.width {
+            None => self.write_str(s),
+            Some(width) => {
+                let chars_count = s.chars().count();
+                if chars_count >= width {
+                    self.write_str(s)
+                } else {
+                    let post_padding = self.padding(width - chars_count, ALIGN_LEFT)?;
+                    self.write_str(s)?;
+                    post_padding.write(self)
+                }
+            }
+        }
+    }
+
+    /// Like `pad`, but ignores the precision (which the caller has already applied).
+    pub(crate) fn pad_ignoring_precision(&mut self, s: &str) -> Result {
         match self.width {
             None => self.write_str(s),
             Some(width) => {

@@ -6,10 +6,15 @@ use crate::str::FromStr;
 
 mod float;
 mod int;
+mod nonzero;
 mod wrapping;
 
 pub use self::float::FpCategory;
 pub use self::wrapping::{Saturating, Wrapping};
+pub use self::nonzero::{
+    NonZeroI128, NonZeroI16, NonZeroI32, NonZeroI64, NonZeroI8, NonZeroIsize, NonZeroU128, NonZeroU16, NonZeroU32, NonZeroU64,
+    NonZeroU8, NonZeroUsize,
+};
 pub use crate::convert::TryFromIntError;
 
 /// Enum to store the various types of errors that can cause parsing an integer to fail.

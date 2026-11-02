@@ -77,6 +77,17 @@ func desugarAsync(c *ast.Crate) error {
 	}
 	rewrite := func(x ast.Expr) ast.Expr {
 		switch e := x.(type) {
+		case *ast.LitExpr:
+			if e.Kind != ast.LitCStr {
+				return x
+			}
+			// c"..." => CStr::from_bytes_with_nul_unchecked(b"...\0")
+			r, err := templExpr("unsafe { ::std::ffi::CStr::from_bytes_with_nul_unchecked(b"+quoteRust(e.Value+"\x00", '"')+") }", nil, e.Span)
+			if err != nil {
+				fail(err)
+				return x
+			}
+			return r
 		case *ast.AwaitExpr:
 			r, err := templExpr(awaitTemplate, map[string]ast.Expr{"__rg_await_operand": e.X}, e.Span)
 			if err != nil {

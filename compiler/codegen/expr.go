@@ -794,7 +794,7 @@ func (fc *fnGen) cast(x *ast.CastExpr, t Ty) string {
 	case from.Kind == TFloat && t.Kind == TInt:
 		return fmt.Sprintf("RG_F2I(%s, %s, %s, %s)", ct, v, intMinStr(t), intMaxStr(t))
 	case from.Kind == TAdt && from.Def.Adt.Kind == AdtEnum:
-		return fmt.Sprintf("((%s)(%s).tag)", ct, fc.spillIfNeeded(v, from))
+		return fmt.Sprintf("((%s)%s)", ct, fc.g.enumTag(from, fc.spillIfNeeded(v, from)))
 	case (from.Kind == TRef || from.Kind == TPtr) && (t.Kind == TPtr || t.Kind == TRef):
 		if from.Elem.IsUnsized() && !t.Elem.IsUnsized() {
 			return fmt.Sprintf("((%s)(%s).ptr)", ct, v)
@@ -934,7 +934,7 @@ func (fc *fnGen) tryExpr(x *ast.TryExpr, t Ty) string {
 	tcx := fc.g.tcx
 	if info.IsOption {
 		some := tcx.Lang("Some").Variant
-		fc.line("if (%s.tag != %d) {", v, some.Disc)
+		fc.line("if (!%s) {", fc.g.enumIs(st, v, some))
 		fc.ind++
 		none := tcx.Lang("None")
 		fc.emitReturn(fc.g.adtLiteral(info.OutTy, none, nil))
@@ -943,13 +943,13 @@ func (fc *fnGen) tryExpr(x *ast.TryExpr, t Ty) string {
 		if isZST(t) {
 			return fc.unit()
 		}
-		return fmt.Sprintf("%s.u.v%d.f0", v, some.Index)
+		return fmt.Sprintf("%s.f0", fc.g.enumPayload(st, v, some.Index))
 	}
 	ok := tcx.Lang("Ok").Variant
 	errD := tcx.Lang("Err")
-	fc.line("if (%s.tag != %d) {", v, ok.Disc)
+	fc.line("if (!%s) {", fc.g.enumIs(st, v, ok))
 	fc.ind++
-	e := fmt.Sprintf("%s.u.v%d.f0", v, errD.Variant.Index)
+	e := fmt.Sprintf("%s.f0", fc.g.enumPayload(st, v, errD.Variant.Index))
 	if info.From != nil {
 		e = fc.spill(fc.callResolved(info.From.Def, info.From.Args, []string{e}, info.OutErrTy), info.OutErrTy)
 	}
@@ -959,7 +959,7 @@ func (fc *fnGen) tryExpr(x *ast.TryExpr, t Ty) string {
 	if isZST(t) {
 		return fc.unit()
 	}
-	return fmt.Sprintf("%s.u.v%d.f0", v, ok.Index)
+	return fmt.Sprintf("%s.f0", fc.g.enumPayload(st, v, ok.Index))
 }
 
 // ---------------------------------------------------------------------------

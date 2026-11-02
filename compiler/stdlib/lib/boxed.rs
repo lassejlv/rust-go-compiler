@@ -39,12 +39,6 @@ impl<T> Box<T> {
             v
         }
     }
-
-    /// Constructs a new `Pin<Box<T>>` (pinning is a no-op here).
-    #[inline]
-    pub fn pin(x: T) -> Box<T> {
-        Box::new(x)
-    }
 }
 
 impl<T: ?Sized> Box<T> {

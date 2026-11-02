@@ -258,8 +258,69 @@ impl Read for &[u8] {
 
 /// A `BufRead` is a type of `Read`er which has an internal buffer.
 pub trait BufRead: Read {
+    /// Returns the contents of the internal buffer, filling it with more data from the inner reader if it is empty.
+    fn fill_buf(&mut self) -> Result<&[u8]>;
+
+    /// Tells this buffer that `amt` bytes have been consumed from the buffer.
+    fn consume(&mut self, amt: usize);
+
+    /// Checks if the underlying `Read` has any data left to be read.
+    fn has_data_left(&mut self) -> Result<bool> {
+        let b = self.fill_buf()?;
+        Ok(!b.is_empty())
+    }
+
+    /// Read all bytes into `buf` until the delimiter `byte` or EOF is reached.
+    fn read_until(&mut self, byte: u8, buf: &mut Vec<u8>) -> Result<usize> {
+        let mut read = 0;
+        loop {
+            let (done, used) = {
+                let available = self.fill_buf()?;
+                match available.iter().position(|&b| b == byte) {
+                    Some(i) => {
+                        buf.extend_from_slice(&available[..i + 1]);
+                        (true, i + 1)
+                    }
+                    None => {
+                        buf.extend_from_slice(available);
+                        (available.is_empty(), available.len())
+                    }
+                }
+            };
+            self.consume(used);
+            read += used;
+            if done || used == 0 {
+                return Ok(read);
+            }
+        }
+    }
+
+    /// Skips all bytes until the delimiter `byte` or EOF is reached.
+    fn skip_until(&mut self, byte: u8) -> Result<usize> {
+        let mut v = Vec::new();
+        self.read_until(byte, &mut v)
+    }
+
     /// Read all bytes until a newline (the `0xA` byte) is reached, and append them to the provided `String` buffer.
-    fn read_line(&mut self, buf: &mut String) -> Result<usize>;
+    fn read_line(&mut self, buf: &mut String) -> Result<usize> {
+        let mut bytes = Vec::new();
+        let n = self.read_until(b'\n', &mut bytes)?;
+        match crate::str::from_utf8(&bytes) {
+            Ok(s) => {
+                buf.push_str(s);
+                Ok(n)
+            }
+            Err(_) => Err(Error::new(ErrorKind::InvalidData, "stream did not contain valid UTF-8")),
+        }
+    }
+
+    /// Returns an iterator over the contents of this reader split on the byte `byte`.
+    fn split(self, byte: u8) -> Split<Self>
+    where
+        Self: Sized,
+    {
+        Split { buf: self, delim: byte }
+    }
 
     /// Returns an iterator over the lines of this reader.
     fn lines(self) -> Lines<Self>
@@ -267,6 +328,45 @@ pub trait BufRead: Read {
         Self: Sized,
     {
         Lines { buf: self }
+    }
+}
+
+impl BufRead for &[u8] {
+    fn fill_buf(&mut self) -> Result<&[u8]> {
+        Ok(*self)
+    }
+    fn consume(&mut self, amt: usize) {
+        *self = &self[amt..];
+    }
+}
+
+impl<B: BufRead + ?Sized> BufRead for &mut B {
+    fn fill_buf(&mut self) -> Result<&[u8]> {
+        (**self).fill_buf()
+    }
+    fn consume(&mut self, amt: usize) {
+        (**self).consume(amt)
+    }
+}
+
+impl<B: BufRead + ?Sized> BufRead for Box<B> {
+    fn fill_buf(&mut self) -> Result<&[u8]> {
+        (**self).fill_buf()
+    }
+    fn consume(&mut self, amt: usize) {
+        (**self).consume(amt)
+    }
+}
+
+impl<R: Read + ?Sized> Read for &mut R {
+    fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
+        (**self).read(buf)
+    }
+}
+
+impl<R: Read + ?Sized> Read for Box<R> {
+    fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
+        (**self).read(buf)
     }
 }
 
@@ -292,6 +392,160 @@ impl<B: BufRead> Iterator for Lines<B> {
             }
             Err(e) => Some(Err(e)),
         }
+    }
+}
+
+/// An iterator over the contents of an instance of `BufRead` split on a particular byte.
+pub struct Split<B> {
+    buf: B,
+    delim: u8,
+}
+
+impl<B: BufRead> Iterator for Split<B> {
+    type Item = Result<Vec<u8>>;
+    fn next(&mut self) -> Option<Result<Vec<u8>>> {
+        let mut buf = Vec::new();
+        match self.buf.read_until(self.delim, &mut buf) {
+            Ok(0) => None,
+            Ok(_n) => {
+                if buf[buf.len() - 1] == self.delim {
+                    buf.pop();
+                }
+                Some(Ok(buf))
+            }
+            Err(e) => Some(Err(e)),
+        }
+    }
+}
+
+/// The `BufReader<R>` struct adds buffering to any reader.
+pub struct BufReader<R> {
+    inner: R,
+    buf: Vec<u8>,
+    pos: usize,
+    filled: usize,
+}
+
+impl<R: Read> BufReader<R> {
+    /// Creates a new `BufReader<R>` with a default buffer capacity (8 KiB).
+    pub fn new(inner: R) -> BufReader<R> {
+        BufReader::with_capacity(8192, inner)
+    }
+
+    /// Creates a new `BufReader<R>` with the specified buffer capacity.
+    pub fn with_capacity(capacity: usize, inner: R) -> BufReader<R> {
+        let mut buf = Vec::with_capacity(capacity);
+        buf.resize(capacity, 0);
+        BufReader { inner, buf, pos: 0, filled: 0 }
+    }
+}
+
+impl<R> BufReader<R> {
+    /// Gets a reference to the underlying reader.
+    pub fn get_ref(&self) -> &R {
+        &self.inner
+    }
+
+    /// Gets a mutable reference to the underlying reader.
+    pub fn get_mut(&mut self) -> &mut R {
+        &mut self.inner
+    }
+
+    /// Returns a reference to the internally buffered data.
+    pub fn buffer(&self) -> &[u8] {
+        &self.buf[self.pos..self.filled]
+    }
+
+    /// Returns the number of bytes the internal buffer can hold at once.
+    pub fn capacity(&self) -> usize {
+        self.buf.len()
+    }
+
+    /// Unwraps this `BufReader<R>`, returning the underlying reader (buffered data is lost).
+    pub fn into_inner(self) -> R {
+        self.inner
+    }
+}
+
+impl<R: Read> Read for BufReader<R> {
+    fn read(&mut self, out: &mut [u8]) -> Result<usize> {
+        if self.pos == self.filled && out.len() >= self.buf.len() {
+            return self.inner.read(out);
+        }
+        let n = {
+            let available = self.fill_buf()?;
+            let n = if out.len() < available.len() { out.len() } else { available.len() };
+            out[..n].copy_from_slice(&available[..n]);
+            n
+        };
+        self.consume(n);
+        Ok(n)
+    }
+}
+
+impl<R: Read> BufRead for BufReader<R> {
+    fn fill_buf(&mut self) -> Result<&[u8]> {
+        if self.pos >= self.filled {
+            let n = self.inner.read(&mut self.buf)?;
+            self.pos = 0;
+            self.filled = n;
+        }
+        Ok(&self.buf[self.pos..self.filled])
+    }
+    fn consume(&mut self, amt: usize) {
+        self.pos += amt;
+        if self.pos > self.filled {
+            self.pos = self.filled;
+        }
+    }
+}
+
+impl<R: fmt::Debug> fmt::Debug for BufReader<R> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("BufReader")
+            .field("reader", &self.inner)
+            .field("buffer", &format_args!("{}/{}", self.filled - self.pos, self.buf.len()))
+            .finish()
+    }
+}
+
+/// Reads all bytes from a reader into a new `String`.
+pub fn read_to_string<R: Read>(reader: R) -> Result<String> {
+    let mut reader = reader;
+    let mut buf = String::new();
+    reader.read_to_string(&mut buf)?;
+    Ok(buf)
+}
+
+/// Empty ignores any data written via `Write`, and will always be empty (returning zero bytes) when read via `Read`.
+pub struct Empty {
+    _priv: (),
+}
+
+/// Creates a value that is always at EOF for reads, and ignores all data written.
+pub const fn empty() -> Empty {
+    Empty { _priv: () }
+}
+
+impl Read for Empty {
+    fn read(&mut self, _buf: &mut [u8]) -> Result<usize> {
+        Ok(0)
+    }
+}
+
+impl BufRead for Empty {
+    fn fill_buf(&mut self) -> Result<&[u8]> {
+        Ok(&[])
+    }
+    fn consume(&mut self, _amt: usize) {}
+}
+
+impl Write for Empty {
+    fn write(&mut self, buf: &[u8]) -> Result<usize> {
+        Ok(buf.len())
+    }
+    fn flush(&mut self) -> Result<()> {
+        Ok(())
     }
 }
 
@@ -402,8 +656,7 @@ impl<'a> Write for StderrLock<'a> {
     }
 }
 
-/// A handle to the standard input stream of a process. Input is not
-/// supported by this runtime: reads always report end of file.
+/// A handle to the standard input stream of a process.
 pub struct Stdin {
     _priv: (),
 }
@@ -418,6 +671,25 @@ pub fn stdin() -> Stdin {
     Stdin { _priv: () }
 }
 
+// The process-wide stdin buffer (in the runtime).
+fn stdin_fill_buf<'a>() -> Result<&'a [u8]> {
+    unsafe {
+        let n = intrinsics::stdin_fill();
+        if n < 0 {
+            return Err(Error::new(ErrorKind::Other, "failed to read from stdin"));
+        }
+        Ok(crate::slice::from_raw_parts(intrinsics::stdin_ptr(), n as usize))
+    }
+}
+
+fn stdin_read(out: &mut [u8]) -> Result<usize> {
+    let available = stdin_fill_buf()?;
+    let n = if out.len() < available.len() { out.len() } else { available.len() };
+    out[..n].copy_from_slice(&available[..n]);
+    unsafe { intrinsics::stdin_consume(n) };
+    Ok(n)
+}
+
 impl Stdin {
     /// Locks this handle to the standard input stream.
     pub fn lock(&self) -> StdinLock<'static> {
@@ -426,31 +698,84 @@ impl Stdin {
 
     /// Locks this handle and reads a line of input, appending it to the specified buffer.
     pub fn read_line(&self, buf: &mut String) -> Result<usize> {
-        let _ = buf;
-        Ok(0)
+        self.lock().read_line(buf)
     }
 
     /// Consumes this handle and returns an iterator over input lines.
     pub fn lines(self) -> Lines<StdinLock<'static>> {
         self.lock().lines()
     }
+
+    /// Consumes this handle and returns an iterator over input bytes split at the given byte.
+    pub fn split(self, byte: u8) -> Split<StdinLock<'static>> {
+        self.lock().split(byte)
+    }
+
+    /// Reads all bytes until EOF into `buf` (as a `String`).
+    pub fn read_to_string(&mut self, buf: &mut String) -> Result<usize> {
+        self.lock().read_to_string(buf)
+    }
+
+    /// Reads all bytes until EOF into `buf`.
+    pub fn read_to_end(&mut self, buf: &mut Vec<u8>) -> Result<usize> {
+        self.lock().read_to_end(buf)
+    }
 }
 
 impl Read for Stdin {
-    fn read(&mut self, _buf: &mut [u8]) -> Result<usize> {
-        Ok(0)
+    fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
+        stdin_read(buf)
     }
 }
 
 impl<'a> Read for StdinLock<'a> {
-    fn read(&mut self, _buf: &mut [u8]) -> Result<usize> {
-        Ok(0)
+    fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
+        stdin_read(buf)
     }
 }
 
 impl<'a> BufRead for StdinLock<'a> {
-    fn read_line(&mut self, _buf: &mut String) -> Result<usize> {
-        Ok(0)
+    fn fill_buf(&mut self) -> Result<&[u8]> {
+        stdin_fill_buf()
+    }
+    fn consume(&mut self, amt: usize) {
+        unsafe { intrinsics::stdin_consume(amt) }
+    }
+}
+
+impl fmt::Debug for Stdin {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Stdin").finish_non_exhaustive()
+    }
+}
+
+impl fmt::Debug for Stderr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Stderr").finish_non_exhaustive()
+    }
+}
+
+/// A trait to determine whether a descriptor/handle refers to a terminal/tty.
+pub trait IsTerminal {
+    /// Returns `true` if the descriptor/handle refers to a terminal/tty.
+    fn is_terminal(&self) -> bool;
+}
+
+impl IsTerminal for Stdin {
+    fn is_terminal(&self) -> bool {
+        false
+    }
+}
+
+impl IsTerminal for Stdout {
+    fn is_terminal(&self) -> bool {
+        false
+    }
+}
+
+impl IsTerminal for Stderr {
+    fn is_terminal(&self) -> bool {
+        false
     }
 }
 

@@ -91,8 +91,8 @@ func (fc *fnGen) ptest(p ast.Pat, pl pplace, t Ty) string {
 		var parts []string
 		prefix := pl.s
 		if t.Def.Adt.Kind == AdtEnum {
-			parts = append(parts, fmt.Sprintf("%s.tag == %d", pl.s, v.Disc))
-			prefix = fmt.Sprintf("%s.u.v%d", pl.s, v.Index)
+			parts = append(parts, fc.g.enumIs(t, pl.s, v))
+			prefix = fc.g.enumPayload(t, pl.s, v.Index)
 		}
 		fc.seqFields(x.Elems, len(fts), func(pi, fi int) {
 			parts = append(parts, fc.ptest(x.Elems[pi], pplace{s: fmt.Sprintf("%s.f%d", prefix, fi)}, fts[fi]))
@@ -104,8 +104,8 @@ func (fc *fnGen) ptest(p ast.Pat, pl pplace, t Ty) string {
 		var parts []string
 		prefix := pl.s
 		if t.Def.Adt.Kind == AdtEnum {
-			parts = append(parts, fmt.Sprintf("%s.tag == %d", pl.s, v.Disc))
-			prefix = fmt.Sprintf("%s.u.v%d", pl.s, v.Index)
+			parts = append(parts, fc.g.enumIs(t, pl.s, v))
+			prefix = fc.g.enumPayload(t, pl.s, v.Index)
 		}
 		for _, f := range x.Fields {
 			fi := v.FieldIndex(f.Name.Name)
@@ -164,7 +164,7 @@ func (fc *fnGen) pathTest(vr *typeck.ValueRes, pl pplace, t Ty) string {
 	switch vr.Kind {
 	case typeck.VUnitCtor:
 		if vr.Def.Kind == DefVariant {
-			return fmt.Sprintf("(%s.tag == %d)", pl.s, vr.Def.Variant.Disc)
+			return fc.g.enumIs(t, pl.s, vr.Def.Variant)
 		}
 		return "1"
 	case typeck.VConst:
@@ -189,7 +189,7 @@ func (fc *fnGen) eqTest(pl pplace, v string, t Ty) string {
 		return fmt.Sprintf("(%s == %s)", pl.s, v)
 	case t.Kind == TAdt && t.Def.Adt.Kind == AdtEnum:
 		// fieldless enums compare by tag
-		return fmt.Sprintf("(%s.tag == (%s).tag)", pl.s, v)
+		return fmt.Sprintf("(%s == %s)", fc.g.enumTag(t, pl.s), fc.g.enumTag(t, fc.spill(v, t)))
 	}
 	// fall back to PartialEq::eq
 	eq := fc.g.tcx.Lang("eq")
@@ -376,7 +376,7 @@ func (fc *fnGen) pbind(p ast.Pat, pl pplace, t Ty, moves *[]string, inOr bool) {
 		fts := fc.g.fieldTypes(t, v.Index)
 		prefix := pl.s
 		if t.Def.Adt.Kind == AdtEnum {
-			prefix = fmt.Sprintf("%s.u.v%d", pl.s, v.Index)
+			prefix = fc.g.enumPayload(t, pl.s, v.Index)
 		}
 		fc.seqFields(x.Elems, len(fts), func(pi, fi int) {
 			fc.pbind(x.Elems[pi], pplace{s: fmt.Sprintf("%s.f%d", prefix, fi)}, fts[fi], moves, inOr)
@@ -386,7 +386,7 @@ func (fc *fnGen) pbind(p ast.Pat, pl pplace, t Ty, moves *[]string, inOr bool) {
 		fts := fc.g.fieldTypes(t, v.Index)
 		prefix := pl.s
 		if t.Def.Adt.Kind == AdtEnum {
-			prefix = fmt.Sprintf("%s.u.v%d", pl.s, v.Index)
+			prefix = fc.g.enumPayload(t, pl.s, v.Index)
 		}
 		for _, f := range x.Fields {
 			fi := v.FieldIndex(f.Name.Name)

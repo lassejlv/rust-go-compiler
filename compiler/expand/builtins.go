@@ -59,7 +59,6 @@ func init() {
 		"include":         unsupportedMac,
 		"include_str":     unsupportedMac,
 		"include_bytes":   unsupportedMac,
-		"thread_local":    unsupportedMac,
 		"concat_idents":   unsupportedMac,
 		"compile_error":   (*Expander).compileErrorMac,
 	}

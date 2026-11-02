@@ -218,7 +218,7 @@ macro_rules! __std_float_impl {
 
             /// Raw transmutation from the unsigned integer of the same width.
             #[inline]
-            pub fn from_bits(v: $bits) -> $t {
+            pub const fn from_bits(v: $bits) -> $t {
                 unsafe { intrinsics::transmute::<$bits, $t>(v) }
             }
 
@@ -594,7 +594,7 @@ impl f64 {
     /// Maximum possible power of 10 exponent.
     pub const MAX_10_EXP: i32 = 308;
     /// Not a Number (NaN).
-    pub const NAN: f64 = 0.0 / 0.0;
+    pub const NAN: f64 = f64::from_bits(0x7ff8_0000_0000_0000);
     /// Infinity (∞).
     pub const INFINITY: f64 = 1.0 / 0.0;
     /// Negative infinity (−∞).
@@ -625,7 +625,7 @@ impl f32 {
     /// Maximum possible power of 10 exponent.
     pub const MAX_10_EXP: i32 = 38;
     /// Not a Number (NaN).
-    pub const NAN: f32 = 0.0 / 0.0;
+    pub const NAN: f32 = f32::from_bits(0x7fc0_0000);
     /// Infinity (∞).
     pub const INFINITY: f32 = 1.0 / 0.0;
     /// Negative infinity (−∞).

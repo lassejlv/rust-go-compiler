@@ -199,12 +199,20 @@ func (g *Gen) defineType(t Ty) {
 				}
 				fmt.Fprintf(&b, " %s f%d;", g.ctype(ft), i)
 			}
-			b.WriteString(" };\n")
+			if reprPacked(d) {
+				b.WriteString(" } __attribute__((packed));\n")
+			} else {
+				b.WriteString(" };\n")
+			}
 		case AdtEnum:
 			for vi := range d.Adt.Variants {
 				for _, ft := range g.fieldTypes(t, vi) {
 					g.defineByValue(ft)
 				}
+			}
+			if n := g.niche(t); n != nil {
+				fmt.Fprintf(&b, "struct %s { %s f0; };\n", ti.name, g.ctype(g.fieldTypes(t, n.data.Index)[0]))
+				break
 			}
 			fmt.Fprintf(&b, "struct %s { %s tag; union {", ti.name, g.tagType(d))
 			for vi := range d.Adt.Variants {
@@ -430,12 +438,12 @@ func (g *Gen) emitDropGlue(t Ty) {
 				}
 			}
 		case AdtEnum:
-			b.WriteString("  switch (p->tag) {\n")
+			fmt.Fprintf(&b, "  switch (%s) {\n", g.enumTag(t, "(*p)"))
 			for vi, v := range d.Adt.Variants {
 				var drops []string
 				for i, ft := range g.fieldTypes(t, vi) {
 					if g.needsDrop(ft) {
-						drops = append(drops, fmt.Sprintf("%s(&p->u.v%d.f%d);", g.dropFn(ft), vi, i))
+						drops = append(drops, fmt.Sprintf("%s(&%s.f%d);", g.dropFn(ft), g.enumPayload(t, "(*p)", vi), i))
 					}
 				}
 				if len(drops) > 0 {
@@ -591,4 +599,18 @@ func (g *Gen) callableThunk(t Ty) string {
 	fmt.Fprintf(&g.protos, "static %s %s(%s);\n", g.ctype(out), name, strings.Join(ps, ", "))
 	fmt.Fprintf(&g.fns, "static %s %s(%s) { return %s(%s); }\n", g.ctype(out), name, strings.Join(ps, ", "), callee, strings.Join(as, ", "))
 	return name
+}
+
+// reprPacked reports #[repr(packed)] / #[repr(C, packed)].
+func reprPacked(d *Def) bool {
+	for _, a := range d.Attrs {
+		if a.Path == "repr" && len(a.Tokens) > 0 && a.Tokens[0].Delim == '(' {
+			for _, tt := range a.Tokens[0].Inner {
+				if tt.Tok.Text == "packed" {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }

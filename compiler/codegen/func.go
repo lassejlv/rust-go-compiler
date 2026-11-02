@@ -567,8 +567,8 @@ func (fc *fnGen) forExpr(x *ast.ForExpr) string {
 	next := fc.callResolved(info.Next.Def, info.Next.Args, []string{"&" + it}, optTy)
 	n := fc.spill(next, optTy)
 	someV := fc.g.tcx.Lang("Some").Variant
-	fc.line("if (%s.tag != %d) goto %s;", n, someV.Disc, li.brk)
-	item := fmt.Sprintf("%s.u.v%d.f0", n, someV.Index)
+	fc.line("if (!%s) goto %s;", fc.g.enumIs(optTy, n, someV), li.brk)
+	item := fmt.Sprintf("%s.f0", fc.g.enumPayload(optTy, n, someV.Index))
 	fc.declarePatLocals(x.Pat)
 	fc.bindPat(x.Pat, item, info.ItemTy, true)
 	fc.blockValue(x.Body, TyUnit)

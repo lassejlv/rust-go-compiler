@@ -44,6 +44,14 @@ static __thread size_t rg_pmsg_len;
 static __thread int rg_pmsg_static;
 typedef struct RgTry { jmp_buf jb; size_t csbase; struct RgTry* prev; } RgTry;
 static __thread RgTry* rg_try_top;
+/* Cleanup-stack switching (for coroutines): each execution context owns a
+   cleanup stack (array + count + capacity) and its innermost catch frame.
+   rg_cs_swap installs `s` as the current thread's state and returns the
+   previous one; a fresh context starts from (RgCsState){0}. */
+typedef struct { RgCleanup* cs; size_t n, cap; struct RgTry* try_top; } RgCsState;
+/* Simpler form: the current stack pointer/count (capacity kept internally). */
+static RgCleanup* rg_cs_save(size_t* n) { *n = rg_csn; return rg_cs; }
+
 static int rg_first_panic = 1;
 
 __attribute__((noinline)) static void rg_cs_grow(void) {
@@ -54,6 +62,14 @@ __attribute__((noinline)) static void rg_cs_grow(void) {
 }
 #define RG_CS_PUSH(P, F, FL) do { if (__builtin_expect(rg_csn >= rg_cscap, 0)) rg_cs_grow(); rg_cs[rg_csn] = (RgCleanup){ (void*)(P), (void (*)(void*))(F), (FL) }; rg_csn++; } while (0)
 #define RG_CS_POP(N) (rg_csn -= (N))
+static RgCsState rg_cs_swap(RgCsState s) {
+  RgCsState old = { rg_cs, rg_csn, rg_cscap, rg_try_top };
+  rg_cs = s.cs; rg_csn = s.n; rg_cscap = s.cap; rg_try_top = s.try_top;
+  return old;
+}
+/* Restores a stack obtained from rg_cs_save on this thread (capacity must not
+   have changed meanwhile: use rg_cs_swap for independent stacks). */
+static void rg_cs_restore(RgCleanup* base, size_t n) { if (base != rg_cs) { rg_cs = base; rg_cscap = n; } rg_csn = n; }
 
 static void rg_tls_run_dtors(void);
 static void rg_atexit(void) { rg_tls_run_dtors(); }
@@ -85,19 +101,20 @@ static void rg_thread_name_get(const char** p, int* n) {
 __attribute__((noreturn)) static void rg_unwind(const char* msg, uint64_t mlen, int is_static) {
   size_t base = rg_try_top ? rg_try_top->csbase : 0;
   rg_panicking = 1;
-  while (rg_csn > base) {
-    rg_csn--;
-    RgCleanup c = rg_cs[rg_csn];
-    if (*c.flag) { *c.flag = 0; c.f(c.p); }
-  }
   if (rg_try_top) {
+    /* copy the message first: the destructors may free it */
     char* m = (char*)malloc(mlen + 1);
     if (mlen) memcpy(m, msg, mlen);
     m[mlen] = 0;
     free(rg_pmsg);
     rg_pmsg = m; rg_pmsg_len = mlen; rg_pmsg_static = is_static;
-    longjmp(rg_try_top->jb, 1);
   }
+  while (rg_csn > base) {
+    rg_csn--;
+    RgCleanup c = rg_cs[rg_csn];
+    if (*c.flag) { *c.flag = 0; c.f(c.p); }
+  }
+  if (rg_try_top) longjmp(rg_try_top->jb, 1);
   fflush(stdout);
   if (!rg_is_main) pthread_exit(NULL);
   exit(101);
@@ -108,7 +125,7 @@ __attribute__((noreturn, cold)) static void rg_panic_full(const char* msg, uint6
   rg_thread_name_get(&tn, &tl);
   fflush(stdout);
   flockfile(stderr);
-  fprintf(stderr, "thread '%.*s' panicked at %.*s:%u:%u:\n%.*s\n", tl, tn, (int)flen, file, line, col, (int)mlen, msg);
+  fprintf(stderr, "\nthread '%.*s' (%ld) panicked at %.*s:%u:%u:\n%.*s\n", tl, tn, (long)syscall(SYS_gettid), (int)flen, file, line, col, (int)mlen, msg);
   if (__atomic_exchange_n(&rg_first_panic, 0, __ATOMIC_SEQ_CST))
     fprintf(stderr, "note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n");
   funlockfile(stderr);
@@ -147,7 +164,7 @@ __attribute__((noreturn, cold)) static void rg_panic_bounds(uint64_t idx, uint64
 
 /* Calls f(data), catching a panic: returns 1 if f panicked (the message is
    then available through rg_pmsg). */
-static uint8_t rg_try(Unit (*f)(uint8_t*), uint8_t* data) {
+__attribute__((noinline)) static uint8_t rg_try(Unit (*f)(uint8_t*), uint8_t* data) {
   RgTry t;
   t.csbase = rg_csn;
   t.prev = rg_try_top;

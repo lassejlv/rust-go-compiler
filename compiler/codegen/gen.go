@@ -47,6 +47,7 @@ type Gen struct {
 	dropImplCache  map[Ty]*instance
 
 	vtables map[string]string
+	nicheCache map[Ty]*nicheLayout
 	statics_ map[*Def]string
 	staticInit []string
 	strN int
@@ -65,6 +66,7 @@ func New(tcx *typeck.Tcx) *Gen {
 		needsDropCache: map[Ty]bool{},
 		dropImplCache:  map[Ty]*instance{},
 		vtables:        map[string]string{},
+		nicheCache:     map[Ty]*nicheLayout{},
 		statics_:       map[*Def]string{},
 	}
 }
@@ -300,6 +302,12 @@ func (g *Gen) adtLiteral(t Ty, d *Def, fields []string) string {
 	ct := g.ctype(t)
 	if t.Def.Adt.Kind == AdtEnum {
 		v := d.Variant
+		if n := g.niche(t); n != nil {
+			if v == n.empty {
+				return fmt.Sprintf("((%s){})", ct)
+			}
+			return fmt.Sprintf("((%s){ .f0 = %s })", ct, fields[0])
+		}
 		var fs []string
 		for i, f := range fields {
 			fs = append(fs, fmt.Sprintf(".f%d = %s", i, f))

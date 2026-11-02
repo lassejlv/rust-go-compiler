@@ -76,9 +76,9 @@ impl<T> Rc<T> {
         }
     }
 
-    /// Constructs a new `Pin<Rc<T>>` (pinning is a no-op here).
-    pub fn pin(value: T) -> Rc<T> {
-        Rc::new(value)
+    /// Constructs a new `Pin<Rc<T>>`.
+    pub fn pin(value: T) -> crate::pin::Pin<Rc<T>> {
+        unsafe { crate::pin::Pin::new_unchecked(Rc::new(value)) }
     }
 
     /// Returns the inner value, if the `Rc` has exactly one strong reference.

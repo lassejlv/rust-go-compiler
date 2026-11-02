@@ -8,7 +8,7 @@ use crate::intrinsics;
 #[cold]
 #[track_caller]
 pub fn panic_str(msg: &str, file: &str, line: u32, col: u32) -> ! {
-    unsafe { intrinsics::panic_impl(msg, file, line, col) }
+    unsafe { intrinsics::panic_impl_static(msg, file, line, col) }
 }
 
 /// Panics with a formatted message (`panic!("...", args)`).
@@ -16,6 +16,9 @@ pub fn panic_str(msg: &str, file: &str, line: u32, col: u32) -> ! {
 #[cold]
 #[track_caller]
 pub fn panic_fmt(args: fmt::Arguments<'_>, file: &str, line: u32, col: u32) -> ! {
+    if let Some(s) = args.as_str() {
+        unsafe { intrinsics::panic_impl_static(s, file, line, col) }
+    }
     let s = args.into_string();
     unsafe { intrinsics::panic_impl(s.as_str(), file, line, col) }
 }

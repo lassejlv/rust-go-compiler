@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"rustgo/compiler/stdlib"
 	"strings"
 	"testing"
 
@@ -625,7 +626,6 @@ func TestLiteralBuiltins(t *testing.T) {
 	mustErr(t, `fn main() { let x = include_str!("a.txt"); }`, "`include_str!` is not supported")
 	mustErr(t, `compile_error!("custom failure");`, "custom failure")
 	mustErr(t, `fn main() { compile_error!("in fn"); }`, "in fn")
-	mustErr(t, `thread_local! { static X: i32 = 1; }`, "not supported")
 	mustErr(t, `fn main() { nosuch!(1); }`, "cannot find macro `nosuch` in this scope")
 }
 
@@ -1186,6 +1186,15 @@ func TestCorpus(t *testing.T) {
 	if len(files) == 0 {
 		t.Skip("no test programs")
 	}
+	// std defines some macros (thread_local!, ...): expand it first.
+	e := New()
+	stdCrate, err := stdlib.LoadCrate(func(name, src string) int { return lexer.AddFile(name, src) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.ExpandCrate(stdCrate, "std"); err != nil {
+		t.Fatal(err)
+	}
 	for _, f := range files {
 		src, err := os.ReadFile(f)
 		if err != nil {
@@ -1196,7 +1205,7 @@ func TestCorpus(t *testing.T) {
 		if err != nil {
 			continue
 		}
-		if err := New().ExpandCrate(c, "main"); err != nil {
+		if err := e.ExpandCrate(c, "main"); err != nil {
 			t.Errorf("%s: %v", f, err)
 			continue
 		}

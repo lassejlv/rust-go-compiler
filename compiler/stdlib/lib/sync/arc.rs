@@ -1,7 +1,7 @@
-//! Thread-safe reference-counting pointers (non-atomic implementation).
+//! Thread-safe reference-counting pointers (atomic reference counts).
 
 use crate::borrow::Borrow;
-use crate::cell::Cell;
+use crate::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use crate::cmp::Ordering;
 use crate::fmt;
 use crate::hash::{Hash, Hasher};
@@ -13,8 +13,8 @@ use crate::ops::Deref;
 // The heap part of an `Arc`: the counts followed by the (possibly unsized)
 // value. `weak` counts the weak pointers plus one for all strong pointers.
 struct ArcInner<T: ?Sized> {
-    strong: Cell<usize>,
-    weak: Cell<usize>,
+    strong: AtomicUsize,
+    weak: AtomicUsize,
     value: T,
 }
 
@@ -54,7 +54,7 @@ unsafe fn allocate_for_slice<T>(len: usize) -> (*mut ArcInner<[T]>, *mut T) {
 impl<T> Arc<T> {
     /// Constructs a new `Arc<T>`.
     pub fn new(value: T) -> Arc<T> {
-        let b = Box::new(ArcInner { strong: Cell::new(1), weak: Cell::new(1), value });
+        let b = Box::new(ArcInner { strong: AtomicUsize::new(1), weak: AtomicUsize::new(1), value });
         Arc { ptr: Box::into_raw(b) }
     }
 
@@ -65,29 +65,28 @@ impl<T> Arc<T> {
     {
         unsafe {
             let p = crate::alloc::alloc_array::<ArcInner<T>>(1);
-            intrinsics::write(&mut (*p).strong as *mut Cell<usize>, Cell::new(0));
-            intrinsics::write(&mut (*p).weak as *mut Cell<usize>, Cell::new(1));
+            intrinsics::write(&mut (*p).strong as *mut AtomicUsize, AtomicUsize::new(0));
+            intrinsics::write(&mut (*p).weak as *mut AtomicUsize, AtomicUsize::new(1));
             let weak = Weak { ptr: p };
             let data = data_fn(&weak);
             intrinsics::write(&mut (*p).value as *mut T, data);
-            (*p).strong.set(1);
+            (*p).strong.store(1, SeqCst);
             mem::forget(weak);
             Arc { ptr: p }
         }
     }
 
-    /// Constructs a new `Pin<Arc<T>>` (pinning is a no-op here).
-    pub fn pin(value: T) -> Arc<T> {
-        Arc::new(value)
+    /// Constructs a new `Pin<Arc<T>>`.
+    pub fn pin(value: T) -> crate::pin::Pin<Arc<T>> {
+        unsafe { crate::pin::Pin::new_unchecked(Arc::new(value)) }
     }
 
     /// Returns the inner value, if the `Arc` has exactly one strong reference.
     pub fn try_unwrap(this: Self) -> Result<T, Self> {
-        if Arc::strong_count(&this) == 1 {
+        if this.inner().strong.compare_exchange(1, 0, SeqCst, SeqCst).is_ok() {
             unsafe {
                 let p = this.ptr;
                 let val = intrinsics::read(&(*p).value as *const T);
-                (*p).strong.set(0);
                 mem::forget(this);
                 // Drop the implicit weak reference held by the strong ones.
                 drop(Weak { ptr: p });
@@ -135,8 +134,8 @@ impl<T: Clone> Arc<T> {
             unsafe {
                 let old = this.ptr;
                 let fresh = Arc::new(intrinsics::read(&(*old).value as *const T));
-                (*old).strong.set(0);
-                (*old).weak.set((*old).weak.get() - 1);
+                (*old).strong.store(0, SeqCst);
+                (*old).weak.fetch_sub(1, SeqCst);
                 intrinsics::write(this as *mut Arc<T>, fresh);
             }
         }
@@ -158,21 +157,20 @@ impl<T: ?Sized> Arc<T> {
 
     /// Creates a new `Weak` pointer to this allocation.
     pub fn downgrade(this: &Self) -> Weak<T> {
-        let w = this.inner().weak.get();
-        this.inner().weak.set(w + 1);
+        this.inner().weak.fetch_add(1, SeqCst);
         Weak { ptr: this.ptr }
     }
 
     /// Gets the number of `Weak` pointers to this allocation.
     #[inline]
     pub fn weak_count(this: &Self) -> usize {
-        this.inner().weak.get() - 1
+        this.inner().weak.load(SeqCst) - 1
     }
 
     /// Gets the number of strong (`Arc`) pointers to this allocation.
     #[inline]
     pub fn strong_count(this: &Self) -> usize {
-        this.inner().strong.get()
+        this.inner().strong.load(SeqCst)
     }
 
     /// Increments the strong reference count on the `Arc<T>` associated with the provided pointer by one.
@@ -181,8 +179,15 @@ impl<T: ?Sized> Arc<T> {
         T: Sized,
     {
         let rc = mem::ManuallyDrop::new(Arc::<T>::from_raw(ptr));
-        let s = rc.inner().strong.get();
-        rc.inner().strong.set(s + 1);
+        rc.inner().strong.fetch_add(1, SeqCst);
+    }
+
+    /// Decrements the strong reference count on the `Arc<T>` associated with the provided pointer by one.
+    pub unsafe fn decrement_strong_count(ptr: *const T)
+    where
+        T: Sized,
+    {
+        drop(Arc::<T>::from_raw(ptr));
     }
 
     /// Returns a mutable reference into the given `Arc`, if there are no other `Arc` or `Weak` pointers to the same allocation.
@@ -205,8 +210,7 @@ impl<T: ?Sized> Arc<T> {
 impl<T: ?Sized> Clone for Arc<T> {
     #[inline]
     fn clone(&self) -> Arc<T> {
-        let s = self.inner().strong.get();
-        self.inner().strong.set(s + 1);
+        self.inner().strong.fetch_add(1, SeqCst);
         Arc { ptr: self.ptr }
     }
 }
@@ -215,13 +219,9 @@ impl<T: ?Sized> Drop for Arc<T> {
     fn drop(&mut self) {
         unsafe {
             let p = self.ptr;
-            let s = (*p).strong.get() - 1;
-            (*p).strong.set(s);
-            if s == 0 {
+            if (*p).strong.fetch_sub(1, SeqCst) == 1 {
                 intrinsics::drop_in_place(&mut (*p).value as *mut T);
-                let w = (*p).weak.get() - 1;
-                (*p).weak.set(w);
-                if w == 0 {
+                if (*p).weak.fetch_sub(1, SeqCst) == 1 {
                     let size = intrinsics::size_of_val(p as *const ArcInner<T>);
                     let align = intrinsics::align_of_val(p as *const ArcInner<T>);
                     intrinsics::dealloc(p as *mut u8, size, align);
@@ -390,12 +390,15 @@ impl<T: ?Sized> Weak<T> {
             return None;
         }
         unsafe {
-            let s = (*self.ptr).strong.get();
-            if s == 0 {
-                None
-            } else {
-                (*self.ptr).strong.set(s + 1);
-                Some(Arc { ptr: self.ptr })
+            let mut s = (*self.ptr).strong.load(SeqCst);
+            loop {
+                if s == 0 {
+                    return None;
+                }
+                match (*self.ptr).strong.compare_exchange_weak(s, s + 1, SeqCst, SeqCst) {
+                    Ok(_) => return Some(Arc { ptr: self.ptr }),
+                    Err(old) => s = old,
+                }
             }
         }
     }
@@ -405,7 +408,7 @@ impl<T: ?Sized> Weak<T> {
         if self.is_dangling() {
             0
         } else {
-            unsafe { (*self.ptr).strong.get() }
+            unsafe { (*self.ptr).strong.load(SeqCst) }
         }
     }
 
@@ -415,9 +418,9 @@ impl<T: ?Sized> Weak<T> {
             return 0;
         }
         unsafe {
-            let strong = (*self.ptr).strong.get();
+            let strong = (*self.ptr).strong.load(SeqCst);
             if strong > 0 {
-                (*self.ptr).weak.get() - 1
+                (*self.ptr).weak.load(SeqCst) - 1
             } else {
                 0
             }
@@ -441,8 +444,7 @@ impl<T: ?Sized> Clone for Weak<T> {
     fn clone(&self) -> Weak<T> {
         if !self.is_dangling() {
             unsafe {
-                let w = (*self.ptr).weak.get();
-                (*self.ptr).weak.set(w + 1);
+                (*self.ptr).weak.fetch_add(1, SeqCst);
             }
         }
         Weak { ptr: self.ptr }
@@ -456,9 +458,7 @@ impl<T: ?Sized> Drop for Weak<T> {
         }
         unsafe {
             let p = self.ptr;
-            let w = (*p).weak.get() - 1;
-            (*p).weak.set(w);
-            if w == 0 {
+            if (*p).weak.fetch_sub(1, SeqCst) == 1 {
                 let size = intrinsics::size_of_val(p as *const ArcInner<T>);
                 let align = intrinsics::align_of_val(p as *const ArcInner<T>);
                 intrinsics::dealloc(p as *mut u8, size, align);

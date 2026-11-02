@@ -18,6 +18,103 @@ pub trait Error: Debug + Display {
     fn cause(&self) -> Option<&dyn Error> {
         None
     }
+
+    /// Gets the `TypeId` of `self` (used for downcasting).
+    #[doc(hidden)]
+    fn type_id(&self, _: private::Internal) -> crate::any::TypeId
+    where
+        Self: 'static,
+    {
+        crate::any::TypeId::of::<Self>()
+    }
+}
+
+mod private {
+    /// A type that cannot be named outside std (seals `Error::type_id`).
+    #[derive(Debug)]
+    pub struct Internal;
+}
+
+// NOTE: rustgo models `dyn Error + Send` and `dyn Error + Send + Sync` as the
+// same type (one auto-trait flag), so the second block covers both.
+impl dyn Error {
+    /// Returns `true` if the inner type is the same as `T`.
+    #[inline]
+    pub fn is<T: Error + 'static>(&self) -> bool {
+        crate::any::TypeId::of::<T>() == self.type_id(private::Internal)
+    }
+
+    /// Returns some reference to the inner value if it is of type `T`, or `None` if it isn't.
+    #[inline]
+    pub fn downcast_ref<T: Error + 'static>(&self) -> Option<&T> {
+        if self.is::<T>() {
+            unsafe { Some(&*(self as *const dyn Error as *const T)) }
+        } else {
+            None
+        }
+    }
+
+    /// Returns some mutable reference to the inner value if it is of type `T`, or `None` if it isn't.
+    #[inline]
+    pub fn downcast_mut<T: Error + 'static>(&mut self) -> Option<&mut T> {
+        if self.is::<T>() {
+            unsafe { Some(&mut *(self as *mut dyn Error as *mut T)) }
+        } else {
+            None
+        }
+    }
+}
+
+impl (dyn Error + Send) {
+    /// Returns `true` if the inner type is the same as `T`.
+    #[inline]
+    pub fn is<T: Error + 'static>(&self) -> bool {
+        crate::any::TypeId::of::<T>() == self.type_id(private::Internal)
+    }
+
+    /// Returns some reference to the inner value if it is of type `T`, or `None` if it isn't.
+    #[inline]
+    pub fn downcast_ref<T: Error + 'static>(&self) -> Option<&T> {
+        if self.is::<T>() {
+            unsafe { Some(&*(self as *const (dyn Error + Send) as *const T)) }
+        } else {
+            None
+        }
+    }
+
+    /// Returns some mutable reference to the inner value if it is of type `T`, or `None` if it isn't.
+    #[inline]
+    pub fn downcast_mut<T: Error + 'static>(&mut self) -> Option<&mut T> {
+        if self.is::<T>() {
+            unsafe { Some(&mut *(self as *mut (dyn Error + Send) as *mut T)) }
+        } else {
+            None
+        }
+    }
+}
+
+impl Box<dyn Error> {
+    /// Attempts to downcast the box to a concrete type.
+    pub fn downcast<T: Error + 'static>(self) -> Result<Box<T>, Box<dyn Error>> {
+        if self.is::<T>() {
+            let raw: *mut dyn Error = Box::into_raw(self);
+            Ok(unsafe { Box::from_raw(raw as *mut T) })
+        } else {
+            Err(self)
+        }
+    }
+}
+
+impl Box<dyn Error + Send> {
+    /// Attempts to downcast the box to a concrete type.
+    pub fn downcast<T: Error + 'static>(self) -> Result<Box<T>, Box<dyn Error + Send>> {
+        if self.is::<T>() {
+            let raw: *mut (dyn Error + Send) = Box::into_raw(self);
+            Ok(unsafe { Box::from_raw(raw as *mut T) })
+        } else {
+            Err(self)
+        }
+    }
 }
 
 impl<'a, E: Error + 'a> From<E> for Box<dyn Error + 'a> {

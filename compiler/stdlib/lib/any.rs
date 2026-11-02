@@ -109,3 +109,54 @@ impl Box<dyn Any> {
         }
     }
 }
+
+// NOTE: rustgo models `dyn Any + Send` and `dyn Any + Send + Sync` as the same
+// type (one auto-trait flag), so these impls cover both.
+impl (dyn Any + Send) {
+    /// Returns `true` if the inner type is the same as `T`.
+    #[inline]
+    pub fn is<T: Any>(&self) -> bool {
+        let t = TypeId::of::<T>();
+        let concrete = self.type_id();
+        t == concrete
+    }
+
+    /// Returns some reference to the inner value if it is of type `T`, or `None` if it isn't.
+    #[inline]
+    pub fn downcast_ref<T: Any>(&self) -> Option<&T> {
+        if self.is::<T>() {
+            unsafe { Some(&*(self as *const (dyn Any + Send) as *const T)) }
+        } else {
+            None
+        }
+    }
+
+    /// Returns some mutable reference to the inner value if it is of type `T`, or `None` if it isn't.
+    #[inline]
+    pub fn downcast_mut<T: Any>(&mut self) -> Option<&mut T> {
+        if self.is::<T>() {
+            unsafe { Some(&mut *(self as *mut (dyn Any + Send) as *mut T)) }
+        } else {
+            None
+        }
+    }
+}
+
+impl fmt::Debug for (dyn Any + Send) {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("Any")?;
+        f.write_str(" { .. }")
+    }
+}
+
+impl Box<dyn Any + Send> {
+    /// Attempts to downcast the box to a concrete type.
+    pub fn downcast<T: Any>(self) -> Result<Box<T>, Self> {
+        if self.is::<T>() {
+            let raw: *mut (dyn Any + Send) = Box::into_raw(self);
+            Ok(unsafe { Box::from_raw(raw as *mut T) })
+        } else {
+            Err(self)
+        }
+    }
+}

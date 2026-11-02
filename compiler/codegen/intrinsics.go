@@ -181,7 +181,7 @@ func (fc *fnGen) intrinsic(d *Def, args []Ty, v []string, ret Ty, sp ast.Span) s
 	case "discriminant_value":
 		t := arg(0)
 		if t.Kind == TAdt && t.Def.Adt.Kind == AdtEnum {
-			return fmt.Sprintf("((int64_t)(%s)->tag)", v[0])
+			return fmt.Sprintf("((int64_t)%s)", g.enumTag(t, "(*"+v[0]+")"))
 		}
 		return "((int64_t)0)"
 	case "abort":
