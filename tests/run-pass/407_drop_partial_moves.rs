@@ -113,4 +113,19 @@ fn main() {
         log.borrow_mut().push(format!("destructured {}", left.name));
     }
     report(&log, "reassign");
+
+    {
+        struct Duo(Noisy, Noisy);
+        let d = Duo(mk(&log, "duo0"), mk(&log, "duo1"));
+        let Duo(first, _) = d;
+        log.borrow_mut().push(format!("kept {}", first.name));
+    }
+    report(&log, "tuple struct _");
+
+    {
+        let base = Bag { left: mk(&log, "base-l"), right: mk(&log, "base-r"), label: "base".into() };
+        let derived = Bag { left: mk(&log, "new-l"), ..base };
+        log.borrow_mut().push(format!("derived {} {} {}", derived.left.name, derived.right.name, derived.label));
+    }
+    report(&log, "struct update");
 }

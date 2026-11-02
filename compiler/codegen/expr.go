@@ -908,7 +908,19 @@ func (fc *fnGen) structLit(x *ast.StructExpr, t Ty) string {
 	for k, fv := range fc.evalOperands(fes) {
 		vals[v.FieldIndex(x.Fields[k].Name.Name)] = fv
 	}
-	if x.Base != nil {
+	if l := fc.structBaseLocal(x); l != nil && len(fc.split[l]) > 0 {
+		// `..l` moves only the fields not given; the rest stay in l
+		place, _ := fc.localPlace(l)
+		fts := fc.g.fieldTypes(t, 0)
+		for i := range vals {
+			if vals[i] == "" {
+				vals[i] = fmt.Sprintf("%s.f%d", place, i)
+				if fc.g.needsDrop(fts[i]) {
+					fc.line("%s_%d = 0;", fc.flagName(l), i)
+				}
+			}
+		}
+	} else if x.Base != nil {
 		base := fc.spill(fc.value(x.Base), t)
 		// fields not given come from base; the remaining base fields are
 		// moved into the new value

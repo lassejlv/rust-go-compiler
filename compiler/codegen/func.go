@@ -52,6 +52,19 @@ type fnGen struct {
 	// inConst is set while generating a const item's initializer: every
 	// shared borrow of a temporary is promoted to static storage.
 	inConst bool
+	// resActivate, when set, collects the statements that arm residual
+	// drops scheduled by residualDrops (see bindPatDeferred).
+	resActivate *[]string
+	// resSrcFlag maps a residual place to the drop flag that arms it.
+	resSrcFlag func(place string) string
+	// patSplit: patterns that move whole top-level fields out of a local
+	// (which then has per-field drop flags for them).
+	patSplit map[ast.Pat]patSplitInfo
+}
+
+type patSplitInfo struct {
+	local  *typeck.Local
+	fields []int
 }
 
 func newFnGen(g *Gen, r *typeck.Results) *fnGen {
@@ -165,7 +178,26 @@ func (fc *fnGen) splittable(t Ty) bool {
 // and gives them per-field drop flags.
 func (fc *fnGen) computeSplit(body any) {
 	fc.split = map[*typeck.Local]map[int]bool{}
+	fc.patSplit = map[ast.Pat]patSplitInfo{}
 	ast.Walk(body, func(n any) bool {
+		switch x := n.(type) {
+		case *ast.StructExpr:
+			fc.splitStructBase(x)
+			return true
+		case *ast.LetStmt:
+			if x.Init != nil {
+				fc.splitPatMove(x.Pat, x.Init)
+			}
+			return true
+		case *ast.LetExpr:
+			fc.splitPatMove(x.Pat, x.Expr)
+			return true
+		case *ast.MatchExpr:
+			for _, a := range x.Arms {
+				fc.splitPatMove(a.Pat, x.Scrutinee)
+			}
+			return true
+		}
 		fe, ok := n.(*ast.FieldExpr)
 		if !ok {
 			return true
@@ -197,6 +229,123 @@ func (fc *fnGen) computeSplit(body any) {
 		fc.split[l][fr.Index] = true
 		return true
 	})
+}
+
+// splitPatMove records a pattern that moves whole top-level fields out of a
+// plain local (`let (a, _) = t;`, `match s { S { a, .. } => .. }`): those
+// fields get their own drop flags, and the rest stays in the local, which
+// is dropped (and usable) as usual.
+func (fc *fnGen) splitPatMove(p ast.Pat, src ast.Expr) {
+	if len(fc.r.Adjust[src.GetID()]) > 0 || len(fc.r.PatDerefs[p.GetID()]) > 0 {
+		return
+	}
+	pe, ok := unparen(src).(*ast.PathExpr)
+	if !ok {
+		return
+	}
+	vr := fc.r.Paths[pe.ID]
+	if vr == nil || vr.Kind != typeck.VLocal || vr.Local.ByRef {
+		return
+	}
+	l := vr.Local
+	if !fc.g.needsDrop(l.Ty) || !fc.splittable(l.Ty) {
+		return
+	}
+	var subs []ast.Pat
+	var idx []int
+	switch x := p.(type) {
+	case *ast.TuplePat:
+		if l.Ty.Kind != TTuple {
+			return
+		}
+		fc.seqFields(x.Elems, len(l.Ty.Elems), func(pi, fi int) {
+			subs, idx = append(subs, x.Elems[pi]), append(idx, fi)
+		})
+	case *ast.TupleStructPat:
+		if l.Ty.Kind != TAdt {
+			return
+		}
+		fc.seqFields(x.Elems, len(fc.g.fieldTypes(l.Ty, 0)), func(pi, fi int) {
+			subs, idx = append(subs, x.Elems[pi]), append(idx, fi)
+		})
+	case *ast.StructPat:
+		v := fc.r.Variants[x.ID]
+		if v == nil || l.Ty.Kind != TAdt {
+			return
+		}
+		for _, f := range x.Fields {
+			subs, idx = append(subs, f.Pat), append(idx, v.FieldIndex(f.Name.Name))
+		}
+	default:
+		return
+	}
+	var fields []int
+	for k, sp := range subs {
+		if !fc.patMoves(sp) {
+			continue
+		}
+		ip, ok := sp.(*ast.IdentPat)
+		if !ok || ip.Sub != nil || fc.r.Paths[ip.ID] != nil || len(fc.r.PatDerefs[ip.ID]) > 0 {
+			return // moves part of a field: handled by residual drops
+		}
+		fields = append(fields, idx[k])
+	}
+	if len(fields) == 0 {
+		return
+	}
+	if fc.split[l] == nil {
+		fc.split[l] = map[int]bool{}
+	}
+	for _, i := range fields {
+		fc.split[l][i] = true
+	}
+	fc.patSplit[p] = patSplitInfo{local: l, fields: fields}
+}
+
+// structBaseLocal returns the local of a struct-update base `..l` that is
+// moved field by field (nil if the base is not a plain droppable local).
+func (fc *fnGen) structBaseLocal(se *ast.StructExpr) *typeck.Local {
+	if se.Base == nil || len(fc.r.Adjust[se.Base.GetID()]) > 0 {
+		return nil
+	}
+	pe, ok := unparen(se.Base).(*ast.PathExpr)
+	if !ok {
+		return nil
+	}
+	vr := fc.r.Paths[pe.ID]
+	if vr == nil || vr.Kind != typeck.VLocal || vr.Local.ByRef {
+		return nil
+	}
+	l := vr.Local
+	if !fc.g.needsDrop(l.Ty) || !fc.splittable(l.Ty) || l.Ty.Kind != TAdt || l.Ty.Def.Adt.Kind != AdtStruct {
+		return nil
+	}
+	return l
+}
+
+// splitStructBase gives `..l` per-field flags for the fields it moves, so
+// the explicitly given fields stay in l and are dropped with it.
+func (fc *fnGen) splitStructBase(se *ast.StructExpr) {
+	l := fc.structBaseLocal(se)
+	if l == nil {
+		return
+	}
+	v := fc.r.Variants[se.ID]
+	if v == nil {
+		return
+	}
+	given := map[int]bool{}
+	for _, f := range se.Fields {
+		given[v.FieldIndex(f.Name.Name)] = true
+	}
+	for i, ft := range fc.fieldTys(l.Ty) {
+		if !given[i] && fc.g.needsDrop(ft) {
+			if fc.split[l] == nil {
+				fc.split[l] = map[int]bool{}
+			}
+			fc.split[l][i] = true
+		}
+	}
 }
 
 // allFlags returns "df = df_0 = ..." for chained assignment.

@@ -1,0 +1,37 @@
+guard fails then second arm
+  second g1
+  drop g1
+  after match
+  drop g0
+temporary scrutinee
+  got x0
+  drop x0
+  drop x1
+if let partial
+  y o1
+  drop o1
+  drop o0
+pattern on partially moved local
+  moved pa pb
+  drop pb
+  drop pa
+  drop pc
+struct update keeps given fields
+  s2 ua nb uc / s1.b ub
+  drop ua
+  drop nb
+  drop uc
+  drop ub
+assigned field then destructure
+  drop ac
+  got aa
+  drop aa
+  drop ab
+  drop ac2
+remainder usable after match
+  took r0
+  drop r0
+  still have r1 r2
+  then r1
+  drop r1
+end

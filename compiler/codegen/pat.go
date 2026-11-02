@@ -327,7 +327,81 @@ func (fc *fnGen) bindPatDeferred(p ast.Pat, place string, t Ty, op operand) []st
 		moved = true
 	}
 	out := inits
+	if info, ok := fc.patSplit[p]; ok && moved && op.movable && place == fc.localName(info.local) {
+		// whole fields moved out of a local: only their flags are cleared
+		for _, i := range info.fields {
+			out = append(out, fmt.Sprintf("%s_%d = 0;", fc.flagName(info.local), i))
+		}
+		return out
+	}
 	if moved && op.flag != "" && op.movable {
+		// The parts the pattern does not move out are still owned: schedule
+		// their drops, armed (after a guard succeeds) from the source's drop
+		// flag, which is cleared afterwards. With per-field flags (a local
+		// partially moved or assigned before), each top-level field is armed
+		// from its own flag.
+		if fc.g.needsDrop(t) {
+			flags := strings.Split(op.flag, " = ")
+			base := flags[0]
+			fieldFlag := map[string]string{}
+			for _, f := range flags[1:] {
+				if i := strings.LastIndex(f, "_"); i >= 0 {
+					fieldFlag[place+".f"+f[i+1:]] = f
+				}
+			}
+			fc.resSrcFlag = func(pl string) string {
+				for k, f := range fieldFlag {
+					if pl == k || strings.HasPrefix(pl, k+".") {
+						return f
+					}
+				}
+				return base
+			}
+			sc := fc.scopes[len(fc.scopes)-1]
+			mark := len(sc.drops)
+			var act []string
+			fc.resActivate = &act
+			fc.residualDrops(p, place, t, false)
+			fc.resActivate = nil
+			fc.resSrcFlag = nil
+			out = append(out, act...)
+			// fields are dropped in declaration order
+			for i, j := mark, len(sc.drops)-1; i < j; i, j = i+1, j-1 {
+				sc.drops[i], sc.drops[j] = sc.drops[j], sc.drops[i]
+			}
+			// the remainder belongs to the matched value, which is older
+			// than the bindings: drop it after them
+			if len(sc.drops) > mark {
+				locals := map[*typeck.Local]bool{}
+				ast.Walk(p, func(n any) bool {
+					if ip, ok := n.(*ast.IdentPat); ok {
+						if l := fc.r.Locals[ip.ID]; l != nil {
+							locals[l] = true
+						}
+					}
+					return true
+				})
+				first := mark
+				for i := 0; i < mark; i++ {
+					if sc.drops[i].local != nil && locals[sc.drops[i].local] {
+						first = i
+						break
+					}
+				}
+				// a source local in this scope: the remainder takes its place
+				for i := 0; i < mark; i++ {
+					if sc.drops[i].local != nil && sc.drops[i].place == place {
+						first = i + 1
+						break
+					}
+				}
+				if first < mark {
+					res := append([]dropEntry(nil), sc.drops[mark:]...)
+					rest := append([]dropEntry(nil), sc.drops[first:mark]...)
+					sc.drops = append(append(sc.drops[:first], res...), rest...)
+				}
+			}
+		}
 		out = append(out, fmt.Sprintf("%s = 0;", op.flag))
 	}
 	return out
@@ -534,7 +608,17 @@ func (fc *fnGen) residualDrops(p ast.Pat, place string, t Ty, now bool) {
 			return
 		}
 		flag := fc.newName("drf")
-		fc.line("uint8_t %s = 1;", flag)
+		if fc.resActivate != nil {
+			// armed later, when the move out of the source is committed
+			fc.line("uint8_t %s = 0;", flag)
+			src := "1"
+			if fc.resSrcFlag != nil {
+				src = fc.resSrcFlag(pl)
+			}
+			*fc.resActivate = append(*fc.resActivate, fmt.Sprintf("%s = %s;", flag, src))
+		} else {
+			fc.line("uint8_t %s = 1;", flag)
+		}
 		fc.addDrop(pl, flag, ty)
 		fc.line("RG_CS_PUSH(&%s, %s, &%s);", pl, fc.g.dropFn(ty), flag)
 	}

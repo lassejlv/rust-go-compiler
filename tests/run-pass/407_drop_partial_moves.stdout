@@ -7,3 +7,5 @@ take loop     | iter 0 got slot, drop slot, iter 1 empty, iter 2 empty
 move closure  | call closure, call closure, drop closure, closure dropped
 into_iter     | first v0, drop v1, drop v2, iter dropped, drop v0
 reassign      | drop br, reassigned, destructured bl, drop bl, drop br2
+tuple struct _| kept duo0, drop duo0, drop duo1
+struct update | derived new-l base-r base, drop new-l, drop base-r, drop base-l
