@@ -587,6 +587,7 @@ func (ac *astConv) lowerTy(at ast.Type) Ty {
 			fd := ac.opaqueFn
 			idx := len(fd.Fn.AstOpaques)
 			fd.Fn.AstOpaques = append(fd.Fn.AstOpaques, x)
+			fd.Fn.OpaqueBounds = append(fd.Fn.OpaqueBounds, nil) // reserve slot idx
 			ot := Opaque(fd, t.Generics(fd).Identity(), idx)
 			var preds []*Predicate
 			for _, b := range x.Bounds {
@@ -594,7 +595,7 @@ func (ac *astConv) lowerTy(at ast.Type) Ty {
 					preds = append(preds, p)
 				}
 			}
-			fd.Fn.OpaqueBounds = append(fd.Fn.OpaqueBounds, preds)
+			fd.Fn.OpaqueBounds[idx] = preds
 			return ot
 		}
 		t.Errorf(x.Span, "`impl Trait` is not allowed here")

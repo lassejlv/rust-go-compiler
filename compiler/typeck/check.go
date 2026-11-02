@@ -547,17 +547,59 @@ func (fcx *FnCtxt) checkFn() {
 	}
 	declOut := Subst(sig.Output, fcx.inst.Args)
 	var opaques []Ty
+	ownVar := map[int]Ty{}
+	for idx := range d.Fn.AstOpaques {
+		v := fcx.ic.newVar()
+		ownVar[idx] = v
+		opaques = append(opaques, Opaque(d, fcx.inst.Args, idx), v)
+	}
 	if declOut.HasOpaque() {
 		declOut = Fold(declOut, func(x Ty) Ty {
 			if x.Kind == TOpaque && x.Def == d {
-				v := fcx.ic.newVar()
-				opaques = append(opaques, x, v)
-				return v
+				return ownVar[x.Index]
 			}
 			return nil
 		})
 	}
 	out := fcx.normalizeInBody(declOut, d.Span)
+	// The declared bounds of our own opaque types guide inference of their
+	// hidden types (e.g. `impl Iterator<Item = (usize, impl Iterator)>`).
+	if len(opaques) > 0 {
+		varOf := map[int]Ty{}
+		for k := 0; k < len(opaques); k += 2 {
+			varOf[opaques[k].Index] = opaques[k+1]
+		}
+		repl := func(t Ty) Ty {
+			return Fold(Subst(t, fcx.inst.Args), func(x Ty) Ty {
+				if x.Kind == TOpaque && x.Def == d {
+					if v, ok := varOf[x.Index]; ok {
+						return v
+					}
+				}
+				return nil
+			})
+		}
+		for k := 0; k < len(opaques); k += 2 {
+			idx := opaques[k].Index
+			if idx >= len(d.Fn.OpaqueBounds) {
+				continue
+			}
+			for _, p := range d.Fn.OpaqueBounds[idx] {
+				if p.Maybe || p.Trait.Trait.LangItem == "sized" {
+					continue
+				}
+				np := &Predicate{Trait: &TraitRef{Trait: p.Trait.Trait}}
+				for _, a := range p.Trait.Args {
+					np.Trait.Args = append(np.Trait.Args, fcx.normalizeInBody(repl(a), d.Span))
+				}
+				np.Trait.Args[0] = opaques[k+1]
+				for _, b := range p.Bindings {
+					np.Bindings = append(np.Bindings, Binding{Name: b.Name, Ty: fcx.normalizeInBody(repl(b.Ty), d.Span)})
+				}
+				fcx.ic.obligations = append(fcx.ic.obligations, &Obligation{Pred: np, Span: d.Span})
+			}
+		}
+	}
 	fcx.retTy = out
 	fcx.r.RetTy = out
 	fcx.r.ParamTys = ins
