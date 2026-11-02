@@ -329,13 +329,15 @@ var (
 	TyErr   = intern(&TyS{Kind: TError})
 	TyF32   = intern(&TyS{Kind: TFloat, Sub: 32})
 	TyF64   = intern(&TyS{Kind: TFloat, Sub: 64})
-	intTys  [12]Ty
+	intTys  = makeIntTys()
 )
 
-func init() {
-	for i := range intTys {
-		intTys[i] = intern(&TyS{Kind: TInt, Sub: uint8(i)})
+func makeIntTys() [12]Ty {
+	var out [12]Ty
+	for i := range out {
+		out[i] = intern(&TyS{Kind: TInt, Sub: uint8(i)})
 	}
+	return out
 }
 
 func IntT(i IntTy) Ty { return intTys[i] }

@@ -1,0 +1,248 @@
+// Package driver wires the compiler passes together (mirrors rustc_driver /
+// rustc_interface): parse -> expand -> resolve -> typeck -> codegen (C) ->
+// invoke the system C compiler.
+package driver
+
+import (
+	"fmt"
+	"io/fs"
+	"os"
+	"os/exec"
+	"path"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"rustgo/compiler/ast"
+	"rustgo/compiler/codegen"
+	"rustgo/compiler/expand"
+	"rustgo/compiler/lexer"
+	. "rustgo/compiler/middle"
+	"rustgo/compiler/parser"
+	"rustgo/compiler/resolve"
+	"rustgo/compiler/stdlib"
+	"rustgo/compiler/typeck"
+)
+
+// Options configure a compilation.
+type Options struct {
+	Input    string
+	Output   string
+	EmitC    string // if set, write the generated C here
+	StdDir   string // override the embedded std with a directory
+	CC       string
+	OptLevel string
+	Verbose  bool
+	KeepC    bool
+}
+
+// LoadCrateFS parses a crate rooted at root inside fsys, loading `mod x;`
+// files (x.rs or x/mod.rs).
+func LoadCrateFS(fsys fs.FS, root, displayPrefix string) (*ast.Crate, error) {
+	src, err := fs.ReadFile(fsys, root)
+	if err != nil {
+		return nil, err
+	}
+	c, err := parser.ParseCrate(lexer.AddFile(displayPrefix+root, string(src)), string(src))
+	if err != nil {
+		return nil, err
+	}
+	dir := path.Dir(root)
+	base := path.Base(root)
+	// A non-mod.rs, non-root file's children live in a dir named after it;
+	// the crate root's children live next to it.
+	if err := loadMods(fsys, c.Items, dir, displayPrefix); err != nil {
+		return nil, err
+	}
+	_ = base
+	return c, nil
+}
+
+func loadMods(fsys fs.FS, items []*ast.Item, dir, prefix string) error {
+	for _, it := range items {
+		m, ok := it.Kind.(*ast.ModItem)
+		if !ok {
+			continue
+		}
+		name := it.Name.Name
+		for _, a := range it.Attrs {
+			if a.Path == "path" && len(a.Tokens) >= 2 {
+				name = strings.TrimSuffix(a.Tokens[1].Tok.Text, ".rs")
+			}
+		}
+		if m.Inline {
+			if err := loadMods(fsys, m.Items, path.Join(dir, name), prefix); err != nil {
+				return err
+			}
+			continue
+		}
+		if m.Loaded {
+			continue
+		}
+		cands := []string{path.Join(dir, name+".rs"), path.Join(dir, name, "mod.rs")}
+		var file string
+		var src []byte
+		for _, cand := range cands {
+			if b, err := fs.ReadFile(fsys, cand); err == nil {
+				file, src = cand, b
+				break
+			}
+		}
+		if file == "" {
+			return fmt.Errorf("%s: error: file not found for module `%s` (tried %s)", it.Span.Lo, name, strings.Join(cands, ", "))
+		}
+		c, err := parser.ParseCrate(lexer.AddFile(prefix+file, string(src)), string(src))
+		if err != nil {
+			return err
+		}
+		m.Items = c.Items
+		m.Loaded = true
+		if err := loadMods(fsys, m.Items, path.Join(dir, name), prefix); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Frontend runs everything up to (and including) typeck setup and returns
+// the type context and the user's main function.
+func Frontend(opts *Options) (*typeck.Tcx, *Def, error) {
+	t0 := time.Now()
+	var stdCrate *ast.Crate
+	var err error
+	if opts.StdDir != "" {
+		stdCrate, err = LoadCrateFS(os.DirFS(opts.StdDir), "lib.rs", opts.StdDir+"/")
+	} else {
+		sub, _ := fs.Sub(stdlib.FS, "lib")
+		stdCrate, err = LoadCrateFS(sub, "lib.rs", "<std>/")
+	}
+	if err != nil {
+		return nil, nil, fmt.Errorf("while loading std: %v", err)
+	}
+	abs, _ := filepath.Abs(opts.Input)
+	dir := filepath.Dir(abs)
+	userCrate, err := LoadCrateFS(os.DirFS(dir), filepath.Base(abs), relPrefix(opts.Input))
+	if err != nil {
+		return nil, nil, err
+	}
+	t1 := time.Now()
+	exp := expand.New()
+	if err := exp.ExpandCrate(stdCrate, "std"); err != nil {
+		return nil, nil, fmt.Errorf("while expanding std: %v", err)
+	}
+	if err := exp.ExpandCrate(userCrate, "main"); err != nil {
+		return nil, nil, err
+	}
+	t2 := time.Now()
+	r := resolve.New()
+	r.AddCrate("std", stdCrate)
+	user := r.AddCrate("main", userCrate)
+	r.ResolveImports()
+	if err := r.Err(); err != nil {
+		return nil, nil, err
+	}
+	tcx := typeck.NewTcx(r)
+	var mainDef *Def
+	if b := user.Root.Lookup("main", ValueNS); b != nil && b.Res.Def != nil && b.Res.Def.Kind == DefFn {
+		mainDef = b.Res.Def
+	}
+	if mainDef == nil {
+		return nil, nil, fmt.Errorf("error: `main` function not found in crate")
+	}
+	if aborted := tcx.Guard(func() { tcx.BuildImpls() }); aborted || tcx.Err() != nil {
+		return nil, nil, tcx.Err()
+	}
+	if opts.Verbose {
+		fmt.Fprintf(os.Stderr, "parse %v, expand %v, resolve %v\n", t1.Sub(t0), t2.Sub(t1), time.Since(t2))
+	}
+	return tcx, mainDef, nil
+}
+
+func relPrefix(input string) string {
+	d := filepath.Dir(input)
+	if d == "." {
+		return ""
+	}
+	return d + "/"
+}
+
+// GenerateC runs the full pipeline up to C source.
+func GenerateC(opts *Options) (string, error) {
+	tcx, mainDef, err := Frontend(opts)
+	if err != nil {
+		return "", err
+	}
+	g := codegen.New(tcx)
+	var src string
+	var genErr error
+	aborted := tcx.Guard(func() {
+		src, genErr = g.Generate(mainDef)
+	})
+	if aborted {
+		return "", tcx.Err()
+	}
+	if genErr != nil {
+		return "", genErr
+	}
+	if err := tcx.Err(); err != nil {
+		return "", err
+	}
+	return src, nil
+}
+
+// Compile compiles opts.Input to an executable at opts.Output.
+func Compile(opts *Options) error {
+	t0 := time.Now()
+	src, err := GenerateC(opts)
+	if err != nil {
+		return err
+	}
+	if opts.EmitC != "" {
+		if err := os.WriteFile(opts.EmitC, []byte(src), 0o644); err != nil {
+			return err
+		}
+	}
+	if opts.Output == "" {
+		return nil
+	}
+	tmp, err := os.CreateTemp("", "rustgo-*.c")
+	if err != nil {
+		return err
+	}
+	cpath := tmp.Name()
+	tmp.WriteString(src)
+	tmp.Close()
+	if !opts.KeepC {
+		defer os.Remove(cpath)
+	} else {
+		fmt.Fprintf(os.Stderr, "C source kept at %s\n", cpath)
+	}
+	cc := opts.CC
+	if cc == "" {
+		cc = os.Getenv("RUSTGO_CC")
+	}
+	if cc == "" {
+		cc = "gcc"
+	}
+	ol := opts.OptLevel
+	if ol == "" {
+		ol = "1"
+	}
+	t1 := time.Now()
+	cmd := exec.Command(cc, "-O"+ol, "-w", "-fwrapv", "-fno-strict-aliasing", "-o", opts.Output, cpath, "-lm")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("C compiler failed: %v\n%s", err, truncate(string(out), 4000))
+	}
+	if opts.Verbose {
+		fmt.Fprintf(os.Stderr, "frontend+codegen %v, cc %v\n", t1.Sub(t0), time.Since(t1))
+	}
+	return nil
+}
+
+func truncate(s string, n int) string {
+	if len(s) > n {
+		return s[:n] + "\n..."
+	}
+	return s
+}
