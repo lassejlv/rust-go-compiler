@@ -34,6 +34,7 @@ type Options struct {
 	OptLevel string
 	Verbose  bool
 	KeepC    bool
+	CheckAll bool // type-check every non-generic function in all crates
 }
 
 // LoadCrateFS parses a crate rooted at root inside fsys, loading `mod x;`
@@ -187,6 +188,28 @@ func relPrefix(input string) string {
 		return ""
 	}
 	return d + "/"
+}
+
+// CheckAll type-checks every non-generic function body (in std and the
+// user crate) and reports all errors.
+func CheckAll(opts *Options) error {
+	tcx, _, err := Frontend(opts)
+	if err != nil {
+		return err
+	}
+	tcx.MaxErrors = 1000
+	tcx.Guard(func() {
+		for _, d := range tcx.R.Defs {
+			if d.Kind != DefFn || d.Fn == nil || d.Fn.Ast.Body == nil {
+				continue
+			}
+			if tcx.Generics(d).Count() != 0 {
+				continue
+			}
+			tcx.CheckInstance(d, nil)
+		}
+	})
+	return tcx.Err()
 }
 
 // GenerateC runs the full pipeline up to C source.

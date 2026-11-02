@@ -79,6 +79,8 @@ func main() {
 		case a == "--edition":
 			next()
 		case strings.HasPrefix(a, "--edition="):
+		case a == "--check-all":
+			opts.CheckAll = true
 		case a == "-v":
 			opts.Verbose = true
 		case a == "-h" || a == "--help":
@@ -112,6 +114,13 @@ func main() {
 		} else {
 			opts.Output = strings.TrimSuffix(filepath.Base(opts.Input), ".rs")
 		}
+	}
+	if opts.CheckAll {
+		if err := driver.CheckAll(opts); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
 	}
 	if err := driver.Compile(opts); err != nil {
 		fmt.Fprintln(os.Stderr, err)
