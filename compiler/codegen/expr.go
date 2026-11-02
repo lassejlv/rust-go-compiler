@@ -1,10 +1,10 @@
 package codegen
 
 import (
-	"rustgo/compiler/lexer"
 	"fmt"
 	"math"
 	"math/big"
+	"rustgo/compiler/lexer"
 	"strconv"
 	"strings"
 

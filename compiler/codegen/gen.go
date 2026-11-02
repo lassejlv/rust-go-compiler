@@ -30,7 +30,7 @@ type Gen struct {
 	vtdefs  strings.Builder // vtable definitions
 	statics strings.Builder
 	locs    map[string]string // track_caller locations (locStatic)
-	fns     chunkBuf // function bodies (one chunk per function)
+	fns     chunkBuf          // function bodies (one chunk per function)
 
 	types        map[Ty]*typeInfo
 	typeN        int
