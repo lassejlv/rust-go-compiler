@@ -13,6 +13,8 @@ typedef struct RgCoro {
   size_t size;
   int done;
   struct RgCoro* prev;
+  RgCsState cs;     /* the coroutine's own cleanup stack */
+  RgCsState saved;  /* the resumer's cleanup stack while running */
 } RgCoro;
 
 static __thread RgCoro* rg_coro_current;
@@ -48,7 +50,9 @@ static uint8_t rg_coro_resume(uint8_t* p) {
   RgCoro* c = (RgCoro*)p;
   c->prev = rg_coro_current;
   rg_coro_current = c;
+  c->saved = rg_cs_swap(c->cs);
   swapcontext(&c->caller, &c->ctx);
+  c->cs = rg_cs_swap(c->saved);
   rg_coro_current = c->prev;
   return (uint8_t)c->done;
 }
@@ -63,5 +67,6 @@ static void rg_coro_free(uint8_t* p) {
   RgCoro* c = (RgCoro*)p;
   if (!c) return;
   munmap(c->stack, c->size);
+  free(c->cs.cs);
   free(c);
 }
