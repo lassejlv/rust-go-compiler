@@ -22,11 +22,43 @@ its backend IR (where rustc uses LLVM IR):
 go build -o rustgo ./cmd/rustgo
 ./rustgo hello.rs -o hello && ./hello
 ./rustgo run hello.rs
+./rustgo build                    # in a cargo project: builds the whole crate graph
+./rustgo build --release -o app   # gcc -O2, wrapping integer arithmetic (like cargo --release)
 ```
 
-Options: `-o <out>`, `--emit-c <file>` (dump generated C), `--keep-c`,
-`--std <dir>` (use a std from a directory), `--cc <compiler>` (default `gcc`),
-`-O <level>`.
+Options: `-o <out>`, `--release`, `--emit-c <file>` (dump generated C),
+`--keep-c`, `--std <dir>` (use a std from a directory), `--cc <compiler>`
+(default `gcc`), `-O <level>`, `-v` (phase timings).
+
+`rustgo build` reads the crate graph with `cargo metadata --offline` (crates
+must already be in the local cargo registry or be path dependencies), runs
+build scripts, compiles proc-macro crates into macro servers, and compiles
+everything into one native executable. Large programs are split into several
+C translation units compiled in parallel.
+
+## What works
+
+* Rust 2015/2018/2021/2024 syntax, `macro_rules!` (with hygiene for local
+  variables), procedural macros (derive, attribute and bang macros, served by
+  separately compiled macro servers), `#[cfg]`/`cfg_attr`, `include!`.
+* Traits, generics, associated types and consts, GATs, `impl Trait` (argument
+  and return position, also in traits), `dyn Trait` with supertrait upcasting,
+  const generics with a compile-time const-fn interpreter, closures, iterators,
+  pattern matching with match ergonomics, `?`, `async`/`.await` and
+  `AsyncFn*` (coroutine-based), threads, atomics, `catch_unwind`, panic hooks,
+  `#[track_caller]`, inline assembly (`asm!`, x86-64), FFI.
+* A large standard library: collections, strings and formatting, io, fs,
+  path, process, net, os::unix, sync/mpsc, thread-locals, arch::x86_64
+  intrinsics (emulated), ...
+* Real crates from crates.io build and produce the same output as rustc/cargo,
+  e.g. regex (+ regex-syntax, aho-corasick, memchr), serde (hand-written
+  serializers), nom, itertools, hashbrown, anyhow, once_cell, bitflags, log,
+  uuid, itoa, ryu, bumpalo, crossbeam-utils, getrandom, rustix (libc and raw
+  syscall backends), polling, num_cpus, ttf-parser, zlib-rs, hybrid-array,
+  typenum, x11rb-protocol and many smaller ones.
+
+Not implemented: the borrow checker (programs are assumed to be valid Rust),
+targets other than x86_64-linux-gnu, incremental compilation.
 
 ## Design notes
 
@@ -46,8 +78,12 @@ Options: `-o <out>`, `--emit-c <file>` (dump generated C), `--keep-c`,
   out of struct fields, temporaries with Rust's temporary-lifetime rules, and
   unwinding on panic (a cleanup stack runs pending destructors before the
   process exits with code 101).
-* **Integer overflow** panics like a debug build of rustc; bounds checks,
-  division by zero etc. produce rustc's panic messages.
+* **Integer overflow** panics like a debug build of rustc (wraps with
+  `--release`); bounds checks, division by zero etc. produce rustc's panic
+  messages at the same source locations (including `#[track_caller]`).
+* **Trait evaluation** is cached by canonical query (inference variables
+  renumbered), and generic bodies can also be checked generically to pick the
+  trait a method call meant when a substituted type implements several.
 * The **standard library** is regular Rust in `compiler/stdlib/lib`, built on a
   small set of compiler intrinsics (`extern "rust-intrinsic"`), and embedded
   into the binary.
