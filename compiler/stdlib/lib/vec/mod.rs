@@ -160,25 +160,7 @@ impl<T> Vec<T> {
     }
 
     fn grow_amortized(&mut self, additional: usize) {
-        let required = match self.len.checked_add(additional) {
-            Some(r) => r,
-            None => capacity_overflow(),
-        };
-        let min_non_zero_cap = if mem::size_of::<T>() == 1 {
-            8
-        } else if mem::size_of::<T>() <= 1024 {
-            4
-        } else {
-            1
-        };
-        let mut cap = self.cap.saturating_mul(2);
-        if cap < required {
-            cap = required;
-        }
-        if cap < min_non_zero_cap {
-            cap = min_non_zero_cap;
-        }
-        self.grow_to(cap);
+        self.grow_to(amortized_cap(self.len, self.cap, additional, mem::size_of::<T>()));
     }
 
     /// Reserves capacity for at least `additional` more elements.
@@ -978,4 +960,27 @@ impl<T, const N: usize> Vec<[T; N]> {
         }
         unsafe { Vec::from_raw_parts(p, len * N, cap * N) }
     }
+}
+
+/// The capacity `grow_amortized` grows to (non-generic).
+fn amortized_cap(len: usize, cap: usize, additional: usize, elem_size: usize) -> usize {
+    let required = match len.checked_add(additional) {
+        Some(r) => r,
+        None => capacity_overflow(),
+    };
+    let min_non_zero_cap = if elem_size == 1 {
+        8
+    } else if elem_size <= 1024 {
+        4
+    } else {
+        1
+    };
+    let mut new_cap = cap.saturating_mul(2);
+    if new_cap < required {
+        new_cap = required;
+    }
+    if new_cap < min_non_zero_cap {
+        new_cap = min_non_zero_cap;
+    }
+    new_cap
 }

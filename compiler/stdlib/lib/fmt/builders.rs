@@ -23,9 +23,9 @@ impl<'a, 'b: 'a> DebugStruct<'a, 'b> {
     pub fn field<T: Debug + ?Sized>(&mut self, name: &str, value: &T) -> &mut Self {
         if self.result.is_ok() {
             self.result = if self.fmt.alternate() {
-                pretty_struct_field(self.fmt, self.has_fields, name, value)
+                pretty_struct_field(self.fmt, self.has_fields, name, &value)
             } else {
-                plain_struct_field(self.fmt, self.has_fields, name, value)
+                plain_struct_field(self.fmt, self.has_fields, name, &value)
             };
         }
         self.has_fields = true;
@@ -63,7 +63,7 @@ impl<'a, 'b: 'a> DebugStruct<'a, 'b> {
     }
 }
 
-fn plain_struct_field<T: Debug + ?Sized>(fmt: &mut Formatter<'_>, has_fields: bool, name: &str, value: &T) -> Result {
+fn plain_struct_field(fmt: &mut Formatter<'_>, has_fields: bool, name: &str, value: &dyn Debug) -> Result {
     let prefix = if has_fields { ", " } else { " { " };
     fmt.write_str(prefix)?;
     fmt.write_str(name)?;
@@ -71,7 +71,7 @@ fn plain_struct_field<T: Debug + ?Sized>(fmt: &mut Formatter<'_>, has_fields: bo
     value.fmt(fmt)
 }
 
-fn pretty_struct_field<T: Debug + ?Sized>(fmt: &mut Formatter<'_>, has_fields: bool, name: &str, value: &T) -> Result {
+fn pretty_struct_field(fmt: &mut Formatter<'_>, has_fields: bool, name: &str, value: &dyn Debug) -> Result {
     if !has_fields {
         fmt.write_str(" {\n")?;
     }
@@ -81,7 +81,7 @@ fn pretty_struct_field<T: Debug + ?Sized>(fmt: &mut Formatter<'_>, has_fields: b
     r
 }
 
-fn pretty_struct_field_inner<T: Debug + ?Sized>(fmt: &mut Formatter<'_>, name: &str, value: &T) -> Result {
+fn pretty_struct_field_inner(fmt: &mut Formatter<'_>, name: &str, value: &dyn Debug) -> Result {
     fmt.write_str(name)?;
     fmt.write_str(": ")?;
     value.fmt(fmt)?;
@@ -107,9 +107,9 @@ impl<'a, 'b: 'a> DebugTuple<'a, 'b> {
     pub fn field<T: Debug + ?Sized>(&mut self, value: &T) -> &mut Self {
         if self.result.is_ok() {
             self.result = if self.fmt.alternate() {
-                pretty_tuple_field(self.fmt, self.fields == 0, value)
+                pretty_tuple_field(self.fmt, self.fields == 0, &value)
             } else {
-                plain_tuple_field(self.fmt, self.fields == 0, value)
+                plain_tuple_field(self.fmt, self.fields == 0, &value)
             };
         }
         self.fields += 1;
@@ -153,13 +153,13 @@ impl<'a, 'b: 'a> DebugTuple<'a, 'b> {
     }
 }
 
-fn plain_tuple_field<T: Debug + ?Sized>(fmt: &mut Formatter<'_>, first: bool, value: &T) -> Result {
+fn plain_tuple_field(fmt: &mut Formatter<'_>, first: bool, value: &dyn Debug) -> Result {
     let prefix = if first { "(" } else { ", " };
     fmt.write_str(prefix)?;
     value.fmt(fmt)
 }
 
-fn pretty_tuple_field<T: Debug + ?Sized>(fmt: &mut Formatter<'_>, first: bool, value: &T) -> Result {
+fn pretty_tuple_field(fmt: &mut Formatter<'_>, first: bool, value: &dyn Debug) -> Result {
     if first {
         fmt.write_str("(\n")?;
     }
@@ -169,7 +169,7 @@ fn pretty_tuple_field<T: Debug + ?Sized>(fmt: &mut Formatter<'_>, first: bool, v
     r
 }
 
-fn pretty_entry_inner<T: Debug + ?Sized>(fmt: &mut Formatter<'_>, value: &T) -> Result {
+fn pretty_entry_inner(fmt: &mut Formatter<'_>, value: &dyn Debug) -> Result {
     value.fmt(fmt)?;
     fmt.write_str(",\n")
 }
@@ -183,6 +183,10 @@ struct DebugInner<'a, 'b: 'a> {
 
 impl<'a, 'b: 'a> DebugInner<'a, 'b> {
     fn entry<T: Debug + ?Sized>(&mut self, value: &T) {
+        self.entry_dyn(&value)
+    }
+
+    fn entry_dyn(&mut self, value: &dyn Debug) {
         if self.result.is_ok() {
             self.result = if self.fmt.alternate() {
                 pretty_inner_entry(self.fmt, self.has_fields, value)
@@ -198,14 +202,14 @@ impl<'a, 'b: 'a> DebugInner<'a, 'b> {
     }
 }
 
-fn plain_inner_entry<T: Debug + ?Sized>(fmt: &mut Formatter<'_>, has_fields: bool, value: &T) -> Result {
+fn plain_inner_entry(fmt: &mut Formatter<'_>, has_fields: bool, value: &dyn Debug) -> Result {
     if has_fields {
         fmt.write_str(", ")?;
     }
     value.fmt(fmt)
 }
 
-fn pretty_inner_entry<T: Debug + ?Sized>(fmt: &mut Formatter<'_>, has_fields: bool, value: &T) -> Result {
+fn pretty_inner_entry(fmt: &mut Formatter<'_>, has_fields: bool, value: &dyn Debug) -> Result {
     if !has_fields {
         fmt.write_str("\n")?;
     }
@@ -364,9 +368,9 @@ impl<'a, 'b: 'a> DebugMap<'a, 'b> {
                 );
             }
             self.result = if self.fmt.alternate() {
-                pretty_map_key(self.fmt, self.has_fields, key)
+                pretty_map_key(self.fmt, self.has_fields, &key)
             } else {
-                plain_map_key(self.fmt, self.has_fields, key)
+                plain_map_key(self.fmt, self.has_fields, &key)
             };
             self.has_key = true;
         }
@@ -381,7 +385,7 @@ impl<'a, 'b: 'a> DebugMap<'a, 'b> {
             }
             self.result = if self.fmt.alternate() {
                 self.fmt.push_indent();
-                let r = pretty_entry_inner(self.fmt, value);
+                let r = pretty_entry_inner(self.fmt, &value);
                 self.fmt.pop_indent();
                 r
             } else {
@@ -441,7 +445,7 @@ impl<'a, 'b: 'a> DebugMap<'a, 'b> {
     }
 }
 
-fn plain_map_key<K: Debug + ?Sized>(fmt: &mut Formatter<'_>, has_fields: bool, key: &K) -> Result {
+fn plain_map_key(fmt: &mut Formatter<'_>, has_fields: bool, key: &dyn Debug) -> Result {
     if has_fields {
         fmt.write_str(", ")?;
     }
@@ -449,7 +453,7 @@ fn plain_map_key<K: Debug + ?Sized>(fmt: &mut Formatter<'_>, has_fields: bool, k
     fmt.write_str(": ")
 }
 
-fn pretty_map_key<K: Debug + ?Sized>(fmt: &mut Formatter<'_>, has_fields: bool, key: &K) -> Result {
+fn pretty_map_key(fmt: &mut Formatter<'_>, has_fields: bool, key: &dyn Debug) -> Result {
     if !has_fields {
         fmt.write_str("\n")?;
     }
@@ -459,7 +463,7 @@ fn pretty_map_key<K: Debug + ?Sized>(fmt: &mut Formatter<'_>, has_fields: bool, 
     r
 }
 
-fn pretty_map_key_inner<K: Debug + ?Sized>(fmt: &mut Formatter<'_>, key: &K) -> Result {
+fn pretty_map_key_inner(fmt: &mut Formatter<'_>, key: &dyn Debug) -> Result {
     key.fmt(fmt)?;
     fmt.write_str(": ")
 }

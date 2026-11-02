@@ -289,48 +289,56 @@ pub fn handle_alloc_error(layout: Layout) -> ! {
 /// total size is zero.
 #[inline]
 pub(crate) unsafe fn alloc_array<T>(n: usize) -> *mut T {
-    let size = crate::mem::size_of::<T>();
-    let align = crate::mem::align_of::<T>();
-    if size == 0 || n == 0 {
-        return align as *mut T;
-    }
-    let total = match size.checked_mul(n) {
-        Some(t) if t <= isize::MAX as usize => t,
-        _ => capacity_overflow(),
-    };
-    intrinsics::alloc(total, align) as *mut T
+    alloc_raw(n, crate::mem::size_of::<T>(), crate::mem::align_of::<T>()) as *mut T
 }
 
 /// Frees an array allocated by `alloc_array` (or `realloc_array`).
 #[inline]
 pub(crate) unsafe fn dealloc_array<T>(p: *mut T, n: usize) {
-    let size = crate::mem::size_of::<T>();
-    if size == 0 || n == 0 {
-        return;
-    }
-    intrinsics::dealloc(p as *mut u8, size * n, crate::mem::align_of::<T>())
+    dealloc_raw(p as *mut u8, n, crate::mem::size_of::<T>(), crate::mem::align_of::<T>())
 }
 
 /// Grows or shrinks an array allocation from `old_n` to `new_n` elements.
 #[inline]
 pub(crate) unsafe fn realloc_array<T>(p: *mut T, old_n: usize, new_n: usize) -> *mut T {
-    let size = crate::mem::size_of::<T>();
-    let align = crate::mem::align_of::<T>();
+    realloc_raw(p as *mut u8, old_n, new_n, crate::mem::size_of::<T>(), crate::mem::align_of::<T>()) as *mut T
+}
+
+// Non-generic cores (one copy instead of one per element type).
+unsafe fn alloc_raw(n: usize, size: usize, align: usize) -> *mut u8 {
+    if size == 0 || n == 0 {
+        return align as *mut u8;
+    }
+    let total = match size.checked_mul(n) {
+        Some(t) if t <= isize::MAX as usize => t,
+        _ => capacity_overflow(),
+    };
+    intrinsics::alloc(total, align)
+}
+
+unsafe fn dealloc_raw(p: *mut u8, n: usize, size: usize, align: usize) {
+    if size == 0 || n == 0 {
+        return;
+    }
+    intrinsics::dealloc(p, size * n, align)
+}
+
+unsafe fn realloc_raw(p: *mut u8, old_n: usize, new_n: usize, size: usize, align: usize) -> *mut u8 {
     if size == 0 {
-        return align as *mut T;
+        return align as *mut u8;
     }
     if old_n == 0 {
-        return alloc_array::<T>(new_n);
+        return alloc_raw(new_n, size, align);
     }
     if new_n == 0 {
-        dealloc_array(p, old_n);
-        return align as *mut T;
+        dealloc_raw(p, old_n, size, align);
+        return align as *mut u8;
     }
     let total = match size.checked_mul(new_n) {
         Some(t) if t <= isize::MAX as usize => t,
         _ => capacity_overflow(),
     };
-    intrinsics::realloc(p as *mut u8, size * old_n, align, total) as *mut T
+    intrinsics::realloc(p, size * old_n, align, total)
 }
 
 #[inline(never)]
