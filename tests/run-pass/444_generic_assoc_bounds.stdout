@@ -1,0 +1,13 @@
+3 2 1 first=Some(3)
+("a", 1.5) ("b", -2.0) first=Some(("a", 1.5))
+(0, 0) via ""
+(0, 1) via "D"
+(1, 0) via "R"
+(1, 1) via "RD"
+(2, 0) via "RR"
+(2, 1) via "RRD"
+6
+21
+486921
+01FE10
+6 6 2 size=2

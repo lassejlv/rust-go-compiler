@@ -1,0 +1,26 @@
+5 20
+2 1 take=2 after=0
+CELL STRING
+one two total=3
+node 0 visited=true cost=Some(0) now=None
+node 1 visited=false cost=None now=None
+node 2 visited=true cost=Some(20) now=None
+node 3 visited=false cost=None now=None
+[1, 3, 6]
+[100, 3, 2]
+None
+first
+first set_again=Err("third")
+Ok(()) Some(1) None
+before config
+  (init config)
+["debug", "fast"]
+2
+before squares
+  (init squares)
+9 285
+lazy created
+  (lazy cell eval)
+42 43
+depth 6
+depth after 0

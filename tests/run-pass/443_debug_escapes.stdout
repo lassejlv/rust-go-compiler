@@ -1,0 +1,55 @@
+"plain"
+"with \"double\" quotes"
+"with 'single' quotes"
+"back\\slash"
+"nl\ncr\rtab\t"
+"nul\0bell\u{7}esc\u{1b} del\u{7f}"
+"unicode: é ñ 日本 🦀"
+"\u{301}combining at start"
+"mid\u{301}dle"
+"zero\u{200b}width\u{feff}bom"
+"nbsp\u{a0}here"
+"line\u{2028}sep"
+"private\u{e000}use"
+"unassigned\u{378}x"
+"\u{10ffff}"
+"soft\u{ad}hyphen"
+"rtl\u{202e}override"
+""
+'"' '\'' '\\' '\n' '\0' '\u{301}' '\u{200b}' 'é' '\u{ad}' '\u{85}' ' ' 
+["a\"b", "c\\d", "e\nf"]
+[
+    "a\"b",
+    "c\\d",
+    "e\nf",
+]
+('\t', "\t", 9)
+{"k\"1": ['\'', '"'], "k2": []}
+Msg { text: "say \"hi\"\n", sep: '\'', raw: [0, 255, 65] }
+Msg {
+    text: "say \"hi\"\n",
+    sep: '\'',
+    raw: [
+        0,
+        255,
+        65,
+    ],
+}
+"own\\ed" "box\"ed" "c'ow"
+Some("x\ty")
+Ok("😀")
+["\u{7}", "\u{7}"]
+["a\nb"] ["q\""] ['x']
+display=<tab	here> debug=<"tab\there"> len=11
+display=<quote"> debug=<"quote\""> len=9
+display=<unié> debug=<"unié"> len=7
+[97, 98, 10] [61, 62, a]
+"/tmp/with space/\"q\""
+"/tmp/with space/\"q\""
+"os\nstr"
+a\"b\\c\nd
+"simple" "simple" same=true
+"q\"uote" "q\"uote" same=true
+"ctl\u0001\u001f" "ctl\u{1}\u{1f}" same=false
+"nl\n" "nl\n" same=true
+"uni é" "uni é" same=true

@@ -1,0 +1,40 @@
+["a", "b", "", "c", ""]
+["a", "b", "", "c"]
+["c", "", "b", "a"]
+["a", "b", ",c,"]
+["", "c", "a,b,"]
+["a,", "b,", ",", "c,"]
+["", "c", "", "b", "a"]
+[""]
+["", "a", "b", "c", ""]
+["one", "two", "-three", ""]
+["one", "t", "o", "three"]
+["a", "b", "", "c", "", "", "d"]
+["x", "y", "z", "w"]
+["x", "y", "z"]
+Some(("key", "value=more")) Some(("key=value", "more"))
+None Some(("a", "b::c"))
+["hello", "world", "nbsp", "em"]
+["hello", "world", "\u{a0}nbsp", "\u{2003}em"]
+["", "", "hello", "\t", "world\n\u{a0}nbsp", "", "\u{2003}em", ""]
+["line1", "line2", "line3", "", "line5"]
+1
+["ab", "ab", "ab"]
+[(0, "abc"), (3, "abc")]
+[(7, "b"), (4, "b"), (1, "b")]
+2
+Some(2) Some(6) Some(2)
+[--hello--] [-hello--xx] [xx--hello]
+[hi] [hi  ] [  hi]
+[abc]
+[full width]
+Some("rest") Some("file.tar")
+None Some("bc")
+["name", "age", "city"]
+["Smith, John", "42", "New \"York\""]
+["plain", "", ""]
+["a\"b", "x", "multi, comma, field"]
+["usr", "local", "lib", "rustlib", "x86_64", "lib.rs"] file=lib.rs stem=lib ext=rs
+dir=/usr/local/lib/rustlib/x86_64 depth=5
+[("a", Some(1)), ("b", Some(2)), ("c", Some(3)), ("d", None)]
+["lleh", "w ", "dlr"]

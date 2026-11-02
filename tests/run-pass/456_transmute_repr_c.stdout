@@ -1,0 +1,26 @@
+0x44332211
+Pixel { r: 204, g: 221, b: 238, a: 255 }
+[17, 34, 51, 68]
+0x0004000300020001
+3.1415927
+0xbf800000
+[3, 5]
+Record size=16 align=4
+offsets kind=0 value=4 scale=8 count=12
+Packed size=7 align=1 value@1 count@5
+Meters size=8 Op size=1
+kind [7] value [4, 3, 2, 1] scale [0, 0, 192, 63] count [9, 0]
+0xaabbccdd 0x1234
+[01, dd, cc, bb, aa, 34, 12]
+2 1 5
+12.5 [1.0, 2.0]
+0 -> Some(Nop) Some(0)
+1 -> Some(Push) Some(1)
+2 -> Some(Pop) Some(2)
+3 -> None None
+16 -> Some(Jump) Some(16)
+255 -> None None
+42 true
+[1, 2, 3, 4, 5, 6, 7, 8]
+[2, 6]
+[04030201, 08070605]

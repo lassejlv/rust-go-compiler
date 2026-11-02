@@ -1,0 +1,40 @@
+a cat sat on a mat
+THE cat sat on the mat
+the c@t s@t on the m@t
+th ct st n th mt
+the bat sat on the bat
+|t|h|e| |c|a|t| |s|a|t| |o|n| |t|h|e| |m|a|t|
+ba
+月本月本
+the_cat_sat_on the mat
+straße -> upper=STRASSE lower=straße ascii_up=STRAßE
+ΣΊΣΥΦΟΣ -> upper=ΣΊΣΥΦΟΣ lower=σίσυφος ascii_up=ΣΊΣΥΦΟΣ
+İstanbul -> upper=İSTANBUL lower=i̇stanbul ascii_up=İSTANBUL
+ŉ -> upper=ʼN lower=ŉ ascii_up=ŉ
+ǆ -> upper=Ǆ lower=ǆ ascii_up=ǆ
+Ǳ -> upper=Ǳ lower=ǳ ascii_up=Ǳ
+ﬀ -> upper=FF lower=ﬀ ascii_up=ﬀ
+ΌΣΟΣ ΣΑ -> upper=ΌΣΟΣ ΣΑ lower=όσος σα ascii_up=ΌΣΟΣ ΣΑ
+hello wörld
+mixed ÄÖ
+true false
+parse_http_request -> parseHttpRequest -> parse_http_request
+already -> already -> already
+_leading -> Leading -> leading
+trailing_ -> trailing -> trailing
+a_b_c -> aBC -> a_b_c
+x_m_l_http_request
+Uryyb, Jbeyq!
+Round Trip
+The Quick Brown  Fox Ǆungla
+ababab
+[]
++==========+
+true 0!123!456!789!101112!131415!161718!19
+37 true
+[] empty=true
+******* in a ******* sentence
+aXYZWef
+aXY ZWef
+acenrstu
+[1, 2, 3, 4]

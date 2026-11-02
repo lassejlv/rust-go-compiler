@@ -1,0 +1,19 @@
+0x3f800000 [0, 0, 128, 63]
+-1
+3.140625 0x40490000
+0xc004000000000000 [0, c0040000] 1
+sizes 4 8 24 8
+int -42
+float 0.125
+str "hello union"
+  dropping string payload "hello union"
+dropped items
+[11, 22, 33, 44, 55]
+["s0", "s1", "s4", "s9"]
+(7, 700)
+(0, false, None)
+[0, 0, 0]
+[1, 2, 3]
+true
+true 8
+8 true

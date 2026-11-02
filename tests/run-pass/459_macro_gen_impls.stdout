@@ -1,0 +1,17 @@
+u8: 1 bytes, signed=false, min=0, max=255
+i8: 1 bytes, signed=true, min=-128, max=127
+u16: 2 bytes, signed=false, min=0, max=65535
+i32: 4 bytes, signed=true, min=-2147483648, max=2147483647
+u64: 8 bytes, signed=false, min=0, max=18446744073709551615
+i128: 16 bytes, signed=true, min=-170141183460469231731687303715884105728, max=170141183460469231731687303715884105727
+8 32 1
+[     GET] Get
+[    POST] Post
+[  DELETE] Delete
+Ok(Post) Err("unknown Method \"PUT\"")
+Ok(Green) 2
+70s Seconds(0) true
+20.25°C true
+pass=2 fail=["\"\": got 0 want 1", "\"héllo\": got 6 want 5"]
+pass=3 fail=[]
+Ada 36

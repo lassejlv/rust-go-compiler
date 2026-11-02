@@ -1,0 +1,33 @@
+[High, Mid, Mid, Low]
+[1, 5, 5, 10]
+false false
+Less Low
+  Start
+  Data(1, "z")
+  Data(2, "a")
+  Data(2, "b")
+  Tagged { level: Mid, id: -3 }
+  Tagged { level: Mid, id: -1 }
+  Tagged { level: Low, id: 5 }
+  End
+first=Some(Start) last=Some(End)
+hash set len 8
+None
+Some(Greater)
+false
+["a", "a", "b"]
+["0.99.99", "1.2.3", "1.2.10", "1.10.0", "2.0.0"]
+max=Some(Version { major: 2, minor: 0, patch: 0 })
+Equal
+true
+[(false, 5), (false, -5), (true, 9), (true, 1)]
+[None, Some(-1), Some(3)]
+[Ok(0), Ok(5), Err(-2), Err(1)]
+[(1, 'z', "y"), (2, 'a', "z"), (2, 'b', "a"), (2, 'b', "x")]
+None Greater
+Less Less
+Greater
+["", "B1", "a", "b10", "b9"]
+["", "a", "B1", "b9", "b10"]
+Greater
+Greater

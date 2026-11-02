@@ -1,0 +1,70 @@
+         'a' U+00061 A.a..l..GX
+         'Z' U+0005A A.a...u.G.
+         '5' U+00035 .Na.....GX
+         ' ' U+00020 ...W......
+        '\n' U+0000A ...WC.....
+        '\t' U+00009 ...WC.....
+         '!' U+00021 .......PG.
+         '~' U+0007E .......PG.
+         'é' U+000E9 A.a..l....
+         'Ω' U+003A9 A.a...u...
+         'ß' U+000DF A.a..l....
+         '٣' U+00663 .Na.......
+         'Ⅻ' U+0216B ANa...u...
+    '\u{a0}' U+000A0 ...W......
+    '\u{7f}' U+0007F ....C.....
+         '中' U+04E2D A.a.......
+         '🦀' U+1F980 ..........
+         '_' U+0005F .......PG.
+         'F' U+00046 A.a...u.GX
+        '\0' U+00000 ....C.....
+escapes:
+'a': default=a debug=a unicode=\u{61}
+'\'': default=\' debug=\' unicode=\u{27}
+'"': default=\" debug=\" unicode=\u{22}
+'\\': default=\\ debug=\\ unicode=\u{5c}
+'\n': default=\n debug=\n unicode=\u{a}
+'\r': default=\r debug=\r unicode=\u{d}
+'\t': default=\t debug=\t unicode=\u{9}
+'\0': default=\u{0} debug=\0 unicode=\u{0}
+'é': default=\u{e9} debug=é unicode=\u{e9}
+'\u{301}': default=\u{301} debug=\u{301} unicode=\u{301}
+'\u{200b}': default=\u{200b} debug=\u{200b} unicode=\u{200b}
+'🦀': default=\u{1f980} debug=🦀 unicode=\u{1f980}
+'\u{7f}': default=\u{7f} debug=\u{7f} unicode=\u{7f}
+tab\there \"q\" \u{e9}\u{1}
+tab\there \"q\" é\u{1}
+\u{61}\u{62}
+case:
+a up=A (1) lo=a (1) ascii_up=A
+A up=A (1) lo=a (1) ascii_up=A
+ß up=SS (2) lo=ß (1) ascii_up=ß
+ǅ up=Ǆ (1) lo=ǆ (1) ascii_up=ǅ
+İ up=İ (1) lo=i̇ (2) ascii_up=İ
+ﬃ up=FFI (3) lo=ﬃ (1) ascii_up=ﬃ
+Σ up=Σ (1) lo=σ (1) ascii_up=Σ
+1 up=1 (1) lo=1 (1) ascii_up=1
+conversions:
+65 233 63872
+A é Some('A')
+Ok(233) Ok(255)
+Ok('😀')
+true
+Some('b') Some('{') None
+"abcde" "zyx"
+afkpuz
+4
+'\u{10ffff}'
+true true
+['0', 'A', 'd', 'z', 'é']
+ascii:
+0x61: alpha=true digit=false ws=false ctrl=false punct=false upper=A ascii=true -> "a"
+0x51: alpha=true digit=false ws=false ctrl=false punct=false upper=Q ascii=true -> "Q"
+0x37: alpha=false digit=true ws=false ctrl=false punct=false upper=7 ascii=true -> "7"
+0x20: alpha=false digit=false ws=true ctrl=false punct=false upper=  ascii=true -> " "
+0x07: alpha=false digit=false ws=false ctrl=true punct=false upper= ascii=true -> "\\x07"
+0x23: alpha=false digit=false ws=false ctrl=false punct=true upper=# ascii=true -> "#"
+0xc3: alpha=false digit=false ws=false ctrl=false punct=false upper=Ã ascii=false -> "\\xc3"
+hi\n\x00\xff
+digit sum 6
+[10, 3, 2, 2]

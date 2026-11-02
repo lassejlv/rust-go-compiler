@@ -1,0 +1,6 @@
+100.000m + 328.084ft = 200.000m
+200.000m = 0.124mi
+5280.000ft
+Id<User>(7) Id<User>(7) Id<Order>(7) eq=true
+sizes: 8 4 0 true
+created -> connect db.local -> login failed -> login admin -> query SELECT 1 (8 bytes)

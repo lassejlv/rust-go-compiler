@@ -1,0 +1,10 @@
+Circle { r: 2.0, id: 101 } 102 103
+12.5664 3.1416 0.5000
+4 circle#103 r=0.5
+int 7
+util::describe | util::strings::describe | util::describe | crate::top_level
+QUIET!
+9 -6
+acc 12
+[104, 105, 106]
+28

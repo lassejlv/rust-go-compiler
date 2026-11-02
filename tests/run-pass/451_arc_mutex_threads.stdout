@@ -1,0 +1,18 @@
+returns [499000, 333666, 249000, 199000]
+total 640333
+hist {0: 249500, 1: 166833, 2: 124500, 3: 99500}
+strong 1
+chunk sums [325, 950, 1575, 2200] = 5050
+grid [1, 8, 27, 64, 125, 216, 343, 512]
+atomic 4000
+4000 Ok(7) Err(9) 9
+fetch_max 9 now 20
+join err true
+poisoned true
+recovered [1, 2, 3, 4]
+poisoned after clear false
+abcd
+Some("worker-7")
+Err("nope")
+try_lock while held: true
+try_lock after: Some(1)

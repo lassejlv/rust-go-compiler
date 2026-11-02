@@ -1,0 +1,11 @@
+["msg0", "msg1", "msg2", "msg3", "msg4"]
+per producer [[0, 10, 20, 30], [1, 11, 21, 31], [2, 12, 22, 32]]
+count 12 first Some((0, 0)) last Some((2, 32))
+rendezvous [7, 8, 9]
+true
+Ok(1)
+true true
+send error returns "lost"
+processed 4 ["#1 100", "#2 101", "#3 104", "#4 OWNED DATA"]
+[(10, 55), (20, 6765), (50, 12586269025), (90, 2880067194370816120)]
+pipeline [1, 4, 9, 16, 25]

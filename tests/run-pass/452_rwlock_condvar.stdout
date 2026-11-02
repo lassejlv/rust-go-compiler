@@ -1,0 +1,8 @@
+two readers 3 1 write blocked=true
+read blocked during write: true
+reader sums [10, 20, 30]
+t0r0 t1r0 t2r0 t0r1 t1r1 t2r1 t0r2 t1r2 t2r2
+consumed [1, 4, 9, 16, 25, 36]
+waited until 5
+leaders=1 ordered=true [(0, 0), (0, 1), (0, 2), (0, 3), (1, 0), (1, 1), (1, 2), (1, 3)]
+6 Ok(6)
