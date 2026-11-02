@@ -24,28 +24,46 @@ typedef struct { void* ptr; uint64_t meta; } Fat;
 #include <linux/futex.h>
 #include <signal.h>
 #include <stdio_ext.h>
+#include <cpuid.h>
 
 extern char** environ;
 
-static char rg_outbuf[1 << 16];
-static int rg_argc;
-static char** rg_argv;
+/* Process-wide runtime state is declared with RG_GLOBAL (initializers with
+   RG_INIT): the program may be compiled as several translation units
+   (RG_MULTI_TU), of which exactly one (RG_DEFINE_GLOBALS) defines each
+   global while the others declare it extern. Runtime functions are static
+   (a copy per unit) and must not keep state of their own: no `static`
+   variables, at file or function scope (codegen.RuntimeSplittable checks). */
+#if !defined(RG_MULTI_TU)
+#define RG_GLOBAL static
+#define RG_INIT(...) = __VA_ARGS__
+#elif defined(RG_DEFINE_GLOBALS)
+#define RG_GLOBAL
+#define RG_INIT(...) = __VA_ARGS__
+#else
+#define RG_GLOBAL extern
+#define RG_INIT(...)
+#endif
+
+RG_GLOBAL char rg_outbuf[1 << 16];
+RG_GLOBAL int rg_argc;
+RG_GLOBAL char** rg_argv;
 
 /* ---- per-thread runtime state ---- */
 /* cleanup stack for unwinding on panic (grows on demand) */
 typedef struct { void* p; void (*f)(void*); uint8_t* flag; } RgCleanup;
-static __thread RgCleanup* rg_cs;
-static __thread size_t rg_csn, rg_cscap;
-static __thread int rg_panicking;
-static __thread int rg_is_main;
-static __thread char* rg_tname;          /* thread name (NULL: "main" / "<unnamed>") */
-static __thread size_t rg_tname_len;
+RG_GLOBAL __thread RgCleanup* rg_cs;
+RG_GLOBAL __thread size_t rg_csn, rg_cscap;
+RG_GLOBAL __thread int rg_panicking;
+RG_GLOBAL __thread int rg_is_main;
+RG_GLOBAL __thread char* rg_tname;          /* thread name (NULL: "main" / "<unnamed>") */
+RG_GLOBAL __thread size_t rg_tname_len;
 /* the payload message of the last caught panic of this thread */
-static __thread char* rg_pmsg;
-static __thread size_t rg_pmsg_len;
-static __thread int rg_pmsg_static;
+RG_GLOBAL __thread char* rg_pmsg;
+RG_GLOBAL __thread size_t rg_pmsg_len;
+RG_GLOBAL __thread int rg_pmsg_static;
 typedef struct RgTry { jmp_buf jb; size_t csbase; struct RgTry* prev; } RgTry;
-static __thread RgTry* rg_try_top;
+RG_GLOBAL __thread RgTry* rg_try_top;
 /* Cleanup-stack switching (for coroutines): each execution context owns a
    cleanup stack (array + count + capacity) and its innermost catch frame.
    rg_cs_swap installs `s` as the current thread's state and returns the
@@ -54,7 +72,7 @@ typedef struct { RgCleanup* cs; size_t n, cap; struct RgTry* try_top; } RgCsStat
 /* Simpler form: the current stack pointer/count (capacity kept internally). */
 static RgCleanup* rg_cs_save(size_t* n) { *n = rg_csn; return rg_cs; }
 
-static int rg_first_panic = 1;
+RG_GLOBAL int rg_first_panic RG_INIT(1);
 
 __attribute__((noinline)) static void rg_cs_grow(void) {
   size_t n = rg_cscap ? rg_cscap * 2 : 256;
@@ -210,11 +228,11 @@ static void rg_futex_wake_all(uint32_t* p) { syscall(SYS_futex, p, FUTEX_WAKE_PR
 
 /* ---- thread-local storage (thread_local!) ---- */
 typedef struct { uint8_t* p; Unit (*dtor)(uint8_t*); } RgTlsSlot;
-static __thread RgTlsSlot* rg_tls;
-static __thread size_t rg_tls_cap;
-static __thread uint64_t* rg_tls_order;
-static __thread size_t rg_tls_n, rg_tls_ocap;
-static uint64_t rg_tls_next_key = 1;
+RG_GLOBAL __thread RgTlsSlot* rg_tls;
+RG_GLOBAL __thread size_t rg_tls_cap;
+RG_GLOBAL __thread uint64_t* rg_tls_order;
+RG_GLOBAL __thread size_t rg_tls_n, rg_tls_ocap;
+RG_GLOBAL uint64_t rg_tls_next_key RG_INIT(1);
 static uint64_t rg_tls_new_key(void) { return __atomic_fetch_add(&rg_tls_next_key, 1, __ATOMIC_SEQ_CST); }
 static uint8_t* rg_tls_get(uint64_t key) { return key < rg_tls_cap ? rg_tls[key].p : NULL; }
 static void rg_tls_set(uint64_t key, uint8_t* p, Unit (*dtor)(uint8_t*)) {
@@ -354,8 +372,8 @@ static const uint8_t* rg_env_get(const uint8_t* p, uint64_t n) {
 }
 static uint64_t rg_env_count(void) { uint64_t n = 0; while (environ && environ[n]) n++; return n; }
 static const uint8_t* rg_env_entry(uint64_t i) { return (const uint8_t*)environ[i]; }
-static uint8_t rg_stdin_buf[1 << 16];
-static size_t rg_stdin_pos, rg_stdin_end;
+RG_GLOBAL uint8_t rg_stdin_buf[1 << 16];
+RG_GLOBAL size_t rg_stdin_pos, rg_stdin_end;
 /* Makes buffered stdin data available; returns its length (0 at EOF, -1 on error). */
 static int64_t rg_stdin_fill(void) {
   if (rg_stdin_pos < rg_stdin_end) return (int64_t)(rg_stdin_end - rg_stdin_pos);
@@ -373,6 +391,25 @@ static void rg_stdin_consume(uint64_t n) { rg_stdin_pos += n; if (rg_stdin_pos >
 static void rg_drop_noop(void* p) { (void)p; }
 
 /* ---- checked arithmetic (debug-mode semantics) ---- */
+#ifdef RG_NO_OVERFLOW_CHECKS
+/* release profile: integer arithmetic wraps, shift amounts are masked
+ * (division by zero and MIN/-1 still panic, as in rustc) */
+#define RG_ADD(T, a, b, F, L, C) ((T)((T)(a) + (T)(b)))
+#define RG_SUB(T, a, b, F, L, C) ((T)((T)(a) - (T)(b)))
+#define RG_MUL(T, a, b, F, L, C) ((T)((T)(a) * (T)(b)))
+#define RG_TMIN(T) ((T)((unsigned __int128)1 << (sizeof(T) * 8 - 1)))
+#define RG_DIV(T, a, b, F, L, C) ({ T _a = (a), _b = (b); \
+  if (_b == 0) rg_panic_str("attempt to divide by zero", F, L, C); \
+  if ((T)-1 < 0 && _b == (T)-1 && _a == RG_TMIN(T)) rg_panic_str("attempt to divide with overflow", F, L, C); \
+  (T)(_a / _b); })
+#define RG_REM(T, a, b, F, L, C) ({ T _a = (a), _b = (b); \
+  if (_b == 0) rg_panic_str("attempt to calculate the remainder with a divisor of zero", F, L, C); \
+  if ((T)-1 < 0 && _b == (T)-1 && _a == RG_TMIN(T)) rg_panic_str("attempt to calculate the remainder with overflow", F, L, C); \
+  (T)(_a % _b); })
+#define RG_SHL(T, BITS, a, b, F, L, C) ((T)((unsigned __int128)(T)(a) << ((unsigned __int128)(b) & ((BITS) - 1))))
+#define RG_SHR(T, BITS, a, b, F, L, C) ((T)((T)(a) >> ((unsigned __int128)(b) & ((BITS) - 1))))
+#define RG_NEG(T, a, F, L, C) ((T)(-(T)(a)))
+#else
 #define RG_ADD(T, a, b, F, L, C) ({ T _r; if (__builtin_add_overflow((T)(a), (T)(b), &_r)) rg_panic_str("attempt to add with overflow", F, L, C); _r; })
 #define RG_SUB(T, a, b, F, L, C) ({ T _r; if (__builtin_sub_overflow((T)(a), (T)(b), &_r)) rg_panic_str("attempt to subtract with overflow", F, L, C); _r; })
 #define RG_MUL(T, a, b, F, L, C) ({ T _r; if (__builtin_mul_overflow((T)(a), (T)(b), &_r)) rg_panic_str("attempt to multiply with overflow", F, L, C); _r; })
@@ -392,6 +429,7 @@ static void rg_drop_noop(void* p) { (void)p; }
   if ((b) < 0 || _s >= (BITS)) rg_panic_str("attempt to shift right with overflow", F, L, C); \
   (T)(_a >> _s); })
 #define RG_NEG(T, a, F, L, C) ({ T _a = (a); if (_a == RG_TMIN(T)) rg_panic_str("attempt to negate with overflow", F, L, C); (T)(-_a); })
+#endif
 #define RG_F2I(T, v, MN, MX) ({ double _v = (double)(v); \
   (_v != _v) ? (T)0 : (_v <= (double)(MN)) ? (T)(MN) : (_v >= (double)(MX)) ? (T)(MX) : (T)_v; })
 
@@ -549,4 +587,12 @@ static uint8_t rg_parse_f64(const uint8_t* p, uint64_t len, double* out) {
   if (s[i] != 0) return 0;
   *out = strtod(s, NULL);
   return 1;
+}
+
+/* CPUID for core::arch::x86_64::__cpuid_count (declared in std as an extern
+ * "C" fn). Weak so every translation unit may carry a copy. */
+__attribute__((weak, used)) void rustgo_cpuid(uint32_t leaf, uint32_t sub, uint32_t* out) {
+  unsigned int a, b, c, d;
+  __cpuid_count(leaf, sub, a, b, c, d);
+  out[0] = a; out[1] = b; out[2] = c; out[3] = d;
 }

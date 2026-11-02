@@ -313,6 +313,11 @@ func (ev *constEval) eval(fr *cframe, e ast.Expr) (*cval, bool) {
 		if !ok {
 			return nil, false
 		}
+		if _, inferred := x.Ty.(*ast.InferType); inferred {
+			// `expr as _`: the target comes from the context (e.g. an
+			// enum's repr type); the caller applies it
+			return v, true
+		}
 		ty := fr.ac.sub(fr.ac.lowerTy(x.Ty))
 		switch ty.Kind {
 		case TInt, TFloat, TChar, TBool:

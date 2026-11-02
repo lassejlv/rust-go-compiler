@@ -34,6 +34,13 @@ type Tcx struct {
 	implsBuilt   bool
 	implsIndexed bool // BuildImpls finished (traitImpls/inherent complete)
 
+	// quiet > 0 suppresses error reporting (speculative generic checks).
+	quiet     int
+	quietErrs int
+	// methodHints caches, per generic fn, the trait of each trait-method
+	// call resolved in the generic body (see methodTraitHints).
+	methodHints map[*Def]map[ast.NodeID]*Def
+
 	paramOf   map[*Def]*GenericParamDef
 	synthetic map[ast.NodeID]int // impl-Trait-in-arg-position type node -> param index
 
@@ -71,6 +78,13 @@ type fatalError struct{}
 
 // Errorf records a diagnostic at span sp.
 func (t *Tcx) Errorf(sp lexer.Span, format string, args ...any) {
+	if t.quiet > 0 {
+		t.quietErrs++
+		if os.Getenv("RUSTGO_TRACE_HINTS") != "" {
+			fmt.Fprintf(os.Stderr, "  (quiet) %s: %s\n", sp.Lo, fmt.Sprintf(format, args...))
+		}
+		return
+	}
 	msg := fmt.Sprintf("%s: error: %s", sp.Lo, fmt.Sprintf(format, args...))
 	if t.errSeen[msg] {
 		return
@@ -260,4 +274,45 @@ func (i Instance) String() string {
 		b.WriteString(">")
 	}
 	return b.String()
+}
+
+// methodTraitHints type-checks def generically (its own parameters as
+// types) and returns, for each method call resolved to a trait method, that
+// trait. Instances use it where the substituted receiver type implements
+// several traits with the method (e.g. serde's `S::SerializeMap` and
+// `S::SerializeSeq` both become one concrete type): the generic body
+// knows which trait was meant. Errors of the speculative check are ignored.
+func (t *Tcx) methodTraitHints(def *Def) map[ast.NodeID]*Def {
+	if t.methodHints == nil {
+		t.methodHints = map[*Def]map[ast.NodeID]*Def{}
+	}
+	if h, ok := t.methodHints[def]; ok {
+		return h
+	}
+	t.methodHints[def] = nil // recursion guard
+	if def.Kind != DefFn || def.Fn == nil || def.Fn.Ast == nil || def.Fn.Ast.Body == nil {
+		return nil
+	}
+	args := t.Generics(def).Identity()
+	if len(args) == 0 {
+		return nil
+	}
+	hints := map[ast.NodeID]*Def{}
+	t.quiet++
+	func() {
+		defer func() { recover() }()
+		fcx := t.newFnCtxt(def, args)
+		fcx.checkFn()
+		for id, c := range fcx.r.Callees {
+			if c != nil && c.Def != nil && c.Def.InTrait() && c.Def.Parent != nil {
+				hints[id] = c.Def.Parent
+			}
+		}
+	}()
+	t.quiet--
+	if os.Getenv("RUSTGO_TRACE_HINTS") != "" {
+		fmt.Fprintf(os.Stderr, "hints for %s: %d calls, %d quiet errors\n", def.Path(), len(hints), t.quietErrs)
+	}
+	t.methodHints[def] = hints
+	return hints
 }

@@ -17,8 +17,8 @@ typedef struct RgCoro {
   RgCsState saved;  /* the resumer's cleanup stack while running */
 } RgCoro;
 
-static __thread RgCoro* rg_coro_current;
-static __thread uint8_t* rg_coro_cx;
+RG_GLOBAL __thread RgCoro* rg_coro_current;
+RG_GLOBAL __thread uint8_t* rg_coro_cx;
 
 #define RG_CORO_STACK (512 * 1024)
 

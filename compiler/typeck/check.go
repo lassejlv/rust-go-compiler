@@ -9,12 +9,14 @@ import (
 
 // FnCtxt checks one body instance.
 type FnCtxt struct {
-	t    *Tcx
-	ic   *InferCtxt
-	r    *Results
-	inst Instance
-	def  *Def
-	ac   *astConv
+	// methodNode is the method call being probed (for methodHint).
+	methodNode ast.NodeID
+	t          *Tcx
+	ic         *InferCtxt
+	r          *Results
+	inst       Instance
+	def        *Def
+	ac         *astConv
 
 	scopes   []map[string]*Local
 	modStack []*Module
@@ -105,6 +107,9 @@ func (t *Tcx) newFnCtxt(def *Def, args []Ty) *FnCtxt {
 			tr.Args[i] = t.Normalize(a)
 		}
 		fcx.ic.env = append(fcx.ic.env, tr)
+		if len(p.Bindings) > 0 {
+			fcx.ic.envBindings = append(fcx.ic.envBindings, &Predicate{Trait: tr, Bindings: p.Subst(args).Bindings})
+		}
 	}
 	// a trait's default method body has the implicit `Self: Trait<..>`
 	if def.InTrait() && def.Parent != nil && def.Parent.Kind == DefTrait {
@@ -245,6 +250,11 @@ func (fcx *FnCtxt) normalizeInBody(t Ty, sp lexer.Span) Ty {
 			}
 			if n := fcx.ic.normalizeProjection(x.Def, fcx.ic.resolveList(args), x.Name, 0); n != nil {
 				return fcx.normalizeInBody(n, sp)
+			}
+			rargs := fcx.ic.resolveList(args)
+			if len(rargs) > 0 && !rargs[0].HasInfer() && (rargs[0].Kind == TParam || rargs[0].Kind == TProjection) {
+				// rigid projection in a generic body (`<I as IntoIterator>::IntoIter`)
+				return Projection(x.Def, rargs, x.Name)
 			}
 			v := fcx.ic.newVar()
 			fcx.ic.obligations = append(fcx.ic.obligations, &Obligation{Proj: Projection(x.Def, args, x.Name), Var: v, Span: sp})

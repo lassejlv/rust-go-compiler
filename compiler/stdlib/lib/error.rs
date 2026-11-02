@@ -35,8 +35,6 @@ mod private {
     pub struct Internal;
 }
 
-// NOTE: rustgo models `dyn Error + Send` and `dyn Error + Send + Sync` as the
-// same type (one auto-trait flag), so the second block covers both.
 impl dyn Error {
     /// Returns `true` if the inner type is the same as `T`.
     #[inline]
@@ -110,6 +108,46 @@ impl Box<dyn Error + Send> {
     pub fn downcast<T: Error + 'static>(self) -> Result<Box<T>, Box<dyn Error + Send>> {
         if self.is::<T>() {
             let raw: *mut (dyn Error + Send) = Box::into_raw(self);
+            Ok(unsafe { Box::from_raw(raw as *mut T) })
+        } else {
+            Err(self)
+        }
+    }
+}
+
+impl (dyn Error + Send + Sync) {
+    /// Returns `true` if the inner type is the same as `T`.
+    #[inline]
+    pub fn is<T: Error + 'static>(&self) -> bool {
+        crate::any::TypeId::of::<T>() == self.type_id(private::Internal)
+    }
+
+    /// Returns some reference to the inner value if it is of type `T`, or `None` if it isn't.
+    #[inline]
+    pub fn downcast_ref<T: Error + 'static>(&self) -> Option<&T> {
+        if self.is::<T>() {
+            unsafe { Some(&*(self as *const (dyn Error + Send + Sync) as *const T)) }
+        } else {
+            None
+        }
+    }
+
+    /// Returns some mutable reference to the inner value if it is of type `T`, or `None` if it isn't.
+    #[inline]
+    pub fn downcast_mut<T: Error + 'static>(&mut self) -> Option<&mut T> {
+        if self.is::<T>() {
+            unsafe { Some(&mut *(self as *mut (dyn Error + Send + Sync) as *mut T)) }
+        } else {
+            None
+        }
+    }
+}
+
+impl Box<dyn Error + Send + Sync> {
+    /// Attempts to downcast the box to a concrete type.
+    pub fn downcast<T: Error + 'static>(self) -> Result<Box<T>, Box<dyn Error + Send + Sync>> {
+        if self.is::<T>() {
+            let raw: *mut (dyn Error + Send + Sync) = Box::into_raw(self);
             Ok(unsafe { Box::from_raw(raw as *mut T) })
         } else {
             Err(self)

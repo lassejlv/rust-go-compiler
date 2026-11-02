@@ -361,6 +361,91 @@ impl<T> SliceIndex<[T]> for RangeToInclusive<usize> {
     }
 }
 
+/// Converts a pair of bounds to a `Range`, returning `None` on overflow.
+#[inline]
+pub(crate) fn bounds_into_range(len: usize, (start, end): (Bound<usize>, Bound<usize>)) -> Option<Range<usize>> {
+    let start = match start {
+        Bound::Included(start) => start,
+        Bound::Excluded(start) => start.checked_add(1)?,
+        Bound::Unbounded => 0,
+    };
+    let end = match end {
+        Bound::Included(end) => end.checked_add(1)?,
+        Bound::Excluded(end) => end,
+        Bound::Unbounded => len,
+    };
+    Some(start..end)
+}
+
+/// Converts a pair of bounds to a `Range` without overflow checks.
+#[inline]
+pub(crate) fn bounds_into_range_unchecked(len: usize, (start, end): (Bound<usize>, Bound<usize>)) -> Range<usize> {
+    let start = match start {
+        Bound::Included(i) => i,
+        Bound::Excluded(i) => i + 1,
+        Bound::Unbounded => 0,
+    };
+    let end = match end {
+        Bound::Included(i) => i + 1,
+        Bound::Excluded(i) => i,
+        Bound::Unbounded => len,
+    };
+    start..end
+}
+
+/// Converts a pair of bounds to a `Range`, panicking on overflow.
+#[inline]
+#[track_caller]
+pub(crate) fn bounds_into_slice_range(len: usize, (start, end): (Bound<usize>, Bound<usize>)) -> Range<usize> {
+    let start = match start {
+        Bound::Included(start) => start,
+        Bound::Excluded(start) => match start.checked_add(1) {
+            Some(s) => s,
+            None => crate::rt::panic_str("attempted to index slice from after maximum usize", file!(), line!(), column!()),
+        },
+        Bound::Unbounded => 0,
+    };
+    let end = match end {
+        Bound::Included(end) => match end.checked_add(1) {
+            Some(e) => e,
+            None => slice_end_index_overflow_fail(),
+        },
+        Bound::Excluded(end) => end,
+        Bound::Unbounded => len,
+    };
+    start..end
+}
+
+impl<T> SliceIndex<[T]> for (Bound<usize>, Bound<usize>) {
+    type Output = [T];
+    #[inline]
+    fn get(self, slice: &[T]) -> Option<&[T]> {
+        bounds_into_range(slice.len(), self)?.get(slice)
+    }
+    #[inline]
+    fn get_mut(self, slice: &mut [T]) -> Option<&mut [T]> {
+        bounds_into_range(slice.len(), self)?.get_mut(slice)
+    }
+    #[inline]
+    unsafe fn get_unchecked(self, slice: *const [T]) -> *const [T] {
+        bounds_into_range_unchecked(intrinsics::slice_len(slice), self).get_unchecked(slice)
+    }
+    #[inline]
+    unsafe fn get_unchecked_mut(self, slice: *mut [T]) -> *mut [T] {
+        bounds_into_range_unchecked(intrinsics::slice_len(slice as *const [T]), self).get_unchecked_mut(slice)
+    }
+    #[inline]
+    #[track_caller]
+    fn index(self, slice: &[T]) -> &[T] {
+        bounds_into_slice_range(slice.len(), self).index(slice)
+    }
+    #[inline]
+    #[track_caller]
+    fn index_mut(self, slice: &mut [T]) -> &mut [T] {
+        bounds_into_slice_range(slice.len(), self).index_mut(slice)
+    }
+}
+
 impl<T, I: SliceIndex<[T]>> Index<I> for [T] {
     type Output = I::Output;
     #[inline]

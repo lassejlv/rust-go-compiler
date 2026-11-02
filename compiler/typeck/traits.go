@@ -174,6 +174,44 @@ func (ic *InferCtxt) selectTrait(tr *TraitRef, depth int) (res Selection) {
 		}
 		return Selection{Kind: SelAmbig}
 	}
+	// Generic bodies (types still containing parameters): where-clauses
+	// are candidates (rustc's param-env candidates).
+	if self.HasParam() {
+		for _, e := range ic.env {
+			if e.Trait != trait {
+				for _, st := range t.AllSupertraits(e) {
+					if st.Trait == trait && ic.probeUnifyList(st.Args, tr.Args) {
+						ic.unifyList(st.Args, tr.Args)
+						return Selection{Kind: SelObject}
+					}
+				}
+				continue
+			}
+			if ic.probeUnifyList(e.Args, tr.Args) {
+				ic.unifyList(e.Args, tr.Args)
+				return Selection{Kind: SelObject}
+			}
+		}
+	}
+	// An associated type that can't be normalized (its Self is a type
+	// parameter) implements the bounds declared on it in its trait.
+	if self.Kind == TProjection && self.Def != nil && self.Def.Trait != nil {
+		if it, ok := self.Def.Trait.Items[self.Name]; ok && it.Kind == DefAssocTy {
+			t.Generics(it)
+			n := len(t.Generics(self.Def).Params)
+			if len(self.Args) >= n {
+				for _, b := range it.AssocTy.Bounds {
+					btr := b.Trait.Subst(self.Args[:n])
+					for _, st := range t.AllSupertraits(btr) {
+						if st.Trait == trait && ic.probeUnifyList(st.Args, tr.Args) {
+							ic.unifyList(st.Args, tr.Args)
+							return Selection{Kind: SelObject}
+						}
+					}
+				}
+			}
+		}
+	}
 	// Unrevealed opaque types (recursion) implement their declared bounds.
 	if self.Kind == TOpaque {
 		if b := ic.opaqueBound(self, trait); b != nil {
@@ -536,8 +574,48 @@ func (ic *InferCtxt) normalizeProjection(trait *Def, args []Ty, name string, dep
 	if self.Kind == TInfer && self.Sub == 0 {
 		return nil
 	}
-	if self.Kind == TParam {
-		return nil
+	if self.Kind == TParam || self.Kind == TProjection {
+		// generic body: a where-clause binding gives the type
+		for _, p := range ic.envBindings {
+			for _, st := range t.AllSupertraits(p.Trait) {
+				if st.Trait != trait || !ic.probeUnifyList(st.Args, args) {
+					continue
+				}
+				for _, b := range p.Bindings {
+					if b.Name == name {
+						ic.unifyList(st.Args, args)
+						return b.Ty
+					}
+				}
+			}
+		}
+		// `<<S as Serializer>::SerializeMap as SerializeMap>::Ok` from the
+		// bound `type SerializeMap: SerializeMap<Ok = Self::Ok>`
+		if self.Kind == TProjection && self.Def != nil && self.Def.Trait != nil {
+			if it, ok := self.Def.Trait.Items[self.Name]; ok && it.Kind == DefAssocTy {
+				t.Generics(it)
+				n := len(t.Generics(self.Def).Params)
+				if len(self.Args) >= n {
+					for _, b := range it.AssocTy.Bounds {
+						bp := b.Subst(self.Args[:n])
+						for _, st := range t.AllSupertraits(bp.Trait) {
+							if st.Trait != trait || !ic.probeUnifyList(st.Args, args) {
+								continue
+							}
+							for _, bd := range bp.Bindings {
+								if bd.Name == name {
+									ic.unifyList(st.Args, args)
+									return bd.Ty
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		if self.Kind == TParam {
+			return nil
+		}
 	}
 	// Fn-family Output.
 	if trait.LangItem == "fn_once" && name == "Output" {

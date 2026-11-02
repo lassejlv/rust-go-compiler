@@ -57,7 +57,9 @@ func (fcx *FnCtxt) checkMethodCall(x *ast.MethodCallExpr, expected Ty) Ty {
 	}
 	p := early
 	if p == nil {
+		fcx.methodNode = x.ID
 		p = fcx.lookupMethod(rt, x.Method.Name, x.Span)
+		fcx.methodNode = 0
 	}
 	if p == nil {
 		fcx.errorf(x.Method.Span, "no method named `%s` found for `%s`", x.Method.Name, fcx.resolve(rt))
@@ -90,7 +92,7 @@ func (fcx *FnCtxt) checkMethodCall(x *ast.MethodCallExpr, expected Ty) Ty {
 	// like calls: argument expectations from the expected result type
 	fcx.nextHints = fcx.expectedInputs(ins, out, expected)
 	fcx.checkArgs(x.Args, ins, false, x.Span)
-	if o := fcx.shallow(out); o.Kind == TInfer && o.Sub == 0 {
+	if fcx.resolve(out).HasInfer() {
 		// the result is a pending projection: resolve it now that the
 		// arguments are known, before it meets the caller's expectation
 		fcx.selectWherePossible()
@@ -272,6 +274,16 @@ func (fcx *FnCtxt) lookupMethod(recv Ty, name string, sp lexer.Span) *pick {
 					continue
 				}
 				if found != nil {
+					// several traits apply: in a monomorphized body, the
+					// generic body's resolution decides (see methodTraitHints)
+					if foundKind != SelAmbig && k != SelAmbig {
+						if h := fcx.methodHint(); h != nil && h == tr && found.item.Parent != tr {
+							fcx.ic.rollback(s)
+							found = &pick{item: c.item, parent: targs, recvTy: adjusted}
+							foundKind = k
+							continue
+						}
+					}
 					// prefer a definite match over an ambiguous one
 					if foundKind != SelAmbig || k == SelAmbig {
 						fcx.ic.rollback(s)
@@ -382,4 +394,13 @@ func (fcx *FnCtxt) earlierStepImplements(steps []autoderefStep, e *TraitRef) boo
 		}
 	}
 	return false
+}
+
+// methodHint returns the trait the generic body resolved the current method
+// call to (nil outside monomorphized generic bodies or if unknown).
+func (fcx *FnCtxt) methodHint() *Def {
+	if fcx.methodNode == 0 || len(fcx.inst.Args) == 0 || fcx.t.quiet > 0 {
+		return nil
+	}
+	return fcx.t.methodTraitHints(fcx.def)[fcx.methodNode]
 }

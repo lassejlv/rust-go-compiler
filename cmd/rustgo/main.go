@@ -7,12 +7,12 @@
 package main
 
 import (
-	"runtime/debug"
-	"runtime/pprof"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime/debug"
+	"runtime/pprof"
 	"strings"
 
 	"rustgo/compiler/driver"
@@ -29,6 +29,7 @@ options:
   -o <path>         output executable (default: input name without .rs)
   --emit-c <path>   also write the generated C source
   --keep-c          keep the temporary C file
+  --release         optimize (gcc -O2), no integer overflow checks (like cargo --release)
   --std <dir>       use a std library from a directory instead of the built-in one
   --cc <compiler>   C compiler to use (default: gcc, or $RUSTGO_CC)
   -O <level>        C optimization level (default 1)
@@ -96,6 +97,8 @@ func main() {
 		case strings.HasPrefix(a, "--edition="):
 		case a == "--check-all":
 			opts.CheckAll = true
+		case a == "--release":
+			opts.Release = true
 		case a == "-v":
 			opts.Verbose = true
 		case a == "-h" || a == "--help":
@@ -180,6 +183,8 @@ func cargoBuild(args []string) {
 			opts.Verbose = true
 		case "--run":
 			runAfter = true
+		case "--release", "-r":
+			opts.Release = true
 		default:
 			fmt.Fprintf(os.Stderr, "error: unknown build option %s\n", args[i])
 			os.Exit(1)

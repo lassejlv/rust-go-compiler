@@ -10,7 +10,10 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"runtime"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"rustgo/compiler/ast"
@@ -35,6 +38,7 @@ type Options struct {
 	Verbose  bool
 	KeepC    bool
 	CheckAll bool // type-check every non-generic function in all crates
+	Release  bool // optimize (gcc -O2) and disable integer overflow checks
 	LinkArgs []string
 }
 
@@ -100,6 +104,13 @@ func loadMod(fsys fs.FS, it *ast.Item, dir, prefix string) (string, error) {
 	if m.Loaded {
 		return child, nil
 	}
+	if hasCfg {
+		// Whether the module exists, and which file it lives in
+		// (`#[cfg_attr(unix, path = "unix.rs")]`), depends on the crate's
+		// cfg configuration: the expander loads it through Crate.LoadMod
+		// once #[cfg]/#[cfg_attr] are evaluated.
+		return child, nil
+	}
 	cands := []string{path.Join(dir, name+".rs"), path.Join(dir, name, "mod.rs")}
 	if pathAttr != "" {
 		// #[path]: relative to the declaring file's directory (dir for
@@ -115,11 +126,6 @@ func loadMod(fsys fs.FS, it *ast.Item, dir, prefix string) (string, error) {
 		}
 	}
 	if file == "" {
-		if hasCfg {
-			// probably configured out (e.g. #[cfg(doc)] #[path = "x.md"]);
-			// the expander strips it, or reports the unloaded module
-			return child, nil
-		}
 		return "", fmt.Errorf("%s: error: file not found for module `%s` (tried %s)", it.Span.Lo, name, strings.Join(cands, ", "))
 	}
 	if pathAttr != "" {
@@ -244,59 +250,89 @@ func CheckAll(opts *Options) error {
 
 // GenerateC runs the full pipeline up to C source.
 func GenerateC(opts *Options) (string, error) {
-	tcx, mainDef, err := Frontend(opts)
+	prog, err := GenerateProgram(opts)
 	if err != nil {
 		return "", err
 	}
+	return prog.Source(), nil
+}
+
+// GenerateProgram runs the full pipeline up to the generated C program.
+func GenerateProgram(opts *Options) (*codegen.Program, error) {
+	tcx, mainDef, err := Frontend(opts)
+	if err != nil {
+		return nil, err
+	}
 	g := codegen.New(tcx)
-	var src string
+	var prog *codegen.Program
 	var genErr error
 	aborted := tcx.Guard(func() {
-		src, genErr = g.Generate(mainDef)
+		prog, genErr = g.GenerateProgram(mainDef)
 	})
 	if aborted {
-		return "", tcx.Err()
+		return nil, tcx.Err()
 	}
 	if genErr != nil {
-		return "", genErr
+		return nil, genErr
 	}
 	if err := tcx.Err(); err != nil {
-		return "", err
+		return nil, err
 	}
-	return src, nil
+	return prog, nil
 }
 
 // Compile compiles opts.Input to an executable at opts.Output.
 func Compile(opts *Options) error {
-	src, err := GenerateC(opts)
+	prog, err := GenerateProgram(opts)
 	if err != nil {
 		return err
 	}
-	return compileC(opts, src)
+	return compileC(opts, prog)
 }
 
-// compileC writes the C source and invokes the C compiler.
-func compileC(opts *Options, src string) error {
+// Splitting the C program into several translation units compiled in
+// parallel pays off only for large programs: every unit re-parses the
+// common header (runtime, types, prototypes), and functions called across
+// units can no longer be inlined. Up to two units per CPU are made (the
+// cost of C functions varies a lot, so smaller units balance better), each
+// with at least tuMinFnBytes of function definitions.
+const (
+	tuMinFnBytes = 1 << 20
+	tuMax        = 16
+)
+
+// unitCount picks the number of translation units for a program with
+// fnBytes of function definitions (RUSTGO_CC_UNITS overrides it).
+func unitCount(fnBytes int) int {
+	if s := os.Getenv("RUSTGO_CC_UNITS"); s != "" {
+		if n, err := strconv.Atoi(s); err == nil && n >= 1 {
+			return n
+		}
+	}
+	n := 2 * runtime.NumCPU()
+	if n > tuMax {
+		n = tuMax
+	}
+	if m := fnBytes / tuMinFnBytes; m < n {
+		n = m
+	}
+	if n < 1 {
+		n = 1
+	}
+	return n
+}
+
+// compileC writes the C source and invokes the C compiler. Large programs
+// are compiled as several translation units in parallel, then linked.
+func compileC(opts *Options, prog *codegen.Program) error {
 	t1 := time.Now()
 	if opts.EmitC != "" {
-		if err := os.WriteFile(opts.EmitC, []byte(src), 0o644); err != nil {
+		if err := os.WriteFile(opts.EmitC, []byte(prog.Source()), 0o644); err != nil {
 			return err
 		}
 	}
 	if opts.Output == "" {
 		return nil
-	}
-	tmp, err := os.CreateTemp("", "rustgo-*.c")
-	if err != nil {
-		return err
-	}
-	cpath := tmp.Name()
-	tmp.WriteString(src)
-	tmp.Close()
-	if !opts.KeepC {
-		defer os.Remove(cpath)
-	} else {
-		fmt.Fprintf(os.Stderr, "C source kept at %s\n", cpath)
 	}
 	cc := opts.CC
 	if cc == "" {
@@ -308,16 +344,84 @@ func compileC(opts *Options, src string) error {
 	ol := opts.OptLevel
 	if ol == "" {
 		ol = "1"
+		if opts.Release {
+			ol = "2"
+		}
 	}
-	args := []string{"-O" + ol, "-w", "-fwrapv", "-fno-strict-aliasing", "-o", opts.Output, cpath, "-lm", "-lpthread"}
-	args = append(args, opts.LinkArgs...)
-	cmd := exec.Command(cc, args...)
-	out, err := cmd.CombinedOutput()
+	cflags := []string{"-O" + ol, "-w", "-fwrapv", "-fno-strict-aliasing", "-pipe"}
+	if opts.Release {
+		cflags = append(cflags, "-DRG_NO_OVERFLOW_CHECKS")
+	}
+	libs := append([]string{"-lm", "-lpthread"}, opts.LinkArgs...)
+	units := prog.Units(unitCount(prog.FnBytes()))
+	if len(units) == 1 {
+		tmp, err := os.CreateTemp("", "rustgo-*.c")
+		if err != nil {
+			return err
+		}
+		cpath := tmp.Name()
+		tmp.WriteString(units[0])
+		tmp.Close()
+		if !opts.KeepC {
+			defer os.Remove(cpath)
+		} else {
+			fmt.Fprintf(os.Stderr, "C source kept at %s\n", cpath)
+		}
+		args := append(append(cflags, "-o", opts.Output, cpath), libs...)
+		if out, err := exec.Command(cc, args...).CombinedOutput(); err != nil {
+			return fmt.Errorf("C compiler failed: %v\n%s", err, truncate(string(out), 4000))
+		}
+		if opts.Verbose {
+			fmt.Fprintf(os.Stderr, "cc %v\n", time.Since(t1))
+		}
+		return nil
+	}
+	dir, err := os.MkdirTemp("", "rustgo-*")
 	if err != nil {
-		return fmt.Errorf("C compiler failed: %v\n%s", err, truncate(string(out), 4000))
+		return err
+	}
+	if !opts.KeepC {
+		defer os.RemoveAll(dir)
+	} else {
+		fmt.Fprintf(os.Stderr, "C sources (%d translation units) kept in %s\n", len(units), dir)
+	}
+	objs := make([]string, len(units))
+	errs := make([]error, len(units))
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, runtime.NumCPU())
+	cpaths := make([]string, len(units))
+	for i, src := range units {
+		cpaths[i] = filepath.Join(dir, fmt.Sprintf("u%d.c", i))
+		objs[i] = filepath.Join(dir, fmt.Sprintf("u%d.o", i))
+		if err := os.WriteFile(cpaths[i], []byte(src), 0o644); err != nil {
+			return err
+		}
+	}
+	for i, cpath := range cpaths {
+		wg.Add(1)
+		go func(i int, cpath string) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			args := append(append([]string{}, cflags...), "-c", "-o", objs[i], cpath)
+			if out, err := exec.Command(cc, args...).CombinedOutput(); err != nil {
+				errs[i] = fmt.Errorf("C compiler failed: %v\n%s", err, truncate(string(out), 4000))
+			}
+		}(i, cpath)
+	}
+	wg.Wait()
+	for _, err := range errs {
+		if err != nil {
+			return err
+		}
+	}
+	t2 := time.Now()
+	args := append(append([]string{"-o", opts.Output}, objs...), libs...)
+	if out, err := exec.Command(cc, args...).CombinedOutput(); err != nil {
+		return fmt.Errorf("linking failed: %v\n%s", err, truncate(string(out), 4000))
 	}
 	if opts.Verbose {
-		fmt.Fprintf(os.Stderr, "cc %v\n", time.Since(t1))
+		fmt.Fprintf(os.Stderr, "cc %v (%d units: compile %v, link %v)\n", time.Since(t1), len(units), t2.Sub(t1), time.Since(t2))
 	}
 	return nil
 }

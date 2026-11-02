@@ -177,9 +177,9 @@ func buildProcMacroServer(opts *Options, pm *crateUnit, all map[string]*crateUni
 		return nil, tcx.Err()
 	}
 	g := codegen.New(tcx)
-	var csrc string
+	var prog *codegen.Program
 	var genErr error
-	if aborted := tcx.Guard(func() { csrc, genErr = g.Generate(bnd.Res.Def) }); aborted {
+	if aborted := tcx.Guard(func() { prog, genErr = g.GenerateProgram(bnd.Res.Def) }); aborted {
 		return nil, tcx.Err()
 	}
 	if genErr != nil {
@@ -188,7 +188,7 @@ func buildProcMacroServer(opts *Options, pm *crateUnit, all map[string]*crateUni
 	if err := tcx.Err(); err != nil {
 		return nil, err
 	}
-	sum := sha256.Sum256([]byte(csrc))
+	sum := sha256.Sum256([]byte(prog.Source()))
 	dir := filepath.Join(os.TempDir(), "rustgo-proc-macros")
 	os.MkdirAll(dir, 0o755)
 	exe := filepath.Join(dir, fmt.Sprintf("%s-%x", pm.key, sum[:8]))
@@ -196,7 +196,7 @@ func buildProcMacroServer(opts *Options, pm *crateUnit, all map[string]*crateUni
 		popts := *opts
 		popts.Output = exe
 		popts.EmitC = ""
-		if err := compileC(&popts, csrc); err != nil {
+		if err := compileC(&popts, prog); err != nil {
 			return nil, fmt.Errorf("building proc-macro server for %s: %v", pm.name, err)
 		}
 	}

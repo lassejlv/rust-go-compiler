@@ -45,10 +45,15 @@ type Resolver struct {
 	forcing bool
 	// changed records that an import pass added or changed a binding.
 	changed bool
+	// macroReexports: macros a crate re-exports by `pub use` (per crate).
+	macroReexports map[*Crate]map[string]bool
 }
 
 func (r *Resolver) isMacro(c *Crate, name string) bool {
 	if r.IsBuiltinMacro != nil && r.IsBuiltinMacro(name) {
+		return true
+	}
+	if c != nil && r.macroReexports[c][name] {
 		return true
 	}
 	return c != nil && r.IsCrateMacro != nil && r.IsCrateMacro(c.Name, name)
@@ -237,6 +242,16 @@ func (r *Resolver) collectItem(it *ast.Item, m *Module, parent *Def) *Def {
 		}
 		if cr := r.ExternCrate(m.Crate, name); cr != nil {
 			r.define(m, bind, TypeNS, defRes(cr.Def), it.Name.Span)
+			// 2018+: `extern crate x as y;` at the crate root adds `y` to
+			// the extern prelude (usable from every module)
+			if bind != name && m == m.Crate.Root {
+				if m.Crate.Externs == nil {
+					m.Crate.Externs = map[string]*Crate{}
+				}
+				if _, exists := m.Crate.Externs[bind]; !exists {
+					m.Crate.Externs[bind] = cr
+				}
+			}
 		} else if name == "std" || name == "core" || name == "alloc" {
 			// std may not be loaded yet if we are std itself; resolve lazily via path.
 			m.Imports = append(m.Imports, &Import{Module: m, Path: []string{name}, Global: true, Name: bind, Span: it.Span})
@@ -417,10 +432,7 @@ func (r *Resolver) allModules() []*Module {
 		visit(c.Root)
 	}
 	for _, bm := range r.BlockMods {
-		if !seen[bm] {
-			seen[bm] = true
-			out = append(out, bm)
-		}
+		visit(bm) // including modules declared inside blocks
 	}
 	return out
 }
@@ -652,6 +664,14 @@ func (r *Resolver) tryImport(imp *Import, report bool) bool {
 			if b == nil {
 				return Res{}, false, det
 			}
+			// privacy: another crate's private items are not importable
+			// (`use memchr::memchr` must not pick up memchr's private
+			// `mod memchr` in the type namespace)
+			if target.Crate != m.Crate && !b.Import && b.Res.Kind == ResDef && b.Res.Def != nil &&
+				b.Res.Def.Item != nil && b.Res.Def.Item.Vis != ast.VisPub && target.Def != nil &&
+				target.Def.Kind != DefEnum && target.Def.Kind != DefTrait {
+				return Res{}, false, true
+			}
 			return b.Res, true, true
 		}
 	}
@@ -671,7 +691,18 @@ func (r *Resolver) tryImport(imp *Import, report bool) bool {
 		return false
 	}
 	if !found && r.isMacro(macroCrate, last) {
-		return true // macros live in a namespace we don't model
+		// macros live in a namespace we don't model; remember re-exports
+		// (`pub use dep::some_macro;`) so other crates can import them
+		if macroCrate != m.Crate && imp.Name != "" && imp.Name != "_" {
+			if r.macroReexports == nil {
+				r.macroReexports = map[*Crate]map[string]bool{}
+			}
+			if r.macroReexports[m.Crate] == nil {
+				r.macroReexports[m.Crate] = map[string]bool{}
+			}
+			r.macroReexports[m.Crate][imp.Name] = true
+		}
+		return true
 	}
 	if !found {
 		if report {

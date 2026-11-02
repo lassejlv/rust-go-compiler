@@ -29,7 +29,7 @@ type Gen struct {
 	protos  strings.Builder // prototypes
 	vtdefs  strings.Builder // vtable definitions
 	statics strings.Builder
-	fns     strings.Builder // function bodies
+	fns     chunkBuf // function bodies (one chunk per function)
 
 	types        map[Ty]*typeInfo
 	typeN        int
@@ -109,7 +109,17 @@ func cIdent(s string) string {
 }
 
 // Generate produces the C source for a program whose entry is mainDef.
-func (g *Gen) Generate(mainDef *Def) (out string, err error) {
+func (g *Gen) Generate(mainDef *Def) (string, error) {
+	p, err := g.GenerateProgram(mainDef)
+	if err != nil {
+		return "", err
+	}
+	return p.Source(), nil
+}
+
+// GenerateProgram produces the C program whose entry is mainDef, which can
+// be rendered as one translation unit or split into several (see Units).
+func (g *Gen) GenerateProgram(mainDef *Def) (prog *Program, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			if ce, ok := r.(cgError); ok {
@@ -120,33 +130,30 @@ func (g *Gen) Generate(mainDef *Def) (out string, err error) {
 		}
 	}()
 	mainName := g.fnName(mainDef, nil)
+	ctors := g.initArrayCtors()
 	g.drain()
+	g.staticInit = append(g.staticInit, ctors...) // after every static's init
 	if len(g.tcx.Errors) > 0 {
-		return "", g.tcx.Err()
+		return nil, g.tcx.Err()
 	}
 	if len(g.Errors) > 0 {
-		return "", fmt.Errorf("%s", strings.Join(g.Errors, "\n"))
+		return nil, fmt.Errorf("%s", strings.Join(g.Errors, "\n"))
 	}
-	var b strings.Builder
-	b.WriteString(runtimeH)
-	b.WriteString(coroH)
-	b.WriteString("\n/* ---- types ---- */\n")
-	b.WriteString(g.fwd.String())
-	b.WriteString(g.defs.String())
-	b.WriteString("\n/* ---- prototypes ---- */\n")
-	b.WriteString(g.protos.String())
-	b.WriteString(g.statics.String())
-	b.WriteString(g.vtdefs.String())
-	b.WriteString("\n/* ---- functions ---- */\n")
-	b.WriteString(g.fns.String())
-	// main
-	b.WriteString("int main(int argc, char** argv) {\n  rg_init(argc, argv);\n")
+	var m strings.Builder
+	m.WriteString("int main(int argc, char** argv) {\n  rg_init(argc, argv);\n")
 	for _, s := range g.staticInit {
-		b.WriteString("  " + s + "\n")
+		m.WriteString("  " + s + "\n")
 	}
-	fmt.Fprintf(&b, "  %s();\n", mainName)
-	b.WriteString("  rg_flush_stdout();\n  return 0;\n}\n")
-	return b.String(), nil
+	fmt.Fprintf(&m, "  %s();\n", mainName)
+	m.WriteString("  rg_flush_stdout();\n  return 0;\n}\n")
+	return &Program{
+		types:  g.fwd.String() + g.defs.String(),
+		protos: g.protos.String(),
+		data:   g.statics.String() + g.vtdefs.String(),
+		fns:    g.fns.String(),
+		fnEnds: g.fns.ends,
+		main:   m.String(),
+	}, nil
 }
 
 type cgError struct{ msg string }
@@ -349,7 +356,8 @@ func (g *Gen) genConstFn(name string, d *Def, args []Ty) {
 	if cache {
 		// file-scope cache, also reachable as a place via NAME_p()
 		g.defineByValue(r.RetTy)
-		fmt.Fprintf(&g.statics, "static %s %s_cache; static uint8_t %s_done;\n", g.ctype(r.RetTy), name, name)
+		fmt.Fprintf(&g.statics, "static %s %s_cache;\n", g.ctype(r.RetTy), name)
+		fmt.Fprintf(&g.statics, "static uint8_t %s_done;\n", name)
 		fmt.Fprintf(&g.protos, "static %s* %s_p(void);\n", g.ctype(r.RetTy), name)
 		fmt.Fprintf(&g.fns, "static %s* %s_p(void) { (void)%s(); return &%s_cache; }\n", g.ctype(r.RetTy), name, name, name)
 		fg.line("if (__atomic_load_n(&%s_done, __ATOMIC_ACQUIRE)) return %s_cache;", name, name)
@@ -380,6 +388,37 @@ func (g *Gen) staticVar(d *Def) string {
 	init := g.fnName(d, nil)
 	g.staticInit = append(g.staticInit, fmt.Sprintf("%s = %s();", name, init))
 	return name
+}
+
+// initArrayCtors handles `#[link_section = ".init_array"] static F: fn() = f;`
+// (the `ctor` pattern): such functions run before main, which we emulate by
+// calling them right after static initialization.
+func (g *Gen) initArrayCtors() (calls []string) {
+	for _, d := range g.tcx.R.Defs {
+		if d.Kind != DefStatic || g.tcx.Generics(d).Count() != 0 {
+			continue
+		}
+		section := ""
+		for _, a := range d.Attrs {
+			if a.Path == "link_section" && len(a.Tokens) >= 2 {
+				section = strings.Trim(a.Tokens[1].Tok.Text, "\"")
+			}
+		}
+		if !strings.Contains(section, "init_array") && !strings.Contains(section, ".ctors") {
+			continue
+		}
+		ty := g.tcx.Normalize(g.tcx.ConstTy(d))
+		name := g.staticVar(d)
+		switch ty.Kind {
+		case TFnPtr:
+			calls = append(calls, fmt.Sprintf("%s();", name))
+		case TArray:
+			if ty.Elem.Kind == TFnPtr {
+				calls = append(calls, fmt.Sprintf("for (size_t i = 0; i < sizeof(%s.a)/sizeof(%s.a[0]); i++) %s.a[i]();", name, name, name))
+			}
+		}
+	}
+	return calls
 }
 
 // closureFn returns the C function implementing a closure type's body.

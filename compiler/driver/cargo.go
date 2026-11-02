@@ -2,7 +2,8 @@ package driver
 
 // Cargo-driven builds: the crate graph comes from `cargo metadata`; every
 // crate is compiled by rustgo itself (build scripts and proc-macro servers
-// too), and the whole program is emitted as one C translation unit.
+// too), and the whole program is emitted as one C program (compiled as one
+// or, when large, several translation units: see compileC).
 
 import (
 	"encoding/json"
@@ -355,7 +356,7 @@ func BuildCargo(opts *Options, co *CargoOptions) error {
 
 // compileProgram compiles units[binIdx] with its dependencies (taken from
 // units, which are in dependency order) and returns C source.
-func (bs *buildState) compileProgram(units []*crateUnit, binIdx int) (string, error) {
+func (bs *buildState) compileProgram(units []*crateUnit, binIdx int) (*codegen.Program, error) {
 	need := map[string]bool{}
 	var mark func(u *crateUnit)
 	mark = func(u *crateUnit) {
@@ -373,10 +374,10 @@ func (bs *buildState) compileProgram(units []*crateUnit, binIdx int) (string, er
 	exp := expand.New()
 	stdCrate, err := loadStd(bs.opts)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	if err := exp.ExpandCrate(stdCrate, "std"); err != nil {
-		return "", fmt.Errorf("while expanding std: %v", err)
+		return nil, fmt.Errorf("while expanding std: %v", err)
 	}
 	r := resolve.New()
 	r.IsBuiltinMacro = expand.IsBuiltinMacro
@@ -394,12 +395,12 @@ func (bs *buildState) compileProgram(units []*crateUnit, binIdx int) (string, er
 		}
 		c, err := loadUnitAST(u)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 		if i == binIdx {
 			addMainWrapper(c)
 		}
-		exp.Config = &expand.CrateConfig{Features: u.features, Cfgs: u.cfgs, Env: cargoEnv(u)}
+		exp.Config = &expand.CrateConfig{Features: u.features, Cfgs: append(append([]string{}, u.cfgs...), globalCfgs...), Env: cargoEnv(u)}
 		exp.Externs = u.deps
 		exp.ProcMacros = map[string]*expand.ProcMacro{}
 		for _, k := range u.deps {
@@ -408,7 +409,7 @@ func (bs *buildState) compileProgram(units []*crateUnit, binIdx int) (string, er
 			}
 		}
 		if err := exp.ExpandCrate(c, u.key); err != nil {
-			return "", fmt.Errorf("crate %s: %v", u.name, err)
+			return nil, fmt.Errorf("crate %s: %v", u.name, err)
 		}
 		exp.Config = nil
 		exp.Externs = nil
@@ -428,7 +429,7 @@ func (bs *buildState) compileProgram(units []*crateUnit, binIdx int) (string, er
 	}
 	r.ResolveImports()
 	if err := r.Err(); err != nil {
-		return "", err
+		return nil, err
 	}
 	tcx := typeck.NewTcx(r)
 	entry := "main"
@@ -437,24 +438,24 @@ func (bs *buildState) compileProgram(units []*crateUnit, binIdx int) (string, er
 	}
 	b := binCrate.Root.Lookup(entry, ValueNS)
 	if b == nil || b.Res.Def == nil || b.Res.Def.Kind != DefFn {
-		return "", fmt.Errorf("error: `main` function not found in crate %s", binCrate.Name)
+		return nil, fmt.Errorf("error: `main` function not found in crate %s", binCrate.Name)
 	}
 	if aborted := tcx.Guard(func() { tcx.BuildImpls() }); aborted || tcx.Err() != nil {
-		return "", tcx.Err()
+		return nil, tcx.Err()
 	}
 	g := codegen.New(tcx)
-	var src string
+	var prog *codegen.Program
 	var genErr error
-	if aborted := tcx.Guard(func() { src, genErr = g.Generate(b.Res.Def) }); aborted {
-		return "", tcx.Err()
+	if aborted := tcx.Guard(func() { prog, genErr = g.GenerateProgram(b.Res.Def) }); aborted {
+		return nil, tcx.Err()
 	}
 	if genErr != nil {
-		return "", genErr
+		return nil, genErr
 	}
 	if err := tcx.Err(); err != nil {
-		return "", err
+		return nil, err
 	}
-	return src, nil
+	return prog, nil
 }
 
 // procMacroStub registers a proc-macro crate as an empty crate whose root
@@ -532,7 +533,8 @@ func (bs *buildState) runBuildScript(u *crateUnit) error {
 		"CARGO_CFG_TARGET_OS=linux", "CARGO_CFG_TARGET_ARCH=x86_64", "CARGO_CFG_TARGET_FAMILY=unix",
 		"CARGO_CFG_UNIX=", "CARGO_CFG_TARGET_POINTER_WIDTH=64", "CARGO_CFG_TARGET_ENDIAN=little",
 		"CARGO_CFG_TARGET_ENV=gnu", "CARGO_CFG_TARGET_VENDOR=unknown", "CARGO_CFG_TARGET_HAS_ATOMIC=8,16,32,64,ptr",
-		"CARGO_CFG_PANIC=unwind", "CARGO_CFG_DEBUG_ASSERTIONS=", "CARGO_ENCODED_RUSTFLAGS=", "CARGO=cargo",
+		"CARGO_CFG_PANIC=unwind", "CARGO_CFG_DEBUG_ASSERTIONS=", "CARGO_ENCODED_RUSTFLAGS=--cfg\x1frustix_use_libc", "CARGO=cargo",
+		"CARGO_CFG_RUSTIX_USE_LIBC=",
 	)
 	for _, f := range u.features {
 		env = append(env, "CARGO_FEATURE_"+strings.ToUpper(strings.ReplaceAll(f, "-", "_"))+"=1")
@@ -579,3 +581,8 @@ func (bs *buildState) runBuildScript(u *crateUnit) error {
 	}
 	return nil
 }
+
+// globalCfgs are passed to every crate (like RUSTFLAGS="--cfg ..."):
+// rustix's default linux_raw backend needs inline assembly, which we don't
+// support, so select its libc backend.
+var globalCfgs = []string{"rustix_use_libc"}

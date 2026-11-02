@@ -68,6 +68,11 @@ func (e *Expander) ExpandCrate(c *ast.Crate, crateName string) error {
 	e.modPath = []string{crateName}
 	e.site = nil
 	e.loadMod, e.modDir = c.LoadMod, c.Dir
+	if e.loadMod != nil {
+		if err := e.loadModules(c.Items, c.Dir); err != nil {
+			return err
+		}
+	}
 	// Pre-pass: collect all macro_rules! definitions so that definition order
 	// does not matter.
 	e.collectItems(c.Items)
@@ -81,6 +86,43 @@ func (e *Expander) ExpandCrate(c *ast.Crate, crateName string) error {
 
 // ---------------------------------------------------------------------------
 // Macro definition pre-pass
+
+// loadModules loads the out-of-line modules whose existence or file
+// depends on the crate configuration (`#[cfg(..)] mod m;`,
+// `#[cfg_attr(unix, path = "unix.rs")] mod sys;`), which the driver leaves
+// to the expander, so that the macro pre-pass sees their items.
+func (e *Expander) loadModules(items []*ast.Item, dir string) error {
+	for _, it := range items {
+		k, ok := it.Kind.(*ast.ModItem)
+		if !ok {
+			continue
+		}
+		keep, attrs, err := e.processAttrs(it.Attrs)
+		if err != nil {
+			return err
+		}
+		if !keep {
+			continue // stripped by expandItemInList
+		}
+		it.Attrs = attrs
+		child, err := e.loadMod(it, dir)
+		if err != nil {
+			return err
+		}
+		// the loaded file's inner attributes (`#![cfg(..)]`)
+		if keep, attrs, err = e.processAttrs(it.Attrs); err != nil {
+			return err
+		}
+		if !keep {
+			continue
+		}
+		it.Attrs = attrs
+		if err := e.loadModules(k.Items, child); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
 func (e *Expander) collectItems(items []*ast.Item) {
 	for _, it := range items {

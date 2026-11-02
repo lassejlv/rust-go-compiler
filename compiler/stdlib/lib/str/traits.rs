@@ -312,6 +312,38 @@ impl SliceIndex<str> for RangeToInclusive<usize> {
     }
 }
 
+impl SliceIndex<str> for (crate::ops::Bound<usize>, crate::ops::Bound<usize>) {
+    type Output = str;
+    #[inline]
+    fn get(self, slice: &str) -> Option<&str> {
+        crate::slice::bounds_into_range(slice.len(), self)?.get(slice)
+    }
+    #[inline]
+    fn get_mut(self, slice: &mut str) -> Option<&mut str> {
+        crate::slice::bounds_into_range(slice.len(), self)?.get_mut(slice)
+    }
+    #[inline]
+    unsafe fn get_unchecked(self, slice: *const str) -> *const str {
+        let len = intrinsics::slice_len(slice as *const [u8]);
+        crate::slice::bounds_into_range_unchecked(len, self).get_unchecked(slice)
+    }
+    #[inline]
+    unsafe fn get_unchecked_mut(self, slice: *mut str) -> *mut str {
+        let len = intrinsics::slice_len(slice as *const [u8]);
+        crate::slice::bounds_into_range_unchecked(len, self).get_unchecked_mut(slice)
+    }
+    #[inline]
+    #[track_caller]
+    fn index(self, slice: &str) -> &str {
+        crate::slice::bounds_into_slice_range(slice.len(), self).index(slice)
+    }
+    #[inline]
+    #[track_caller]
+    fn index_mut(self, slice: &mut str) -> &mut str {
+        crate::slice::bounds_into_slice_range(slice.len(), self).index_mut(slice)
+    }
+}
+
 impl<I: SliceIndex<str>> Index<I> for str {
     type Output = I::Output;
     #[inline]

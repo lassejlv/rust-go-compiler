@@ -6,6 +6,7 @@ mod iter;
 mod sort;
 
 pub use self::index::{range, SliceIndex};
+pub(crate) use self::index::{bounds_into_range, bounds_into_range_unchecked, bounds_into_slice_range};
 pub use self::iter::{
     ChunkBy, ChunkByMut, Chunks, ChunksExact, ChunksExactMut, ChunksMut, Iter, IterMut, RChunks, RChunksExact,
     RChunksExactMut, RChunksMut, RSplit, RSplitMut, RSplitN, RSplitNMut, Split, SplitInclusive, SplitInclusiveMut,
