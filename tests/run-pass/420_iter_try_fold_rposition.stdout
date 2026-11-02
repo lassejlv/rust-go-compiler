@@ -1,0 +1,24 @@
+Ok(6)
+Err("bad \"x\": invalid digit found in string")
+Err("overflow")
+Ok(0)
+Break((2, 35))
+Continue(6)
+Some(250) None
+Err(5) visited [1, 2, 3, 4, 5]
+position Some(1) rposition Some(5)
+rfind Some(2)
+rfold 2858183
+reduce Some(3818582)
+reduce empty None
+max_by_key Some((3, 'd'))
+min_by_key Some((1, 'a'))
+rev max_by_key Some((3, 'b'))
+sorted true false
+sorted_by_key true
+Err("e1") Ok(3) Some(24)
+Err("e1") [1, 2, 4] ["e1", "e2"]
+found Some(21) after 7 calls
+Break(300) is_break=true
+Ok([[1, 2], [3], [4, 5, 6]])
+Err("number too large to fit in target type")

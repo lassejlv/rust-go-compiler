@@ -1,0 +1,18 @@
+MEOW!!
+MOOO!!
+MOOO!! MOOO!!
+boxed(meow)
+meow
+BOXED(MEOW)!!
+mo
+ref(mo)
+boxed(boxed(moo))
+["BOXED(MEOW)!!", "BOXED(MOOOO)!!"]
+<2:42>
+<6:héllo>
+<3:3.5>
+<1:x>
+<5:owned>
+total i32 = 42
+total u8 = 350
+total slice = 41

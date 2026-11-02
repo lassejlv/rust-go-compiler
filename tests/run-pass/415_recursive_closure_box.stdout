@@ -1,0 +1,8 @@
+fact: [1, 1, 2, 6, 24, 120, 720, 5040]
+fib(15) = 610
+digit sum = 45
+triangular(10) = 55
+1@1 2@2 3@2 4@3
+longest collatz under 30: 27 steps=111
+memo size 139 calls 169
+0:E 1:O 2:E 3:O 4:E 5:O

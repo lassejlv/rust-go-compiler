@@ -1,0 +1,29 @@
+Num(7, Hearts): red 7
+Num(1, Spades): black 11
+Face('K', Diamonds): red 10
+Face('A', Clubs): black 11
+Face('X', Clubs): black 0
+Num(12, Diamonds): red 0
+Joker: none 50
+reds 3
+Lit(0) = 0
+Lit(5) = 5
+Neg(3) = -3
+Add(2, 2) = 4
+Sub(4, 4) = 0
+Add(1, 9) = 10
+Sub(1, 9) = -8
+1 9
+ok special 3
+err numeric 4
+ok special 100
+err
+a5 b6 c-1 
+[1, 2]: has one with 2
+[2, 1]: has one with 2
+[0]: zeroish
+[3, 3, 3]: same ends 3
+[]: zeroish
+answer with 3
+404 gone
+3 2

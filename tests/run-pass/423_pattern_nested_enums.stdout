@@ -1,0 +1,24 @@
+draw dot in default
+draw square 4 in black
+draw line in red200
+draw rect 3x7 in gray9
+draw line in #0102fe
+group in blue with 0 items
+group in teal with 1 items
+  - rect 2x3
+draw circle-led group +1 in default
+group in red with 3 items
+  - square 2
+  - circle r=1
+  - dot
+reset 3
+small id 3 to Q1 (5,6)
+move 12 x=5
+move 4 x=-1
+batch[3]
+  quit
+  batch[1]
+    small id 1 to Q1 (1,1)
+  draw circle r=2 in primary red
+batches with quit: 1
+pair -> 300

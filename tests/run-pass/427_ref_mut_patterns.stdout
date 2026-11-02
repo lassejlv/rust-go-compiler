@@ -1,0 +1,12 @@
+sum after bump 8
+Pair(Leaf { val: 6, hits: 1 }, Pair(Empty, Leaf { val: 10, hits: 1 }))
+sum after prune 16
+Empty
+("left+long", [1, 2, 3, 4])
+a 11 [1]
+b(reset) 0 [-5]
+c 1 [1]
+Some(Account { name: "OPT", balance: 100, history: [42] })
+Some("HELLO") Some(5)
+1:one 2:two 
+[[5, 1, 2], [3, 4, 0]]

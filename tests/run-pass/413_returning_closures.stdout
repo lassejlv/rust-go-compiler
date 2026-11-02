@@ -1,0 +1,16 @@
+6 -6 98
+[10, 13, 16, 19]
+c2 next 1 c next 22
+add(3,4) = 7
+sub(3,4) = -1
+hyp(3,4) = 5
+unknown(3,4) = -7
+curry: 123 199 407
+sq(5) = 25 cached=false
+sq(7) = 49 cached=false
+sq(5) = 25 cached=true
+sq(12) = 144 cached=false
+sq(7) = 49 cached=true
+pipeline: 7 47
+acc: [1, 2, 3]
+built: [40, 6]

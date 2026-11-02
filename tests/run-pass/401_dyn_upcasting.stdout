@@ -1,0 +1,13 @@
+Dog (4 legs) owned by ann says woof
+Dog { owner: "ann" }
+upcast: woof / hello from Dog
+Parrot[12] (2 legs) owned by bob says hello
+Parrot { owner: "bob", words: 12 }
+upcast: hello / squawk hello
+legs total = 6
+rc count = 3
+cy | 4 | Dog
+  0: hello from Dog
+  1: squawk hello
+rc count after = 2
+none upcast is_none = true

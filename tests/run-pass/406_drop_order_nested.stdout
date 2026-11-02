@@ -1,0 +1,9 @@
+locals: c b a
+outer: Pair(p.a,p.b) p.a p.b t0 t1 arr0 arr1
+enums: vec len 4 e1 e2a e2b nx ny
+literal order: make B make A Pair(A,B) A B
+option: opt1 after reassign none=true end scope opt2
+tuple partial: moved t.1 t.1.0 t.1.1 t.0 t.2
+vec ops: v1 removed v3 truncated popped v2 v2 v0
+shadow: shadowed second first
+boxed slice: bs0 bs1 bs2 after drop

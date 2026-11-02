@@ -1,0 +1,9 @@
+partial       | took L from bag, drop L, end, drop R
+cond true     | drop cond-a, consumed 6, scope end, drop cond-b
+cond false    | scope end, drop cond-b, drop cond-a
+tuple pat     | bound t0, drop t0, drop t1, drop t2
+ref pat       | ref u1, drop u0, drop u1
+take loop     | iter 0 got slot, drop slot, iter 1 empty, iter 2 empty
+move closure  | call closure, call closure, drop closure, closure dropped
+into_iter     | first v0, drop v1, drop v2, iter dropped, drop v0
+reassign      | drop br, reassigned, destructured bl, drop bl, drop br2

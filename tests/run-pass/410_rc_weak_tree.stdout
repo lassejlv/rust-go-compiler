@@ -1,0 +1,26 @@
+path a1 = root/a/a1
+path b = root/b
+root strong=1 weak=2
+a strong=2 weak=1
+depth sum = 4
+leaf alive? true
+removed b path now b
+b strong=1
+drop node b
+end of scope
+drop node root
+drop node a
+drop node a1
+leaf alive after scope? false
+leaf weak count = 0
+x strong=2 y strong=2
+after drops, cycle alive: true
+took next: Some(2)
+drop cyc 2
+x strong now 1
+drop cyc 1
+cycle alive after break: false
+get_mut while shared: true
+still shared, count=2
+final [1, 2, 3, 4]
+cow-mut cow ptr_eq=false

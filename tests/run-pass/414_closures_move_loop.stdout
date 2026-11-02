@@ -1,0 +1,17 @@
+["h0:0", "h1:1", "h2:4"]
+base still usable: base
+base-a-x
+base-b-x
+base-c-x
+svc 12 ["FAST", "SAFE"]
+name still here: two
+tags len 1
+18 24
+snap 0 -> [2]
+snap 1 -> [2, 6]
+snap 2 -> [2, 6, 18]
+[1, 2, 3]
+[2, 4, 6]
+[3, 6, 9]
+sorted [1, 4, 5]
+[5, 4, 5]

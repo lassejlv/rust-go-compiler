@@ -1,0 +1,39 @@
+forget:
+  drops=0
+manually drop:
+  inner name manual-edited
+  drops=0
+  drop "manual-edited"
+  drops=1
+  got back into_inner
+  drop "into_inner"
+replace/take:
+  old=s1 new=s2
+  drop "s1"
+  took 2 items, left 0
+  defaulted slot name="" took=s2
+  drop "i1"
+  drop "i2"
+  drops=5
+swap:
+  x=y y=x
+  arr=["a2", "a1", "a0"]
+  arr=["a0", "a1", "a2"]
+option replace:
+  prev=Some("o1")
+  drop "o2"
+  after take is_none=true prev2=Some("o2")
+  o=Some("o3!")
+vec ManuallyDrop:
+  total name len 6
+  drops=6
+end of main, drops=6
+  drop "o1"
+  drop "o3!"
+  drop "a0"
+  drop "a1"
+  drop "a2"
+  drop "x"
+  drop "y"
+  drop "s2"
+  drop ""

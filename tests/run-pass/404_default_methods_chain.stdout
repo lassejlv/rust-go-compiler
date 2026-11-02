@@ -1,0 +1,18 @@
+[LOG] hello world
+  [LOG] a
+  [LOG] bc
+[LOG] HELLO WORLD!
+  [LOG] A!
+  [LOG] BC!
+[T#0] hello world
+  [T#1] a
+  [T#2] bc
+dlrow olleh
+  a
+  cb
+[LOG] GENERIC!
+[G#5] generic
+[G#6] generic
+count 7
+value=3 doubled=6 extra=7
+value=4 doubled=40 extra=-1

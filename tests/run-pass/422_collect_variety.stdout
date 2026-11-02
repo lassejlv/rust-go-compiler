@@ -1,0 +1,19 @@
+freq: cat=1, end=1, mat=1, on=1, sat=1, the=3
+by_len: {2: ["on"], 3: ["the", "cat", "sat", "the", "mat", "the", "end"]}
+pairs: a=10, b=2, c=3
+uniq: acdehmnost
+hashset sorted: ["cat", "end", "mat", "on", "sat", "the"]
+deque [1, 2, 3, 4, 5] [0, 3, 4, 5, 1, 2] front=Some(0) back=Some(2)
+hi! abcdef xyz eht_tac_tas_no_eht_tam_eht_dne
+boxed [0, 16, 32, 48] len 4
+Ok([1, 2, 3]) Err("invalid digit found in string")
+Some(['a', 'b']) None
+heap sorted [(1, "a"), (3, "c"), (5, "m"), (9, "z")]
+linked [3, 2, 1]
+extended [1, 2, 3, 4, 5, 6]
+start->abC
+{"a": 1, "m": 13, "z": 26} first=Some(("a", 1)) last=Some(("z", 26))
+range [("m", 13)]
+{false: [1, 2, 4, 5, 7, 8], true: [3, 6]}
+inverted {2: "b", 3: "c", 10: "a"}
+{'i': 4, 'm': 1, 'p': 2, 's': 4}

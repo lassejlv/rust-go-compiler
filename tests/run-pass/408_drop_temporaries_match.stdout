@@ -1,0 +1,10 @@
+match scrutinee: new0 | arm some 0 | drop0 | after match
+if-let odd: new1 | else | drop1 | after if-let
+if-let even: new2 | then 20 | drop2 | after if-let
+let temp: new3 | drop3 | let x=3
+call args: new4 | new5 | takes(4,5) | drop5 | drop4 | r=9
+while-let: new6 | loop 3 | drop6 | new7 | loop 2 | drop7 | new8 | loop 1 | drop8 | collected [9, 9, 9]
+block tail: new9 | block body | new10 | drop9 | drop10 | y=19
+arm temp: new11 | new12 | drop12 | v=1200 | drop11
+cell = 15
+abc is short

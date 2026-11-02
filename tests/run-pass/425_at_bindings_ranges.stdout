@@ -1,0 +1,38 @@
+-5000 -> very negative
+-500 -> negative -500
+-10 -> near zero -10
+0 -> near zero 0
+10 -> near zero 10
+11 -> two/three digit 11
+100 -> hundred
+150 -> two/three digit 150
+200 -> big 200
+99999 -> big 99999
+'7' -> digit 7
+'Q' -> letter q
+'z' -> letter z
+' ' -> space
+'β' -> greek β
+'€' -> other U+20AC
+'😀' -> other U+1F600
+["alpha", "alpha", "punct", "space", "digit", "punct", "control", "high", "punct"]
+Point { x: 0, y: 0 } -> origin
+Point { x: 7, y: 0 } -> +x axis at 7
+Point { x: 0, y: -3 } -> -y axis at -3
+Point { x: -2, y: 4 } -> near (-2,4)
+Point { x: 200, y: 1 } -> far right Point { x: 200, y: 1 }
+Point { x: 9, y: 9 } -> elsewhere 81
+Num(1): bit 1
+Num(7): digit 7
+Num(12): even 12
+Num(-3): odd -3
+Op('-'): additive -
+Op('*'): op *
+Ident("_x"): private
+Ident("value"): ident value (5)
+(3, (4, 5)) 3 (4, 5) 4 5
+small 3
+other 42
+none
+large
+min

@@ -1,0 +1,16 @@
+len 7 hint (7, Some(7))
+fwd [0, 3, 6, 9, 12, 15, 18]
+rev [18, 15, 12, 9, 6, 3, 0]
+Some(0) Some(18) Some(3) Some(15) rest [6, 9, 12] len 3
+nth(2) Some(14) nth(0) Some(21) len 11
+nth_back(1) Some(91)
+rposition Some(4)
+rev skip [7, 3]
+zip rev [(0, 14), (1, 13), (2, 12), (3, 11), (4, 10)]
+empty None 0
+chain len 15
+last Some(8) sum 12
+x! y! z! 
+["z!", "y!", "x!"]
+total 55
+[(4, 25), (3, 16)]

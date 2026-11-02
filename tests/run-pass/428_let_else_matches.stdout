@@ -1,0 +1,20 @@
+error: bad number "x"
+error: empty line
+error: trailing now
+error: jz needs target
+error: unknown op frob
+parsed [Push(3), Jz(4), Dup, Mul, Push(-12)]
+arith=2 neg_push=true jumps=1 pop=false
+Err("no port") None
+Err("port \"99999\" invalid") None
+Ok(8080) Some(("www", "example.com"))
+skip "bob" (no colon)
+skip "carol" (bad age)
+[("alice", 30), ("dave", 41)]
+on y axis at 5
+not on axis: Pt { x: 3, y: 4 }
+a=9 c=7
+positive 1
+nothing
+err bad
+non-positive -2

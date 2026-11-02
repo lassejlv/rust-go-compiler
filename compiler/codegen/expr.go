@@ -1074,6 +1074,11 @@ func (fc *fnGen) callExpr(x *ast.CallExpr, t Ty) string {
 				if vr := fc.r.Paths[pe.ID]; vr != nil && vr.Kind == typeck.VLocal {
 					if _, flag := fc.localPlace(vr.Local); flag != "" {
 						fc.line("%s = 0;", flag)
+						// the environment was consumed by the call; free
+						// the box's allocation (size/align from the vtable)
+						if fc.isBoxTy(fc.ty(pe)) {
+							fc.line("{ uint64_t _bsz = (uint64_t)((void**)(%s).meta)[1]; if (_bsz) rg_dealloc((uint8_t*)(%s).ptr, _bsz, (uint64_t)((void**)(%s).meta)[2]); }", fat, fat, fat)
+						}
 					}
 				}
 			}
@@ -1503,4 +1508,8 @@ func (g *Gen) scalarConstLit(d *Def, args []Ty, t Ty) (string, bool) {
 	}
 	g.scalarConsts[key] = lit
 	return lit, true
+}
+
+func (fc *fnGen) isBoxTy(t Ty) bool {
+	return t != nil && t.Kind == TAdt && t.Def != nil && t.Def.LangItem == "owned_box"
 }

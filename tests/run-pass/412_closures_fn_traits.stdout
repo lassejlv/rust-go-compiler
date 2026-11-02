@@ -1,0 +1,15 @@
+hello world
+[0, 1, 4, 9, 16]
+sum=45
+fn generic: 16
+fn dyn: 7
+dyn mut: 60
+counter after: 3
+boxed once: 8
+fn ptr from fn: 144
+fn ptr from closure: 240
+dbl=14 inc=8 neg=249 
+<42> 7
+clicked ok; count x1; none has no handler; clicked ok; count x2; none has no handler
+[10, 20, 30]
+folded 6

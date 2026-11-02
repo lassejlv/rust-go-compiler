@@ -1,0 +1,16 @@
+len:5
+upper:"HÉLLO"
+sum:294
+usize codec: 3
+usize codec: 363
+total 197
+string codec: MIXED CASE
+0 -> small 0 big 100
+5 -> small 5 big 100
+50 -> small 10 big 100
+500 -> small 10 big 500
+5000 -> small 10 big 1000
+consts: 0 10 100 1000
+[0, 6, 12, 18, 300, 600]
+Some(0) [6, 8, 10] Some(12)
+hint (0, Some(10))

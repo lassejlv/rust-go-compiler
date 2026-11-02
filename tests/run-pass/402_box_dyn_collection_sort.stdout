@@ -1,0 +1,19 @@
+order by priority: [2, 4, 1, 3]
+round 1: printer#2: a, printer#4: x, counter#1 -> 2, counter#3 -> 0
+  removed 1
+round 2: printer#2: b, printer#4: y, counter#1 -> 1
+  removed 1
+round 3: printer#4: z, counter#1 -> 0
+  removed 1
+round 4: printer#4: w
+  removed 1
+add => 7
+mul => 12
+off => 6
+pow => 81
+key 0 ran 0 times, done=true
+key 10 ran 1 times, done=true
+key 20 ran 2 times, done=true
+key 30 ran 3 times, done=true
+total runs 6
+drained [(0, 0), (10, 1), (20, 2), (30, 3)], left 0

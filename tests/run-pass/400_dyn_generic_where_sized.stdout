@@ -1,0 +1,13 @@
+circle with area 3.00
+[R] 10
+circle with area 18.75
+[R] 0.25
+total 32.000 over 4
+largest: circle
+generic: circle=0.8 / Circle { r: 0.5 }
+scaled: circle with area 3.00
+generic: rect3x1.5=4.5 / Rect { w: 3.0, h: 1.5 }
+scaled: [R] 18
+via ref: circle with area 27.00
+CIRCLE
+["circle", "rect0.5x0.5", "rect2x5"]
