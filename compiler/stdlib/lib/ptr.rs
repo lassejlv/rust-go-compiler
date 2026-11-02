@@ -470,6 +470,191 @@ impl<T> NonNull<T> {
     pub fn dangling() -> Self {
         NonNull { pointer: dangling::<T>() }
     }
+
+    /// Creates a pointer with the given address and no provenance.
+    #[inline]
+    pub fn without_provenance(addr: crate::num::NonZeroUsize) -> Self {
+        NonNull { pointer: addr.get() as *const T }
+    }
+
+    /// Adds an offset to a pointer (in units of `T`).
+    #[inline]
+    pub unsafe fn add(self, count: usize) -> Self {
+        NonNull { pointer: intrinsics::ptr_add(self.pointer, count) }
+    }
+
+    /// Subtracts an offset from a pointer (in units of `T`).
+    #[inline]
+    pub unsafe fn sub(self, count: usize) -> Self {
+        NonNull { pointer: intrinsics::ptr_offset(self.pointer, -(count as isize)) }
+    }
+
+    /// Adds a signed offset to a pointer (in units of `T`).
+    #[inline]
+    pub unsafe fn offset(self, count: isize) -> Self {
+        NonNull { pointer: intrinsics::ptr_offset(self.pointer, count) }
+    }
+
+    /// Adds an offset in bytes to a pointer.
+    #[inline]
+    pub unsafe fn byte_add(self, count: usize) -> Self {
+        NonNull { pointer: intrinsics::ptr_add(self.pointer as *const u8, count) as *const T }
+    }
+
+    /// Subtracts an offset in bytes from a pointer.
+    #[inline]
+    pub unsafe fn byte_sub(self, count: usize) -> Self {
+        NonNull { pointer: intrinsics::ptr_offset(self.pointer as *const u8, -(count as isize)) as *const T }
+    }
+
+    /// Calculates the distance between two pointers (in units of `T`).
+    #[inline]
+    pub unsafe fn offset_from(self, origin: NonNull<T>) -> isize {
+        intrinsics::ptr_diff(self.pointer, origin.pointer)
+    }
+
+    /// Calculates the distance between two pointers, where it's known that `self >= origin`.
+    #[inline]
+    pub unsafe fn offset_from_unsigned(self, origin: NonNull<T>) -> usize {
+        intrinsics::ptr_diff(self.pointer, origin.pointer) as usize
+    }
+
+    /// Calculates the distance between two pointers, where it's known that `self >= origin`.
+    #[inline]
+    pub unsafe fn sub_ptr(self, origin: NonNull<T>) -> usize {
+        intrinsics::ptr_diff(self.pointer, origin.pointer) as usize
+    }
+
+    /// Reads the value from `self` without moving it.
+    #[inline]
+    pub unsafe fn read(self) -> T {
+        intrinsics::read(self.pointer)
+    }
+
+    /// Reads the value from `self` without requiring alignment.
+    #[inline]
+    pub unsafe fn read_unaligned(self) -> T {
+        read_unaligned(self.pointer)
+    }
+
+    /// Overwrites a memory location with the given value without reading or dropping the old value.
+    #[inline]
+    pub unsafe fn write(self, val: T) {
+        intrinsics::write(self.pointer as *mut T, val)
+    }
+
+    /// Overwrites a memory location with the given value without requiring alignment.
+    #[inline]
+    pub unsafe fn write_unaligned(self, val: T) {
+        write_unaligned(self.pointer as *mut T, val)
+    }
+
+    /// Invokes memset on the specified pointer.
+    #[inline]
+    pub unsafe fn write_bytes(self, val: u8, count: usize) {
+        intrinsics::write_bytes(self.pointer as *mut T, val, count)
+    }
+
+    /// Replaces the value at `self` with `src`, returning the old value.
+    #[inline]
+    pub unsafe fn replace(self, src: T) -> T {
+        replace(self.pointer as *mut T, src)
+    }
+
+    /// Swaps the values at two mutable locations of the same type.
+    #[inline]
+    pub unsafe fn swap(self, with: NonNull<T>) {
+        swap(self.pointer as *mut T, with.pointer as *mut T)
+    }
+
+    /// Copies `count * size_of::<T>()` bytes from `self` to `dest` (may overlap).
+    #[inline]
+    pub unsafe fn copy_to(self, dest: NonNull<T>, count: usize) {
+        intrinsics::copy(self.pointer, dest.pointer as *mut T, count)
+    }
+
+    /// Copies `count * size_of::<T>()` bytes from `self` to `dest` (must not overlap).
+    #[inline]
+    pub unsafe fn copy_to_nonoverlapping(self, dest: NonNull<T>, count: usize) {
+        intrinsics::copy_nonoverlapping(self.pointer, dest.pointer as *mut T, count)
+    }
+
+    /// Copies `count * size_of::<T>()` bytes from `src` to `self` (may overlap).
+    #[inline]
+    pub unsafe fn copy_from(self, src: NonNull<T>, count: usize) {
+        intrinsics::copy(src.pointer, self.pointer as *mut T, count)
+    }
+
+    /// Copies `count * size_of::<T>()` bytes from `src` to `self` (must not overlap).
+    #[inline]
+    pub unsafe fn copy_from_nonoverlapping(self, src: NonNull<T>, count: usize) {
+        intrinsics::copy_nonoverlapping(src.pointer, self.pointer as *mut T, count)
+    }
+
+    /// Returns whether the pointer is aligned for `T`.
+    #[inline]
+    pub fn is_aligned(self) -> bool {
+        (self.pointer as usize) % crate::mem::align_of::<T>() == 0
+    }
+
+    /// Computes the offset that needs to be applied to the pointer in order to make it aligned to `align`.
+    pub fn align_offset(self, align: usize) -> usize {
+        let addr = self.pointer as usize;
+        let size = crate::mem::size_of::<T>();
+        let rem = addr % align;
+        if rem == 0 {
+            return 0;
+        }
+        if size == 0 {
+            return usize::MAX;
+        }
+        let bytes = align - rem;
+        if bytes % size == 0 { bytes / size } else { usize::MAX }
+    }
+
+    /// Creates a non-null raw slice from a thin pointer and a length.
+    #[inline]
+    pub fn slice_from_raw_parts(data: NonNull<T>, len: usize) -> NonNull<[T]> {
+        NonNull { pointer: intrinsics::slice_from_raw_parts(data.pointer, len) }
+    }
+
+    /// Returns a shared reference to the value (which may be uninitialized).
+    #[inline]
+    pub unsafe fn as_uninit_ref<'a>(self) -> &'a crate::mem::MaybeUninit<T> {
+        &*(self.pointer as *const crate::mem::MaybeUninit<T>)
+    }
+
+    /// Returns a unique reference to the value (which may be uninitialized).
+    #[inline]
+    pub unsafe fn as_uninit_mut<'a>(self) -> &'a mut crate::mem::MaybeUninit<T> {
+        &mut *(self.pointer as *mut crate::mem::MaybeUninit<T>)
+    }
+}
+
+impl<T> NonNull<[T]> {
+    /// Returns the length of a non-null raw slice.
+    #[inline]
+    pub fn len(self) -> usize {
+        unsafe { intrinsics::slice_len(self.pointer) }
+    }
+
+    /// Returns `true` if the non-null raw slice has a length of 0.
+    #[inline]
+    pub fn is_empty(self) -> bool {
+        self.len() == 0
+    }
+
+    /// Returns a non-null pointer to the slice's buffer.
+    #[inline]
+    pub fn as_non_null_ptr(self) -> NonNull<T> {
+        NonNull { pointer: unsafe { intrinsics::slice_ptr(self.pointer) } }
+    }
+
+    /// Returns a raw pointer to the slice's buffer.
+    #[inline]
+    pub fn as_mut_ptr(self) -> *mut T {
+        unsafe { intrinsics::slice_ptr(self.pointer) as *mut T }
+    }
 }
 
 impl<T: ?Sized> NonNull<T> {
@@ -510,9 +695,54 @@ impl<T: ?Sized> NonNull<T> {
     /// Casts to a pointer of another type.
     #[inline]
     pub fn cast<U>(self) -> NonNull<U> {
-        NonNull { pointer: self.pointer as *const U }
+        NonNull { pointer: self.pointer as *const u8 as *const U }
+    }
+
+    /// Gets the "address" portion of the pointer.
+    #[inline]
+    pub fn addr(self) -> crate::num::NonZeroUsize {
+        unsafe { crate::num::NonZeroUsize::new_unchecked(self.pointer as *const u8 as usize) }
+    }
+
+    /// Creates a new pointer with the given address.
+    #[inline]
+    pub fn with_addr(self, addr: crate::num::NonZeroUsize) -> Self {
+        NonNull { pointer: addr.get() as *const u8 as *const T }
+    }
+
+    /// Converts from `&T` to `NonNull<T>`.
+    #[inline]
+    pub fn from_ref(r: &T) -> Self {
+        NonNull { pointer: r as *const T }
+    }
+
+    /// Converts from `&mut T` to `NonNull<T>`.
+    #[inline]
+    pub fn from_mut(r: &mut T) -> Self {
+        NonNull { pointer: r as *mut T as *const T }
+    }
+
+    /// Executes the destructor (if any) of the pointed-to value.
+    #[inline]
+    pub unsafe fn drop_in_place(self) {
+        intrinsics::drop_in_place(self.pointer as *mut T)
     }
 }
+
+impl<T: ?Sized> From<NonNull<T>> for *mut T {
+    #[inline]
+    fn from(p: NonNull<T>) -> *mut T {
+        p.pointer as *mut T
+    }
+}
+
+impl<T: ?Sized> From<NonNull<T>> for *const T {
+    #[inline]
+    fn from(p: NonNull<T>) -> *const T {
+        p.pointer
+    }
+}
+
 
 impl<T: ?Sized> Clone for NonNull<T> {
     #[inline]

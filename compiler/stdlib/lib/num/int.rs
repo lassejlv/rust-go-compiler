@@ -1010,6 +1010,12 @@ __std_int_unsigned! { usize, isize, 64, 8 }
 // ASCII helpers on u8
 
 impl u8 {
+    /// Returns an iterator that produces an escaped version of a `u8`.
+    #[inline]
+    pub fn escape_ascii(self) -> crate::ascii::EscapeDefault {
+        crate::ascii::escape_default(self)
+    }
+
     /// Checks if the value is within the ASCII range.
     #[inline]
     pub const fn is_ascii(&self) -> bool {

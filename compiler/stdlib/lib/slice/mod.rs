@@ -7,6 +7,7 @@ mod sort;
 
 pub use self::index::{range, SliceIndex};
 pub use self::iter::{Chunks, ChunksExact, ChunksExactMut, ChunksMut, Iter, IterMut, RChunks, Split, Windows};
+pub use crate::ascii::EscapeAscii;
 
 use crate::cmp::Ordering;
 use crate::intrinsics;
@@ -793,6 +794,11 @@ impl<T> [T] {
 }
 
 impl [u8] {
+    /// Returns an iterator that produces an escaped version of this slice.
+    pub fn escape_ascii(&self) -> crate::ascii::EscapeAscii<'_> {
+        crate::ascii::escape_ascii(self)
+    }
+
     /// Checks if all bytes in this slice are within the ASCII range.
     #[inline]
     pub fn is_ascii(&self) -> bool {

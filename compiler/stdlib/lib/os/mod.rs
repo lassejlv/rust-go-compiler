@@ -1,4 +1,8 @@
-//! OS-specific functionality.
+//! OS-specific functionality (Linux).
+
+pub mod fd;
+pub mod linux;
+pub mod unix;
 
 /// Platform-specific types, as defined by C.
 pub mod raw {

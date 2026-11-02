@@ -711,6 +711,20 @@ where
 }
 
 impl<I: ExactSizeIterator> ExactSizeIterator for Take<I> {}
+
+impl<A: Clone> DoubleEndedIterator for Take<crate::iter::Repeat<A>> {
+    #[inline]
+    fn next_back(&mut self) -> Option<A> {
+        if self.n == 0 {
+            None
+        } else {
+            self.n -= 1;
+            self.iter.next()
+        }
+    }
+}
+
+impl<A: Clone> ExactSizeIterator for Take<crate::iter::Repeat<A>> {}
 impl<I: FusedIterator> FusedIterator for Take<I> {}
 
 // ---------------------------------------------------------------------------

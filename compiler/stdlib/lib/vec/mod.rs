@@ -6,6 +6,34 @@ mod into_iter;
 pub use self::drain::Drain;
 pub use self::into_iter::IntoIter;
 
+/// A splicing iterator for `Vec` (yields the removed elements).
+#[derive(Debug)]
+pub struct Splice<'a, I: Iterator + 'a> {
+    removed: IntoIter<I::Item>,
+    _marker: crate::marker::PhantomData<(&'a mut (), I)>,
+}
+
+impl<'a, I: Iterator> Iterator for Splice<'a, I> {
+    type Item = I::Item;
+    #[inline]
+    fn next(&mut self) -> Option<I::Item> {
+        self.removed.next()
+    }
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.removed.size_hint()
+    }
+}
+
+impl<'a, I: Iterator> DoubleEndedIterator for Splice<'a, I> {
+    #[inline]
+    fn next_back(&mut self) -> Option<I::Item> {
+        self.removed.next_back()
+    }
+}
+
+impl<'a, I: Iterator> ExactSizeIterator for Splice<'a, I> {}
+
 use crate::alloc::{alloc_array, capacity_overflow, dealloc_array, realloc_array};
 use crate::cmp::Ordering;
 use crate::fmt;
@@ -448,6 +476,23 @@ impl<T> Vec<T> {
         let len = self.len;
         let r = slice::range(range, len);
         Drain::new(self, r.start, r.end)
+    }
+
+    /// Creates a splicing iterator that replaces the specified range in the
+    /// vector with the given `replace_with` iterator and yields the removed
+    /// items (the replacement is performed eagerly).
+    pub fn splice<R, I>(&mut self, range: R, replace_with: I) -> Splice<'_, I::IntoIter>
+    where
+        R: RangeBounds<usize>,
+        I: IntoIterator<Item = T>,
+    {
+        let len = self.len;
+        let r = slice::range(range, len);
+        let mut tail: Vec<T> = self.drain(r.end..).collect();
+        let removed: Vec<T> = self.drain(r.start..).collect();
+        self.extend(replace_with);
+        self.append(&mut tail);
+        Splice { removed: removed.into_iter(), _marker: crate::marker::PhantomData }
     }
 
     /// Clears the vector, removing all values.

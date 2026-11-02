@@ -3,32 +3,46 @@
 use super::hash_map::{self, HashMap};
 use crate::borrow::Borrow;
 use crate::fmt;
-use crate::hash::{BuildHasher, Hash};
+use crate::hash::{BuildHasher, Hash, RandomState};
 use crate::iter::{Chain, ExactSizeIterator, Extend, FromIterator, FusedIterator, IntoIterator, Iterator};
 use crate::ops::{BitAnd, BitOr, BitXor, Sub};
 
 /// A hash set.
-pub struct HashSet<T> {
-    map: HashMap<T, ()>,
+pub struct HashSet<T, S = RandomState> {
+    map: HashMap<T, (), S>,
 }
 
-impl<T> HashSet<T> {
+impl<T> HashSet<T, RandomState> {
     /// Creates an empty `HashSet`.
     #[inline]
-    pub fn new() -> HashSet<T> {
-        HashSet { map: HashMap::new() }
+    pub fn new() -> HashSet<T, RandomState> {
+        Self { map: HashMap::new() }
     }
 
     /// Creates an empty `HashSet` with at least the specified capacity.
     #[inline]
-    pub fn with_capacity(capacity: usize) -> HashSet<T> {
-        HashSet { map: HashMap::with_capacity(capacity) }
+    pub fn with_capacity(capacity: usize) -> HashSet<T, RandomState> {
+        Self { map: HashMap::with_capacity(capacity) }
+    }
+}
+
+impl<T, S> HashSet<T, S> {
+    /// Creates a new empty hash set which will use the given hasher to hash keys.
+    #[inline]
+    pub const fn with_hasher(hasher: S) -> HashSet<T, S> {
+        Self { map: HashMap::<T, (), S>::with_hasher(hasher) }
     }
 
-    /// Creates a new empty hash set which will use the given hasher (ignored).
+    /// Creates an empty `HashSet` with at least the specified capacity, using `hasher` to hash the keys.
     #[inline]
-    pub fn with_hasher<S: BuildHasher>(hasher: S) -> HashSet<T> {
-        HashSet { map: HashMap::with_hasher(hasher) }
+    pub fn with_capacity_and_hasher(capacity: usize, hasher: S) -> HashSet<T, S> {
+        Self { map: HashMap::<T, (), S>::with_capacity_and_hasher(capacity, hasher) }
+    }
+
+    /// Returns a reference to the set's `BuildHasher`.
+    #[inline]
+    pub fn hasher(&self) -> &S {
+        self.map.hasher()
     }
 
     /// Returns the number of elements the set can hold without reallocating.
@@ -77,7 +91,7 @@ impl<T> HashSet<T> {
     }
 }
 
-impl<T: Eq + Hash> HashSet<T> {
+impl<T: Eq + Hash, S: BuildHasher> HashSet<T, S> {
     /// Reserves capacity for at least `additional` more elements.
     #[inline]
     pub fn reserve(&mut self, additional: usize) {
@@ -92,19 +106,19 @@ impl<T: Eq + Hash> HashSet<T> {
 
     /// Visits the values representing the difference, i.e., the values that are in `self` but not in `other`.
     #[inline]
-    pub fn difference<'a>(&'a self, other: &'a HashSet<T>) -> Difference<'a, T> {
+    pub fn difference<'a>(&'a self, other: &'a HashSet<T, S>) -> Difference<'a, T, S> {
         Difference { iter: self.iter(), other }
     }
 
     /// Visits the values representing the symmetric difference.
     #[inline]
-    pub fn symmetric_difference<'a>(&'a self, other: &'a HashSet<T>) -> SymmetricDifference<'a, T> {
+    pub fn symmetric_difference<'a>(&'a self, other: &'a HashSet<T, S>) -> SymmetricDifference<'a, T, S> {
         SymmetricDifference { iter: self.difference(other).chain(other.difference(self)) }
     }
 
     /// Visits the values representing the intersection.
     #[inline]
-    pub fn intersection<'a>(&'a self, other: &'a HashSet<T>) -> Intersection<'a, T> {
+    pub fn intersection<'a>(&'a self, other: &'a HashSet<T, S>) -> Intersection<'a, T, S> {
         if self.len() <= other.len() {
             Intersection { iter: self.iter(), other }
         } else {
@@ -114,7 +128,7 @@ impl<T: Eq + Hash> HashSet<T> {
 
     /// Visits the values representing the union.
     #[inline]
-    pub fn union<'a>(&'a self, other: &'a HashSet<T>) -> Union<'a, T> {
+    pub fn union<'a>(&'a self, other: &'a HashSet<T, S>) -> Union<'a, T, S> {
         if self.len() >= other.len() {
             Union { iter: self.iter().chain(other.difference(self)) }
         } else {
@@ -152,7 +166,7 @@ impl<T: Eq + Hash> HashSet<T> {
     }
 
     /// Returns `true` if `self` has no elements in common with `other`.
-    pub fn is_disjoint(&self, other: &HashSet<T>) -> bool {
+    pub fn is_disjoint(&self, other: &HashSet<T, S>) -> bool {
         let mut it = self.iter();
         while let Some(v) = it.next() {
             if other.contains(v) {
@@ -163,7 +177,7 @@ impl<T: Eq + Hash> HashSet<T> {
     }
 
     /// Returns `true` if the set is a subset of another.
-    pub fn is_subset(&self, other: &HashSet<T>) -> bool {
+    pub fn is_subset(&self, other: &HashSet<T, S>) -> bool {
         if self.len() > other.len() {
             return false;
         }
@@ -178,7 +192,7 @@ impl<T: Eq + Hash> HashSet<T> {
 
     /// Returns `true` if the set is a superset of another.
     #[inline]
-    pub fn is_superset(&self, other: &HashSet<T>) -> bool {
+    pub fn is_superset(&self, other: &HashSet<T, S>) -> bool {
         other.is_subset(self)
     }
 
@@ -229,14 +243,14 @@ impl<T: Eq + Hash> HashSet<T> {
     }
 }
 
-impl<T: Clone> Clone for HashSet<T> {
+impl<T: Clone, S: Clone> Clone for HashSet<T, S> {
     fn clone(&self) -> Self {
-        HashSet { map: self.map.clone() }
+        Self { map: self.map.clone() }
     }
 }
 
-impl<T: Eq + Hash> PartialEq for HashSet<T> {
-    fn eq(&self, other: &HashSet<T>) -> bool {
+impl<T: Eq + Hash, S: BuildHasher> PartialEq for HashSet<T, S> {
+    fn eq(&self, other: &HashSet<T, S>) -> bool {
         if self.len() != other.len() {
             return false;
         }
@@ -250,24 +264,24 @@ impl<T: Eq + Hash> PartialEq for HashSet<T> {
     }
 }
 
-impl<T: Eq + Hash> Eq for HashSet<T> {}
+impl<T: Eq + Hash, S: BuildHasher> Eq for HashSet<T, S> {}
 
-impl<T: fmt::Debug> fmt::Debug for HashSet<T> {
+impl<T: fmt::Debug, S> fmt::Debug for HashSet<T, S> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_set().entries(self.iter()).finish()
     }
 }
 
-impl<T: Eq + Hash> FromIterator<T> for HashSet<T> {
+impl<T: Eq + Hash, S: BuildHasher + Default> FromIterator<T> for HashSet<T, S> {
     #[inline]
-    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> HashSet<T> {
-        let mut set = HashSet::new();
+    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> HashSet<T, S> {
+        let mut set = Self { map: Default::default() };
         set.extend(iter);
         set
     }
 }
 
-impl<T: Eq + Hash, const N: usize> From<[T; N]> for HashSet<T> {
+impl<T: Eq + Hash, const N: usize> From<[T; N]> for HashSet<T, RandomState> {
     fn from(arr: [T; N]) -> Self {
         let mut set = HashSet::with_capacity(N);
         set.extend(arr);
@@ -275,7 +289,7 @@ impl<T: Eq + Hash, const N: usize> From<[T; N]> for HashSet<T> {
     }
 }
 
-impl<T: Eq + Hash> Extend<T> for HashSet<T> {
+impl<T: Eq + Hash, S: BuildHasher> Extend<T> for HashSet<T, S> {
     #[inline]
     fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
         let mut it = iter.into_iter();
@@ -289,7 +303,7 @@ impl<T: Eq + Hash> Extend<T> for HashSet<T> {
     }
 }
 
-impl<'a, T: 'a + Eq + Hash + Copy> Extend<&'a T> for HashSet<T> {
+impl<'a, T: 'a + Eq + Hash + Copy, S: BuildHasher> Extend<&'a T> for HashSet<T, S> {
     #[inline]
     fn extend<I: IntoIterator<Item = &'a T>>(&mut self, iter: I) {
         let mut it = iter.into_iter();
@@ -299,42 +313,42 @@ impl<'a, T: 'a + Eq + Hash + Copy> Extend<&'a T> for HashSet<T> {
     }
 }
 
-impl<T> Default for HashSet<T> {
+impl<T, S: Default> Default for HashSet<T, S> {
     #[inline]
-    fn default() -> HashSet<T> {
-        HashSet::new()
+    fn default() -> HashSet<T, S> {
+        Self { map: Default::default() }
     }
 }
 
-impl<T: Eq + Hash + Clone> BitOr<&HashSet<T>> for &HashSet<T> {
-    type Output = HashSet<T>;
-    fn bitor(self, rhs: &HashSet<T>) -> HashSet<T> {
+impl<T: Eq + Hash + Clone, S: BuildHasher + Default> BitOr<&HashSet<T, S>> for &HashSet<T, S> {
+    type Output = HashSet<T, S>;
+    fn bitor(self, rhs: &HashSet<T, S>) -> HashSet<T, S> {
         self.union(rhs).cloned().collect()
     }
 }
 
-impl<T: Eq + Hash + Clone> BitAnd<&HashSet<T>> for &HashSet<T> {
-    type Output = HashSet<T>;
-    fn bitand(self, rhs: &HashSet<T>) -> HashSet<T> {
+impl<T: Eq + Hash + Clone, S: BuildHasher + Default> BitAnd<&HashSet<T, S>> for &HashSet<T, S> {
+    type Output = HashSet<T, S>;
+    fn bitand(self, rhs: &HashSet<T, S>) -> HashSet<T, S> {
         self.intersection(rhs).cloned().collect()
     }
 }
 
-impl<T: Eq + Hash + Clone> BitXor<&HashSet<T>> for &HashSet<T> {
-    type Output = HashSet<T>;
-    fn bitxor(self, rhs: &HashSet<T>) -> HashSet<T> {
+impl<T: Eq + Hash + Clone, S: BuildHasher + Default> BitXor<&HashSet<T, S>> for &HashSet<T, S> {
+    type Output = HashSet<T, S>;
+    fn bitxor(self, rhs: &HashSet<T, S>) -> HashSet<T, S> {
         self.symmetric_difference(rhs).cloned().collect()
     }
 }
 
-impl<T: Eq + Hash + Clone> Sub<&HashSet<T>> for &HashSet<T> {
-    type Output = HashSet<T>;
-    fn sub(self, rhs: &HashSet<T>) -> HashSet<T> {
+impl<T: Eq + Hash + Clone, S: BuildHasher + Default> Sub<&HashSet<T, S>> for &HashSet<T, S> {
+    type Output = HashSet<T, S>;
+    fn sub(self, rhs: &HashSet<T, S>) -> HashSet<T, S> {
         self.difference(rhs).cloned().collect()
     }
 }
 
-impl<'a, T> IntoIterator for &'a HashSet<T> {
+impl<'a, T, S> IntoIterator for &'a HashSet<T, S> {
     type Item = &'a T;
     type IntoIter = Iter<'a, T>;
     #[inline]
@@ -343,7 +357,7 @@ impl<'a, T> IntoIterator for &'a HashSet<T> {
     }
 }
 
-impl<T> IntoIterator for HashSet<T> {
+impl<T, S> IntoIterator for HashSet<T, S> {
     type Item = T;
     type IntoIter = IntoIter<T>;
     #[inline]
@@ -433,18 +447,18 @@ impl<'a, K> Iterator for Drain<'a, K> {
 }
 
 /// A lazy iterator producing elements in the intersection of `HashSet`s.
-pub struct Intersection<'a, T: 'a> {
+pub struct Intersection<'a, T: 'a, S: 'a = RandomState> {
     iter: Iter<'a, T>,
-    other: &'a HashSet<T>,
+    other: &'a HashSet<T, S>,
 }
 
-impl<'a, T> Clone for Intersection<'a, T> {
+impl<'a, T, S> Clone for Intersection<'a, T, S> {
     fn clone(&self) -> Self {
         Intersection { iter: self.iter.clone(), other: self.other }
     }
 }
 
-impl<'a, T: Eq + Hash> Iterator for Intersection<'a, T> {
+impl<'a, T: Eq + Hash, S: BuildHasher> Iterator for Intersection<'a, T, S> {
     type Item = &'a T;
     #[inline]
     fn next(&mut self) -> Option<&'a T> {
@@ -465,25 +479,25 @@ impl<'a, T: Eq + Hash> Iterator for Intersection<'a, T> {
     }
 }
 
-impl<'a, T: fmt::Debug + Eq + Hash> fmt::Debug for Intersection<'a, T> {
+impl<'a, T: fmt::Debug + Eq + Hash, S: BuildHasher> fmt::Debug for Intersection<'a, T, S> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_list().entries(self.clone()).finish()
     }
 }
 
 /// A lazy iterator producing elements in the difference of `HashSet`s.
-pub struct Difference<'a, T: 'a> {
+pub struct Difference<'a, T: 'a, S: 'a = RandomState> {
     iter: Iter<'a, T>,
-    other: &'a HashSet<T>,
+    other: &'a HashSet<T, S>,
 }
 
-impl<'a, T> Clone for Difference<'a, T> {
+impl<'a, T, S> Clone for Difference<'a, T, S> {
     fn clone(&self) -> Self {
         Difference { iter: self.iter.clone(), other: self.other }
     }
 }
 
-impl<'a, T: Eq + Hash> Iterator for Difference<'a, T> {
+impl<'a, T: Eq + Hash, S: BuildHasher> Iterator for Difference<'a, T, S> {
     type Item = &'a T;
     #[inline]
     fn next(&mut self) -> Option<&'a T> {
@@ -504,24 +518,24 @@ impl<'a, T: Eq + Hash> Iterator for Difference<'a, T> {
     }
 }
 
-impl<'a, T: fmt::Debug + Eq + Hash> fmt::Debug for Difference<'a, T> {
+impl<'a, T: fmt::Debug + Eq + Hash, S: BuildHasher> fmt::Debug for Difference<'a, T, S> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_list().entries(self.clone()).finish()
     }
 }
 
 /// A lazy iterator producing elements in the symmetric difference of `HashSet`s.
-pub struct SymmetricDifference<'a, T: 'a> {
-    iter: Chain<Difference<'a, T>, Difference<'a, T>>,
+pub struct SymmetricDifference<'a, T: 'a, S: 'a = RandomState> {
+    iter: Chain<Difference<'a, T, S>, Difference<'a, T, S>>,
 }
 
-impl<'a, T> Clone for SymmetricDifference<'a, T> {
+impl<'a, T, S> Clone for SymmetricDifference<'a, T, S> {
     fn clone(&self) -> Self {
         SymmetricDifference { iter: self.iter.clone() }
     }
 }
 
-impl<'a, T: Eq + Hash> Iterator for SymmetricDifference<'a, T> {
+impl<'a, T: Eq + Hash, S: BuildHasher> Iterator for SymmetricDifference<'a, T, S> {
     type Item = &'a T;
     #[inline]
     fn next(&mut self) -> Option<&'a T> {
@@ -533,24 +547,24 @@ impl<'a, T: Eq + Hash> Iterator for SymmetricDifference<'a, T> {
     }
 }
 
-impl<'a, T: fmt::Debug + Eq + Hash> fmt::Debug for SymmetricDifference<'a, T> {
+impl<'a, T: fmt::Debug + Eq + Hash, S: BuildHasher> fmt::Debug for SymmetricDifference<'a, T, S> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_list().entries(self.clone()).finish()
     }
 }
 
 /// A lazy iterator producing elements in the union of `HashSet`s.
-pub struct Union<'a, T: 'a> {
-    iter: Chain<Iter<'a, T>, Difference<'a, T>>,
+pub struct Union<'a, T: 'a, S: 'a = RandomState> {
+    iter: Chain<Iter<'a, T>, Difference<'a, T, S>>,
 }
 
-impl<'a, T> Clone for Union<'a, T> {
+impl<'a, T, S> Clone for Union<'a, T, S> {
     fn clone(&self) -> Self {
         Union { iter: self.iter.clone() }
     }
 }
 
-impl<'a, T: Eq + Hash> Iterator for Union<'a, T> {
+impl<'a, T: Eq + Hash, S: BuildHasher> Iterator for Union<'a, T, S> {
     type Item = &'a T;
     #[inline]
     fn next(&mut self) -> Option<&'a T> {
@@ -562,7 +576,7 @@ impl<'a, T: Eq + Hash> Iterator for Union<'a, T> {
     }
 }
 
-impl<'a, T: fmt::Debug + Eq + Hash> fmt::Debug for Union<'a, T> {
+impl<'a, T: fmt::Debug + Eq + Hash, S: BuildHasher> fmt::Debug for Union<'a, T, S> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_list().entries(self.clone()).finish()
     }

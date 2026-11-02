@@ -325,6 +325,107 @@ impl<T> MaybeUninit<T> {
     pub unsafe fn assume_init_mut(&mut self) -> &mut T {
         &mut *self.as_mut_ptr()
     }
+
+    /// Creates a new array of `MaybeUninit<T>` items, in an uninitialized state.
+    #[inline]
+    pub fn uninit_array<const N: usize>() -> [MaybeUninit<T>; N] {
+        unsafe { intrinsics::uninit::<[MaybeUninit<T>; N]>() }
+    }
+
+    /// Extracts the values from an array of `MaybeUninit` containers.
+    #[inline]
+    pub unsafe fn array_assume_init<const N: usize>(array: [MaybeUninit<T>; N]) -> [T; N] {
+        let r = intrinsics::read(&array as *const [MaybeUninit<T>; N] as *const [T; N]);
+        intrinsics::forget(array);
+        r
+    }
+
+    /// Assuming all the elements are initialized, get a slice to them.
+    #[inline]
+    pub unsafe fn slice_assume_init_ref(slice: &[MaybeUninit<T>]) -> &[T] {
+        &*(slice as *const [MaybeUninit<T>] as *const [T])
+    }
+
+    /// Assuming all the elements are initialized, get a mutable slice to them.
+    #[inline]
+    pub unsafe fn slice_assume_init_mut(slice: &mut [MaybeUninit<T>]) -> &mut [T] {
+        &mut *(slice as *mut [MaybeUninit<T>] as *mut [T])
+    }
+
+    /// Gets a pointer to the first element of the array.
+    #[inline]
+    pub fn slice_as_ptr(this: &[MaybeUninit<T>]) -> *const T {
+        this.as_ptr() as *const T
+    }
+
+    /// Gets a mutable pointer to the first element of the array.
+    #[inline]
+    pub fn slice_as_mut_ptr(this: &mut [MaybeUninit<T>]) -> *mut T {
+        this.as_mut_ptr() as *mut T
+    }
+
+    /// Returns the contents of this `MaybeUninit` as a slice of potentially uninitialized bytes.
+    #[inline]
+    pub fn as_bytes(&self) -> &[MaybeUninit<u8>] {
+        unsafe { crate::slice::from_raw_parts(self.as_ptr() as *const MaybeUninit<u8>, crate::mem::size_of::<T>()) }
+    }
+
+    /// Returns the contents of this `MaybeUninit` as a mutable slice of potentially uninitialized bytes.
+    #[inline]
+    pub fn as_bytes_mut(&mut self) -> &mut [MaybeUninit<u8>] {
+        unsafe {
+            crate::slice::from_raw_parts_mut(self.as_mut_ptr() as *mut MaybeUninit<u8>, crate::mem::size_of::<T>())
+        }
+    }
+}
+
+impl<T: Copy> MaybeUninit<T> {
+    /// Copies the elements from `src` to `this`, returning a mutable reference to the now initialized contents.
+    pub fn copy_from_slice<'a>(this: &'a mut [MaybeUninit<T>], src: &[T]) -> &'a mut [T] {
+        assert_eq!(this.len(), src.len(), "destination and source slices have different lengths");
+        unsafe {
+            intrinsics::copy_nonoverlapping(src.as_ptr(), this.as_mut_ptr() as *mut T, src.len());
+            &mut *(this as *mut [MaybeUninit<T>] as *mut [T])
+        }
+    }
+}
+
+impl<T> [MaybeUninit<T>] {
+    /// Copies the elements from `src` to `self`, returning a mutable reference to the now initialized contents.
+    pub fn write_copy_of_slice(&mut self, src: &[T]) -> &mut [T]
+    where
+        T: Copy,
+    {
+        MaybeUninit::copy_from_slice(self, src)
+    }
+
+    /// Gets a shared reference to the contained values (assumed initialized).
+    #[inline]
+    pub unsafe fn assume_init_ref(&self) -> &[T] {
+        &*(self as *const [MaybeUninit<T>] as *const [T])
+    }
+
+    /// Gets a mutable reference to the contained values (assumed initialized).
+    #[inline]
+    pub unsafe fn assume_init_mut(&mut self) -> &mut [T] {
+        &mut *(self as *mut [MaybeUninit<T>] as *mut [T])
+    }
+}
+
+impl<T, const N: usize> MaybeUninit<[T; N]> {
+    /// Transposes a `MaybeUninit<[T; N]>` into a `[MaybeUninit<T>; N]`.
+    #[inline]
+    pub fn transpose(self) -> [MaybeUninit<T>; N] {
+        unsafe { intrinsics::transmute::<MaybeUninit<[T; N]>, [MaybeUninit<T>; N]>(self) }
+    }
+}
+
+impl<T, const N: usize> [MaybeUninit<T>; N] {
+    /// Transposes a `[MaybeUninit<T>; N]` into a `MaybeUninit<[T; N]>`.
+    #[inline]
+    pub fn transpose(self) -> MaybeUninit<[T; N]> {
+        unsafe { intrinsics::transmute::<[MaybeUninit<T>; N], MaybeUninit<[T; N]>>(self) }
+    }
 }
 
 impl<T> fmt::Debug for MaybeUninit<T> {

@@ -22,6 +22,8 @@ typedef struct { void* ptr; uint64_t meta; } Fat;
 #include <sched.h>
 #include <sys/syscall.h>
 #include <linux/futex.h>
+#include <signal.h>
+#include <stdio_ext.h>
 
 extern char** environ;
 
@@ -79,11 +81,23 @@ static void rg_init(int argc, char** argv) {
   rg_is_main = 1;
   setvbuf(stdout, rg_outbuf, _IOFBF, sizeof rg_outbuf);
   atexit(rg_atexit);
+  /* like Rust's runtime: writes to closed pipes fail with EPIPE instead of killing the process */
+  signal(SIGPIPE, SIG_IGN);
 }
 
 static void rg_flush_stdout(void) { fflush(stdout); }
 
-static void rg_write_stdout(const uint8_t* p, uint64_t n) { if (n) fwrite(p, 1, n, stdout); }
+__attribute__((noreturn, cold)) static void rg_panic_str(const char* msg, const char* file, uint32_t line, uint32_t col);
+__attribute__((noinline, cold)) static void rg_stdout_failed(void) {
+  int e = errno;
+  clearerr(stdout);
+  if (e == EPIPE) {
+    /* drop what is still buffered so that the exit-time flush stays quiet */
+    __fpurge(stdout);
+    rg_panic_str("failed printing to stdout: Broken pipe (os error 32)", "library/std/src/io/stdio.rs", 1166, 9);
+  }
+}
+static void rg_write_stdout(const uint8_t* p, uint64_t n) { if (n && fwrite(p, 1, n, stdout) != n) rg_stdout_failed(); }
 static void rg_write_stderr(const uint8_t* p, uint64_t n) { fflush(stdout); if (n) fwrite(p, 1, n, stderr); }
 
 __attribute__((noreturn)) static void rg_exit(int32_t code) { fflush(stdout); exit(code); }

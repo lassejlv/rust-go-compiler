@@ -430,7 +430,13 @@ func (fcx *FnCtxt) checkBinary(x *ast.BinaryExpr, expected Ty) Ty {
 		rv := fcx.ic.newVar()
 		fcx.registerOpObligation(x.Op, lt, rv, x.Span, binOpLang)
 		fcx.selectWherePossible()
-		rt := fcx.checkExpr(x.R, nil)
+		// a unique PartialEq impl fixes the rhs type: use it as a hint so
+		// e.g. `Some(b"ab")` checks against `Option<&[u8]>`
+		var hint Ty
+		if r := fcx.shallow(rv); r.Kind != TInfer {
+			hint = r
+		}
+		rt := fcx.checkExpr(x.R, hint)
 		if !fcx.ic.unify(rv, rt) {
 			// try coercing (e.g. &String vs &str)
 			if !fcx.coerce(x.R, rt, rv) {

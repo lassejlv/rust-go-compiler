@@ -23,6 +23,7 @@ pub mod alloc;
 pub mod boxed;
 pub mod num;
 pub mod char;
+pub mod ascii;
 pub mod str;
 pub mod string;
 pub mod slice;
@@ -37,6 +38,9 @@ pub mod rc;
 pub mod sync;
 pub mod collections;
 pub mod io;
+pub mod fs;
+pub mod path;
+pub mod net;
 pub mod process;
 pub mod env;
 pub mod any;
@@ -56,6 +60,8 @@ pub mod future;
 pub mod task;
 pub mod pin;
 pub mod prelude;
+#[doc(hidden)]
+pub mod sys;
 
 // Legacy integer modules: `std::i32::MAX`, `std::u64::MIN`, ...
 macro_rules! __std_legacy_int_modules {

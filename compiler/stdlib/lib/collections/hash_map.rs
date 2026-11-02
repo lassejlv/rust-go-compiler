@@ -3,7 +3,7 @@
 
 use crate::borrow::Borrow;
 use crate::fmt;
-use crate::hash::{BuildHasher, Hash, Hasher};
+use crate::hash::{BuildHasher, Hash};
 
 use crate::iter::{ExactSizeIterator, Extend, FromIterator, FusedIterator, IntoIterator, Iterator};
 use crate::mem;
@@ -22,30 +22,27 @@ struct Bucket<K, V> {
     value: V,
 }
 
-/// A hash map.
-pub struct HashMap<K, V> {
+/// The hash-independent storage of a `HashMap`.
+#[derive(Clone)]
+pub(crate) struct RawTable<K, V> {
     entries: Vec<Bucket<K, V>>,
     indices: Vec<usize>,
 }
 
-#[inline]
-fn make_hash<Q: Hash + ?Sized>(q: &Q) -> u64 {
-    let mut h = DefaultHasher::new();
-    q.hash(&mut h);
-    h.finish()
+/// A hash map.
+pub struct HashMap<K, V, S = RandomState> {
+    table: RawTable<K, V>,
+    hash_builder: S,
 }
 
-impl<K, V> HashMap<K, V> {
-    /// Creates an empty `HashMap`.
+impl<K, V> RawTable<K, V> {
     #[inline]
-    pub fn new() -> HashMap<K, V> {
-        HashMap { entries: Vec::new(), indices: Vec::new() }
+    const fn new() -> RawTable<K, V> {
+        RawTable { entries: Vec::new(), indices: Vec::new() }
     }
 
-    /// Creates an empty `HashMap` with at least the specified capacity.
-    #[inline]
-    pub fn with_capacity(capacity: usize) -> HashMap<K, V> {
-        let mut m = HashMap { entries: Vec::with_capacity(capacity), indices: Vec::new() };
+    fn with_capacity(capacity: usize) -> RawTable<K, V> {
+        let mut m = RawTable { entries: Vec::with_capacity(capacity), indices: Vec::new() };
         if capacity > 0 {
             let mut n = 8;
             while n * 3 < capacity * 4 {
@@ -56,118 +53,13 @@ impl<K, V> HashMap<K, V> {
         m
     }
 
-    /// Creates an empty `HashMap` which will use the given hash builder (ignored).
-    #[inline]
-    pub fn with_hasher<S: BuildHasher>(_hash_builder: S) -> HashMap<K, V> {
-        HashMap::new()
-    }
-
-    /// Creates an empty `HashMap` with at least the specified capacity, using `hasher` (ignored).
-    #[inline]
-    pub fn with_capacity_and_hasher<S: BuildHasher>(capacity: usize, _hasher: S) -> HashMap<K, V> {
-        HashMap::with_capacity(capacity)
-    }
-
-    /// Returns the number of elements the map can hold without reallocating.
-    #[inline]
-    pub fn capacity(&self) -> usize {
-        self.indices.len() * 3 / 4
-    }
-
-    /// An iterator visiting all keys in arbitrary order.
-    #[inline]
-    pub fn keys(&self) -> Keys<'_, K, V> {
-        Keys { inner: self.iter() }
-    }
-
-    /// Creates a consuming iterator visiting all the keys in arbitrary order.
-    #[inline]
-    pub fn into_keys(self) -> IntoKeys<K, V> {
-        IntoKeys { inner: self.into_iter() }
-    }
-
-    /// An iterator visiting all values in arbitrary order.
-    #[inline]
-    pub fn values(&self) -> Values<'_, K, V> {
-        Values { inner: self.iter() }
-    }
-
-    /// An iterator visiting all values mutably in arbitrary order.
-    #[inline]
-    pub fn values_mut(&mut self) -> ValuesMut<'_, K, V> {
-        ValuesMut { inner: self.iter_mut() }
-    }
-
-    /// Creates a consuming iterator visiting all the values in arbitrary order.
-    #[inline]
-    pub fn into_values(self) -> IntoValues<K, V> {
-        IntoValues { inner: self.into_iter() }
-    }
-
-    /// An iterator visiting all key-value pairs in arbitrary order.
-    #[inline]
-    pub fn iter(&self) -> Iter<'_, K, V> {
-        Iter { inner: self.entries.iter() }
-    }
-
-    /// An iterator visiting all key-value pairs in arbitrary order, with mutable references to the values.
-    #[inline]
-    pub fn iter_mut(&mut self) -> IterMut<'_, K, V> {
-        IterMut { inner: self.entries.iter_mut() }
-    }
-
-    /// Returns the number of elements in the map.
-    #[inline]
-    pub fn len(&self) -> usize {
-        self.entries.len()
-    }
-
-    /// Returns `true` if the map contains no elements.
-    #[inline]
-    pub fn is_empty(&self) -> bool {
-        self.entries.is_empty()
-    }
-
-    /// Clears the map, returning all key-value pairs as an iterator.
-    #[inline]
-    pub fn drain(&mut self) -> Drain<'_, K, V> {
+    fn clear_indices(&mut self) {
         let mut i = 0;
         let n = self.indices.len();
         while i < n {
             self.indices[i] = EMPTY;
             i += 1;
         }
-        Drain { inner: self.entries.drain(..) }
-    }
-
-    /// Retains only the elements specified by the predicate.
-    pub fn retain<F>(&mut self, f: F)
-    where
-        F: FnMut(&K, &mut V) -> bool,
-    {
-        let mut f = f;
-        let before = self.entries.len();
-        self.entries.retain_mut(|b| f(&b.key, &mut b.value));
-        if self.entries.len() != before {
-            self.rebuild_indices(self.indices.len());
-        }
-    }
-
-    /// Clears the map, removing all key-value pairs.
-    #[inline]
-    pub fn clear(&mut self) {
-        self.entries.clear();
-        let mut i = 0;
-        let n = self.indices.len();
-        while i < n {
-            self.indices[i] = EMPTY;
-            i += 1;
-        }
-    }
-
-    /// Returns a reference to the map's `BuildHasher`.
-    pub fn hasher(&self) -> RandomState {
-        RandomState::new()
     }
 
     fn rebuild_indices(&mut self, table_len: usize) {
@@ -198,17 +90,6 @@ impl<K, V> HashMap<K, V> {
             }
             self.rebuild_indices(n);
         }
-    }
-
-    /// Reserves capacity for at least `additional` more elements.
-    pub fn reserve(&mut self, additional: usize) {
-        self.entries.reserve(additional);
-        self.grow_if_needed(additional);
-    }
-
-    /// Shrinks the capacity of the map as much as possible.
-    pub fn shrink_to_fit(&mut self) {
-        self.entries.shrink_to_fit();
     }
 
     /// Removes the entry at `idx` (and its table `slot`), returning it.
@@ -244,11 +125,22 @@ impl<K, V> HashMap<K, V> {
         }
         bucket
     }
-}
 
-impl<K: Eq + Hash, V> HashMap<K, V> {
+    fn insert_new(&mut self, hash: u64, key: K, value: V) -> usize {
+        self.grow_if_needed(1);
+        let mask = self.indices.len() - 1;
+        let mut i = (hash as usize) & mask;
+        while self.indices[i] != EMPTY {
+            i = (i + 1) & mask;
+        }
+        let idx = self.entries.len();
+        self.indices[i] = idx;
+        self.entries.push(Bucket { hash, key, value });
+        idx
+    }
+
     /// Finds the table slot and entry index for `key`.
-    fn find<Q: ?Sized + Hash + Eq>(&self, hash: u64, key: &Q) -> (usize, Option<usize>)
+    fn find<Q: ?Sized + Eq>(&self, hash: u64, key: &Q) -> (usize, Option<usize>)
     where
         K: Borrow<Q>,
     {
@@ -270,26 +162,186 @@ impl<K: Eq + Hash, V> HashMap<K, V> {
             i = (i + 1) & mask;
         }
     }
+}
 
-    fn insert_new(&mut self, hash: u64, key: K, value: V) -> usize {
-        self.grow_if_needed(1);
-        let mask = self.indices.len() - 1;
-        let mut i = (hash as usize) & mask;
-        while self.indices[i] != EMPTY {
-            i = (i + 1) & mask;
+impl<K, V> HashMap<K, V, RandomState> {
+    /// Creates an empty `HashMap`.
+    #[inline]
+    pub fn new() -> HashMap<K, V, RandomState> {
+        Self { table: RawTable::new(), hash_builder: RandomState::new() }
+    }
+
+    /// Creates an empty `HashMap` with at least the specified capacity.
+    #[inline]
+    pub fn with_capacity(capacity: usize) -> HashMap<K, V, RandomState> {
+        Self { table: RawTable::with_capacity(capacity), hash_builder: RandomState::new() }
+    }
+}
+
+impl<K, V, S> HashMap<K, V, S> {
+    /// Creates an empty `HashMap` which will use the given hash builder to hash keys.
+    #[inline]
+    pub const fn with_hasher(hash_builder: S) -> HashMap<K, V, S> {
+        Self { table: RawTable::new(), hash_builder }
+    }
+
+    /// Creates an empty `HashMap` with at least the specified capacity, using `hasher` to hash the keys.
+    #[inline]
+    pub fn with_capacity_and_hasher(capacity: usize, hasher: S) -> HashMap<K, V, S> {
+        Self { table: RawTable::with_capacity(capacity), hash_builder: hasher }
+    }
+
+    /// Returns the number of elements the map can hold without reallocating.
+    #[inline]
+    pub fn capacity(&self) -> usize {
+        self.table.indices.len() * 3 / 4
+    }
+
+    /// An iterator visiting all keys in arbitrary order.
+    #[inline]
+    pub fn keys(&self) -> Keys<'_, K, V> {
+        Keys { inner: self.iter() }
+    }
+
+    /// Creates a consuming iterator visiting all the keys in arbitrary order.
+    #[inline]
+    pub fn into_keys(self) -> IntoKeys<K, V> {
+        IntoKeys { inner: self.into_iter() }
+    }
+
+    /// An iterator visiting all values in arbitrary order.
+    #[inline]
+    pub fn values(&self) -> Values<'_, K, V> {
+        Values { inner: self.iter() }
+    }
+
+    /// An iterator visiting all values mutably in arbitrary order.
+    #[inline]
+    pub fn values_mut(&mut self) -> ValuesMut<'_, K, V> {
+        ValuesMut { inner: self.iter_mut() }
+    }
+
+    /// Creates a consuming iterator visiting all the values in arbitrary order.
+    #[inline]
+    pub fn into_values(self) -> IntoValues<K, V> {
+        IntoValues { inner: self.into_iter() }
+    }
+
+    /// An iterator visiting all key-value pairs in arbitrary order.
+    #[inline]
+    pub fn iter(&self) -> Iter<'_, K, V> {
+        Iter { inner: self.table.entries.iter() }
+    }
+
+    /// An iterator visiting all key-value pairs in arbitrary order, with mutable references to the values.
+    #[inline]
+    pub fn iter_mut(&mut self) -> IterMut<'_, K, V> {
+        IterMut { inner: self.table.entries.iter_mut() }
+    }
+
+    /// Returns the number of elements in the map.
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.table.entries.len()
+    }
+
+    /// Returns `true` if the map contains no elements.
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.table.entries.is_empty()
+    }
+
+    /// Clears the map, returning all key-value pairs as an iterator.
+    #[inline]
+    pub fn drain(&mut self) -> Drain<'_, K, V> {
+        self.table.clear_indices();
+        Drain { inner: self.table.entries.drain(..) }
+    }
+
+    /// Creates an iterator which uses a closure to determine if an element should be removed.
+    pub fn extract_if<F>(&mut self, pred: F) -> vec::IntoIter<(K, V)>
+    where
+        F: FnMut(&K, &mut V) -> bool,
+    {
+        let mut pred = pred;
+        let mut out = Vec::new();
+        let mut kept = Vec::new();
+        for mut b in mem::take(&mut self.table.entries) {
+            if pred(&b.key, &mut b.value) {
+                out.push((b.key, b.value));
+            } else {
+                kept.push(b);
+            }
         }
-        let idx = self.entries.len();
-        self.indices[i] = idx;
-        self.entries.push(Bucket { hash, key, value });
-        idx
+        self.table.entries = kept;
+        let n = self.table.indices.len();
+        self.table.rebuild_indices(n);
+        out.into_iter()
+    }
+
+    /// Retains only the elements specified by the predicate.
+    pub fn retain<F>(&mut self, f: F)
+    where
+        F: FnMut(&K, &mut V) -> bool,
+    {
+        let mut f = f;
+        let before = self.table.entries.len();
+        self.table.entries.retain_mut(|b| f(&b.key, &mut b.value));
+        if self.table.entries.len() != before {
+            let n = self.table.indices.len();
+            self.table.rebuild_indices(n);
+        }
+    }
+
+    /// Clears the map, removing all key-value pairs.
+    #[inline]
+    pub fn clear(&mut self) {
+        self.table.entries.clear();
+        self.table.clear_indices();
+    }
+
+    /// Returns a reference to the map's `BuildHasher`.
+    #[inline]
+    pub fn hasher(&self) -> &S {
+        &self.hash_builder
+    }
+}
+
+impl<K: Eq + Hash, V, S: BuildHasher> HashMap<K, V, S> {
+    #[inline]
+    fn make_hash<Q: Hash + ?Sized>(&self, q: &Q) -> u64 {
+        self.hash_builder.hash_one(q)
+    }
+
+    /// Reserves capacity for at least `additional` more elements.
+    pub fn reserve(&mut self, additional: usize) {
+        self.table.entries.reserve(additional);
+        self.table.grow_if_needed(additional);
+    }
+
+    /// Tries to reserve capacity for at least `additional` more elements.
+    pub fn try_reserve(&mut self, additional: usize) -> Result<(), crate::collections::TryReserveError> {
+        self.table.entries.try_reserve(additional)?;
+        self.table.grow_if_needed(additional);
+        Ok(())
+    }
+
+    /// Shrinks the capacity of the map as much as possible.
+    pub fn shrink_to_fit(&mut self) {
+        self.table.entries.shrink_to_fit();
+    }
+
+    /// Shrinks the capacity of the map with a lower limit.
+    pub fn shrink_to(&mut self, min_capacity: usize) {
+        self.table.entries.shrink_to(min_capacity);
     }
 
     /// Gets the given key's corresponding entry in the map for in-place manipulation.
     pub fn entry(&mut self, key: K) -> Entry<'_, K, V> {
-        let hash = make_hash(&key);
-        match self.find(hash, &key) {
-            (_, Some(idx)) => Entry::Occupied(OccupiedEntry { map: self, idx, key: Some(key) }),
-            (_, None) => Entry::Vacant(VacantEntry { map: self, hash, key }),
+        let hash = self.make_hash(&key);
+        match self.table.find(hash, &key) {
+            (_, Some(idx)) => Entry::Occupied(OccupiedEntry { map: &mut self.table, idx, key: Some(key) }),
+            (_, None) => Entry::Vacant(VacantEntry { map: &mut self.table, hash, key }),
         }
     }
 
@@ -300,8 +352,8 @@ impl<K: Eq + Hash, V> HashMap<K, V> {
         K: Borrow<Q>,
         Q: Hash + Eq,
     {
-        match self.find(make_hash(k), k) {
-            (_, Some(idx)) => Some(&self.entries[idx].value),
+        match self.table.find(self.make_hash(k), k) {
+            (_, Some(idx)) => Some(&self.table.entries[idx].value),
             _ => None,
         }
     }
@@ -313,9 +365,9 @@ impl<K: Eq + Hash, V> HashMap<K, V> {
         K: Borrow<Q>,
         Q: Hash + Eq,
     {
-        match self.find(make_hash(k), k) {
+        match self.table.find(self.make_hash(k), k) {
             (_, Some(idx)) => {
-                let b = &self.entries[idx];
+                let b = &self.table.entries[idx];
                 Some((&b.key, &b.value))
             }
             _ => None,
@@ -329,7 +381,7 @@ impl<K: Eq + Hash, V> HashMap<K, V> {
         K: Borrow<Q>,
         Q: Hash + Eq,
     {
-        self.find(make_hash(k), k).1.is_some()
+        self.table.find(self.make_hash(k), k).1.is_some()
     }
 
     /// Returns a mutable reference to the value corresponding to the key.
@@ -339,8 +391,8 @@ impl<K: Eq + Hash, V> HashMap<K, V> {
         K: Borrow<Q>,
         Q: Hash + Eq,
     {
-        match self.find(make_hash(k), k) {
-            (_, Some(idx)) => Some(&mut self.entries[idx].value),
+        match self.table.find(self.make_hash(k), k) {
+            (_, Some(idx)) => Some(&mut self.table.entries[idx].value),
             _ => None,
         }
     }
@@ -354,7 +406,7 @@ impl<K: Eq + Hash, V> HashMap<K, V> {
         let mut idxs = [usize::MAX; N];
         let mut i = 0;
         while i < N {
-            if let (_, Some(idx)) = self.find(make_hash(ks[i]), ks[i]) {
+            if let (_, Some(idx)) = self.table.find(self.make_hash(ks[i]), ks[i]) {
                 let mut j = 0;
                 while j < i {
                     if idxs[j] == idx {
@@ -366,7 +418,7 @@ impl<K: Eq + Hash, V> HashMap<K, V> {
             }
             i += 1;
         }
-        let base = self.entries.as_mut_ptr();
+        let base = self.table.entries.as_mut_ptr();
         crate::array::from_fn(|i| {
             if idxs[i] == usize::MAX {
                 None
@@ -378,24 +430,32 @@ impl<K: Eq + Hash, V> HashMap<K, V> {
 
     /// Inserts a key-value pair into the map, returning the old value if the key was present.
     pub fn insert(&mut self, k: K, v: V) -> Option<V> {
-        let hash = make_hash(&k);
-        match self.find(hash, &k) {
-            (_, Some(idx)) => Some(mem::replace(&mut self.entries[idx].value, v)),
+        let hash = self.make_hash(&k);
+        match self.table.find(hash, &k) {
+            (_, Some(idx)) => Some(mem::replace(&mut self.table.entries[idx].value, v)),
             (_, None) => {
-                self.insert_new(hash, k, v);
+                self.table.insert_new(hash, k, v);
                 None
             }
         }
     }
 
+    /// Tries to insert a key-value pair into the map, and returns a mutable reference to the value in the entry.
+    pub fn try_insert(&mut self, key: K, value: V) -> Result<&mut V, OccupiedError<'_, K, V>> {
+        match self.entry(key) {
+            Entry::Occupied(entry) => Err(OccupiedError { entry, value }),
+            Entry::Vacant(entry) => Ok(entry.insert(value)),
+        }
+    }
+
     /// Returns the stored key equal to `key`, inserting `key` with `value` if absent.
     pub(crate) fn get_or_insert_key(&mut self, key: K, value: V) -> &K {
-        let hash = make_hash(&key);
-        let idx = match self.find(hash, &key) {
+        let hash = self.make_hash(&key);
+        let idx = match self.table.find(hash, &key) {
             (_, Some(idx)) => idx,
-            (_, None) => self.insert_new(hash, key, value),
+            (_, None) => self.table.insert_new(hash, key, value),
         };
-        &self.entries[idx].key
+        &self.table.entries[idx].key
     }
 
     /// Removes a key from the map, returning the value at the key if the key was previously in the map.
@@ -417,9 +477,9 @@ impl<K: Eq + Hash, V> HashMap<K, V> {
         K: Borrow<Q>,
         Q: Hash + Eq,
     {
-        match self.find(make_hash(k), k) {
+        match self.table.find(self.make_hash(k), k) {
             (slot, Some(idx)) => {
-                let b = self.remove_at(slot, idx);
+                let b = self.table.remove_at(slot, idx);
                 Some((b.key, b.value))
             }
             _ => None,
@@ -427,21 +487,51 @@ impl<K: Eq + Hash, V> HashMap<K, V> {
     }
 }
 
-impl<K: Clone, V: Clone> Clone for HashMap<K, V> {
+/// The error returned by `try_insert` when the key already exists.
+pub struct OccupiedError<'a, K: 'a, V: 'a> {
+    /// The entry in the map that was already occupied.
+    pub entry: OccupiedEntry<'a, K, V>,
+    /// The value which was not inserted, because the entry was already occupied.
+    pub value: V,
+}
+
+impl<'a, K: fmt::Debug, V: fmt::Debug> fmt::Debug for OccupiedError<'a, K, V> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let b = &self.entry.map.entries[self.entry.idx];
+        f.debug_struct("OccupiedError")
+            .field("key", &b.key)
+            .field("old_value", &b.value)
+            .field("new_value", &self.value)
+            .finish()
+    }
+}
+
+impl<'a, K: fmt::Debug, V: fmt::Debug> fmt::Display for OccupiedError<'a, K, V> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let b = &self.entry.map.entries[self.entry.idx];
+        write!(
+            f,
+            "failed to insert {:?}, key {:?} already exists with value {:?}",
+            self.value, b.key, b.value,
+        )
+    }
+}
+
+impl<K: Clone, V: Clone, S: Clone> Clone for HashMap<K, V, S> {
     fn clone(&self) -> Self {
-        HashMap { entries: self.entries.clone(), indices: self.indices.clone() }
+        Self { table: self.table.clone(), hash_builder: self.hash_builder.clone() }
     }
 }
 
-impl<K, V> Default for HashMap<K, V> {
+impl<K, V, S: Default> Default for HashMap<K, V, S> {
     #[inline]
-    fn default() -> HashMap<K, V> {
-        HashMap::new()
+    fn default() -> HashMap<K, V, S> {
+        Self { table: RawTable::new(), hash_builder: Default::default() }
     }
 }
 
-impl<K: Eq + Hash, V: PartialEq> PartialEq for HashMap<K, V> {
-    fn eq(&self, other: &HashMap<K, V>) -> bool {
+impl<K: Eq + Hash, V: PartialEq, S: BuildHasher> PartialEq for HashMap<K, V, S> {
+    fn eq(&self, other: &HashMap<K, V, S>) -> bool {
         if self.len() != other.len() {
             return false;
         }
@@ -460,18 +550,19 @@ impl<K: Eq + Hash, V: PartialEq> PartialEq for HashMap<K, V> {
     }
 }
 
-impl<K: Eq + Hash, V: Eq> Eq for HashMap<K, V> {}
+impl<K: Eq + Hash, V: Eq, S: BuildHasher> Eq for HashMap<K, V, S> {}
 
-impl<K: fmt::Debug, V: fmt::Debug> fmt::Debug for HashMap<K, V> {
+impl<K: fmt::Debug, V: fmt::Debug, S> fmt::Debug for HashMap<K, V, S> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_map().entries(self.iter()).finish()
     }
 }
 
-impl<K, Q: ?Sized, V> Index<&Q> for HashMap<K, V>
+impl<K, Q: ?Sized, V, S> Index<&Q> for HashMap<K, V, S>
 where
     K: Eq + Hash + Borrow<Q>,
     Q: Eq + Hash,
+    S: BuildHasher,
 {
     type Output = V;
     #[inline]
@@ -484,15 +575,15 @@ where
     }
 }
 
-impl<K: Eq + Hash, V> FromIterator<(K, V)> for HashMap<K, V> {
-    fn from_iter<T: IntoIterator<Item = (K, V)>>(iter: T) -> HashMap<K, V> {
-        let mut map = HashMap::new();
+impl<K: Eq + Hash, V, S: BuildHasher + Default> FromIterator<(K, V)> for HashMap<K, V, S> {
+    fn from_iter<T: IntoIterator<Item = (K, V)>>(iter: T) -> HashMap<K, V, S> {
+        let mut map = Self { table: RawTable::new(), hash_builder: Default::default() };
         map.extend(iter);
         map
     }
 }
 
-impl<K: Eq + Hash, V> Extend<(K, V)> for HashMap<K, V> {
+impl<K: Eq + Hash, V, S: BuildHasher> Extend<(K, V)> for HashMap<K, V, S> {
     fn extend<T: IntoIterator<Item = (K, V)>>(&mut self, iter: T) {
         let mut it = iter.into_iter();
         while let Some((k, v)) = it.next() {
@@ -505,7 +596,7 @@ impl<K: Eq + Hash, V> Extend<(K, V)> for HashMap<K, V> {
     }
 }
 
-impl<'a, K: Eq + Hash + Copy, V: Copy> Extend<(&'a K, &'a V)> for HashMap<K, V> {
+impl<'a, K: Eq + Hash + Copy, V: Copy, S: BuildHasher> Extend<(&'a K, &'a V)> for HashMap<K, V, S> {
     fn extend<T: IntoIterator<Item = (&'a K, &'a V)>>(&mut self, iter: T) {
         let mut it = iter.into_iter();
         while let Some((k, v)) = it.next() {
@@ -514,7 +605,7 @@ impl<'a, K: Eq + Hash + Copy, V: Copy> Extend<(&'a K, &'a V)> for HashMap<K, V> 
     }
 }
 
-impl<K: Eq + Hash, V, const N: usize> From<[(K, V); N]> for HashMap<K, V> {
+impl<K: Eq + Hash, V, const N: usize> From<[(K, V); N]> for HashMap<K, V, RandomState> {
     fn from(arr: [(K, V); N]) -> Self {
         let mut map = HashMap::with_capacity(N);
         map.extend(arr);
@@ -522,7 +613,7 @@ impl<K: Eq + Hash, V, const N: usize> From<[(K, V); N]> for HashMap<K, V> {
     }
 }
 
-impl<'a, K, V> IntoIterator for &'a HashMap<K, V> {
+impl<'a, K, V, S> IntoIterator for &'a HashMap<K, V, S> {
     type Item = (&'a K, &'a V);
     type IntoIter = Iter<'a, K, V>;
     #[inline]
@@ -531,7 +622,7 @@ impl<'a, K, V> IntoIterator for &'a HashMap<K, V> {
     }
 }
 
-impl<'a, K, V> IntoIterator for &'a mut HashMap<K, V> {
+impl<'a, K, V, S> IntoIterator for &'a mut HashMap<K, V, S> {
     type Item = (&'a K, &'a mut V);
     type IntoIter = IterMut<'a, K, V>;
     #[inline]
@@ -540,12 +631,12 @@ impl<'a, K, V> IntoIterator for &'a mut HashMap<K, V> {
     }
 }
 
-impl<K, V> IntoIterator for HashMap<K, V> {
+impl<K, V, S> IntoIterator for HashMap<K, V, S> {
     type Item = (K, V);
     type IntoIter = IntoIter<K, V>;
     #[inline]
     fn into_iter(self) -> IntoIter<K, V> {
-        IntoIter { inner: self.entries.into_iter() }
+        IntoIter { inner: self.table.entries.into_iter() }
     }
 }
 
@@ -847,14 +938,14 @@ pub use self::Entry::{Occupied, Vacant};
 
 /// A view into an occupied entry in a `HashMap`.
 pub struct OccupiedEntry<'a, K: 'a, V: 'a> {
-    map: &'a mut HashMap<K, V>,
+    map: &'a mut RawTable<K, V>,
     idx: usize,
     key: Option<K>,
 }
 
 /// A view into a vacant entry in a `HashMap`.
 pub struct VacantEntry<'a, K: 'a, V: 'a> {
-    map: &'a mut HashMap<K, V>,
+    map: &'a mut RawTable<K, V>,
     hash: u64,
     key: K,
 }

@@ -329,12 +329,10 @@ macro_rules! __std_hash_int {
                 }
                 #[inline]
                 fn hash_slice<H: Hasher>(data: &[$t], state: &mut H) {
-                    let n = data.len();
-                    let mut i = 0;
-                    while i < n {
-                        state.$meth(data[i]);
-                        i += 1;
-                    }
+                    // like the real library: the raw bytes in one `write`
+                    let newlen = data.len() * crate::mem::size_of::<$t>();
+                    let ptr = data.as_ptr() as *const u8;
+                    state.write(unsafe { crate::slice::from_raw_parts(ptr, newlen) })
                 }
             }
         )*
