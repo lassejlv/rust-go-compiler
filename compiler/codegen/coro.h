@@ -1,3 +1,5 @@
+#define RG_ALIGN_UP(x, a) (((uint64_t)(x) + (uint64_t)(a) - 1) / (uint64_t)(a) * (uint64_t)(a))
+#define RG_MAXU(a, b) ((uint64_t)(a) > (uint64_t)(b) ? (uint64_t)(a) : (uint64_t)(b))
 /* rustgo coroutines (stackful) used to run `async` blocks */
 #include <ucontext.h>
 #include <sys/mman.h>

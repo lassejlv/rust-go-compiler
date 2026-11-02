@@ -81,19 +81,10 @@ func (fc *fnGen) intrinsic(d *Def, args []Ty, v []string, ret Ty, sp ast.Span) s
 			return fmt.Sprintf("((uint64_t)(uintptr_t)((void**)(%s).meta)[2])", v[0])
 		case TAdt:
 			if t.IsUnsized() {
-				g.defineType(t)
-				sn := g.ctype(t)
-				fts := g.fieldTypes(t, 0)
-				last := len(fts) - 1
-				tail := fts[last]
-				es := "1"
-				if tail.Kind == TSlice {
-					es = fmt.Sprintf("sizeof(%s)", ct(tail.Elem))
+				if isSize {
+					return g.unsizedSize(t, "("+v[0]+").meta")
 				}
-				if !isSize {
-					return fmt.Sprintf("((uint64_t)_Alignof(%s))", sn)
-				}
-				return fmt.Sprintf("((uint64_t)((__builtin_offsetof(%s, f%d) + (%s).meta * %s + _Alignof(%s) - 1) / _Alignof(%s) * _Alignof(%s)))", sn, last, v[0], es, sn, sn, sn)
+				return g.unsizedAlign(t, "("+v[0]+").meta")
 			}
 		}
 		if isZST(t) {

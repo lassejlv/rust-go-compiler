@@ -181,6 +181,9 @@ func (g *Gen) defineType(t Ty) {
 			fmt.Fprintf(&b, "%s %s {", kw, ti.name)
 			for i, ft := range fts {
 				if ft.IsUnsized() {
+					if i == 0 {
+						b.WriteString(" uint8_t __rg_hdr[0];")
+					}
 					// unsized tail: flexible array member
 					switch ft.Kind {
 					case TStr:
@@ -189,7 +192,8 @@ func (g *Gen) defineType(t Ty) {
 						g.defineByValue(ft.Elem)
 						fmt.Fprintf(&b, " %s f%d[];", g.ctype(ft.Elem), i)
 					default:
-						g.fatalf("unsupported unsized struct tail `%s` in `%s` (dyn tails are not supported)", ft, t)
+						// dyn / nested unsized struct: placed at a dynamic offset
+						fmt.Fprintf(&b, " uint8_t f%d[];", i)
 					}
 					continue
 				}
@@ -403,7 +407,11 @@ func (g *Gen) emitDropGlue(t Ty) {
 					continue
 				}
 				if ft.IsUnsized() {
-					fmt.Fprintf(&b, "  %s((Fat){ (void*)((%s*)p.ptr)->f%d, p.meta });\n", g.dropFn(ft), sn, i)
+					if staticTail(ft) {
+						fmt.Fprintf(&b, "  %s((Fat){ (void*)((%s*)p.ptr)->f%d, p.meta });\n", g.dropFn(ft), sn, i)
+					} else {
+						fmt.Fprintf(&b, "  %s((Fat){ (void*)((uint8_t*)p.ptr + %s), p.meta });\n", g.dropFn(ft), g.tailOffset(t, "p.meta"))
+					}
 				} else {
 					fmt.Fprintf(&b, "  %s(&((%s*)p.ptr)->f%d);\n", g.dropFn(ft), sn, i)
 				}
@@ -463,6 +471,9 @@ func (g *Gen) vtable(concrete, dyn Ty) string {
 	entries = append(entries, fmt.Sprintf("(void*)(uintptr_t)sizeof(%s)", g.ctype(concrete)), fmt.Sprintf("(void*)(uintptr_t)_Alignof(%s)", g.ctype(concrete)))
 	for _, m := range g.vtableMethods(dyn) {
 		entries = append(entries, g.vtableEntry(concrete, dyn, m))
+	}
+	for _, st := range g.supertraitSlots(dyn) {
+		entries = append(entries, "(void*)"+g.vtable(concrete, g.supertraitDyn(dyn, st)))
 	}
 	fmt.Fprintf(&g.protos, "static void* %s[%d];\n", name, len(entries))
 	fmt.Fprintf(&g.vtdefs, "static void* %s[%d] = {%s};\n", name, len(entries), strings.Join(entries, ", "))

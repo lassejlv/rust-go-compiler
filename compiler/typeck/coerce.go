@@ -162,11 +162,30 @@ func (fcx *FnCtxt) canUnsize(src, dst Ty) bool {
 		if src.Kind == TArray {
 			return fcx.ic.unify(src.Elem, dst.Elem)
 		}
+	case TAdt:
+		// Struct with an unsized tail: Foo<..., T> -> Foo<..., U> when T -> U.
+		if src.Kind == TAdt && src.Def == dst.Def && dst.Def.Adt != nil && dst.Def.Adt.TailKnown && dst.Def.Adt.TailParam >= 0 {
+			p := dst.Def.Adt.TailParam
+			for i := range src.Args {
+				if i != p && !fcx.ic.unify(src.Args[i], dst.Args[i]) {
+					return false
+				}
+			}
+			return fcx.canUnsize(src.Args[p], dst.Args[p])
+		}
 	case TDyn:
 		if src.Kind == TDyn {
-			// dyn A -> dyn B (upcast / auto trait drop)
+			// dyn A -> dyn B (auto trait drop / supertrait upcast)
 			if src.Def == dst.Def {
 				return fcx.ic.unify(Dyn(src.Def, src.Args, src.Bindings, 0), Dyn(dst.Def, dst.Args, dst.Bindings, 0))
+			}
+			if src.Def != nil && dst.Def != nil {
+				obj := &TraitRef{Trait: src.Def, Args: append([]Ty{src}, src.Args...)}
+				for _, st := range fcx.t.AllSupertraits(obj) {
+					if st.Trait == dst.Def {
+						return fcx.ic.unifyList(st.Args[1:], dst.Args)
+					}
+				}
 			}
 			return false
 		}

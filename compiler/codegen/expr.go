@@ -160,6 +160,15 @@ func (fc *fnGen) unsize(v string, from, to Ty) string {
 }
 
 func (fc *fnGen) unsizePtr(v string, src, dst Ty) string {
+	if src.IsUnsized() {
+		// already a fat pointer: only the metadata changes (upcasts,
+		// struct tails)
+		f := fc.spillIfNeeded(v, Ptr(src, false))
+		return fmt.Sprintf("((Fat){ %s.ptr, %s })", f, fc.g.unsizeMeta(src, dst, f+".meta"))
+	}
+	if dst.Kind == TAdt {
+		return fmt.Sprintf("((Fat){ (void*)(%s), %s })", v, fc.g.unsizeMeta(src, dst, ""))
+	}
 	switch dst.Kind {
 	case TSlice:
 		if src.Kind == TArray {
@@ -215,6 +224,9 @@ func (fc *fnGen) operand(e ast.Expr) operand {
 			fc.g.defineType(base.ty)
 			sn := fc.g.ctype(base.ty)
 			if t.IsUnsized() {
+				if !staticTail(t) {
+					return operand{s: fmt.Sprintf("((Fat){ (void*)((uint8_t*)%s.ptr + %s), %s.meta })", fat, fc.g.tailOffset(base.ty, fat+".meta"), fat), unsized: true, ty: t}
+				}
 				return operand{s: fmt.Sprintf("((Fat){ (void*)((%s*)%s.ptr)->f%d, %s.meta })", sn, fat, fr.Index, fat), unsized: true, ty: t}
 			}
 			return operand{s: fmt.Sprintf("((%s*)%s.ptr)->f%d", sn, fat, fr.Index), place: true, ty: t}
