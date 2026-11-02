@@ -174,10 +174,25 @@ func (g *Gen) defineType(t Ty) {
 			}
 			fts := g.fieldTypes(t, 0)
 			for _, ft := range fts {
-				g.defineByValue(ft)
+				if !ft.IsUnsized() {
+					g.defineByValue(ft)
+				}
 			}
 			fmt.Fprintf(&b, "%s %s {", kw, ti.name)
 			for i, ft := range fts {
+				if ft.IsUnsized() {
+					// unsized tail: flexible array member
+					switch ft.Kind {
+					case TStr:
+						fmt.Fprintf(&b, " uint8_t f%d[];", i)
+					case TSlice:
+						g.defineByValue(ft.Elem)
+						fmt.Fprintf(&b, " %s f%d[];", g.ctype(ft.Elem), i)
+					default:
+						g.fatalf("unsupported unsized struct tail `%s` in `%s` (dyn tails are not supported)", ft, t)
+					}
+					continue
+				}
 				fmt.Fprintf(&b, " %s f%d;", g.ctype(ft), i)
 			}
 			b.WriteString(" };\n")
@@ -367,6 +382,22 @@ func (g *Gen) emitDropGlue(t Ty) {
 			}
 		}
 	case TAdt:
+		if t.IsUnsized() {
+			g.defineType(t)
+			sn := g.ctype(t)
+			fts := g.fieldTypes(t, 0)
+			for i, ft := range fts {
+				if !g.needsDrop(ft) {
+					continue
+				}
+				if ft.IsUnsized() {
+					fmt.Fprintf(&b, "  %s((Fat){ (void*)((%s*)p.ptr)->f%d, p.meta });\n", g.dropFn(ft), sn, i)
+				} else {
+					fmt.Fprintf(&b, "  %s(&((%s*)p.ptr)->f%d);\n", g.dropFn(ft), sn, i)
+				}
+			}
+			break
+		}
 		if di := g.dropImpl(t); di != nil {
 			fmt.Fprintf(&b, "  %s(p);\n", g.fnName(di.def, di.args))
 		}

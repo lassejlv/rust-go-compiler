@@ -169,6 +169,11 @@ func (t *Tcx) BuildImpls() {
 			t.traitsByItem[name] = append(t.traitsByItem[name], tr)
 		}
 	}
+	for _, d := range t.R.Defs {
+		if d.Kind == DefStruct {
+			t.AdtFields(d)
+		}
+	}
 	for _, impl := range t.R.Impls {
 		t.ImplHeader(impl)
 		if impl.Impl.TraitRef != nil {

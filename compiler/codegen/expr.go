@@ -206,6 +206,19 @@ func (fc *fnGen) operand(e ast.Expr) operand {
 	case *ast.FieldExpr:
 		base := fc.asPlace(fc.adjusted(x.X))
 		fr := fc.r.Fields[x.ID]
+		if base.unsized {
+			// field of an unsized-tail struct behind a fat pointer
+			fat := base.s
+			if !isSimple(fat) {
+				fat = fc.spill(fat, Ptr(base.ty, false))
+			}
+			fc.g.defineType(base.ty)
+			sn := fc.g.ctype(base.ty)
+			if t.IsUnsized() {
+				return operand{s: fmt.Sprintf("((Fat){ (void*)((%s*)%s.ptr)->f%d, %s.meta })", sn, fat, fr.Index, fat), unsized: true, ty: t}
+			}
+			return operand{s: fmt.Sprintf("((%s*)%s.ptr)->f%d", sn, fat, fr.Index), place: true, ty: t}
+		}
 		flag := base.flag
 		if pe, ok := unparen(x.X).(*ast.PathExpr); ok && len(fc.r.Adjust[x.X.GetID()]) == 0 {
 			if vr := fc.r.Paths[pe.ID]; vr != nil && vr.Kind == typeck.VLocal && fc.split[vr.Local][fr.Index] && fc.capIndex[vr.Local] == 0 {

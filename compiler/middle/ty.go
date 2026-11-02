@@ -423,7 +423,31 @@ func (t *TyS) IsRefLike() bool { return t.Kind == TRef || t.Kind == TPtr }
 
 // IsUnsized reports whether a type is dynamically sized (str, [T], dyn Trait).
 func (t *TyS) IsUnsized() bool {
-	return t.Kind == TStr || t.Kind == TSlice || t.Kind == TDyn
+	switch t.Kind {
+	case TStr, TSlice, TDyn:
+		return true
+	case TAdt:
+		a := t.Def.Adt
+		if a == nil || !a.TailKnown {
+			return false
+		}
+		if a.TailParam == -2 {
+			return true
+		}
+		if a.TailParam >= 0 && a.TailParam < len(t.Args) {
+			return t.Args[a.TailParam].IsUnsized()
+		}
+	}
+	return false
+}
+
+// UnsizedTail returns the unsized tail type of an unsized struct type
+// (str, [T] or dyn), following nested structs.
+func (t *TyS) UnsizedTail(fieldTy func(Ty) Ty) Ty {
+	for t.Kind == TAdt {
+		t = fieldTy(t)
+	}
+	return t
 }
 
 // IntKind returns the IntTy of an integer type.

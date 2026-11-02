@@ -297,6 +297,24 @@ func (t *Tcx) AdtFields(d *Def) {
 		v := &VariantDef{Def: d, Name: d.Name, Shape: k.Shape}
 		d.Adt.Variants = []*VariantDef{v}
 		lowerFields(v, k.Fields)
+		d.Adt.TailParam = -1
+		if n := len(v.Fields); n > 0 {
+			last := v.Fields[n-1].Ty
+			switch last.Kind {
+			case TParam:
+				d.Adt.TailParam = last.Index
+			case TStr, TSlice, TDyn:
+				d.Adt.TailParam = -2
+			case TAdt:
+				if last.Def != d {
+					t.AdtFields(last.Def)
+					if la := last.Def.Adt; la.TailParam >= 0 && la.TailParam < len(last.Args) && last.Args[la.TailParam].Kind == TParam {
+						d.Adt.TailParam = last.Args[la.TailParam].Index
+					}
+				}
+			}
+		}
+		d.Adt.TailKnown = true
 	case *ast.UnionItem:
 		v := &VariantDef{Def: d, Name: d.Name, Shape: ast.ShapeNamed}
 		d.Adt.Variants = []*VariantDef{v}

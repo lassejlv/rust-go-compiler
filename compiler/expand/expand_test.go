@@ -555,13 +555,13 @@ func TestAssertConditionText(t *testing.T) {
 func TestVec(t *testing.T) {
 	cases := []struct{ src, want string }{
 		{`vec![]`, `::std::vec::Vec::new()`},
-		{`vec![1, 2, 3]`, `{ let mut __v = ::std::vec::Vec::with_capacity(3usize); __v.push(1); __v.push(2); __v.push(3); __v }`},
-		{`vec![a + b,]`, `{ let mut __v = ::std::vec::Vec::with_capacity(1usize); __v.push(a + b); __v }`},
+		{`vec![1, 2, 3]`, `::std::vec::from_array([1, 2, 3])`},
+		{`vec![a + b,]`, `::std::vec::from_array([a + b])`},
 		{`vec![0u8; n * 2]`, `::std::vec::from_elem(0u8, n * 2)`},
-		{`vec![|a, b| a + b]`, `{ let mut __v = ::std::vec::Vec::with_capacity(1usize); __v.push(|a, b| a + b); __v }`},
-		{`vec![HashMap::<i32, i32>::new(), m]`, `__v.push(HashMap::<i32, i32>::new()); __v.push(m);`},
-		{`vec![vec![1], vec![]]`, `__v.push({ let mut __v = ::std::vec::Vec::with_capacity(1usize); __v.push(1); __v }); __v.push(::std::vec::Vec::new());`},
-		{`std::vec![1]`, `with_capacity(1usize)`},
+		{`vec![|a, b| a + b]`, `::std::vec::from_array([|a, b| a + b])`},
+		{`vec![HashMap::<i32, i32>::new(), m]`, `::std::vec::from_array([HashMap::<i32, i32>::new(), m])`},
+		{`vec![vec![1], vec![]]`, `::std::vec::from_array([::std::vec::from_array([1]), ::std::vec::Vec::new()])`},
+		{`std::vec![1]`, `::std::vec::from_array([1])`},
 	}
 	for _, c := range cases {
 		got := expandExprSrc(t, "", c.src)
@@ -781,7 +781,7 @@ fn main() {
 	s := crateString(c)
 	contains(t, s,
 		"fn add(a: i32, b: i32) -> i32 { a + b }",
-		"fn sub(a: i32) -> Vec<i32> { { let mut __v = ::std::vec::Vec::with_capacity(1usize); __v.push(a); __v } }",
+		"fn sub(a: i32) -> Vec<i32> { ::std::vec::from_array([a]) }",
 		"struct Made{x}",
 		"let a = -5;",
 		`let b = "s";`,
@@ -889,7 +889,7 @@ macro_rules! make { ($name:ident, $v:expr) => { macro_rules! $name { () => { $v 
 make!(seven, 7);
 macro_rules! wrap { ($($t:tt)*) => { vec![$($t)*] }; }
 `, `(seven!(), wrap!(1, 2))`)
-	contains(t, got, "(7, { let mut __v = ::std::vec::Vec::with_capacity(2usize); __v.push(1); __v.push(2); __v })")
+	contains(t, got, "(7, ::std::vec::from_array([1, 2]))")
 }
 
 func TestMacroRulesSiteLocation(t *testing.T) {

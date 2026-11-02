@@ -150,6 +150,11 @@ type AdtDef struct {
 	Kind     AdtKind
 	Variants []*VariantDef
 	Repr     string // #[repr(...)] integer type for enums, if any
+	// TailParam: for structs whose last field may be unsized, the index of
+	// the generic param determining it; -2 if the tail is always unsized;
+	// -1 if the struct is always sized. Valid when TailKnown.
+	TailParam int
+	TailKnown bool
 }
 
 func (a *AdtDef) IsEnum() bool { return a.Kind == AdtEnum }
