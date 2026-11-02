@@ -32,6 +32,44 @@ var cfgValues = map[string]map[string]bool{
 	"target_has_atomic":    {"8": true, "16": true, "32": true, "64": true, "ptr": true},
 }
 
+// Per-crate configuration (set by Expander.ExpandCrate from the crate
+// config): enabled features and extra `--cfg` options.
+var (
+	curFeatures = map[string]bool{}
+	curCfgNames = map[string]bool{}
+	curCfgKV    = map[string]map[string]bool{}
+)
+
+// CrateConfig holds per-crate cfg settings.
+type CrateConfig struct {
+	Features []string
+	Cfgs     []string // `name` or `name="value"`
+}
+
+func applyCrateConfig(c *CrateConfig) {
+	curFeatures = map[string]bool{}
+	curCfgNames = map[string]bool{}
+	curCfgKV = map[string]map[string]bool{}
+	if c == nil {
+		return
+	}
+	for _, f := range c.Features {
+		curFeatures[f] = true
+	}
+	for _, x := range c.Cfgs {
+		if i := strings.Index(x, "="); i >= 0 {
+			k := x[:i]
+			v := strings.Trim(x[i+1:], `"`)
+			if curCfgKV[k] == nil {
+				curCfgKV[k] = map[string]bool{}
+			}
+			curCfgKV[k][v] = true
+		} else {
+			curCfgNames[x] = true
+		}
+	}
+}
+
 // EvalCfg evaluates a cfg predicate given as token trees (the contents of
 // `cfg(...)`).
 func EvalCfg(tts []ast.TokenTree, sp lexer.Span) (bool, error) {
@@ -53,12 +91,12 @@ func evalCfgPred(tts []ast.TokenTree, sp lexer.Span) (bool, error) {
 	psp := ttSpan(tts[0])
 	switch {
 	case len(tts) == 1:
-		return cfgNames[name], nil
+		return cfgNames[name] || curCfgNames[name], nil
 	case len(tts) == 3 && isPunct(tts[1], "=") && tts[2].Delim == 0 && tts[2].Tok.Kind == lexer.Str:
 		if name == "feature" {
-			return false, nil
+			return curFeatures[tts[2].Tok.Text], nil
 		}
-		return cfgValues[name][tts[2].Tok.Text], nil
+		return cfgValues[name][tts[2].Tok.Text] || curCfgKV[name][tts[2].Tok.Text], nil
 	case len(tts) == 2 && tts[1].Delim == '(':
 		var args [][]ast.TokenTree
 		for _, a := range splitTop(tts[1].Inner, ",") {

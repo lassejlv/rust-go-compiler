@@ -330,7 +330,15 @@ type Crate struct {
 	Root *Module
 	Def  *Def
 	Ast  *ast.Crate
+	// Edition is "2015", "2018", "2021" or "2024" ("" = 2021).
+	Edition string
+	// Externs is the extern prelude: dependency crates by name. nil means
+	// "every loaded crate" (single-file compilation).
+	Externs map[string]*Crate
 }
+
+// Is2015 reports whether the crate uses Rust 2015 path semantics.
+func (c *Crate) Is2015() bool { return c != nil && c.Edition == "2015" }
 
 type Namespace int
 

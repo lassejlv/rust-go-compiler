@@ -1,0 +1,4 @@
+[package]
+name = "oldstyle"
+version = "0.2.0"
+edition = "2015"

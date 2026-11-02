@@ -35,6 +35,7 @@ type Options struct {
 	Verbose  bool
 	KeepC    bool
 	CheckAll bool // type-check every non-generic function in all crates
+	LinkArgs []string
 }
 
 // LoadCrateFS parses a crate rooted at root inside fsys, loading `mod x;`
@@ -109,14 +110,7 @@ func loadMods(fsys fs.FS, items []*ast.Item, dir, prefix string) error {
 // the type context and the user's main function.
 func Frontend(opts *Options) (*typeck.Tcx, *Def, error) {
 	t0 := time.Now()
-	var stdCrate *ast.Crate
-	var err error
-	if opts.StdDir != "" {
-		stdCrate, err = LoadCrateFS(os.DirFS(opts.StdDir), "lib.rs", opts.StdDir+"/")
-	} else {
-		sub, _ := fs.Sub(stdlib.FS, "lib")
-		stdCrate, err = LoadCrateFS(sub, "lib.rs", "<std>/")
-	}
+	stdCrate, err := loadStd(opts)
 	if err != nil {
 		return nil, nil, fmt.Errorf("while loading std: %v", err)
 	}
@@ -182,6 +176,11 @@ func addMainWrapper(c *ast.Crate) string {
 	return "main"
 }
 
+func loadEmbeddedStd() (*ast.Crate, error) {
+	sub, _ := fs.Sub(stdlib.FS, "lib")
+	return LoadCrateFS(sub, "lib.rs", "<std>/")
+}
+
 func relPrefix(input string) string {
 	d := filepath.Dir(input)
 	if d == "." {
@@ -238,11 +237,16 @@ func GenerateC(opts *Options) (string, error) {
 
 // Compile compiles opts.Input to an executable at opts.Output.
 func Compile(opts *Options) error {
-	t0 := time.Now()
 	src, err := GenerateC(opts)
 	if err != nil {
 		return err
 	}
+	return compileC(opts, src)
+}
+
+// compileC writes the C source and invokes the C compiler.
+func compileC(opts *Options, src string) error {
+	t1 := time.Now()
 	if opts.EmitC != "" {
 		if err := os.WriteFile(opts.EmitC, []byte(src), 0o644); err != nil {
 			return err
@@ -274,14 +278,15 @@ func Compile(opts *Options) error {
 	if ol == "" {
 		ol = "1"
 	}
-	t1 := time.Now()
-	cmd := exec.Command(cc, "-O"+ol, "-w", "-fwrapv", "-fno-strict-aliasing", "-o", opts.Output, cpath, "-lm")
+	args := []string{"-O" + ol, "-w", "-fwrapv", "-fno-strict-aliasing", "-o", opts.Output, cpath, "-lm", "-lpthread"}
+	args = append(args, opts.LinkArgs...)
+	cmd := exec.Command(cc, args...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("C compiler failed: %v\n%s", err, truncate(string(out), 4000))
 	}
 	if opts.Verbose {
-		fmt.Fprintf(os.Stderr, "frontend+codegen %v, cc %v\n", t1.Sub(t0), time.Since(t1))
+		fmt.Fprintf(os.Stderr, "cc %v\n", time.Since(t1))
 	}
 	return nil
 }

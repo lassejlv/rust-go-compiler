@@ -605,10 +605,10 @@ func (t *transcriber) emit(ns []*tnode, idx []int) ([]ast.TokenTree, error) {
 			out = append(out, g)
 		case tCrate:
 			sp := n.tt.Tok.Span
-			if t.def.crate == "std" {
-				out = append(out, punctTok("::", sp, true), identTok("std", sp))
-			} else {
+			if t.def.crate == "main" {
 				out = append(out, identTok("crate", sp))
+			} else {
+				out = append(out, punctTok("::", sp, true), identTok(t.def.crate, sp))
 			}
 		case tVar:
 			m, ok := t.lookup(n.name, idx)

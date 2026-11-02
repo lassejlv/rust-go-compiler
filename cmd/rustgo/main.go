@@ -46,6 +46,10 @@ func main() {
 		run = true
 		args = args[1:]
 	}
+	if args[0] == "build" {
+		cargoBuild(args[1:])
+		return
+	}
 	opts := &driver.Options{}
 	var runArgs []string
 	for i := 0; i < len(args); i++ {
@@ -136,6 +140,54 @@ func main() {
 			}
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
+		}
+	}
+}
+
+// cargoBuild implements `rustgo build [--manifest-path P] [--bin N] [-o out]`.
+func cargoBuild(args []string) {
+	opts := &driver.Options{}
+	co := &driver.CargoOptions{}
+	runAfter := false
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--manifest-path":
+			i++
+			co.Manifest = args[i]
+		case "--bin":
+			i++
+			co.Bin = args[i]
+		case "-o":
+			i++
+			opts.Output = args[i]
+		case "--emit-c":
+			i++
+			opts.EmitC = args[i]
+		case "--keep-c":
+			opts.KeepC = true
+		case "-v":
+			opts.Verbose = true
+		case "--run":
+			runAfter = true
+		default:
+			fmt.Fprintf(os.Stderr, "error: unknown build option %s\n", args[i])
+			os.Exit(1)
+		}
+	}
+	if opts.Output == "" {
+		opts.Output = "a.out"
+	}
+	if err := driver.BuildCargo(opts, co); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	if runAfter {
+		cmd := exec.Command(opts.Output)
+		cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+		if err := cmd.Run(); err != nil {
+			if ee, ok := err.(*exec.ExitError); ok {
+				os.Exit(ee.ExitCode())
+			}
 		}
 	}
 }

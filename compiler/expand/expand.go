@@ -20,6 +20,9 @@ const DefaultRecursionLimit = 128
 type Expander struct {
 	// RecursionLimit bounds nested macro expansion.
 	RecursionLimit int
+	// Config is the cfg configuration of the crate being expanded (set
+	// before each ExpandCrate call).
+	Config *CrateConfig
 
 	crate      string
 	crateOrder []string
@@ -40,6 +43,7 @@ func New() *Expander {
 // ExpandCrate expands all macros of c in place. crateName is "std" for the
 // standard library and the crate's name (e.g. "main") otherwise.
 func (e *Expander) ExpandCrate(c *ast.Crate, crateName string) error {
+	applyCrateConfig(e.Config)
 	e.crate = crateName
 	if _, ok := e.macros[crateName]; !ok {
 		e.macros[crateName] = map[string]*macroDef{}

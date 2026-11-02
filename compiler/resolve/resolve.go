@@ -209,7 +209,7 @@ func (r *Resolver) collectItem(it *ast.Item, m *Module, parent *Def) *Def {
 		if k.Rename != nil {
 			bind = k.Rename.Name
 		}
-		if cr, ok := r.Crates[name]; ok {
+		if cr := r.ExternCrate(m.Crate, name); cr != nil {
 			r.define(m, bind, TypeNS, defRes(cr.Def), it.Name.Span)
 		} else if name == "std" || name == "core" || name == "alloc" {
 			// std may not be loaded yet if we are std itself; resolve lazily via path.
@@ -462,9 +462,11 @@ func (r *Resolver) tryImport(imp *Import, report bool) bool {
 	if len(imp.Path) == 1 {
 		name := imp.Path[0]
 		// `use std;` or `use foo;` (crate) or `use self::x` style single names
-		if cr, ok := r.Crates[name]; ok {
+		if cr := r.ExternCrate(m.Crate, name); cr != nil && (imp.Global || m.Lookup(name, TypeNS) == nil || !m.Crate.Is2015()) {
 			r.define(m, imp.Name, TypeNS, defRes(cr.Def), imp.Span)
-			m.Types[imp.Name].Import = true
+			if b := m.Types[imp.Name]; b != nil {
+				b.Import = true
+			}
 			return true
 		}
 		if imp.Global {
@@ -544,9 +546,12 @@ func (r *Resolver) resolveModulePath(m *Module, segs []string, global bool, repo
 	var cur Res
 	start := 0
 	switch {
+	case global && m.Crate.Is2015():
+		// 2015: `::a::b` is relative to the crate root
+		cur = defRes(m.Crate.Def)
 	case global:
-		cr, ok := r.Crates[segs[0]]
-		if !ok {
+		cr := r.ExternCrate(m.Crate, segs[0])
+		if cr == nil {
 			if report {
 				r.errorf(sp, "unresolved crate `%s`", segs[0])
 			}
@@ -554,6 +559,20 @@ func (r *Resolver) resolveModulePath(m *Module, segs []string, global bool, repo
 		}
 		cur = defRes(cr.Def)
 		start = 1
+	case m.Crate.Is2015() && segs[0] != "self" && segs[0] != "super" && segs[0] != "crate" && segs[0] != "Self":
+		// 2015 `use` paths are relative to the crate root
+		if b := m.Crate.Root.Lookup(segs[0], TypeNS); b != nil {
+			cur = b.Res
+			start = 1
+		} else if cr := r.ExternCrate(m.Crate, segs[0]); cr != nil {
+			cur = defRes(cr.Def)
+			start = 1
+		} else {
+			if report {
+				r.errorf(sp, "unresolved import: cannot find `%s` in crate root", segs[0])
+			}
+			return Res{}, false
+		}
 	case segs[0] == "crate":
 		cur = defRes(m.Crate.Def)
 		start = 1
@@ -629,7 +648,7 @@ func (r *Resolver) LookupLexical(m *Module, name string, ns Namespace) (Res, boo
 		return res, true
 	}
 	if ns == TypeNS {
-		if cr, ok := r.Crates[name]; ok {
+		if cr := r.ExternCrate(m.Crate, name); cr != nil {
 			return defRes(cr.Def), true
 		}
 	}
@@ -672,9 +691,11 @@ func (r *Resolver) ResolvePath(m *Module, segs []string, global bool, ns Namespa
 		return TypeNS
 	}
 	switch {
+	case global && m.Crate.Is2015():
+		cur = defRes(m.Crate.Def)
 	case global:
-		cr, ok := r.Crates[segs[0]]
-		if !ok {
+		cr := r.ExternCrate(m.Crate, segs[0])
+		if cr == nil {
 			return PathResult{}, fmt.Errorf("cannot find crate `%s`", segs[0])
 		}
 		cur = defRes(cr.Def)
@@ -758,6 +779,25 @@ func (r *Resolver) ResolvePath(m *Module, segs []string, global bool, ns Namespa
 		}
 	}
 	return PathResult{Res: cur, Consumed: i}, nil
+}
+
+// ExternCrate looks up a crate name in from's extern prelude.
+func (r *Resolver) ExternCrate(from *Crate, name string) *Crate {
+	if from != nil && from.Externs != nil {
+		if c, ok := from.Externs[name]; ok {
+			return c
+		}
+		if name == from.Name {
+			return from
+		}
+		if name == "std" || name == "core" || name == "alloc" {
+			return r.Std
+		}
+		// `$crate` paths of macros from crates that are not direct
+		// dependencies expand to `::name`; allow any loaded crate.
+		return r.Crates[name]
+	}
+	return r.Crates[name]
 }
 
 // Lang returns a lang item def or nil.
