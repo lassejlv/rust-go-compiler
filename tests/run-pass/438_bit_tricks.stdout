@@ -1,0 +1,23 @@
+0x0: pop=0 manual=0 parity=0 lowbit=0x0 lz=64 tz=64
+0x1: pop=1 manual=1 parity=1 lowbit=0x1 lz=63 tz=0
+0xff: pop=8 manual=8 parity=0 lowbit=0x1 lz=56 tz=0
+0xdeadbeef: pop=24 manual=24 parity=0 lowbit=0x1 lz=32 tz=0
+0xffffffffffffffff: pop=64 manual=64 parity=0 lowbit=0x1 lz=0 tz=0
+0x8000000000000001: pop=2 manual=2 parity=0 lowbit=0x1 lz=0 tz=0
+gray ["000", "001", "011", "010", "110", "111", "101", "100"]
+gosper ["000111", "001011", "001101", "001110", "010011", "010101"]
+-1 7 -128 -1
+01100000 00000001 true
+3 3 32 0
+0x78563412 0x78563412
+[52, 18] [18, 52]
+-2 7
+knight 0 -> [10, 17] (2 moves)
+knight 27 -> [10, 12, 17, 21, 33, 37, 42, 44] (8 moves)
+knight 63 -> [46, 53] (2 moves)
+[1, 7] 238 108
+0xff [5, 7, 10, 11]
+true
+1000000000100011 4
+subsets [11, 10, 9, 8, 3, 2, 1, 0]
+true true

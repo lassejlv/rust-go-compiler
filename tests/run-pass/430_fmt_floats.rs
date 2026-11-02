@@ -68,4 +68,14 @@ fn main() {
     }
     let total: f64 = (1..=10).map(|i| 1.0 / i as f64).sum();
     println!("harmonic(10) = {} ~ {:.5}", total, total);
+
+    // a small report table with mixed float formats
+    let samples = [("north", 1234.5678f64, 0.0123f64), ("south", -0.5, 12.0), ("east", 1e9, 1e-9), ("west", 0.0, -0.0)];
+    for (name, v, r) in samples {
+        println!("{:<6}|{:>14.2}|{:>12.3e}|{:>+9.1}%|{:>10}", name, v, r, r * 100.0, v / 7.0);
+    }
+    let mean = samples.iter().map(|s| s.1).sum::<f64>() / samples.len() as f64;
+    let var = samples.iter().map(|s| (s.1 - mean).powi(2)).sum::<f64>() / samples.len() as f64;
+    println!("mean={:.4} sd={:.4e} sqrt2={} cbrt27={}", mean, var.sqrt(), 2f64.sqrt(), 27f64.cbrt());
+    println!("{} {} {}", 1.0e300 * 1.0e10, -1.0e300 * 1.0e10, (0.0f64 / 0.0).is_nan());
 }

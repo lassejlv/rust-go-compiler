@@ -1,0 +1,110 @@
+Doc { title: "Line1\nLine2\t\"quoted\" \\ é", tags: ["x", "y"], meta: {"first": A, "fourth": D(Wrapper(5, "w\"q\""), Unit), "second": B(7), "third": C { x: -1, y: Some(C { x: 2, y: None }) }}, empty: [], nothing: None, pair: (255, '\''), grid: [[1, -2], [3, -4]], set: {1, 2, 3} }
+Doc {
+    title: "Line1\nLine2\t\"quoted\" \\ é",
+    tags: [
+        "x",
+        "y",
+    ],
+    meta: {
+        "first": A,
+        "fourth": D(
+            Wrapper(
+                5,
+                "w\"q\"",
+            ),
+            Unit,
+        ),
+        "second": B(
+            7,
+        ),
+        "third": C {
+            x: -1,
+            y: Some(
+                C {
+                    x: 2,
+                    y: None,
+                },
+            ),
+        },
+    },
+    empty: [],
+    nothing: None,
+    pair: (
+        255,
+        '\'',
+    ),
+    grid: [
+        [
+            1,
+            -2,
+        ],
+        [
+            3,
+            -4,
+        ],
+    ],
+    set: {
+        1,
+        2,
+        3,
+    },
+}
+[Row(1, 2), Row, Row(3)]
+[
+    Row(
+        1,
+        2,
+    ),
+    Row,
+    Row(
+        3,
+    ),
+]
+Secret { user: "root", password: ***, attempts: 3, .. }
+Secret {
+    user: "root",
+    password: ***,
+    attempts: 3,
+    ..
+}
+{"one": 1, "two": 2}
+{
+    "one": 1,
+    "two": 2,
+}
+{} {}
+{
+    'a',
+    '\n',
+}
+[
+    Some(
+        (
+            1,
+            [
+                "a",
+            ],
+        ),
+    ),
+    None,
+    Some(
+        (
+            2,
+            [],
+        ),
+    ),
+]
+((), (Unit,), Wrapper(0, ""))
+(
+    (),
+    (
+        Unit,
+    ),
+    Wrapper(
+        0,
+        "",
+    ),
+)
+Err(
+    "bad",
+)

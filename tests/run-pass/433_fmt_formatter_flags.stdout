@@ -1,0 +1,23 @@
+w=None p=None fill=' ' align=none plus=false minus=false alt=false zero=false
+w=Some(10) p=None fill=' ' align=right plus=false minus=false alt=false zero=false
+w=Some(7) p=Some(3) fill='*' align=center plus=false minus=false alt=false zero=false
+w=None p=None fill=' ' align=none plus=true minus=false alt=true zero=false
+w=Some(4) p=None fill='-' align=left plus=false minus=false alt=false zero=false
+w=Some(8) p=Some(2) fill=' ' align=none plus=false minus=false alt=false zero=true
+w=Some(12) p=None fill='_' align=left plus=false minus=false alt=false zero=false
+w=None p=Some(5) fill=' ' align=none plus=false minus=false alt=false zero=false
+1-2|   x|!
+line 2
+HELLO 42 STRASSE "SS" (21 bytes in)
+true false true buf="1234567890"
+LOG: 2 + 3 = 5
+LOG:    ab|7    |
+name    |    value
+--------+---------
+alpha   |    1.500
+beta    |  -22.250
+gamma   |  333.333
+total   |  312.583
+007:014:021
+[     a,    bb,   ccc]
+x

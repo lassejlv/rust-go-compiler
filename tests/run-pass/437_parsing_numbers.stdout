@@ -1,0 +1,68 @@
+"42" -> Ok(42)
+"-42" -> Ok(-42)
+"+42" -> Ok(42)
+" 42" -> Err(InvalidDigit) invalid digit found in string
+"42 " -> Err(InvalidDigit) invalid digit found in string
+"" -> Err(Empty) cannot parse integer from empty string
+"-" -> Err(InvalidDigit) invalid digit found in string
+"+" -> Err(InvalidDigit) invalid digit found in string
+"4_2" -> Err(InvalidDigit) invalid digit found in string
+"0042" -> Ok(42)
+"2147483648" -> Err(PosOverflow) number too large to fit in target type
+"-2147483649" -> Err(NegOverflow) number too small to fit in target type
+"-2147483648" -> Ok(-2147483648)
+"1e3" -> Err(InvalidDigit) invalid digit found in string
+"٣" -> Err(InvalidDigit) invalid digit found in string
+Err(ParseIntError { kind: InvalidDigit }) Err("InvalidDigit")
+Err("PosOverflow") Err("NegOverflow")
+ff base 16 -> Ok(255)
+FF base 16 -> Ok(255)
+777 base 8 -> Ok(511)
+1011 base 2 -> Ok(11)
+zz base 36 -> Ok(1295)
+Zz base 36 -> Ok(1295)
+12 base 3 -> Ok(5)
+-7f base 16 -> Ok(-127)
+102 base 2 -> Err("InvalidDigit")
+Ok(255)
+Err("PosOverflow")
+"3.14" -> 3.14
+"-0.0" -> -0.0
+"1e10" -> 10000000000.0
+"1E-5" -> 1e-5
+".5" -> 0.5
+"5." -> 5.0
+"+.5e+2" -> 50.0
+"inf" -> inf
+"-inf" -> -inf
+"infinity" -> inf
+"NaN" -> NaN
+"nan" -> NaN
+"1_0.0" -> error: invalid float literal
+"0x10" -> error: invalid float literal
+"1e400" -> inf
+"-1e400" -> -inf
+"1e-400" -> 0.0
+"  1.0" -> error: invalid float literal
+"1.0.0" -> error: invalid float literal
+"e5" -> error: invalid float literal
+"9007199254740993" -> 9007199254740992.0
+"2.2250738585072014e-308" -> 2.2250738585072014e-308
+Ok(3.4e38) Ok(inf)
+Ok(true) true
+Ok('x') true
+[Some(7), Some(10), Some(15), None, None, None]
+Some(35) None
+0123456789abcdef Some('z') None
+0xff => Ok(255)
+-0x80 => Ok(-128)
+0b1010_1010 => Ok(170)
+0o777 => Ok(511)
+1_000_000 => Ok(1000000)
+-9223372036854775808 => Ok(-9223372036854775808)
+9223372036854775808 => Err("9223372036854775808: overflow")
+0xg1 => Err("0xg1: InvalidDigit")
+0x => Err("0x: Empty")
+good [10, 20, 30, 40] bad 2
+total 100
+Ok([222, 173, 190, 239])

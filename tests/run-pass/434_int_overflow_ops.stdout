@@ -1,0 +1,37 @@
+u8 200 100: wadd=44 wsub=100 wmul=32 cadd=None csub=Some(100) cmul=None cdiv=Some(2) oadd=(44, true) omul=(32, true) sadd=255 ssub=100 smul=255
+u8 3 0: wadd=3 wsub=3 wmul=0 cadd=Some(3) csub=Some(3) cmul=Some(0) cdiv=None oadd=(3, false) omul=(0, false) sadd=3 ssub=3 smul=0
+i8 -128 -1: wadd=127 wsub=-127 wmul=-128 cadd=None csub=Some(-127) cmul=None cdiv=None oadd=(127, true) omul=(-128, true) sadd=-128 ssub=-127 smul=127
+i8 127 2: wadd=-127 wsub=125 wmul=-2 cadd=None csub=Some(125) cmul=None cdiv=Some(63) oadd=(-127, true) omul=(-2, true) sadd=127 ssub=125 smul=127
+i16 -300 200: wadd=-100 wsub=-500 wmul=5536 cadd=Some(-100) csub=Some(-500) cmul=None cdiv=Some(-1) oadd=(-100, false) omul=(5536, true) sadd=-100 ssub=-500 smul=-32768
+u32 0 1: wadd=1 wsub=4294967295 wmul=0 cadd=Some(1) csub=None cmul=Some(0) cdiv=Some(0) oadd=(1, false) omul=(0, false) sadd=1 ssub=0 smul=0
+i32 -2147483648 2: wadd=-2147483646 wsub=2147483646 wmul=0 cadd=Some(-2147483646) csub=None cmul=None cdiv=Some(-1073741824) oadd=(-2147483646, false) omul=(0, true) sadd=-2147483646 ssub=-2147483648 smul=-2147483648
+u64 18446744073709551615 18446744073709551615: wadd=18446744073709551614 wsub=0 wmul=1 cadd=None csub=Some(0) cmul=None cdiv=Some(1) oadd=(18446744073709551614, true) omul=(1, true) sadd=18446744073709551615 ssub=0 smul=18446744073709551615
+i64 9223372036854775807 -1: wadd=9223372036854775806 wsub=-9223372036854775808 wmul=-9223372036854775807 cadd=Some(9223372036854775806) csub=None cmul=Some(-9223372036854775807) cdiv=Some(-9223372036854775807) oadd=(9223372036854775806, false) omul=(-9223372036854775807, false) sadd=9223372036854775806 ssub=9223372036854775807 smul=-9223372036854775807
+usize 5 7: wadd=12 wsub=18446744073709551614 wmul=35 cadd=Some(12) csub=None cmul=Some(35) cdiv=Some(0) oadd=(12, false) omul=(35, false) sadd=12 ssub=0 smul=35
+None Some(-5) -128 -128
+(-2147483648, true) None 2147483647
+0 255 (4294967295, true)
+7 9223372036854775808
+195 200
+None (-2147483648, true) -2147483648
+None (0, true) 0
+None None
+7/3: / 2 % 1 div_euclid 2 rem_euclid 1
+-7/3: / -2 % -1 div_euclid -3 rem_euclid 2
+7/-3: / -2 % 1 div_euclid -2 rem_euclid 1
+-7/-3: / 2 % -1 div_euclid 3 rem_euclid 2
+2 32 None (2, true)
+-4 1073741820 -1
+1 32768
+Some(2147483648) None 217 32767
+(-128, false) (0, true)
+4611686018427387904 None
+Some(3) None None
+32 true 6
+4 120 -2147483648 65535
+fnv 1ad66d8708e9833d
+44 255 -1 127
+-1 0 0
+18446744073709551615 255 -56
+Err(TryFromIntError(PosOverflow)) Ok(-128) true
+panicked: true
