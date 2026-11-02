@@ -1,0 +1,19 @@
+calls before 0
+CONFIG set? false
+[(0, 10), (2, 10), (4, 10), (6, 10), (8, 10), (10, 10)]
+calls after 101
+config production
+set again: Err("dev")
+["one", "three", "two"] len 3
+calls final 101
+None
+Ok(())
+Err([3])
+Some([1, 2])
+Some(6)
+Some(6)
+None
+sizes [1, 2, 3, 4]
+["a", "b", "c", "d"]
+[1, 4, 9, 16, 25] sum 55
+once ran 1 times, completed true

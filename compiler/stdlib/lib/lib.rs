@@ -46,6 +46,9 @@ pub mod rt;
 pub mod tuple;
 pub mod f32;
 pub mod f64;
+pub mod future;
+pub mod task;
+pub mod pin;
 pub mod prelude;
 
 // Legacy integer modules: `std::i32::MAX`, `std::u64::MIN`, ...

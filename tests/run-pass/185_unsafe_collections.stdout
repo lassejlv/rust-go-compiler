@@ -1,0 +1,21 @@
+  grow 0 -> 2
+  grow 2 -> 4
+  grow 4 -> 8
+  grow 8 -> 16
+[0, 1, 4, 9, 16, 25, 36, 49, 64]
+[-1, 0, 1, 4, 9, 555, 16, 25, 36, 49, 64]
+removed 1
+pop Some(64)
+[-1, 0, 4, 9, 555, 16, 25, 36, 49] len 9 cap 16
+  RawVec freed (cap 16)
+  grow 0 -> 2
+  grow 2 -> 4
+removed Loud("b")
+  drop Loud(b)
+remaining [Loud("a"), Loud("c")]
+  drop Loud(c)
+  drop Loud(a)
+  RawVec freed (cap 4)
+layout size 16 align 4
+24 8
+true

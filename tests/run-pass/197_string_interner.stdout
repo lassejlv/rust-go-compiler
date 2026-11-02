@@ -1,0 +1,13 @@
+22 tokens: ["let", "x", "=", "foo", "(", "x", ",", "y_2", ")", "+", "x", "*", "bar", ";", "let", "y_2", "=", "x", ";", "λ", "=", "x"]
+unique 13 of 22
+[Sym(0), Sym(1), Sym(2), Sym(3), Sym(4), Sym(1), Sym(5), Sym(6)]
+x = Sym(1), occurrences 5
+top ["x:5", "=:3", "let:2", "y_2:2"]
+longest token Some("let")
+longer foo
+first ident Some("foo")
+first ident none None
+new symbol Sym(13) total 14
+x@1=10 y_2@1=20 foo=undefined
+x@0=1 y_2=undefined
+["x", "=", "λ"]

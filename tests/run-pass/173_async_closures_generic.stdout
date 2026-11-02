@@ -1,0 +1,15 @@
+apply = 90
+[2, 4, 6]
+*****
+  attempt 1 failed: too early (1)
+  attempt 2 failed: too early (2)
+Ok(300)
+  attempt 1 failed: never 1
+  attempt 2 failed: never 2
+Err("gave up: never 2")
+async closure: 10
+total 27
+  stage 0 -> 6
+  stage 1 -> 18
+  stage 2 -> 14
+pipeline 14

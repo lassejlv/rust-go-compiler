@@ -1,0 +1,16 @@
+wake count 3
+solo finished
+["solo pending 3", "solo pending 2", "solo pending 1", "solo done"]
+wake count 6
+A finished / B finished
+  A pending 2
+  B pending 4
+  A pending 1
+  B pending 3
+  A done
+  B pending 2
+  B pending 1
+  B done
+wake count 6
+total 99
+log entries 9

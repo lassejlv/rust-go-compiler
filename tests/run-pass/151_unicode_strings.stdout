@@ -1,0 +1,46 @@
+bytes 32 chars 20
+1 'é' len_utf8=2 u+00E9
+8 'ö' len_utf8=2 u+00F6
+14 'ß' len_utf8=2 u+00DF
+17 '日' len_utf8=3 u+65E5
+20 '本' len_utf8=3 u+672C
+23 '語' len_utf8=3 u+8A9E
+27 '🦀' len_utf8=4 u+1F980
+!🦀 語本日 ß dlröw olléh
+HÉLLO WÖRLD SS 日本語 🦀!
+strasse straße
+"SS"
+2
+"i\u{307}"
+false false
+[héllo ] [wörld ß 日本語 🦀!]
+false true
+Some("é")
+None
+crab at 27 -> "🦀!"
+[230, 151, 165, 230, 156, 172, 232, 170, 158]
+[97, 195, 177, 98]
+Ok("日")
+true
+Hi�!
+|        日本|ñu      |    🦀    |
+|*****é|ß-----|
+|   hé|
+["α", "β", "", "γ"]
+"ÄÖÜ"
+ueber
+[true, true, true, true]
+[(false, false), (true, false), (true, false)]
+Some('😀')
+None
+Some('7')
+"\\u{e9}"
+tab\there\n
+\u{65e5}
+üañ 5 Some('🦀')
+"üa"
+[97, 55358, 56704]
+Ok("a🦀")
+['a', 'b', 'c', 'd', 'é']
+true
+Hello Wörld

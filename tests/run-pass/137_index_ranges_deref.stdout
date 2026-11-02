@@ -1,0 +1,16 @@
+10 50 30
+[25, 30]
+[40, 50]
+[10, 25]
+[25, 30, 40]
+[10, 25, 30, 40, 50]
+reads = 3
+abc
+dXf
+ghi
+len 11 upper 2
+Hello World Again | hello world again
+true
+[1, 2, 3, 9] first=Some(1) sum=15
+total 15 len 4 contains 9: true
+BOXED

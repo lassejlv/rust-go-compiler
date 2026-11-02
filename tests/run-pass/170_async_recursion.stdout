@@ -1,0 +1,14 @@
+fib(0) = 0
+fib(1) = 1
+fib(10) = 55
+fib(20) = 6765
+node
+  leaf 1
+  node
+    leaf 2
+    node
+      leaf 3
+      leaf 4
+sum = 10
+[5, 4, 3, 2, 1, 0]
+15 moves: AB AC BC AB CA CB AB AC BC BA CA BC AB AC BC

@@ -1,0 +1,22 @@
+abs(-42) = 42
+labs = 9000000000
+strlen = 9
+bytes_with_nul = 10
+apple < banana
+banana > apple
+apple > app
+strncmp first 3 equal: true
+atoi("123") = 123
+atoi("  -77xyz") = -77
+atoi("abc") = 0
+atoi("2147483647") = 2147483647
+strtol = 255 rest = " rest"
+MIXED 9!
+digits 6
+from first slash: /sub/file.txt
+missing is null: true
+"c string literal" 16
+c string literal
+true
+Ok("xyz")
+"roundtrip"

@@ -1,0 +1,5 @@
+consumed 30 items
+sum 465
+all unique and complete: true
+waiter saw ready = true
+turns 6 log ["ping0", "pong0", "ping1", "pong1", "ping2", "pong2"]

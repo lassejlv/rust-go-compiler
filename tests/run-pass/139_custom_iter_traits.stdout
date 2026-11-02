@@ -1,0 +1,17 @@
+len 5
+[4, 3, 2, 1, 0]
+[0, 1, 2, 3, 4]
+Some(15) Some(10)
+remaining 4 Countdown { lo: 11, hi: 15 }
+[14, 13] then [12, 11]
+[(2, 1), (1, 2), (0, 3)]
+[(2, 0), (1, 1), (0, 2)]
+rposition Some(5)
+nth_back Some(1)
+rfind Some(3)
+rfold 0123
+Bag { items: ["alpha", "beta"], total_len: 9 }
+1:alpha 2:beta 3:gamma 4:delta 5:x 6:y 
+total_len 21
+longest delta
+["ALPHA", "BETA", "GAMMA", "DELTA"]

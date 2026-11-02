@@ -1,0 +1,23 @@
+peek Some("deploy")
+5 deploy
+2 write
+2 test
+1 rest
+[(1, "a"), (1, "aa"), (2, "b"), (3, "c")]
+["a", "zz", "bb", "ccc", "dddd"]
+[("bob", 25), ("dan", 25), ("amy", 30), ("cat", 30), ("fay", 30), ("eve", 35)]
+[("eve", 35), ("amy", 30), ("cat", 30), ("fay", 30), ("bob", 25), ("dan", 25)]
+[("eve", 35), ("amy", 30), ("cat", 30), ("fay", 30), ("bob", 25), ("dan", 25)]
+[Int(-3), Int(5), Float(1.5), Text("a"), Text("b"), Pair(1, 1), Pair(1, 2)]
+true
+None
+Some(Greater)
+[Low, Low, Mid, High] max=High
+15
+Less
+Greater
+Greater
+Some(Less)
+7 "a"
+Greater
+[9.75, 2.5, 0.0, -1.0]

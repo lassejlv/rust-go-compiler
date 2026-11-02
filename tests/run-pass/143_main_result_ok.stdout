@@ -1,0 +1,6 @@
+a = 42
+b failed: negative value: -4
+c = -1
+total = 12
+s = hi
+done

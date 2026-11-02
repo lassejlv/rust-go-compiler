@@ -1,0 +1,10 @@
+upper "hello async world" -> Ok("HELLO ASYNC WORLD")
+counter "hello async world" -> Ok("words=3")
+failing "hello async world" -> Err("cannot handle \"hello async world\"")
+upper "" -> Ok("")
+counter "" -> Ok("words=0")
+failing "" -> Ok("empty ok")
+["A B", "words=2", "ERR(19)"]
+store result 1042
+{"a": 1, "b": 41}
+[8, 49]

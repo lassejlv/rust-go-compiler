@@ -1,0 +1,16 @@
+elapsed >= 1ms: true
+1 500 1500
+1.5s
+2.25s 1µs
+None
+2.5s
+250
+1.000000123s
+true
+got [0, 1, 2, 3]
+slept true
+later >= earlier: true
+checked_duration_since reversed is none-or-zero: true
+timeout: Err(Timeout)
+recv_timeout: Ok(5)
+done

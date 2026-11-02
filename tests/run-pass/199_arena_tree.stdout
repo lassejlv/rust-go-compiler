@@ -1,0 +1,24 @@
+"root" (#0)
+  "usr" (#1)
+    "bin" (#2)
+      "rustc" (#6)
+      "cargo" (#7)
+    "lib" (#3)
+  "etc" (#4)
+    "hosts" (#5)
+path ["cargo", "bin", "usr", "root"]
+lca(rustc, lib) = Some("usr")
+lca(cargo, hosts) = Some("root")
+live 8
+removed 5
+live 3 free [NodeId(1), NodeId(3), NodeId(2), NodeId(7), NodeId(6)]
+reused ids NodeId(6) NodeId(7)
+"root" (#0)
+  "etc" (#4)
+    "hosts" (#5)
+  "opt" (#6)
+    "tool-v2" (#7)
+nodes 15 sum 120
+left subtree sum 49
+after scaling sum 2793
+[0, 1, 2, 3, 3, 2, 3, 3, 1, 2, 3, 3, 2, 3, 3]

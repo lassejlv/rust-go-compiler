@@ -1,0 +1,26 @@
+Nop = 0 (0x0)
+Push = 16 (0x10)
+Pop = 17 (0x11)
+Add = 32 (0x20)
+Halt = 255 (0xff)
+0x10 -> Ok(Push)
+0x11 -> Ok(Pop)
+0x12 -> Err("bad opcode 0x12")
+0xff -> Ok(Halt)
+size_of Opcode 1
+-40 20 45
+Cold 2
+0 1 10 11
+-1
+1.0 bits = 0x3f800000
+float = -3.1415927
+word 0x12345678
+halves 0x5678 0x1234
+word 0xabcd5678
+bytes [120, 86, 205, 171]
+union size 4
+int -12
+float 2.5
+int 1099511627776
+modified 10
+big float 10

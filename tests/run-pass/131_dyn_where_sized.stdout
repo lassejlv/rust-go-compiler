@@ -1,0 +1,15 @@
+24
+6.75
+show: Circle { r: 2.0 }
+circle with area 12.00
+[rect 3x4.5]
+circle with area 0.75
+total area 26.250
+a -> 3
+b -> 25
+bumped to 4
+bumped to 30
+show: Simple(4)
+show: Stepped { v: 30, step: 5 }
+boxed -> 102
+boxed -> 14

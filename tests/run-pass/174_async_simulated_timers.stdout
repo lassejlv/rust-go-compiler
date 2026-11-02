@@ -1,0 +1,11 @@
+t=2 fast
+t=4 fast
+t=5 slow
+t=6 fast
+t=6 once a=3 b=6
+t=6 task2 done
+t=8 fast
+t=8 task0 done
+t=10 slow
+t=10 task1 done
+results [4, 2, 99] final time 11

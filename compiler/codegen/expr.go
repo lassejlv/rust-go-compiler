@@ -1037,8 +1037,9 @@ func (fc *fnGen) methodCall(x *ast.MethodCallExpr, t Ty) string {
 		for _, a := range x.Args {
 			pts = append(pts, fc.ctype(fc.aty(a)))
 		}
-		fp := fmt.Sprintf("((%s(*)(%s))((void**)(%s).meta)[%d])", fc.ctype(t), strings.Join(pts, ", "), recv, idx)
-		all := append([]string{recv + ".ptr"}, args...)
+		fat := fc.dynFat(recv, fc.aty(x.Receiver))
+		fp := fmt.Sprintf("((%s(*)(%s))((void**)(%s).meta)[%d])", fc.ctype(t), strings.Join(pts, ", "), fat, idx)
+		all := append([]string{fat + ".ptr"}, args...)
 		return fc.finishCall(fmt.Sprintf("%s(%s)", fp, strings.Join(all, ", ")), t)
 	}
 	all := append([]string{recv}, args...)
@@ -1065,8 +1066,9 @@ func (fc *fnGen) callResolvedSpan(d *Def, args []Ty, vals []string, ret Ty, sp a
 			for _, in := range ins[1:] {
 				pts = append(pts, fc.ctype(in))
 			}
-			fp := fmt.Sprintf("((%s(*)(%s))((void**)(%s).meta)[%d])", fc.ctype(ret), strings.Join(pts, ", "), recv, idx)
-			return fmt.Sprintf("%s(%s)", fp, strings.Join(append([]string{recv + ".ptr"}, vals[1:]...), ", "))
+			fat := fc.dynFat(recv, ins[0])
+			fp := fmt.Sprintf("((%s(*)(%s))((void**)(%s).meta)[%d])", fc.ctype(ret), strings.Join(pts, ", "), fat, idx)
+			return fmt.Sprintf("%s(%s)", fp, strings.Join(append([]string{fat + ".ptr"}, vals[1:]...), ", "))
 		}
 		rd, rargs, ok := fc.g.tcx.ResolveAssocFn(d, args)
 		if !ok || rd == nil {
@@ -1208,4 +1210,20 @@ func (fc *fnGen) constC(e ast.Expr) string {
 		return fmt.Sprintf("((%s){ { %s } })", fc.g.ctype(t), strings.Join(vs, ", "))
 	}
 	return fc.value(e)
+}
+
+// dynFat finds the fat pointer inside a trait-object receiver value: the
+// receiver may be &dyn T, Box<dyn T>, Pin<&mut dyn T>, Pin<Box<dyn T>>, ...
+// (single-pointer wrappers are ABI-identical to the data pointer, so the
+// implementation method can be called with the data pointer).
+func (fc *fnGen) dynFat(v string, t Ty) string {
+	for t != nil && t.Kind == TAdt {
+		fts := fc.g.fieldTypes(t, 0)
+		if len(fts) == 0 {
+			break
+		}
+		v = "(" + v + ").f0"
+		t = fts[0]
+	}
+	return v
 }

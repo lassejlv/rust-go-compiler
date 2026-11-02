@@ -131,6 +131,7 @@ func Frontend(opts *Options) (*typeck.Tcx, *Def, error) {
 	}
 	t2 := time.Now()
 	r := resolve.New()
+	r.IsBuiltinMacro = expand.IsBuiltinMacro
 	r.AddCrate("std", stdCrate)
 	user := r.AddCrate("main", userCrate)
 	r.ResolveImports()

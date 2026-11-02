@@ -1,0 +1,19 @@
+  (ready after 1 poll(s))
+42
+  step 0 acc 2
+  step 1 acc 6
+  step 2 acc 16
+  (ready after 1 poll(s))
+result 16
+  (ready after 1 poll(s))
+hello, async world!
+  (ready after 1 poll(s))
+Ok(77)
+  (ready after 1 poll(s))
+Err("negative -2")
+  (ready after 1 poll(s))
+Err("negative -1")
+  (ready after 1 poll(s))
+[2, 4, 6, 8]
+  (ready after 1 poll(s))
+ready value

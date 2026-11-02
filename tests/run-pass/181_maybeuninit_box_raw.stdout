@@ -1,0 +1,15 @@
+12345
+["s0", "s1", "s4", "s9"]
+hey
+Big { id: 0, data: [0, 0, 0, 0] }
+Big { id: 8, data: [1, 2, 3, 40] }
+leaked boxed
+drop boxed
+manual holds manual
+drop manual2
+got unwrapped
+[1, 2, 3]
+raw string 10
+[50, 6, 7]
+end
+drop unwrapped

@@ -1,0 +1,11 @@
+sent 10 got [0, 1, 4, 9, 16, 25, 36, 49, 64, 81]
+Ok(())
+full, returned b
+recv Ok("a")
+Ok(())
+disconnected, returned d
+sent alpha running total 5
+sent be running total 7
+sent gam running total 10
+worker total 10
+bounded total 3250

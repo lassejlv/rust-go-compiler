@@ -62,7 +62,7 @@ func (e *Expander) ExpandCrate(c *ast.Crate, crateName string) error {
 		return err
 	}
 	c.Items = items
-	return nil
+	return desugarAsync(c)
 }
 
 // ---------------------------------------------------------------------------

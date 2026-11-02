@@ -1,0 +1,16 @@
+answer = 42
+worker says hi, len 6
+chunk 0 primes 168
+chunk 1 primes 135
+chunk 2 primes 127
+chunk 3 primes 120
+chunk 4 primes 119
+chunk 5 primes 114
+chunk 6 primes 117
+chunk 7 primes 107
+total primes below 8000: 1007
+row sums [0, 45, 90, 135]
+thread name: Some("named-thread")
+nested = 3628801
+main thread name: Some("main")
+["a", "b"] finished=true

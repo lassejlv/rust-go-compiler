@@ -1,0 +1,12 @@
+owner: Sam
+Dog { owner: "Sam" }
+animal: Dog has 4 legs
+name: Dog
+name: Dog
+pet Dog { owner: "Kim" } owned by Kim
+pet Spider owned by nobody
+total legs 12
+name: Dog
+name: Spider
+a spider!
+rc count 2

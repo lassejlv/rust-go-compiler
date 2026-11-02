@@ -1,0 +1,23 @@
+u8 1 u16 2 u32 4 u64 8 u128 16
+i8 1 f32 4 f64 8 char 4 bool 1
+align u16 2 u32 4 f64 8
+Header size 12 align 4
+Vec3 size 12 align 4
+Packet size 20
+Packed size 5 align 1
+[u16; 5] size 10
+() size 0 Empty 0
+Option<Box<i32>> == Box<i32>: true
+Option<&u8> == &u8: true
+&[u8] is two words: true
+Option<NonZeroU32> 4
+Header { tag: 0, len: 0, flags: 0 }
+Vec3 { x: 1.5, y: -2.0, z: 3.25 }
+memcmp equal: true
+[171, 171, 171, 171, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0]
+ababcdeh
+Header { tag: 1, len: 8, flags: 2 } PAYLOAD!
+packed 1 0xdeadbeef
+[1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
+offset of len: 4
+offset of flags: 8

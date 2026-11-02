@@ -1,0 +1,13 @@
+global count 4000
+Ok(false) Err(true)
+exactly one winner: true
+acc 300
+max 99
+0b1100
+0b1111
+0b1010
+0b101
+Ok(5) -> 50
+7
+7 7
+true

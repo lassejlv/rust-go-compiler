@@ -1,0 +1,7 @@
+["x0", "x1", "x2"] polls=4 wakes=3
+["item-15", "item-20"] polls=3 wakes=2
+outer counter still 10
+sum*100 = 600 polls=2 data=[3, 1, 2]
+1 2 ["n0"] polls=2 wakes=1
+Pending
+Ready(())

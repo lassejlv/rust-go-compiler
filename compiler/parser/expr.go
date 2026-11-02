@@ -459,9 +459,9 @@ func (p *Parser) parsePrimary(r restr) ast.Expr {
 		case "async":
 			if p.isN(1, "{") || (p.isN(1, "move") && p.isN(2, "{")) {
 				p.next()
-				p.eat("move")
+				mv := p.eat("move")
 				b := p.parseBlock()
-				return &ast.BlockExpr{ExprBase: p.eb(lo), Block: b, Async: true}
+				return &ast.BlockExpr{ExprBase: p.eb(lo), Block: b, Async: true, Move: mv}
 			}
 			return p.parseClosure(r)
 		case "move", "static":

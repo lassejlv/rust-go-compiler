@@ -45,6 +45,9 @@ func (fc *fnGen) intrinsic(d *Def, args []Ty, v []string, ret Ty, sp ast.Span) s
 	g := fc.g
 	ct := func(t Ty) string { g.defineByValue(t); return g.ctype(t) }
 	name := d.Intrinsic
+	if s, ok := coroIntrinsic(name, v); ok {
+		return s
+	}
 	arg := func(i int) Ty { return args[i] }
 	switch name {
 	case "size_of":

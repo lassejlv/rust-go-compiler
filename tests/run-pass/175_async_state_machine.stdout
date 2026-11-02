@@ -1,0 +1,12 @@
+server got add 1 2 3
+client got sum=6
+server got rev hello
+client got olleh
+server got ping
+client got unknown:ping
+server got add 10 -4
+client got sum=6
+server got quit
+client got bye
+client handled Some(5) in 6 rounds
+size_of Recv future == size_of pointer: true

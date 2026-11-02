@@ -1,0 +1,16 @@
+0 1 2
+100 90
+[3, 80, 5]
+[4, 70, 10]
+19 28 19
+hits 1 size 2
+ok: >> alice clicked
+none: no handler
+fib(90) = 2880067194370816120
+memo size 89
+paths(16,16) = 601080390
+apple+kiwi
+total 12
+[10, 20, 30]
+6
+3 ["0:start", "1:middle", "2:end"]

@@ -1,0 +1,19 @@
+[exec] task 1 complete
+[exec] task 2 complete
+[exec] task 0 complete
+polls 9
+a:0 b:0 c:0 a:1 b:end c:1 a:2 c:end a:end
+produced 1
+consumed 1
+produced 4
+consumed 4
+produced 9
+consumed 9
+produced 16
+consumed 16
+produced 25
+consumed 25
+[exec] task 0 complete
+consumer saw close
+[exec] task 1 complete
+polls 22 results [1, 4, 9, 16, 25]

@@ -1,0 +1,27 @@
+argc = 1
+args().skip(1) empty: true
+descend 2
+descend 1
+depth 0 total 6
+drop validate
+unwind 1
+drop validate
+unwind 2
+drop validate
+first ok 6
+descend 3
+descend 2
+descend 1
+depth 0 total 4
+drop validate
+unwind 1
+drop validate
+unwind 2
+drop validate
+unwind 3
+drop validate
+descend 3
+descend 2
+descend 1
+depth 0 total 18
+total too large, exiting with 18

@@ -1,0 +1,13 @@
+received 20 values
+[0, 1, 2, 3, 4]
+[100, 101, 102, 103, 104]
+[200, 201, 202, 203, 204]
+[300, 301, 302, 303, 304]
+done [0, 1, 2, 3]
+count 150 in_order true last [Some(49), Some(49), Some(49)]
+sq(1)=1, sq(2)=4, sq(3)=9, sq(4)=16, sq(5)=25
+try_recv empty: Err(Empty)
+try_recv: Ok(9)
+after drop: Err(RecvError)
+try after drop: Err(Disconnected)
+send to closed: true

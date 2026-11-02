@@ -1,0 +1,13 @@
+thread panicked
+task 1 -> 10
+task 2 -> 20
+task 3 panicked: bad input 3
+task 4 -> 40
+task 5 -> 50
+index panic caught: true
+expect message: Some("needed a value")
+poisoned: true
+recovered value 1
+catch_unwind is_err: true
+catch_unwind ok: Some(40)
+main continues

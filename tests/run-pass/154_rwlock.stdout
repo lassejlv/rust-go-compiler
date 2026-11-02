@@ -1,0 +1,12 @@
+reader results [7, 14, 21, 28]
+version 6
+key0 = 6
+key1 = 4
+retries = 3
+threads = 4
+two readers see same version: true
+try_write while reading fails: true
+try_write after release ok: true
+len 3
+[1, 2, 3, 4]
+inner [1, 2, 3, 4]

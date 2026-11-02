@@ -236,8 +236,17 @@ func (fcx *FnCtxt) revealOpaque(x Ty, sp lexer.Span) Ty {
 		return h
 	}
 	if x.Def == fcx.def && sameArgs(args, fcx.inst.Args) {
-		fcx.errorf(sp, "recursive use of opaque type")
-		return TyErr
+		// recursive use inside its own defining body: stays opaque
+		return o
+	}
+	if x.Def.InTrait() {
+		// impl Trait in a trait method's return type: use the impl's
+		if d, iargs, ok := fcx.t.ResolveAssocFn(x.Def, args); ok && d != nil && d != x.Def {
+			fcx.t.FnSig(d)
+			if x.Index < len(d.Fn.AstOpaques) {
+				return fcx.revealOpaque(Opaque(d, iargs, x.Index), sp)
+			}
+		}
 	}
 	fcx.resolveClosureSigs(args)
 	fcx.t.CheckInstance(x.Def, args)
@@ -288,6 +297,14 @@ func (t *Tcx) RevealOpaque(ty Ty) Ty {
 		if x.Kind == TOpaque {
 			if h, ok := t.OpaqueHidden[x]; ok {
 				return t.RevealOpaque(h)
+			}
+			if x.Def.InTrait() {
+				if d, iargs, ok := t.ResolveAssocFn(x.Def, x.Args); ok && d != nil && d != x.Def {
+					t.FnSig(d)
+					if x.Index < len(d.Fn.AstOpaques) {
+						return t.RevealOpaque(Opaque(d, iargs, x.Index))
+					}
+				}
 			}
 			t.CheckInstance(x.Def, x.Args)
 			if h, ok := t.OpaqueHidden[x]; ok {

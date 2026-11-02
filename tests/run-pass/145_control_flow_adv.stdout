@@ -1,0 +1,18 @@
+Some((2, 1))
+None
+found (3, 12) counter 3
+value 2187
+block odd-big
+[3, 20, 10, 2, 1]
+5 0 1
+Ok(("a", 5))
+Err("bad value \"x\"")
+Err("no '=' in \"noeq\"")
+Ok(("key", -12))
+big a 50
+b ok y
+a 5 with err 9
+nothing
+[2, 3, 2, 29, 2, 43]
+6 10
+collatz steps 111

@@ -90,7 +90,7 @@ func (fcx *FnCtxt) coerce(e ast.Expr, from, to Ty) bool {
 			fcx.ic.rollback(s)
 			ae := fcx.shallow(a.Args[0])
 			be := fcx.shallow(b.Args[0])
-			if fcx.canUnsize(ae, be) {
+			if fcx.canUnsize(ae, be) || fcx.canUnsizeNested(ae, be) {
 				fcx.addAdjust(e, Adjustment{Kind: AdjUnsize, Target: b})
 				return true
 			}
@@ -186,4 +186,15 @@ func (fcx *FnCtxt) canUnsize(src, dst Ty) bool {
 		return true
 	}
 	return false
+}
+
+// canUnsizeNested handles smart pointers wrapping smart pointers, e.g.
+// Pin<Box<T>> -> Pin<Box<dyn Trait>>.
+func (fcx *FnCtxt) canUnsizeNested(a, b Ty) bool {
+	if a.Kind != TAdt || b.Kind != TAdt || a.Def != b.Def || !isUnsizableSmartPtr(a.Def) || len(a.Args) == 0 {
+		return false
+	}
+	ae := fcx.shallow(a.Args[0])
+	be := fcx.shallow(b.Args[0])
+	return fcx.canUnsize(ae, be) || fcx.canUnsizeNested(ae, be)
 }

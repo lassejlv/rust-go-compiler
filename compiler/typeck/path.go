@@ -340,7 +340,7 @@ func (fcx *FnCtxt) checkCall(x *ast.CallExpr, expected Ty) Ty {
 				} else {
 					es := fcx.shallow(expected)
 					// only keep if no coercion could be intended
-					if es.Kind == TRef || es.Kind == TAdt && es.Def.LangItem == "owned_box" || es.Kind == TFnPtr {
+					if es.Kind == TRef || es.Kind == TAdt && isUnsizableSmartPtr(es.Def) || es.Kind == TFnPtr {
 						fcx.ic.rollback(s)
 					}
 				}

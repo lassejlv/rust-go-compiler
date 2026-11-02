@@ -1,0 +1,20 @@
+bfs [0, 1, 2, 3, 5, 4, 6]
+dfs [0, 1, 3, 4, 5, 6, 2]
+topo Ok([0, 2, 1, 3, 4, 5, 6])
+  0 -> 0: dist  0 via [0]
+  0 -> 1: dist  3 via [0, 2, 1]
+  0 -> 2: dist  1 via [0, 2]
+  0 -> 3: dist  4 via [0, 2, 1, 3]
+  0 -> 4: dist  7 via [0, 2, 1, 3, 4]
+  0 -> 5: dist  8 via [0, 2, 1, 3, 4, 5]
+  0 -> 6: dist 10 via [0, 2, 1, 3, 4, 5, 6]
+topo with cycle Err(1)
+bfs from 4 [4, 5, 6, 2, 1, 3]
+open cells 28
+grid S->E dist 15 steps 15
+  S**#****
+  .#*#*##*
+  .#***#.*
+  .####.~*
+  ......#E
+reachable from S: 28

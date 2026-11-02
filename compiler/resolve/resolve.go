@@ -28,6 +28,9 @@ type Resolver struct {
 	// FnBodyScope maps item node ids of fns to the def.
 	ItemDefs map[*ast.Item]*Def
 	Errors   []string
+	// IsBuiltinMacro reports names of builtin macros (imports of them,
+	// e.g. `use std::pin::pin;`, are accepted).
+	IsBuiltinMacro func(string) bool
 }
 
 func New() *Resolver {
@@ -506,6 +509,9 @@ func (r *Resolver) tryImport(imp *Import, report bool) bool {
 			r.bindImport(m, imp.Name, ns, b.Res, imp.Span)
 			found = true
 		}
+	}
+	if !found && r.IsBuiltinMacro != nil && r.IsBuiltinMacro(last) {
+		return true // macros live in a namespace we don't model
 	}
 	if !found {
 		if report {

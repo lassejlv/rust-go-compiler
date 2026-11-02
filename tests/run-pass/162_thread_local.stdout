@@ -1,0 +1,11 @@
+thread 0 count 2 log ["t0"]
+thread 1 count 4 log ["t1"]
+thread 2 count 6 log ["t2"]
+main count 2
+main log ["main-1", "main-2"]
+max depth 7
+depth after 0
+set/get 100
+taken ["main-1", "main-2"] now empty true
+["again"]
+fresh thread sees 0

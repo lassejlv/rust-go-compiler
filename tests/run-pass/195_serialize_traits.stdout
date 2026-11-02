@@ -1,0 +1,11 @@
+[{"admin":true,"id":1,"manager":null,"name":"Ann \"the boss\"","tags":["ops","dev"]},{"admin":false,"id":2,"manager":1,"name":"Bob\nNewline","tags":[]}]
+roundtrip json equal: true
+roundtrip users equal: true
+User { id: 2, name: "Bob\nNewline", admin: false, tags: [], manager: Some(1) }
+error: field 'admin': expected bool, got Str("yes")
+error: field 'id': expected integer, got Num(4.5)
+error: field 'tags': expected string, got Num(7.0)
+ok User { id: 6, name: "F", admin: false, tags: ["x"], manager: Some(2) }
+error: expected object
+[Some(1), None, Some(-3)]
+[1.5,-0.25,1000000000000000000000]

@@ -1,0 +1,16 @@
+Ready(5)
+Pending
+Pending
+Pending
+Pending
+Ready(3)
+counter polls 3
+Ready(31)
+Ready("boxed-13")
+[1, 16, 200]
+from poll_fn
+poll_fn counted to 4
+len 3
+[1, 2, 5]
+42 42
+9

@@ -1,0 +1,19 @@
+i32 42
+String "hi"
+&str "static"
+Point Point { x: 1, y: 2 }
+some f64
+unknown
+owned other
+owned other
+owned other
+owned point sum 3
+owned other
+owned other
+owned vec len 3
+true
+false
+true
+health = 7
+position = (13, 4)
+Some(5) Some("five") None

@@ -1,0 +1,12 @@
+               A           B           C           D
+  1           10          20   #CYCLE@C1      #PARSE
+  2           20          25   #CYCLE@C2      #PARSE
+  3        30.50         900       #DIV0           0
+  4        60.50         315       14.50           0
+--- update A1 = 100
+               A           B           C           D
+  1          100         200   #CYCLE@C1      #PARSE
+  2           20         205   #CYCLE@C2      #PARSE
+  3        30.50        3600       #DIV0           0
+  4       150.50        1335      374.50           0
+B4 = 1335

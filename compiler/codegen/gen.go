@@ -125,6 +125,7 @@ func (g *Gen) Generate(mainDef *Def) (out string, err error) {
 	}
 	var b strings.Builder
 	b.WriteString(runtimeH)
+	b.WriteString(coroH)
 	b.WriteString("\n/* ---- types ---- */\n")
 	b.WriteString(g.fwd.String())
 	b.WriteString(g.defs.String())

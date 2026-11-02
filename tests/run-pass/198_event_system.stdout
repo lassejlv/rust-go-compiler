@@ -1,0 +1,20 @@
+emit Click { x: 10, y: 20 } -> 2 listener(s)
+emit Key('h') -> 1 listener(s)
+emit Key('i') -> 1 listener(s)
+    (any-listener saw 4 events)
+    [modal] stopped propagation
+emit Click { x: -1, y: 5 } -> 2 listener(s)
+emit Key('x') -> 1 listener(s)
+  removing modal: true
+  removing again: false
+emit Key('\u{8}') -> 1 listener(s)
+    [layout] stopped propagation
+emit Resize(800, 600) -> 1 listener(s)
+    (any-listener saw 8 events)
+emit Key('!') -> 1 listener(s)
+emit Quit -> 0 listener(s)
+log: ["click at (10, 20)", "click at (-1, 5)", "modal ate click", "click at (-5, -5)"]
+typed: "hi!"
+size: (800, 600)
+counts: {"click": 3, "key": 5, "quit": 1, "resize": 1}
+4 listeners: ["logger", "typist", "layout", "never-called"]

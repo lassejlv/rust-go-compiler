@@ -1,0 +1,13 @@
+["hello", "bonjour Ana", "hello"]
+english strong count = 3
+english strong count = 1
+Logger[START,START,TICK,TICK]
+Counter[count=2, len=9]
+logger rc = 3
+Counter[count=3, len=15]
+-> Logger[START,START,TICK,TICK]
+-> Counter[count=3, len=15]
+-> Logger[START,START,TICK,TICK]
+[8, 49, -93]
+shared(9) = 81
+fn rc = 2

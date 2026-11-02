@@ -1,0 +1,24 @@
+Num(7)
+Num(-20)
+Num(0)
+newborn
+child(5)
+teen(15)
+round adult(30)
+adult
+senior(70)
+empty
+one 4
+same ends 3
+1 [3 mid, sum 9] 5
+1 [0 mid, sum 0] 2
+starts; rest=["a", "b"]
+ends
+same len ab cd
+other
+5 6 6 -1
+AB6 flipped 4 none
+three-letter
+digit 4
+anti-diag 3
+zed

@@ -1,0 +1,16 @@
+["a", "b", "c"]
+get a Some(1)
+["b", "c", "a"]
+after d ["c", "a", "d"] evicted ["b"]
+get b None
+replace c -> Some(3)
+["a", "d", "c"]
+["c", "e", "f"] evicted ["b", "a", "d"]
+hits 1 misses 1
+[1, 4, 9, 1, 16, 25, 1, 4, 36, 1, 9, 9]
+computed 8 times, hits 4, misses 8
+final order [2, 6, 1, 3]
+evictions [2, 3, 4, 5]
+c -> ["cherry"]
+a -> ["apple"]
+evicted ["a", "b"]

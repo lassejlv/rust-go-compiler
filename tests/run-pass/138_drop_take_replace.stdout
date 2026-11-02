@@ -1,0 +1,30 @@
+taken Stats { count: 3, names: ["a", "b"] }
+left Stats { count: 0, names: [] }
+[1, 2, 3] [9]
+[hello] []
+-- holder
+replaced first
+replaced second
+cleared Some("third")
+current is none: true
+drop third
+history len 2
+removed first
+drop first
+-- state
+running job
+drop job
+done job
+already done: job
+done job
+already done: job
+done job
+-- swap
+a=B b=A
+got opt-modified
+drop B
+-- end of main
+drop opt-modified
+drop A
+drop A2
+drop second

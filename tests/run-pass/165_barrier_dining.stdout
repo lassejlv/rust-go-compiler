@@ -1,0 +1,9 @@
+after barrier total 100
+after barrier total 100
+after barrier total 100
+after barrier total 100
+leaders 1
+meals [20, 20, 20, 20, 20]
+fork uses [40, 40, 40, 40, 40]
+reader sums [126, 66, 93]
+available_parallelism >= 1: true

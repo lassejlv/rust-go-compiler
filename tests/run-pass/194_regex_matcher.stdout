@@ -1,0 +1,18 @@
+abc              "abc"=[0..3] "xabcx"=[1..4] "ab"=no
+^a.c$            "abc"=[0..3] "aXc"=[0..3] "abcd"=no "ac"=no
+ab*c             "ac"=[0..2] "abc"=[0..3] "abbbbc"=[0..6] "adc"=no
+ab+c             "ac"=no "abc"=[0..3] "abbbc"=[0..5]
+colou?r          "color"=[0..5] "colour"=[0..6] "colouur"=no
+[0-9]+           "abc123def"=[3..6] "no digits"=no "7"=[0..1]
+^[A-Z][a-z]*$    "Hello"=[0..5] "hello"=no "HeLLo"=no "X"=[0..1]
+[^aeiou ]+       "aei"=no "rhythm"=[0..6] "a b"=[2..3]
+(cat|dog)s?$     "cats"=[0..4] "dog"=[0..3] "cow"=no "hotdogs"=[3..7]
+^(a|b)*abb$      "abb"=[0..3] "aababb"=[0..6] "abab"=no "babb"=[0..4]
+a.*b             "axxxbyyb"=[0..8] "ab"=[0..2] "ba"=no
+\.txt$           "notes.txt"=[5..9] "notesxtxt"=no "a.txt.bak"=no
+^$               ""=[0..0] "x"=no
+bob@example.com  email? true
+a.b@c.co.uk      email? true
+bad@             email? false
+@x.com           email? false
+x@y              email? false

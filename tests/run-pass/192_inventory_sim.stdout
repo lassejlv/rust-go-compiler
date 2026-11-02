@@ -1,0 +1,22 @@
+#00 ok  ann balance $100.00
+#01 ok  bob balance $25.00
+#02 ok  ann bought 4 x widget for $10.00 (0% off)
+#03 ok  ann bought 5 x widget for $10.63 (15% off)
+#04 ERR insufficient funds: need $39.98, have $25.00
+#05 ok  bob bought 1 x gadget for $19.99 (0% off)
+#06 ERR not enough G7: wanted 3, have 2
+#07 ok  ann bought 20 x sprocket for $11.25 (25% off)
+#08 ERR insufficient funds: need $0.75, have $0.00
+#09 ERR unknown sku XX
+#10 ERR quantity must be positive
+#11 ok  restocked G7 to 12
+#12 ERR unknown sku ZZ
+#13 ok  ann bought 2 x gadget for $39.98 (0% off)
+errors: 6
+revenue: $91.85
+G7 gadget    stock  10 value $199.90
+S3 sprocket  stock  80 value $60.00
+W1 widget    stock  21 value $52.50
+ann has $28.14
+bob has $5.01
+boxed: quantity must be positive

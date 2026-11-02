@@ -217,6 +217,7 @@ func BuildCargo(opts *Options, co *CargoOptions) error {
 		return fmt.Errorf("while expanding std: %v", err)
 	}
 	r := resolve.New()
+	r.IsBuiltinMacro = expand.IsBuiltinMacro
 	r.AddCrate("std", stdCrate)
 	crates := map[string]*Crate{}
 	byKey := map[string]*crateUnit{}

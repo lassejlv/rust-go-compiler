@@ -1,0 +1,22 @@
+10 50
+sum via ptr walk 91
+distance 5
+[10, 21, -30, 40, 50]
+[21, -30, 40]
+[99, 21, -30, 40, 50]
+swapped 2 1
+replace returned 2 now 77
+[1, 2, 1, 2, 3, 6]
+[9, 9, 1, 2, 3, 6]
+2 [9, 9, 1, 2, 3, 200]
+null? true None
+as_ref Some(99)
+ptr::eq same true
+ptr::eq diff false
+[400, 300, 200, 100]
+head val 401
+freed 4
+true
+dangling aligned: true
+0x1020304
+3

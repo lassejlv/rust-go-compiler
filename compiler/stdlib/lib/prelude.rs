@@ -41,6 +41,7 @@ pub mod rust_2021 {
 /// The 2024 version of the prelude.
 pub mod rust_2024 {
     pub use super::rust_2021::*;
+    pub use crate::future::{Future, IntoFuture};
 }
 
 pub use self::rust_2021::*;

@@ -1,0 +1,8 @@
+factorial  ok   output=[3628800] steps=119 stack=[]
+fib        ok   output=[0, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89] steps=1117 stack=[]
+arith      ok   output=[16, 2] steps=12 stack=[]
+underflow  err  stack underflow at pc=1 (output=[])
+divzero    err  division by zero at pc=2 (output=[])
+infinite   err  step limit exceeded (output=[])
+badjump    err  bad jump at pc=99 (output=[])
+factorial program has 18 ops; first Push(1), last Halt

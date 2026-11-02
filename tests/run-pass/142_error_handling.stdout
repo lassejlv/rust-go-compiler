@@ -1,0 +1,14 @@
+ok 600
+err config: missing key 'height' | chain: missing key 'height'
+err config: bad number for width: invalid digit found in string | chain: bad number for width: invalid digit found in string <- invalid digit found in string
+err config: value 5000 out of range | chain: value 5000 out of range
+"10,4" -> 2.5
+"7" -> error: no second part in "7" (cfg=false, parse_int=false)
+"x,1" -> error: invalid digit found in string (cfg=false, parse_int=true)
+"3,abc" -> error: invalid float literal (cfg=false, parse_int=false)
+"5,0" -> error: value 0 out of range (cfg=true, parse_int=false)
+"" -> error: cannot parse integer from empty string (cfg=false, parse_int=true)
+Ok([1, 2, 3])
+Err("invalid digit found in string")
+None
+plain message / "plain message"

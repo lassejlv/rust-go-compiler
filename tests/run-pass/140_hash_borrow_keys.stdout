@@ -1,0 +1,23 @@
+the -> Some(3)
+dog -> Some(2)
+cat -> Some(1)
+bird -> None
+contains 'end': true
+by &String: 3
+by str index: 2
+[("cat", 1), ("dog", 2), ("end", 1), ("the", 3)]
+removed Some(3)
+len 3
+cat 101
+insert Card { rank: 10, suit: Hearts } -> true
+insert Card { rank: 2, suit: Spades } -> true
+insert Card { rank: 10, suit: Hearts } -> false
+insert Card { rank: 10, suit: Spades } -> true
+hand size 3
+[Card { rank: 2, suit: Spades }, Card { rank: 10, suit: Hearts }, Card { rank: 10, suit: Spades }]
+Id(3) => ["a", "d"]
+Pair(1, -1) => ["b", "e"]
+Named => ["c"]
+Some('x') None
+["y", "z"] ["w", "x", "y", "z"] ["x"]
+Some(1) {"a": 1, "b": 2}

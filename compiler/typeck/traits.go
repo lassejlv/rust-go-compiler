@@ -133,6 +133,14 @@ func (ic *InferCtxt) selectTrait(tr *TraitRef, depth int) Selection {
 	if self.Kind == TInfer && self.Sub == 0 {
 		return Selection{Kind: SelAmbig}
 	}
+	// Unrevealed opaque types (recursion) implement their declared bounds.
+	if self.Kind == TOpaque {
+		if b := ic.opaqueBound(self, trait); b != nil {
+			if ic.unifyList(b.Trait.Args, tr.Args) {
+				return Selection{Kind: SelObject}
+			}
+		}
+	}
 	// Trait objects implement their principal trait and its supertraits.
 	if self.Kind == TDyn && self.Def != nil {
 		obj := &TraitRef{Trait: self.Def, Args: append([]Ty{self}, self.Args...)}
@@ -504,6 +512,24 @@ func (ic *InferCtxt) normalizeProjection(trait *Def, args []Ty, name string, dep
 			}
 		}
 	}
+	if self.Kind == TOpaque {
+		for _, st := range t.AllSupertraits(&TraitRef{Trait: trait, Args: args}) {
+			if b := ic.opaqueBound(self, st.Trait); b != nil {
+				for _, bd := range b.Bindings {
+					if bd.Name == name {
+						return bd.Ty
+					}
+				}
+			}
+		}
+		if b := ic.opaqueBound(self, trait); b != nil {
+			for _, bd := range b.Bindings {
+				if bd.Name == name {
+					return bd.Ty
+				}
+			}
+		}
+	}
 	tr := &TraitRef{Trait: trait, Args: args}
 	sel := ic.selectTrait(tr, depth+1)
 	switch sel.Kind {
@@ -603,4 +629,26 @@ func (t *Tcx) ResolveAssocFn(d *Def, args []Ty) (*Def, []Ty, bool) {
 		return d, args, false
 	}
 	return nil, nil, false
+}
+
+// opaqueBound finds the declared bound of an opaque type for a trait
+// (through supertraits), substituted with the opaque's args.
+func (ic *InferCtxt) opaqueBound(o Ty, trait *Def) *Predicate {
+	t := ic.t
+	t.FnSig(o.Def)
+	if o.Index >= len(o.Def.Fn.OpaqueBounds) {
+		return nil
+	}
+	for _, p := range o.Def.Fn.OpaqueBounds[o.Index] {
+		sp := p.Subst(o.Args)
+		for _, st := range t.AllSupertraits(sp.Trait) {
+			if st.Trait == trait {
+				if st == sp.Trait || len(sp.Bindings) == 0 {
+					return &Predicate{Trait: st, Bindings: sp.Bindings}
+				}
+				return &Predicate{Trait: st, Bindings: sp.Bindings}
+			}
+		}
+	}
+	return nil
 }
