@@ -196,10 +196,7 @@ func (ic *InferCtxt) unify(a, b Ty) bool {
 		return a.Index == b.Index && ic.unifyList(a.Args, b.Args)
 	case TDyn:
 		if a.Def != b.Def || len(a.Bindings) != len(b.Bindings) || a.Sub != b.Sub {
-			// allow auto-trait differences
-			if a.Def != b.Def || len(a.Bindings) != len(b.Bindings) {
-				return false
-			}
+			return false
 		}
 		if !ic.unifyList(a.Args, b.Args) {
 			return false

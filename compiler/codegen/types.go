@@ -237,6 +237,18 @@ func (g *Gen) defineByValue(t Ty) {
 }
 
 func (g *Gen) tagType(d *Def) string {
+	if it, ok := IntTyByName(d.Adt.Repr); ok {
+		return g.ctype(IntT(it))
+	}
+	for _, a := range d.Attrs {
+		if a.Path == "repr" && len(a.Tokens) > 0 && a.Tokens[0].Delim == '(' {
+			for _, tt := range a.Tokens[0].Inner {
+				if tt.Tok.Text == "C" {
+					return "int32_t"
+				}
+			}
+		}
+	}
 	return "int64_t"
 }
 

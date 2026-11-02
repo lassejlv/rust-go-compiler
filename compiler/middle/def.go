@@ -260,6 +260,9 @@ type GenericParamDef struct {
 	Owner   *Def
 	Ast     *ast.GenericParam
 	Synthetic bool // impl Trait in argument position
+	// MaybeUnsized: the param has a `?Sized` bound (otherwise it is
+	// implicitly Sized).
+	MaybeUnsized bool
 }
 
 // Predicate is a bound `Trait.Args[0]: Trait<Args[1:]>` optionally with

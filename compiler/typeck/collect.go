@@ -136,6 +136,9 @@ func (t *Tcx) Generics(d *Def) *Generics {
 			idx := t.paramIndex(g, p.Name.Name)
 			self := Param(idx, p.Name.Name)
 			for _, b := range p.Bounds {
+				if b.Maybe {
+					g.Params[idx].MaybeUnsized = true
+				}
 				if pr := ac.lowerBound(b, self); pr != nil {
 					g.Predicates = append(g.Predicates, pr)
 				}
@@ -147,6 +150,9 @@ func (t *Tcx) Generics(d *Def) *Generics {
 			}
 			self := ac.lowerTy(w.Ty)
 			for _, b := range w.Bounds {
+				if b.Maybe && self.Kind == TParam && self.Index < len(g.Params) {
+					g.Params[self.Index].MaybeUnsized = true
+				}
 				if pr := ac.lowerBound(b, self); pr != nil {
 					g.Predicates = append(g.Predicates, pr)
 				}

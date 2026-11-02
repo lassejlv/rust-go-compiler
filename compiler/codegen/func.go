@@ -422,36 +422,32 @@ func (fc *fnGen) letStmt(x *ast.LetStmt) {
 			return
 		}
 	}
-	// general pattern: evaluate into a place, then bind
-	var place string
-	if isPlaceExpr(x.Init) && fc.aty(x.Init) == pt {
-		op := fc.placeOp(x.Init)
-		place = op.s
-		if x.Else != nil {
-			fc.declarePatLocals(x.Pat)
-			test := fc.patTest(x.Pat, place, pt)
-			fc.line("if (!(%s)) {", test)
-			fc.ind++
-			fc.blockValue(x.Else, nil)
-			fc.ind--
-			fc.line("}")
-		}
-		moves := fc.bindPatPlace(x.Pat, place, pt, op)
-		_ = moves
-		return
+	// general pattern: evaluate into a place, then bind (pattern derefs are
+	// applied relative to the initializer's type)
+	it := fc.aty(x.Init)
+	var op operand
+	if isPlaceExpr(x.Init) {
+		op = fc.placeOp(x.Init)
+	} else {
+		v := fc.value(x.Init)
+		p, _ := fc.materializeNoDrop(v, it)
+		op = operand{s: p, place: true, ty: it}
 	}
-	v := fc.value(x.Init)
-	place, _ = fc.materializeNoDrop(v, pt)
 	fc.declarePatLocals(x.Pat)
 	if x.Else != nil {
-		test := fc.patTest(x.Pat, place, pt)
+		test := fc.patTest(x.Pat, op.s, it)
 		fc.line("if (!(%s)) {", test)
 		fc.ind++
 		fc.blockValue(x.Else, nil)
 		fc.ind--
 		fc.line("}")
 	}
-	fc.bindPat(x.Pat, place, pt, true)
+	if isPlaceExpr(x.Init) {
+		fc.bindPatPlace(x.Pat, op.s, it, op)
+	} else {
+		fc.bindPat(x.Pat, op.s, it, true)
+	}
+	_ = pt
 }
 
 // materializeNoDrop stores a value whose ownership is transferred into

@@ -972,7 +972,7 @@ func (fc *fnGen) callExpr(x *ast.CallExpr, t Ty) string {
 		fc.g.fatalf("%s: unresolved call", x.Span.Lo)
 	}
 	switch c.Kind {
-	case typeck.CallFn, typeck.CallCtor:
+	case typeck.CallFn, typeck.CallCtor, typeck.CallVirtual:
 		args := fc.argValues(x.Args)
 		return fc.finishCall(fc.callResolvedSpan(c.Def, c.Args, args, t, x.Span), t)
 	case typeck.CallFnPtr:

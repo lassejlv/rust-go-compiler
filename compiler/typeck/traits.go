@@ -271,6 +271,15 @@ func (ic *InferCtxt) matchImpl(impl *Def, tr *TraitRef, depth int) ([]Ty, bool, 
 	if !ic.unifyList(itr.Args, tr.Args) {
 		return nil, false, false
 	}
+	// implicit `Sized` bounds on the impl's type parameters
+	for i, gp := range g.Params {
+		if gp.Const || gp.MaybeUnsized || gp.Synthetic {
+			continue
+		}
+		if a := ic.shallow(args[i]); a.Kind != TInfer && a.IsUnsized() {
+			return nil, false, false
+		}
+	}
 	ambig := false
 	for _, p := range g.Predicates {
 		if p.Maybe {
