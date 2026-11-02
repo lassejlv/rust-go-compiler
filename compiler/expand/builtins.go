@@ -66,8 +66,20 @@ func init() {
 	}
 }
 
-// IsBuiltinMacro reports whether name is a builtin macro.
-func IsBuiltinMacro(name string) bool { _, ok := builtins[name]; return ok }
+// builtinAttrMacros are the builtin attribute macros of the std prelude
+// (`core::prelude::v1::derive`, ...), handled by the expander directly.
+var builtinAttrMacros = map[string]bool{
+	"derive": true, "test": true, "bench": true, "test_case": true, "cfg_attr": true,
+	"cfg_eval": true, "global_allocator": true, "alloc_error_handler": true,
+	"derive_const": true, "define_opaque": true,
+}
+
+// IsBuiltinMacro reports whether name is a builtin (bang or attribute)
+// macro; imports of these (`use core::prelude::v1::derive;`) are accepted.
+func IsBuiltinMacro(name string) bool {
+	_, ok := builtins[name]
+	return ok || builtinAttrMacros[name]
+}
 
 // ---------------------------------------------------------------------------
 // Argument helpers

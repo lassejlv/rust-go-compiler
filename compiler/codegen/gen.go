@@ -24,21 +24,21 @@ type instance struct {
 type Gen struct {
 	tcx *typeck.Tcx
 
-	fwd    strings.Builder // typedefs
-	defs   strings.Builder // struct definitions
-	protos strings.Builder // prototypes
-	vtdefs strings.Builder // vtable definitions
+	fwd     strings.Builder // typedefs
+	defs    strings.Builder // struct definitions
+	protos  strings.Builder // prototypes
+	vtdefs  strings.Builder // vtable definitions
 	statics strings.Builder
-	fns    strings.Builder // function bodies
+	fns     strings.Builder // function bodies
 
 	types        map[Ty]*typeInfo
 	typeN        int
 	pendingTypes []Ty
 
-	fnNames  map[string]string
-	fnQueue  []instance
-	fnN      int
-	closureFns map[Ty]string
+	fnNames      map[string]string
+	fnQueue      []instance
+	fnN          int
+	closureFns   map[Ty]string
 	closureQueue []Ty
 
 	dropFns        map[Ty]string
@@ -46,11 +46,11 @@ type Gen struct {
 	needsDropCache map[Ty]bool
 	dropImplCache  map[Ty]*instance
 
-	vtables map[string]string
+	vtables    map[string]string
 	nicheCache map[Ty]*nicheLayout
-	statics_ map[*Def]string
+	statics_   map[*Def]string
 	staticInit []string
-	strN int
+	strN       int
 
 	Errors []string
 }
@@ -84,7 +84,9 @@ func (g *Gen) fnName(d *Def, args []Ty) string {
 	g.fnN++
 	name := fmt.Sprintf("f%d_%s", g.fnN, cIdent(d.Name))
 	if d.Intrinsic == "" && d.Fn != nil && d.Fn.Extern {
-		name = "rgx_" + cIdent(d.Name) // foreign fn, declared with an asm label
+		// foreign fn, declared with an asm label; the C name is unique per
+		// declaration (two modules may declare the same symbol differently)
+		name = fmt.Sprintf("rgx%d_%s", g.fnN, cIdent(d.Name))
 	}
 	g.fnNames[key] = name
 	g.fnQueue = append(g.fnQueue, instance{def: d, args: args})
@@ -282,6 +284,12 @@ func (g *Gen) genForeignDecl(name string, d *Def, args []Ty) {
 	fmt.Fprintf(&g.protos, "extern %s %s(%s) __asm__(%q);\n", ret, name, joinParams(ps), sym)
 }
 
+// constCached reports whether a const item's value is computed once and
+// kept in static storage (it owns no resources, so every use may share it).
+func (g *Gen) constCached(d *Def, t Ty) bool {
+	return d.Kind == DefConst && !isZST(t) && !g.needsDrop(t)
+}
+
 // genCtorFn emits a constructor function for a tuple struct/variant.
 func (g *Gen) genCtorFn(name string, d *Def, args []Ty) {
 	ins, out := g.tcx.InstantiateFnSig(d, args)
@@ -335,8 +343,24 @@ func (g *Gen) genConstFn(name string, d *Def, args []Ty) {
 	fg.retTy = r.RetTy
 	sig := fmt.Sprintf("static %s %s(void)", g.ctype(r.RetTy), name)
 	fmt.Fprintf(&g.protos, "%s;\n", sig)
+	// a const's value is the same at every use: unless it owns resources
+	// (each use must then get a fresh value), compute it once
+	cache := g.constCached(d, r.RetTy)
+	if cache {
+		// file-scope cache, also reachable as a place via NAME_p()
+		g.defineByValue(r.RetTy)
+		fmt.Fprintf(&g.statics, "static %s %s_cache; static uint8_t %s_done;\n", g.ctype(r.RetTy), name, name)
+		fmt.Fprintf(&g.protos, "static %s* %s_p(void);\n", g.ctype(r.RetTy), name)
+		fmt.Fprintf(&g.fns, "static %s* %s_p(void) { (void)%s(); return &%s_cache; }\n", g.ctype(r.RetTy), name, name, name)
+		fg.line("if (__atomic_load_n(&%s_done, __ATOMIC_ACQUIRE)) return %s_cache;", name, name)
+	}
 	fg.pushScope()
 	v := fg.coerceValue(r.ConstExpr, r.RetTy)
+	if cache {
+		fg.line("%s_cache = %s;", name, v)
+		fg.line("__atomic_store_n(&%s_done, 1, __ATOMIC_RELEASE);", name)
+		v = name + "_cache"
+	}
 	fg.emitReturn(v)
 	fg.popScopeNoDrop()
 	fmt.Fprintf(&g.fns, "%s {\n%s}\n", sig, fg.b.String())
@@ -368,6 +392,9 @@ func (g *Gen) closureFn(t Ty) string {
 	g.closureFns[t] = name
 	g.closureQueue = append(g.closureQueue, t)
 	ci := g.tcx.Closures[t]
+	if ci == nil {
+		g.fatalf("internal error: no closure info for callee type %s", t)
+	}
 	var ps []string
 	ps = append(ps, g.ctype(t)+"* env")
 	for i, in := range ci.Inputs {

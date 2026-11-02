@@ -103,7 +103,7 @@ func (fc *fnGen) intrinsic(d *Def, args []Ty, v []string, ret Ty, sp ast.Span) s
 		}
 		return "0"
 	case "type_name":
-		s := arg(0).String()
+		s := rustcTypeName(arg(0))
 		return fmt.Sprintf("((Fat){ (void*)%s, %d })", cString(s), len(s))
 	case "alloc":
 		return fmt.Sprintf("rg_alloc(%s, %s)", v[0], v[1])

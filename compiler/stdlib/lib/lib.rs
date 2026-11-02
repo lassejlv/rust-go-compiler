@@ -44,6 +44,10 @@ pub mod net;
 pub mod process;
 pub mod env;
 pub mod any;
+pub mod arch;
+pub mod backtrace;
+#[doc(hidden)]
+mod bool;
 pub mod error;
 pub mod hint;
 pub mod rt;

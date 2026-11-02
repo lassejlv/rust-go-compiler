@@ -4,6 +4,7 @@ import (
 	"rustgo/compiler/ast"
 	"rustgo/compiler/lexer"
 	. "rustgo/compiler/middle"
+	"strconv"
 )
 
 // FnCtxt checks one body instance.
@@ -105,6 +106,17 @@ func (t *Tcx) newFnCtxt(def *Def, args []Ty) *FnCtxt {
 		}
 		fcx.ic.env = append(fcx.ic.env, tr)
 	}
+	// a trait's default method body has the implicit `Self: Trait<..>`
+	if def.InTrait() && def.Parent != nil && def.Parent.Kind == DefTrait {
+		n := len(t.Generics(def.Parent).Params)
+		if len(args) >= n {
+			tr := &TraitRef{Trait: def.Parent, Args: append([]Ty{}, args[:n]...)}
+			for i, a := range tr.Args {
+				tr.Args[i] = t.Normalize(a)
+			}
+			fcx.ic.env = append(fcx.ic.env, tr)
+		}
+	}
 	fcx.scopes = []map[string]*Local{{}}
 	return fcx
 }
@@ -126,16 +138,38 @@ func (fcx *FnCtxt) curClosure() ast.NodeID {
 	return fcx.closures[len(fcx.closures)-1].expr.ID
 }
 
-func (fcx *FnCtxt) newLocal(name string, ty Ty, mut bool, sp lexer.Span, node ast.NodeID) *Local {
+func (fcx *FnCtxt) newLocal(name string, hyg uint32, ty Ty, mut bool, sp lexer.Span, node ast.NodeID) *Local {
 	fcx.localCount++
 	l := &Local{ID: fcx.localCount, Name: name, Ty: ty, Mut: mut, Span: sp, Node: node, Owner: fcx.curClosure()}
-	fcx.scopes[len(fcx.scopes)-1][name] = l
+	fcx.bindLocal(name, hyg, l)
 	return l
 }
 
-func (fcx *FnCtxt) lookupLocal(name string) *Local {
+// bindLocal makes l visible in the current scope under (name, hygiene
+// mark). Bindings from macro bodies only match uses from the same
+// expansion; a name-only index serves as a lenient fallback.
+func (fcx *FnCtxt) bindLocal(name string, hyg uint32, l *Local) {
+	sc := fcx.scopes[len(fcx.scopes)-1]
+	sc[hygKey(name, hyg)] = l
+	sc["\x01"+name] = l
+}
+
+func hygKey(name string, hyg uint32) string {
+	if hyg == 0 {
+		return name
+	}
+	return name + "\x00" + strconv.FormatUint(uint64(hyg), 10)
+}
+
+func (fcx *FnCtxt) lookupLocal(name string, hyg uint32) *Local {
+	key := hygKey(name, hyg)
 	for i := len(fcx.scopes) - 1; i >= 0; i-- {
-		if l, ok := fcx.scopes[i][name]; ok {
+		if l, ok := fcx.scopes[i][key]; ok {
+			return l
+		}
+	}
+	for i := len(fcx.scopes) - 1; i >= 0; i-- {
+		if l, ok := fcx.scopes[i]["\x01"+name]; ok {
 			return l
 		}
 	}
@@ -613,7 +647,7 @@ func (fcx *FnCtxt) checkFn() {
 	fcx.r.Body = fn.Body
 	i := 0
 	if sp := fn.Decl.SelfParam; sp != nil {
-		l := fcx.newLocal("self", ins[0], sp.Mut, sp.Span, sp.ID)
+		l := fcx.newLocal("self", 0, ins[0], sp.Mut, sp.Span, sp.ID)
 		fcx.r.SelfLocal = l
 		fcx.r.Params = append(fcx.r.Params, l)
 		i = 1
@@ -622,7 +656,7 @@ func (fcx *FnCtxt) checkFn() {
 		pty := ins[i]
 		i++
 		if ip, ok := p.Pat.(*ast.IdentPat); ok && ip.Sub == nil && !ip.ByRef {
-			l := fcx.newLocal(ip.Name.Name, pty, ip.Mut, ip.Name.Span, ip.ID)
+			l := fcx.newLocal(ip.Name.Name, ip.Name.Hyg, pty, ip.Mut, ip.Name.Span, ip.ID)
 			fcx.r.Locals[ip.ID] = l
 			fcx.record(ip.ID, pty)
 			fcx.r.Params = append(fcx.r.Params, l)

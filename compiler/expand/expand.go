@@ -26,13 +26,22 @@ type Expander struct {
 	// ProcMacros are the procedural macros visible to the crate being
 	// expanded, by name.
 	ProcMacros map[string]*ProcMacro
+	// Externs maps the extern crate names of the crate being expanded to
+	// crate names as given to ExpandCrate (for path-qualified macro calls
+	// such as `dep::m!`); names not listed are taken as crate names.
+	Externs map[string]string
 
 	crate      string
 	crateOrder []string
 	macros     map[string]map[string]*macroDef // crate -> name -> def
 	modPath    []string
-	site       *lexer.Span // outermost user-macro call site, for line!/file!/panic locations
-	assoc      bool        // expanding trait/impl items (item macros parse as associated items)
+	// loadMod/modDir load out-of-line modules produced by macro expansion
+	// (see ast.Crate.LoadMod); modDir is where the current module's
+	// children live.
+	loadMod func(it *ast.Item, dir string) (string, error)
+	modDir  string
+	site    *lexer.Span // outermost user-macro call site, for line!/file!/panic locations
+	assoc   bool        // expanding trait/impl items (item macros parse as associated items)
 	// aliases maps names introduced by renaming imports (`use m as n;`) to
 	// the imported name, per crate; consulted for macro names only.
 	aliases map[string]map[string]string
@@ -58,6 +67,7 @@ func (e *Expander) ExpandCrate(c *ast.Crate, crateName string) error {
 	}
 	e.modPath = []string{crateName}
 	e.site = nil
+	e.loadMod, e.modDir = c.LoadMod, c.Dir
 	// Pre-pass: collect all macro_rules! definitions so that definition order
 	// does not matter.
 	e.collectItems(c.Items)
@@ -74,12 +84,14 @@ func (e *Expander) ExpandCrate(c *ast.Crate, crateName string) error {
 
 func (e *Expander) collectItems(items []*ast.Item) {
 	for _, it := range items {
-		if keep, _, err := e.processAttrs(it.Attrs); err != nil || !keep {
+		keep, attrs, err := e.processAttrs(it.Attrs)
+		if err != nil || !keep {
 			continue
 		}
 		switch k := it.Kind.(type) {
 		case *ast.MacroRulesItem:
 			if def, err := parseMacroRules(it.Name.Name, k.Body, e.crate, it.Span); err == nil {
+				def.exported = hasAttr(attrs, "macro_export")
 				e.defineMacro(def)
 			}
 		case *ast.UseItem:
@@ -216,6 +228,7 @@ func (e *Expander) expandItemInList(it *ast.Item, depth int) ([]*ast.Item, error
 		if err != nil {
 			return nil, err
 		}
+		def.exported = hasAttr(it.Attrs, "macro_export")
 		e.defineMacro(def)
 		return nil, nil
 	case *ast.MacCallItem:
@@ -349,9 +362,33 @@ func (e *Expander) expandItem(it *ast.Item, depth int) error {
 		k.Expr, err = e.expandExpr(k.Expr, depth)
 		return err
 	case *ast.ModItem:
+		savedDir := e.modDir
+		if e.loadMod != nil {
+			// `mod m;` produced by a macro has not been loaded yet.
+			loaded := k.Inline || k.Loaded
+			if e.modDir, err = e.loadMod(it, e.modDir); err != nil {
+				return err
+			}
+			if !k.Inline && !k.Loaded {
+				return errAt(it.Span, "file not found for module `%s`", it.Name.Name)
+			}
+			if !loaded {
+				// the file's inner attributes (`#![cfg(..)]`)
+				keep, attrs, err := e.processAttrs(it.Attrs)
+				if err != nil {
+					return err
+				}
+				it.Attrs = attrs
+				if !keep {
+					k.Items = nil
+				}
+				e.collectItems(k.Items)
+			}
+		}
 		e.modPath = append(e.modPath, it.Name.Name)
 		k.Items, err = e.expandItems(k.Items, depth)
 		e.modPath = e.modPath[:len(e.modPath)-1]
+		e.modDir = savedDir
 		return err
 	case *ast.ExternBlockItem:
 		k.Items, err = e.expandItems(k.Items, depth)
@@ -774,6 +811,14 @@ func (e *Expander) expandStmts(stmts []ast.Stmt, depth int) ([]ast.Stmt, error) 
 			out = append(out, s)
 		}
 	}
+	// `#[cfg(a)] { x } #[cfg(b)] { y }`: when the statements after a
+	// block-like expression were all removed, it is the block's tail
+	if len(out) > 0 && len(out) < len(stmts) {
+		if es, ok := out[len(out)-1].(*ast.ExprStmt); ok && es.ImplicitSemi && out[len(out)-1] != stmts[len(stmts)-1] {
+			es.Semi = false
+			es.ImplicitSemi = false
+		}
+	}
 	return out, nil
 }
 
@@ -999,11 +1044,22 @@ func (e *Expander) expandExpr(x ast.Expr, depth int) (ast.Expr, error) {
 		if err = e.expandPath(x.Path, depth); err != nil {
 			return nil, err
 		}
+		fields := x.Fields[:0]
 		for _, f := range x.Fields {
+			keep, attrs, err := e.processAttrs(f.Attrs)
+			if err != nil {
+				return nil, err
+			}
+			if !keep {
+				continue
+			}
+			f.Attrs = attrs
 			if f.Expr, err = e.expandExpr(f.Expr, depth); err != nil {
 				return nil, err
 			}
+			fields = append(fields, f)
 		}
+		x.Fields = fields
 		x.Base, err = e.expandExpr(x.Base, depth)
 	case *ast.RangeExpr:
 		if x.Start, err = e.expandExpr(x.Start, depth); err != nil {

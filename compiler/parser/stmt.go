@@ -109,7 +109,8 @@ func (p *Parser) parseStmt() ast.Stmt {
 			if p.eat(";") {
 				return &ast.ExprStmt{Expr: e, Semi: true}
 			}
-			return &ast.ExprStmt{Expr: e, Semi: !p.atBlockEnd()}
+			end := p.atBlockEnd()
+			return &ast.ExprStmt{Expr: e, Semi: !end, ImplicitSemi: !end}
 		}
 		return p.finishExprStmt(e)
 	}

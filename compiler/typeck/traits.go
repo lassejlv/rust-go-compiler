@@ -135,6 +135,29 @@ func (ic *InferCtxt) selectTrait(tr *TraitRef, depth int) Selection {
 		return Selection{Kind: SelBuiltin}
 	}
 	if self.Kind == TInfer && self.Sub == 0 {
+		// a not-yet-revealed `impl Trait` return value (its type is a
+		// variable pending reveal): its declared bounds still hold and
+		// drive inference of the opaque's generic args
+		for _, o := range ic.obligations {
+			if o.Done || o.Proj == nil || o.Proj.Kind != TOpaque || ic.shallow(o.Var) != self {
+				continue
+			}
+			op := Opaque(o.Proj.Def, ic.resolveList(o.Proj.Args), o.Proj.Index)
+			if b := ic.opaqueBound(op, trait); b != nil {
+				bargs := append([]Ty{}, b.Trait.Args...)
+				bargs[0] = self
+				if ic.unifyList(bargs, tr.Args) {
+					return Selection{Kind: SelObject}
+				}
+			}
+			// impls applying through its bounds (e.g. a blanket
+			// `impl<F: FnMut(I) -> R> Parser<I> for F`)
+			args := append([]Ty{op}, tr.Args[1:]...)
+			if sel := ic.selectTrait(&TraitRef{Trait: trait, Args: args}, depth+1); sel.Kind == SelImpl || sel.Kind == SelObject || sel.Kind == SelBuiltin {
+				return Selection{Kind: SelObject}
+			}
+			break
+		}
 		return Selection{Kind: SelAmbig}
 	}
 	// Unrevealed opaque types (recursion) implement their declared bounds.
@@ -191,6 +214,10 @@ func (ic *InferCtxt) selectTrait(tr *TraitRef, depth int) Selection {
 		if self.Kind == TInfer {
 			if ic.useEnv(tr) {
 				return ic.selectTrait(tr, depth+1)
+			}
+			if self.Sub != 0 {
+				// `{integer}`/`{float}`: no numeric type implements it
+				return Selection{Kind: SelNone}
 			}
 			return Selection{Kind: SelAmbig}
 		}

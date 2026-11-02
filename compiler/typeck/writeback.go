@@ -58,6 +58,18 @@ func (fcx *FnCtxt) finCallee(c *Callee) {
 	}
 	c.Args = fcx.finList(c.Args)
 	c.Ty = fcx.fin(c.Ty)
+	if c.Kind == CallClosure && c.Ty != nil {
+		// a call through a then-unrevealed opaque: use the hidden type
+		for i := 0; i < 8 && c.Ty.Kind == TOpaque; i++ {
+			c.Ty = fcx.t.RevealOpaque(c.Ty)
+		}
+		switch c.Ty.Kind {
+		case TFnPtr:
+			c.Kind = CallFnPtr
+		case TFnDef:
+			c.Kind, c.Def, c.Args = CallFn, c.Ty.Def, c.Ty.Args
+		}
+	}
 	if c.Kind == CallFn && c.Def != nil && c.Def.InTrait() && len(c.Args) > 0 && c.Args[0].Kind == TDyn && fcx.t.IsObjectMethod(c.Def, c.Args[0]) {
 		c.Kind = CallVirtual
 	}

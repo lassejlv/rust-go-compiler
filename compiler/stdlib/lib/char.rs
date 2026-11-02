@@ -1057,6 +1057,13 @@ impl char {
         from_u32_unchecked(i)
     }
 
+    /// Creates an iterator over the UTF-16 encoded code points in `iter`,
+    /// returning unpaired surrogates as `Err`s.
+    #[inline]
+    pub fn decode_utf16<I: crate::iter::IntoIterator<Item = u16>>(iter: I) -> DecodeUtf16<I::IntoIter> {
+        decode_utf16(iter)
+    }
+
     /// Converts a digit in the given radix to a `char`.
     #[inline]
     pub fn from_digit(num: u32, radix: u32) -> Option<char> {
@@ -1775,6 +1782,8 @@ impl DecodeUtf16Error {
         self.code
     }
 }
+
+impl crate::error::Error for DecodeUtf16Error {}
 
 impl fmt::Display for DecodeUtf16Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

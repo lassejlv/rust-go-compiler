@@ -257,12 +257,12 @@ func (p *Parser) parseStructPat(lo lexer.Pos, qs *ast.QSelf, path *ast.Path) ast
 			fp.Shorthand = true
 		case t.Kind == lexer.Int:
 			p.next()
-			fp.Name = ast.Ident{Name: t.Text, Span: t.Span}
+			fp.Name = ast.Ident{Name: t.Text, Span: t.Span, Hyg: t.Hyg}
 			p.expect(":")
 			fp.Pat = p.parsePat()
 		case t.Kind == lexer.Ident:
 			p.next()
-			fp.Name = ast.Ident{Name: t.Text, Span: t.Span}
+			fp.Name = ast.Ident{Name: t.Text, Span: t.Span, Hyg: t.Hyg}
 			if p.eat(":") {
 				fp.Pat = p.parsePat()
 			} else {

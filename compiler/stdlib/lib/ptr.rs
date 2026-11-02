@@ -38,7 +38,10 @@ pub unsafe fn read<T>(src: *const T) -> T {
 /// Reads the value from `src` without moving it (no alignment requirement).
 #[inline]
 pub unsafe fn read_unaligned<T>(src: *const T) -> T {
-    intrinsics::read(src)
+    // Byte copy: the C backend must not assume `src` is aligned.
+    let mut tmp: T = intrinsics::uninit();
+    intrinsics::copy_nonoverlapping(src as *const u8, &mut tmp as *mut T as *mut u8, crate::mem::size_of::<T>());
+    tmp
 }
 
 /// Overwrites a memory location with the given value without reading or dropping the old value.
@@ -50,7 +53,8 @@ pub unsafe fn write<T>(dst: *mut T, src: T) {
 /// Overwrites a memory location (no alignment requirement).
 #[inline]
 pub unsafe fn write_unaligned<T>(dst: *mut T, src: T) {
-    intrinsics::write(dst, src)
+    intrinsics::copy_nonoverlapping(&src as *const T as *const u8, dst as *mut u8, crate::mem::size_of::<T>());
+    intrinsics::forget(src);
 }
 
 /// Copies `count * size_of::<T>()` bytes from `src` to `dst`. The regions may overlap.
@@ -101,6 +105,85 @@ pub unsafe fn replace<T>(dst: *mut T, src: T) -> T {
     let old = intrinsics::read(dst as *const T);
     intrinsics::write(dst, src);
     old
+}
+
+#[inline]
+fn align_offset_impl(addr: usize, size: usize, align: usize) -> usize {
+    if !align.is_power_of_two() {
+        crate::rt::panic_str("align_offset: align is not a power-of-two", file!(), line!(), column!());
+    }
+    let rem = addr & (align - 1);
+    if rem == 0 {
+        return 0;
+    }
+    if size == 0 {
+        return usize::MAX;
+    }
+    // Smallest k with (addr + k * size) % align == 0.
+    let mut k = 0usize;
+    let mut a = addr;
+    while k < align {
+        if a & (align - 1) == 0 {
+            return k;
+        }
+        a = a.wrapping_add(size);
+        k += 1;
+    }
+    usize::MAX
+}
+
+/// Creates a pointer with the given address and no provenance.
+#[inline]
+pub const fn without_provenance<T>(addr: usize) -> *const T {
+    addr as *const T
+}
+
+/// Creates a mutable pointer with the given address and no provenance.
+#[inline]
+pub const fn without_provenance_mut<T>(addr: usize) -> *mut T {
+    addr as *mut T
+}
+
+/// Converts an address back to a pointer, picking up some previously "exposed" provenance.
+#[inline]
+pub fn with_exposed_provenance<T>(addr: usize) -> *const T {
+    addr as *const T
+}
+
+/// Converts an address back to a mutable pointer, picking up some previously "exposed" provenance.
+#[inline]
+pub fn with_exposed_provenance_mut<T>(addr: usize) -> *mut T {
+    addr as *mut T
+}
+
+/// Converts a reference to a raw pointer.
+#[inline]
+pub const fn from_ref<T: ?Sized>(r: &T) -> *const T {
+    r
+}
+
+/// Converts a mutable reference to a raw pointer.
+#[inline]
+pub fn from_mut<T: ?Sized>(r: &mut T) -> *mut T {
+    r
+}
+
+/// Performs a volatile read of the value from `src` without moving it.
+#[inline]
+pub unsafe fn read_volatile<T>(src: *const T) -> T {
+    intrinsics::read(src)
+}
+
+/// Performs a volatile write of a memory location with the given value without reading or dropping the old value.
+#[inline]
+pub unsafe fn write_volatile<T>(dst: *mut T, src: T) {
+    intrinsics::write(dst, src)
+}
+
+/// Compares the addresses of the two function pointers for equality.
+#[inline]
+pub fn fn_addr_eq<T: Copy, U: Copy>(f: T, g: U) -> bool {
+    unsafe { intrinsics::transmute::<T, usize>(f) == intrinsics::transmute::<U, usize>(g) }
 }
 
 /// Compares raw pointers for equality (address and metadata).
@@ -193,13 +276,125 @@ impl<T> *const T {
     /// Adds an unsigned offset to a pointer using wrapping arithmetic.
     #[inline]
     pub fn wrapping_add(self, count: usize) -> *const T {
-        unsafe { intrinsics::ptr_add(self, count) }
+        // Integer arithmetic: the C backend must not see out-of-object pointer arithmetic.
+        (self as usize).wrapping_add(count.wrapping_mul(crate::mem::size_of::<T>())) as *const T
+    }
+
+    /// Adds a signed offset to a pointer using wrapping arithmetic.
+    #[inline]
+    pub fn wrapping_offset(self, count: isize) -> *const T {
+        (self as usize).wrapping_add((count as usize).wrapping_mul(crate::mem::size_of::<T>())) as *const T
+    }
+
+    /// Adds a signed offset in bytes using wrapping arithmetic.
+    #[inline]
+    pub fn wrapping_byte_offset(self, count: isize) -> *const T {
+        (self as usize).wrapping_add(count as usize) as *const T
+    }
+
+    /// Adds an unsigned offset in bytes using wrapping arithmetic.
+    #[inline]
+    pub fn wrapping_byte_add(self, count: usize) -> *const T {
+        (self as usize).wrapping_add(count) as *const T
+    }
+
+    /// Subtracts an unsigned offset in bytes using wrapping arithmetic.
+    #[inline]
+    pub fn wrapping_byte_sub(self, count: usize) -> *const T {
+        (self as usize).wrapping_sub(count) as *const T
+    }
+
+    /// Adds an unsigned offset in bytes to a pointer.
+    #[inline]
+    pub unsafe fn byte_add(self, count: usize) -> *const T {
+        (self as *const u8).add(count) as *const T
+    }
+
+    /// Subtracts an unsigned offset in bytes from a pointer.
+    #[inline]
+    pub unsafe fn byte_sub(self, count: usize) -> *const T {
+        (self as *const u8).sub(count) as *const T
+    }
+
+    /// Adds a signed offset in bytes to a pointer.
+    #[inline]
+    pub unsafe fn byte_offset(self, count: isize) -> *const T {
+        (self as *const u8).offset(count) as *const T
+    }
+
+    /// Calculates the distance between two pointers in bytes.
+    #[inline]
+    pub unsafe fn byte_offset_from<U>(self, origin: *const U) -> isize {
+        (self as usize as isize).wrapping_sub(origin as usize as isize)
+    }
+
+    /// Calculates the distance between two pointers, where it's known that `self >= origin`.
+    #[inline]
+    pub unsafe fn offset_from_unsigned(self, origin: *const T) -> usize {
+        intrinsics::ptr_diff(self as *const T, origin) as usize
+    }
+
+    /// Calculates the distance between two pointers, where it's known that `self >= origin`.
+    #[inline]
+    pub unsafe fn sub_ptr(self, origin: *const T) -> usize {
+        intrinsics::ptr_diff(self as *const T, origin) as usize
+    }
+
+    /// Creates a new pointer with the given address.
+    #[inline]
+    pub fn with_addr(self, addr: usize) -> *const T {
+        addr as *const T
+    }
+
+    /// Creates a new pointer by mapping `self`'s address to a new one.
+    #[inline]
+    pub fn map_addr(self, f: impl FnOnce(usize) -> usize) -> *const T {
+        f(self as usize) as *const T
+    }
+
+    /// Exposes the "provenance" part of the pointer and returns the "address" portion.
+    #[inline]
+    pub fn expose_provenance(self) -> usize {
+        self as usize
+    }
+
+    /// Returns whether the pointer is properly aligned for `T`.
+    #[inline]
+    pub fn is_aligned(self) -> bool {
+        (self as usize) & (crate::mem::align_of::<T>() - 1) == 0
+    }
+
+    /// Returns whether the pointer is aligned to `align`.
+    #[inline]
+    pub fn is_aligned_to(self, align: usize) -> bool {
+        if !align.is_power_of_two() {
+            crate::rt::panic_str("is_aligned_to: align is not a power-of-two", file!(), line!(), column!());
+        }
+        (self as usize) & (align - 1) == 0
+    }
+
+    /// Computes the offset that needs to be applied to the pointer in order to make it aligned to `align`.
+    #[inline]
+    pub fn align_offset(self, align: usize) -> usize {
+        align_offset_impl(self as usize, crate::mem::size_of::<T>(), align)
+    }
+
+    /// Performs a volatile read of the value from `self` without moving it.
+    #[inline]
+    pub unsafe fn read_volatile(self) -> T {
+        intrinsics::read(self as *const T)
+    }
+
+    /// Casts a pointer to an array to a pointer to a slice of the same length.
+    #[inline]
+    pub fn cast_array<const N: usize>(self) -> *const [T; N] {
+        self as *const [T; N]
     }
 
     /// Subtracts an unsigned offset from a pointer using wrapping arithmetic.
     #[inline]
     pub fn wrapping_sub(self, count: usize) -> *const T {
-        unsafe { intrinsics::ptr_offset(self, 0isize - (count as isize)) }
+        (self as usize).wrapping_sub(count.wrapping_mul(crate::mem::size_of::<T>())) as *const T
     }
 
     /// Calculates the distance between two pointers, in units of `T`.
@@ -217,7 +412,7 @@ impl<T> *const T {
     /// Reads the value from `self` without moving it (no alignment requirement).
     #[inline]
     pub unsafe fn read_unaligned(self) -> T {
-        intrinsics::read(self)
+        read_unaligned(self as *const T)
     }
 
     /// Copies `count * size_of::<T>()` bytes from `self` to `dest`. The regions may overlap.
@@ -307,13 +502,125 @@ impl<T> *mut T {
     /// Adds an unsigned offset to a pointer using wrapping arithmetic.
     #[inline]
     pub fn wrapping_add(self, count: usize) -> *mut T {
-        unsafe { intrinsics::ptr_add_mut(self, count) }
+        // Integer arithmetic: the C backend must not see out-of-object pointer arithmetic.
+        (self as usize).wrapping_add(count.wrapping_mul(crate::mem::size_of::<T>())) as *mut T
+    }
+
+    /// Adds a signed offset to a pointer using wrapping arithmetic.
+    #[inline]
+    pub fn wrapping_offset(self, count: isize) -> *mut T {
+        (self as usize).wrapping_add((count as usize).wrapping_mul(crate::mem::size_of::<T>())) as *mut T
+    }
+
+    /// Adds a signed offset in bytes using wrapping arithmetic.
+    #[inline]
+    pub fn wrapping_byte_offset(self, count: isize) -> *mut T {
+        (self as usize).wrapping_add(count as usize) as *mut T
+    }
+
+    /// Adds an unsigned offset in bytes using wrapping arithmetic.
+    #[inline]
+    pub fn wrapping_byte_add(self, count: usize) -> *mut T {
+        (self as usize).wrapping_add(count) as *mut T
+    }
+
+    /// Subtracts an unsigned offset in bytes using wrapping arithmetic.
+    #[inline]
+    pub fn wrapping_byte_sub(self, count: usize) -> *mut T {
+        (self as usize).wrapping_sub(count) as *mut T
+    }
+
+    /// Adds an unsigned offset in bytes to a pointer.
+    #[inline]
+    pub unsafe fn byte_add(self, count: usize) -> *mut T {
+        (self as *mut u8).add(count) as *mut T
+    }
+
+    /// Subtracts an unsigned offset in bytes from a pointer.
+    #[inline]
+    pub unsafe fn byte_sub(self, count: usize) -> *mut T {
+        (self as *mut u8).sub(count) as *mut T
+    }
+
+    /// Adds a signed offset in bytes to a pointer.
+    #[inline]
+    pub unsafe fn byte_offset(self, count: isize) -> *mut T {
+        (self as *mut u8).offset(count) as *mut T
+    }
+
+    /// Calculates the distance between two pointers in bytes.
+    #[inline]
+    pub unsafe fn byte_offset_from<U>(self, origin: *const U) -> isize {
+        (self as usize as isize).wrapping_sub(origin as usize as isize)
+    }
+
+    /// Calculates the distance between two pointers, where it's known that `self >= origin`.
+    #[inline]
+    pub unsafe fn offset_from_unsigned(self, origin: *const T) -> usize {
+        intrinsics::ptr_diff(self as *const T, origin) as usize
+    }
+
+    /// Calculates the distance between two pointers, where it's known that `self >= origin`.
+    #[inline]
+    pub unsafe fn sub_ptr(self, origin: *const T) -> usize {
+        intrinsics::ptr_diff(self as *const T, origin) as usize
+    }
+
+    /// Creates a new pointer with the given address.
+    #[inline]
+    pub fn with_addr(self, addr: usize) -> *mut T {
+        addr as *mut T
+    }
+
+    /// Creates a new pointer by mapping `self`'s address to a new one.
+    #[inline]
+    pub fn map_addr(self, f: impl FnOnce(usize) -> usize) -> *mut T {
+        f(self as usize) as *mut T
+    }
+
+    /// Exposes the "provenance" part of the pointer and returns the "address" portion.
+    #[inline]
+    pub fn expose_provenance(self) -> usize {
+        self as usize
+    }
+
+    /// Returns whether the pointer is properly aligned for `T`.
+    #[inline]
+    pub fn is_aligned(self) -> bool {
+        (self as usize) & (crate::mem::align_of::<T>() - 1) == 0
+    }
+
+    /// Returns whether the pointer is aligned to `align`.
+    #[inline]
+    pub fn is_aligned_to(self, align: usize) -> bool {
+        if !align.is_power_of_two() {
+            crate::rt::panic_str("is_aligned_to: align is not a power-of-two", file!(), line!(), column!());
+        }
+        (self as usize) & (align - 1) == 0
+    }
+
+    /// Computes the offset that needs to be applied to the pointer in order to make it aligned to `align`.
+    #[inline]
+    pub fn align_offset(self, align: usize) -> usize {
+        align_offset_impl(self as usize, crate::mem::size_of::<T>(), align)
+    }
+
+    /// Performs a volatile read of the value from `self` without moving it.
+    #[inline]
+    pub unsafe fn read_volatile(self) -> T {
+        intrinsics::read(self as *const T)
+    }
+
+    /// Casts a pointer to an array to a pointer to a slice of the same length.
+    #[inline]
+    pub fn cast_array<const N: usize>(self) -> *mut [T; N] {
+        self as *mut [T; N]
     }
 
     /// Subtracts an unsigned offset from a pointer using wrapping arithmetic.
     #[inline]
     pub fn wrapping_sub(self, count: usize) -> *mut T {
-        unsafe { intrinsics::ptr_offset_mut(self, 0isize - (count as isize)) }
+        (self as usize).wrapping_sub(count.wrapping_mul(crate::mem::size_of::<T>())) as *mut T
     }
 
     /// Calculates the distance between two pointers, in units of `T`.
@@ -332,6 +639,25 @@ impl<T> *mut T {
     #[inline]
     pub unsafe fn write(self, val: T) {
         intrinsics::write(self, val)
+    }
+
+    /// Overwrites a memory location with the given value without reading or dropping the old value
+    /// (no alignment requirement).
+    #[inline]
+    pub unsafe fn write_unaligned(self, val: T) {
+        write_unaligned(self, val)
+    }
+
+    /// Reads the value from `self` without moving it (no alignment requirement).
+    #[inline]
+    pub unsafe fn read_unaligned(self) -> T {
+        read_unaligned(self as *const T)
+    }
+
+    /// Performs a volatile write of a memory location with the given value.
+    #[inline]
+    pub unsafe fn write_volatile(self, val: T) {
+        write_volatile(self, val)
     }
 
     /// Replaces the value at `self` with `src`, returning the old value.

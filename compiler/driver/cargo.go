@@ -400,6 +400,7 @@ func (bs *buildState) compileProgram(units []*crateUnit, binIdx int) (string, er
 			addMainWrapper(c)
 		}
 		exp.Config = &expand.CrateConfig{Features: u.features, Cfgs: u.cfgs, Env: cargoEnv(u)}
+		exp.Externs = u.deps
 		exp.ProcMacros = map[string]*expand.ProcMacro{}
 		for _, k := range u.deps {
 			for n, m := range bs.pmMacros[k] {
@@ -410,6 +411,7 @@ func (bs *buildState) compileProgram(units []*crateUnit, binIdx int) (string, er
 			return "", fmt.Errorf("crate %s: %v", u.name, err)
 		}
 		exp.Config = nil
+		exp.Externs = nil
 		exp.ProcMacros = nil
 		cr := r.AddCrate(u.key, c)
 		cr.Edition = u.edition

@@ -50,18 +50,18 @@ func FileName(idx int) string {
 type Kind int
 
 const (
-	EOF Kind = iota
-	Ident          // identifiers and keywords (check Text); raw idents have Raw=true
-	Lifetime       // 'a  (Text includes the leading quote)
-	Int            // integer literal (Text = digits without suffix, Suffix separate)
-	Float          // float literal
-	Str            // "..." (Text = decoded value)
-	ByteStr        // b"..."
-	CStr           // c"..."
-	Char           // 'x'  (Text = decoded value)
-	Byte           // b'x'
-	Punct          // operators and delimiters (Text = the operator)
-	DocComment     // /// or //! (Text = content), kept for attrs; parser may skip
+	EOF        Kind = iota
+	Ident           // identifiers and keywords (check Text); raw idents have Raw=true
+	Lifetime        // 'a  (Text includes the leading quote)
+	Int             // integer literal (Text = digits without suffix, Suffix separate)
+	Float           // float literal
+	Str             // "..." (Text = decoded value)
+	ByteStr         // b"..."
+	CStr            // c"..."
+	Char            // 'x'  (Text = decoded value)
+	Byte            // b'x'
+	Punct           // operators and delimiters (Text = the operator)
+	DocComment      // /// or //! (Text = content), kept for attrs; parser may skip
 )
 
 var kindNames = [...]string{"EOF", "Ident", "Lifetime", "Int", "Float", "Str", "ByteStr", "CStr", "Char", "Byte", "Punct", "DocComment"}
@@ -79,6 +79,9 @@ type Token struct {
 	// JointNext is true when the next token immediately follows this one with
 	// no whitespace (used for splitting/merging punctuation in macros).
 	JointNext bool
+	// Hyg is the macro_rules hygiene mark of an identifier introduced by a
+	// macro body (0 for source text and macro arguments).
+	Hyg uint32
 }
 
 func (t Token) String() string {

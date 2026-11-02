@@ -75,3 +75,54 @@ pub fn panic_any<M: 'static + Any + Send>(msg: M) -> ! {
     crate::panicking::set_custom_payload(payload);
     unsafe { intrinsics::panic_impl(text.as_str(), file!(), line!(), column!()) }
 }
+
+/// A struct containing information about the location of a panic.
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Location<'a> {
+    file: &'a str,
+    line: u32,
+    col: u32,
+}
+
+impl<'a> Location<'a> {
+    /// Returns the source location of the caller of this function.
+    ///
+    /// NOTE: rustgo does not implement `#[track_caller]` propagation yet, so
+    /// this reports an unknown location.
+    #[track_caller]
+    #[inline]
+    pub const fn caller() -> &'static Location<'static> {
+        &UNKNOWN_LOCATION
+    }
+
+    /// Returns the name of the source file.
+    #[inline]
+    pub const fn file(&self) -> &'a str {
+        self.file
+    }
+
+    /// Returns the line number.
+    #[inline]
+    pub const fn line(&self) -> u32 {
+        self.line
+    }
+
+    /// Returns the column.
+    #[inline]
+    pub const fn column(&self) -> u32 {
+        self.col
+    }
+
+    #[doc(hidden)]
+    pub const fn internal_constructor(file: &'a str, line: u32, col: u32) -> Self {
+        Location { file, line, col }
+    }
+}
+
+static UNKNOWN_LOCATION: Location<'static> = Location { file: "<unknown>", line: 0, col: 0 };
+
+impl fmt::Display for Location<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}:{}:{}", self.file, self.line, self.col)
+    }
+}

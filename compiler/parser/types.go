@@ -39,7 +39,7 @@ func (p *Parser) parsePathSegIdent() ast.Ident {
 		p.errExpected("identifier")
 	}
 	p.next()
-	return ast.Ident{Name: t.Text, Span: t.Span}
+	return ast.Ident{Name: t.Text, Span: t.Span, Hyg: t.Hyg}
 }
 
 // parsePath parses a path in the given style.
@@ -535,7 +535,7 @@ func (p *Parser) parseGenericParams() *ast.Generics {
 		case t.Kind == lexer.Lifetime:
 			p.next()
 			gp.Kind = ast.GPLifetime
-			gp.Name = ast.Ident{Name: t.Text, Span: t.Span}
+			gp.Name = ast.Ident{Name: t.Text, Span: t.Span, Hyg: t.Hyg}
 			if p.eat(":") {
 				for p.cur().Kind == lexer.Lifetime {
 					lt := p.next()

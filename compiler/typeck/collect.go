@@ -123,6 +123,7 @@ func (t *Tcx) Generics(d *Def) *Generics {
 			}
 		}
 	}
+	var deferred []deferredPred
 	if ag != nil {
 		for _, p := range ag.Params {
 			if p.Kind == ast.GPConst {
@@ -139,6 +140,15 @@ func (t *Tcx) Generics(d *Def) *Generics {
 				if b.Maybe {
 					g.Params[idx].MaybeUnsized = true
 				}
+				if mentionsParamAssoc(b, g) {
+					b, self := b, self
+					deferred = append(deferred, deferredPred{needs: paramAssocRefs(b, g), lower: func() {
+						if pr := ac.lowerBound(b, self); pr != nil {
+							g.Predicates = append(g.Predicates, pr)
+						}
+					}})
+					continue
+				}
 				if pr := ac.lowerBound(b, self); pr != nil {
 					g.Predicates = append(g.Predicates, pr)
 				}
@@ -148,15 +158,60 @@ func (t *Tcx) Generics(d *Def) *Generics {
 			if w.Ty == nil {
 				continue
 			}
-			self := ac.lowerTy(w.Ty)
-			for _, b := range w.Bounds {
-				if b.Maybe && self.Kind == TParam && self.Index < len(g.Params) {
-					g.Params[self.Index].MaybeUnsized = true
-				}
-				if pr := ac.lowerBound(b, self); pr != nil {
-					g.Predicates = append(g.Predicates, pr)
+			w := w
+			lower := func() {
+				self := ac.lowerTy(w.Ty)
+				for _, b := range w.Bounds {
+					if b.Maybe && self.Kind == TParam && self.Index < len(g.Params) {
+						g.Params[self.Index].MaybeUnsized = true
+					}
+					if pr := ac.lowerBound(b, self); pr != nil {
+						g.Predicates = append(g.Predicates, pr)
+					}
 				}
 			}
+			// bounds naming another param's associated type (`T::Item`)
+			// are lowered after the plain bounds that make it resolvable
+			if mentionsParamAssoc(w, g) {
+				deferred = append(deferred, deferredPred{needs: paramAssocRefs(w, g), lower: lower})
+				continue
+			}
+			lower()
+		}
+	}
+	// lower deferred bounds once the params whose assoc types they name
+	// have bounds of their own (dependency order); then the rest
+	hasBound := func(idx int) bool {
+		for _, p := range g.Predicates {
+			if a := p.Trait.Args[0]; a.Kind == TParam && a.Index == idx {
+				return true
+			}
+		}
+		return false
+	}
+	for len(deferred) > 0 {
+		progress := false
+		rest := deferred[:0]
+		for _, d := range deferred {
+			ready := true
+			for _, idx := range d.needs {
+				if !hasBound(idx) {
+					ready = false
+				}
+			}
+			if ready {
+				d.lower()
+				progress = true
+			} else {
+				rest = append(rest, d)
+			}
+		}
+		deferred = rest
+		if !progress {
+			for _, d := range deferred {
+				d.lower()
+			}
+			break
 		}
 	}
 	if d.Kind == DefFn {
@@ -729,7 +784,12 @@ func (ac *astConv) genericArgsFor(d *Def, seg *ast.PathSegment, prefix []Ty, sp 
 				}
 			} else {
 				if a.Type != nil {
+					// nested types are ordinary type positions: their own
+					// omitted params take defaults (`collect::<HashMap<K, V>>`)
+					saved := ac.exprCtx
+					ac.exprCtx = false
 					args = append(args, ac.lowerTy(a.Type))
+					ac.exprCtx = saved
 				} else {
 					t.Errorf(sp, "expected type argument")
 					args = append(args, TyErr)
@@ -1067,4 +1127,48 @@ func (ac *astConv) lowerBound(b *ast.Bound, self Ty) *Predicate {
 		return nil
 	}
 	return &Predicate{Trait: tr, Bindings: binds, Maybe: b.Maybe}
+}
+
+// mentionsParamAssoc reports whether n contains a type path `P::Name...`
+// whose first segment is one of g's type parameters.
+func mentionsParamAssoc(n any, g *Generics) bool {
+	found := false
+	ast.Walk(n, func(x any) bool {
+		if found {
+			return false
+		}
+		if pt, ok := x.(*ast.PathType); ok && pt.QSelf == nil && pt.Path != nil && len(pt.Path.Segments) >= 2 && !pt.Path.Global {
+			name := pt.Path.Segments[0].Ident.Name
+			for _, gp := range g.Params {
+				if gp.Name == name && !gp.Const {
+					found = true
+					return false
+				}
+			}
+		}
+		return true
+	})
+	return found
+}
+
+type deferredPred struct {
+	needs []int // params whose associated types the bound names
+	lower func()
+}
+
+// paramAssocRefs lists the indices of g's type params P used as `P::Name`.
+func paramAssocRefs(n any, g *Generics) []int {
+	var out []int
+	ast.Walk(n, func(x any) bool {
+		if pt, ok := x.(*ast.PathType); ok && pt.QSelf == nil && pt.Path != nil && len(pt.Path.Segments) >= 2 && !pt.Path.Global {
+			name := pt.Path.Segments[0].Ident.Name
+			for _, gp := range g.Params {
+				if gp.Name == name && !gp.Const {
+					out = append(out, gp.Index)
+				}
+			}
+		}
+		return true
+	})
+	return out
 }

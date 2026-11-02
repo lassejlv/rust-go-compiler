@@ -389,3 +389,15 @@ impl<T> fmt::Debug for JoinHandle<T> {
         f.debug_struct("JoinHandle").finish_non_exhaustive()
     }
 }
+
+impl<T> crate::os::unix::thread::JoinHandleExt for JoinHandle<T> {
+    fn as_pthread_t(&self) -> crate::os::unix::thread::RawPthread {
+        (self.0).native.0
+    }
+
+    fn into_pthread_t(self) -> crate::os::unix::thread::RawPthread {
+        let h = (self.0).native.0;
+        crate::mem::forget(self);
+        h
+    }
+}

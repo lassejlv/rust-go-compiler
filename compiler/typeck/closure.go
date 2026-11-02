@@ -2,6 +2,7 @@ package typeck
 
 import (
 	"rustgo/compiler/ast"
+	"rustgo/compiler/lexer"
 	. "rustgo/compiler/middle"
 )
 
@@ -59,6 +60,19 @@ func (fcx *FnCtxt) expectedClosureSig(expected Ty) ([]Ty, Ty) {
 				}
 			}
 		}
+		// obligations from impl where-clauses may carry projections
+		// (`&<I as Iterator>::Item`): normalize what is known now
+		sp := lexerSpanZero
+		if ins != nil {
+			nins := make([]Ty, len(ins))
+			for i, t := range ins {
+				nins[i] = fcx.normalizeInBody(t, sp)
+			}
+			ins = nins
+		}
+		if out != nil {
+			out = fcx.normalizeInBody(out, sp)
+		}
 		return ins, out
 	}
 	return nil, nil
@@ -99,7 +113,7 @@ func (fcx *FnCtxt) checkClosure(x *ast.ClosureExpr, expected Ty) Ty {
 	for i, p := range x.Params {
 		if ip, ok := p.Pat.(*ast.IdentPat); ok && ip.Sub == nil && !ip.ByRef {
 			if _, _, isPath := fcx.identPatAsPath(ip); !isPath {
-				l := fcx.newLocal(ip.Name.Name, ins[i], ip.Mut, ip.Name.Span, ip.ID)
+				l := fcx.newLocal(ip.Name.Name, ip.Name.Hyg, ins[i], ip.Mut, ip.Name.Span, ip.ID)
 				fcx.r.Locals[ip.ID] = l
 				fcx.record(ip.ID, ins[i])
 				ci.Params = append(ci.Params, l)
@@ -119,3 +133,5 @@ func (fcx *FnCtxt) checkClosure(x *ast.ClosureExpr, expected Ty) Ty {
 
 // noteLocalUse is a hook for local uses (captures are computed in writeback).
 func (fcx *FnCtxt) noteLocalUse(l *Local, e *ast.PathExpr) {}
+
+var lexerSpanZero lexer.Span

@@ -21,14 +21,14 @@ type scope struct {
 }
 
 type loopInfo struct {
-	label    string
-	brk      string
-	cont     string
-	result   string // C variable receiving break values ("" if none)
-	resultTy Ty
-	depth    int // scope depth at loop entry (scopes above are exited by break)
+	label     string
+	brk       string
+	cont      string
+	result    string // C variable receiving break values ("" if none)
+	resultTy  Ty
+	depth     int // scope depth at loop entry (scopes above are exited by break)
 	contDepth int
-	isBlock  bool
+	isBlock   bool
 }
 
 type fnGen struct {

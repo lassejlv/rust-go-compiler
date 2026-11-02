@@ -73,8 +73,8 @@ func (g *Gen) ctype(t Ty) string {
 func (g *Gen) cty(t Ty) string { return g.ctype(t) }
 
 type typeInfo struct {
-	name    string
-	defined bool
+	name     string
+	defined  bool
 	defining bool
 }
 
@@ -199,9 +199,12 @@ func (g *Gen) defineType(t Ty) {
 				}
 				fmt.Fprintf(&b, " %s f%d;", g.ctype(ft), i)
 			}
-			if reprPacked(d) {
+			switch {
+			case reprPacked(d):
 				b.WriteString(" } __attribute__((packed));\n")
-			} else {
+			case d.ReprAlign() > 0:
+				fmt.Fprintf(&b, " } __attribute__((aligned(%d)));\n", d.ReprAlign())
+			default:
 				b.WriteString(" };\n")
 			}
 		case AdtEnum:

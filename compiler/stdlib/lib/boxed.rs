@@ -341,3 +341,87 @@ impl<'a, T> IntoIterator for &'a mut Box<[T]> {
         self.iter_mut()
     }
 }
+
+// ---------------------------------------------------------------------------
+// Uninitialized boxes
+
+use crate::mem::MaybeUninit;
+
+impl<T> Box<T> {
+    /// Constructs a new box with uninitialized contents.
+    #[inline]
+    pub fn new_uninit() -> Box<MaybeUninit<T>> {
+        unsafe { Box { ptr: crate::alloc::alloc_array::<MaybeUninit<T>>(1) } }
+    }
+
+    /// Constructs a new `Box` with uninitialized contents, with the memory being filled with `0` bytes.
+    #[inline]
+    pub fn new_zeroed() -> Box<MaybeUninit<T>> {
+        unsafe {
+            let p = crate::alloc::alloc_array::<MaybeUninit<T>>(1);
+            intrinsics::write_bytes(p as *mut u8, 0, crate::mem::size_of::<T>());
+            Box { ptr: p }
+        }
+    }
+
+    /// Constructs a new box with uninitialized contents in a slice.
+    #[inline]
+    pub fn new_uninit_slice(len: usize) -> Box<[MaybeUninit<T>]> {
+        unsafe {
+            let p = crate::alloc::alloc_array::<MaybeUninit<T>>(len);
+            Box { ptr: crate::ptr::slice_from_raw_parts_mut(p, len) }
+        }
+    }
+
+    /// Constructs a new boxed slice with uninitialized contents, with the memory being filled with `0` bytes.
+    #[inline]
+    pub fn new_zeroed_slice(len: usize) -> Box<[MaybeUninit<T>]> {
+        unsafe {
+            let p = crate::alloc::alloc_array::<MaybeUninit<T>>(len);
+            intrinsics::write_bytes(p as *mut u8, 0, crate::mem::size_of::<T>() * len);
+            Box { ptr: crate::ptr::slice_from_raw_parts_mut(p, len) }
+        }
+    }
+}
+
+impl<T> Box<MaybeUninit<T>> {
+    /// Converts to `Box<T>`.
+    #[inline]
+    pub unsafe fn assume_init(self) -> Box<T> {
+        let raw = Box::into_raw(self);
+        Box { ptr: raw as *mut T }
+    }
+
+    /// Writes the value and converts to `Box<T>`.
+    #[inline]
+    pub fn write(mut boxed: Self, value: T) -> Box<T> {
+        unsafe {
+            (*boxed).write(value);
+            boxed.assume_init()
+        }
+    }
+}
+
+impl<T> Box<[MaybeUninit<T>]> {
+    /// Converts to `Box<[T]>`.
+    #[inline]
+    pub unsafe fn assume_init(self) -> Box<[T]> {
+        let raw = Box::into_raw(self);
+        let len = (*raw).len();
+        Box { ptr: crate::ptr::slice_from_raw_parts_mut((*raw).as_mut_ptr() as *mut T, len) }
+    }
+}
+
+impl<T: ?Sized> Box<T> {
+    /// Constructs a box from a `NonNull` pointer.
+    #[inline]
+    pub unsafe fn from_non_null(ptr: crate::ptr::NonNull<T>) -> Box<T> {
+        Box { ptr: ptr.as_ptr() }
+    }
+
+    /// Consumes the `Box`, returning a wrapped `NonNull` pointer.
+    #[inline]
+    pub fn into_non_null(b: Box<T>) -> crate::ptr::NonNull<T> {
+        unsafe { crate::ptr::NonNull::new_unchecked(Box::into_raw(b)) }
+    }
+}

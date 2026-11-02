@@ -358,7 +358,7 @@ func Tuple(elems []Ty) Ty {
 	}
 	return intern(&TyS{Kind: TTuple, Elems: elems})
 }
-func Array(elem Ty, n Ty) Ty     { return intern(&TyS{Kind: TArray, Elem: elem, Len: n}) }
+func Array(elem Ty, n Ty) Ty      { return intern(&TyS{Kind: TArray, Elem: elem, Len: n}) }
 func ArrayN(elem Ty, n uint64) Ty { return Array(elem, ConstVal(n)) }
 func Slice(elem Ty) Ty            { return intern(&TyS{Kind: TSlice, Elem: elem}) }
 func Ref(elem Ty, mut bool) Ty    { return intern(&TyS{Kind: TRef, Elem: elem, Mut: mut}) }
@@ -407,11 +407,11 @@ func NewInfer(kind uint8) Ty {
 // ---------------------------------------------------------------------------
 // Predicates
 
-func (t *TyS) IsUnit() bool     { return t.Kind == TTuple && len(t.Elems) == 0 }
-func (t *TyS) IsInteger() bool  { return t.Kind == TInt || (t.Kind == TInfer && t.Sub == 1) }
-func (t *TyS) IsFloat() bool    { return t.Kind == TFloat || (t.Kind == TInfer && t.Sub == 2) }
-func (t *TyS) IsNumeric() bool  { return t.IsInteger() || t.IsFloat() }
-func (t *TyS) IsSigned() bool   { return t.Kind == TInt && IntTy(t.Sub).Signed() }
+func (t *TyS) IsUnit() bool    { return t.Kind == TTuple && len(t.Elems) == 0 }
+func (t *TyS) IsInteger() bool { return t.Kind == TInt || (t.Kind == TInfer && t.Sub == 1) }
+func (t *TyS) IsFloat() bool   { return t.Kind == TFloat || (t.Kind == TInfer && t.Sub == 2) }
+func (t *TyS) IsNumeric() bool { return t.IsInteger() || t.IsFloat() }
+func (t *TyS) IsSigned() bool  { return t.Kind == TInt && IntTy(t.Sub).Signed() }
 func (t *TyS) IsScalar() bool {
 	switch t.Kind {
 	case TBool, TChar, TInt, TFloat, TPtr, TFnPtr:

@@ -49,7 +49,27 @@ func New(file int, src string) (*Parser, error) {
 // NewFromTokens returns a parser over toks. An EOF token is appended if the
 // slice does not already end with one.
 func NewFromTokens(toks []lexer.Token) *Parser {
-	var ts []lexer.Token
+	// fast path: no doc comments to rewrite and no interior EOF — use the
+	// slice as is (the parser never mutates its tokens)
+	clean := true
+	for i, t := range toks {
+		if t.Kind == lexer.DocComment || (t.Kind == lexer.EOF && i != len(toks)-1) {
+			clean = false
+			break
+		}
+	}
+	if clean && len(toks) > 0 {
+		ts := toks
+		if ts[len(ts)-1].Kind != lexer.EOF {
+			// toks may alias a larger array: never write past its length
+			hi := ts[len(ts)-1].Span.Hi
+			ts = append(ts[:len(ts):len(ts)], lexer.Token{Kind: lexer.EOF, Span: lexer.Span{Lo: hi, Hi: hi}})
+		}
+		p := &Parser{toks: ts}
+		p.lastHi = ts[0].Span.Lo
+		return p
+	}
+	ts := make([]lexer.Token, 0, len(toks)+1)
 	for _, t := range toks {
 		if t.Kind == lexer.DocComment {
 			// Doc comments are converted into `#[doc = "..."]` attributes.
@@ -87,13 +107,32 @@ func docCommentTokens(t lexer.Token) []lexer.Token {
 
 // NewFromTokenTrees returns a parser over the flattened token trees.
 func NewFromTokenTrees(tts []ast.TokenTree) *Parser {
-	return NewFromTokens(FlattenTokenTrees(tts))
+	toks := FlattenTokenTrees(tts)
+	if len(toks) > 0 {
+		// the flattened slice is ours and has room for the EOF
+		hi := toks[len(toks)-1].Span.Hi
+		toks = append(toks, lexer.Token{Kind: lexer.EOF, Span: lexer.Span{Lo: hi, Hi: hi}})
+	}
+	return NewFromTokens(toks)
 }
 
 // FlattenTokenTrees turns token trees back into a flat token list
 // (delimiters included). No EOF token is appended.
 func FlattenTokenTrees(tts []ast.TokenTree) []lexer.Token {
-	var out []lexer.Token
+	n := 0
+	var count func([]ast.TokenTree)
+	count = func(ts []ast.TokenTree) {
+		for _, tt := range ts {
+			if tt.Delim == 0 {
+				n++
+			} else {
+				n += 2
+				count(tt.Inner)
+			}
+		}
+	}
+	count(tts)
+	out := make([]lexer.Token, 0, n+1)
 	var rec func([]ast.TokenTree)
 	rec = func(ts []ast.TokenTree) {
 		for _, tt := range ts {
@@ -364,7 +403,7 @@ func (p *Parser) parseIdentTok() ast.Ident {
 		p.errExpected("identifier")
 	}
 	p.next()
-	return ast.Ident{Name: t.Text, Span: t.Span}
+	return ast.Ident{Name: t.Text, Span: t.Span, Hyg: t.Hyg}
 }
 
 // ---------------------------------------------------------------------------
@@ -498,7 +537,7 @@ func (p *Parser) ParseIdent() (id ast.Ident, err error) {
 		p.errExpected("identifier")
 	}
 	p.next()
-	return ast.Ident{Name: t.Text, Span: t.Span}, nil
+	return ast.Ident{Name: t.Text, Span: t.Span, Hyg: t.Hyg}, nil
 }
 
 // ParseVisibility parses an optional visibility qualifier.

@@ -272,18 +272,23 @@ impl String {
     where
         F: FnMut(char) -> bool,
     {
+        // In place (keeps the capacity, like the real implementation).
         let mut f = f;
         let len = self.len();
-        let mut out = String::with_capacity(len);
         let mut i = 0;
+        let mut w = 0;
         while i < len {
             let (c, n) = str::decode_at(self.as_str(), i);
             if f(c) {
-                out.push(c);
+                if w != i {
+                    let p = self.vec.as_mut_ptr();
+                    unsafe { crate::ptr::copy(p.add(i), p.add(w), n) };
+                }
+                w += n;
             }
             i += n;
         }
-        *self = out;
+        unsafe { self.vec.set_len(w) };
     }
 
     /// Inserts a character into this `String` at a byte position.

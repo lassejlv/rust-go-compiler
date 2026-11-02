@@ -1212,3 +1212,67 @@ func TestCorpus(t *testing.T) {
 		noMacros(t, c)
 	}
 }
+
+// `$crate::m!` resolves in the macro's own crate, not to another crate's
+// private (textual-scope) macro of the same name.
+func TestDollarCratePathMacro(t *testing.T) {
+	e := New()
+	a := parseCrate(t, "a.rs", `
+#[macro_export]
+macro_rules! log { ($x:expr, $y:expr) => { a_log($x, $y) } }
+#[macro_export]
+macro_rules! info { ($y:expr) => { $crate::log!(1, $y) } }
+`)
+	b := parseCrate(t, "b.rs", `
+#[macro_use]
+mod macros { macro_rules! log { ($($tt:tt)*) => { b_log() } } }
+pub fn f() -> i32 { log!(5) }
+`)
+	app := parseCrate(t, "app.rs", `fn main() { a::info!(2); }`)
+	for _, x := range []struct {
+		c    *ast.Crate
+		name string
+	}{{a, "a"}, {b, "b"}} {
+		if err := e.ExpandCrate(x.c, x.name); err != nil {
+			t.Fatalf("expand %s: %v", x.name, err)
+		}
+	}
+	e.Externs = map[string]string{"a": "a", "b": "b"}
+	if err := e.ExpandCrate(app, "app"); err != nil {
+		t.Fatalf("expand app: %v", err)
+	}
+	got := fnBody(t, app, "main")
+	contains(t, got, "a_log")
+	notContains(t, got, "b_log")
+}
+
+// Out-of-line modules produced by macro expansion are loaded through
+// Crate.LoadMod, relative to the invoking module's directory.
+func TestMacroExpandedModLoaded(t *testing.T) {
+	c := parseCrate(t, "lib.rs", `
+macro_rules! wrap { ($($i:item)*) => { $($i)* } }
+mod grp { wrap! { mod generic; } }
+`)
+	var asked []string
+	c.Dir = "."
+	c.LoadMod = func(it *ast.Item, dir string) (string, error) {
+		k := it.Kind.(*ast.ModItem)
+		child := dir + "/" + it.Name.Name
+		if !k.Inline && !k.Loaded {
+			asked = append(asked, child)
+			k.Items = parseCrate(t, child+".rs", "pub struct Group;").Items
+			k.Loaded = true
+		}
+		return child, nil
+	}
+	if err := New().ExpandCrate(c, "main"); err != nil {
+		t.Fatalf("expand: %v", err)
+	}
+	if len(asked) != 1 || asked[0] != "./grp/generic" {
+		t.Fatalf("loaded %v, want [./grp/generic]", asked)
+	}
+	g := findItem(findItem(c.Items, "grp").Kind.(*ast.ModItem).Items, "generic")
+	if g == nil || findItem(g.Kind.(*ast.ModItem).Items, "Group") == nil {
+		t.Fatalf("generic not loaded")
+	}
+}

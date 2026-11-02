@@ -28,6 +28,7 @@ type lx struct {
 // token. Comments (including doc comments) are skipped.
 func Tokenize(file int, src string) ([]Token, error) {
 	l := &lx{file: file, src: src, line: 1, col: 1}
+	l.toks = make([]Token, 0, len(src)/5+16) // ~1 token per 5 bytes of source
 	// Byte-order mark.
 	if strings.HasPrefix(l.src, "\xEF\xBB\xBF") {
 		l.off = 3

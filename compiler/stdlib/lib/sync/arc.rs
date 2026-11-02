@@ -485,3 +485,66 @@ impl From<String> for Arc<str> {
         Arc::from(v.as_str())
     }
 }
+
+// ---------------------------------------------------------------------------
+// Uninitialized values and downcasting
+
+impl<T> Arc<T> {
+    /// Constructs a new `Arc` with uninitialized contents.
+    pub fn new_uninit() -> Arc<mem::MaybeUninit<T>> {
+        Arc::new(mem::MaybeUninit::uninit())
+    }
+
+    /// Constructs a new `Arc` with uninitialized contents, with the memory being filled with `0` bytes.
+    pub fn new_zeroed() -> Arc<mem::MaybeUninit<T>> {
+        Arc::new(mem::MaybeUninit::zeroed())
+    }
+
+    /// Constructs a new reference-counted slice with uninitialized contents.
+    pub fn new_uninit_slice(len: usize) -> Arc<[mem::MaybeUninit<T>]> {
+        unsafe {
+            let (p, _) = allocate_for_slice::<mem::MaybeUninit<T>>(len);
+            Arc { ptr: p }
+        }
+    }
+
+    /// Constructs a new reference-counted slice with uninitialized contents, with the memory being filled with `0` bytes.
+    pub fn new_zeroed_slice(len: usize) -> Arc<[mem::MaybeUninit<T>]> {
+        unsafe {
+            let (p, elems) = allocate_for_slice::<mem::MaybeUninit<T>>(len);
+            intrinsics::write_bytes(elems as *mut u8, 0, len * mem::size_of::<T>());
+            Arc { ptr: p }
+        }
+    }
+}
+
+impl<T> Arc<mem::MaybeUninit<T>> {
+    /// Converts to `Arc<T>`.
+    pub unsafe fn assume_init(self) -> Arc<T> {
+        let p = self.ptr as *mut ArcInner<T>;
+        mem::forget(self);
+        Arc { ptr: p }
+    }
+}
+
+impl<T> Arc<[mem::MaybeUninit<T>]> {
+    /// Converts to `Arc<[T]>`.
+    pub unsafe fn assume_init(self) -> Arc<[T]> {
+        let p = self.ptr as *mut ArcInner<[T]>;
+        mem::forget(self);
+        Arc { ptr: p }
+    }
+}
+
+impl Arc<dyn crate::any::Any + Send + Sync> {
+    /// Attempts to downcast the `Arc<dyn crate::any::Any + Send + Sync>` to a concrete type.
+    pub fn downcast<T: crate::any::Any + Send + Sync>(self) -> Result<Arc<T>, Self> {
+        if (*self).is::<T>() {
+            let p = self.ptr as *mut ArcInner<T>;
+            mem::forget(self);
+            Ok(Arc { ptr: p })
+        } else {
+            Err(self)
+        }
+    }
+}

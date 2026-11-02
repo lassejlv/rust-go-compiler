@@ -6,6 +6,71 @@ import (
 	"rustgo/compiler/parser"
 )
 
+// lookupMacroCall resolves the macro invoked by mac. A path-qualified call
+// (`$crate::m!`, `krate::m!`, `crate::m!`, `self::m!`) names the crate the
+// macro lives in: macro_export'ed macros live at their crate's root, so the
+// macro is looked up in that crate rather than by bare name (where another
+// crate's textual-scope macro of the same name could shadow it).
+func (e *Expander) lookupMacroCall(mac *ast.MacCall) (*macroDef, builtinFn) {
+	name := macName(mac)
+	if c, ok := e.macroPathCrate(mac.Path); ok {
+		if d, b := e.lookupMacroIn(c, name); d != nil || b != nil {
+			return d, b
+		}
+	}
+	return e.lookupMacro(name)
+}
+
+// macroPathCrate returns the crate (as named in ExpandCrate) a multi-segment
+// macro path refers to.
+func (e *Expander) macroPathCrate(p *ast.Path) (string, bool) {
+	if p == nil || len(p.Segments) < 2 {
+		return "", false
+	}
+	first := p.Segments[0].Ident.Name
+	if !p.Global {
+		switch first {
+		case "crate", "self", "super":
+			return e.crate, true
+		}
+	}
+	if k, ok := e.Externs[first]; ok {
+		return k, true
+	}
+	if first == "std" || first == "core" || first == "alloc" {
+		return "std", true
+	}
+	if _, ok := e.macros[first]; ok {
+		return first, true
+	}
+	if !p.Global {
+		// a path through a local module
+		return e.crate, true
+	}
+	return "", false
+}
+
+// lookupMacroIn looks up a macro defined in (or re-exported under a renaming
+// import by) crate c.
+func (e *Expander) lookupMacroIn(c, name string) (*macroDef, builtinFn) {
+	for i := 0; i < 16; i++ {
+		if d, ok := e.macros[c][name]; ok {
+			return d, nil
+		}
+		if c == "std" {
+			if b, ok := builtins[name]; ok {
+				return nil, b
+			}
+		}
+		orig, ok := e.aliases[c][name]
+		if !ok || orig == name {
+			break
+		}
+		name = orig
+	}
+	return nil, nil
+}
+
 // lookupMacro resolves a macro by name: macro_rules! of the current crate,
 // then builtins, then macro_rules! of previously expanded crates (std), then
 // names a macro was imported under (`use crate::m as n;`).
@@ -34,16 +99,24 @@ func (e *Expander) lookupMacroName(name string) (*macroDef, builtinFn) {
 	if b, ok := builtins[name]; ok {
 		return nil, b
 	}
+	// Other crates: prefer #[macro_export]ed macros (std's are all
+	// visible) over another crate's private textual-scope macro.
+	var private *macroDef
 	for i := len(e.crateOrder) - 1; i >= 0; i-- {
 		c := e.crateOrder[i]
 		if c == e.crate {
 			continue
 		}
 		if d, ok := e.macros[c][name]; ok {
-			return d, nil
+			if d.exported || c == "std" {
+				return d, nil
+			}
+			if private == nil {
+				private = d
+			}
 		}
 	}
-	return nil, nil
+	return private, nil
 }
 
 // IsCrateMacro reports whether crate (as named in ExpandCrate) defines a
@@ -74,7 +147,7 @@ func (e *Expander) IsCrateMacro(crate, name string) bool {
 // macro_rules! macro was invoked (as opposed to a builtin).
 func (e *Expander) macTokens(mac *ast.MacCall) (tts []ast.TokenTree, user bool, err error) {
 	name := macName(mac)
-	def, bi := e.lookupMacro(name)
+	def, bi := e.lookupMacroCall(mac)
 	switch {
 	case def != nil:
 		tts, err = e.invokeMacroRules(def, mac)
@@ -189,18 +262,28 @@ func (e *Expander) expandStmtMac(mac *ast.MacCall, semi bool) ([]ast.Stmt, bool,
 
 func (e *Expander) expandItemMac(mac *ast.MacCall) ([]*ast.Item, bool, error) {
 	name := macName(mac)
-	def, bi := e.lookupMacro(name)
+	def, bi := e.lookupMacroCall(mac)
+	var tts []ast.TokenTree
+	var user bool
+	var err error
 	if def == nil && bi != nil {
 		switch name {
-		case "compile_error", "thread_local", "include", "include_str", "include_bytes", "env":
+		case "include":
+			// the file's items are spliced in at this position
+			if tts, err = bi(e, mac); err != nil {
+				return nil, false, err
+			}
+		case "compile_error", "thread_local", "include_str", "include_bytes", "env":
 			_, err := bi(e, mac)
 			return nil, false, err
+		default:
+			return nil, false, errAt(mac.Span, "macro `%s!` cannot be used in item position", name)
 		}
-		return nil, false, errAt(mac.Span, "macro `%s!` cannot be used in item position", name)
-	}
-	tts, user, err := e.macTokens(mac)
-	if err != nil {
-		return nil, user, err
+	} else {
+		tts, user, err = e.macTokens(mac)
+		if err != nil {
+			return nil, user, err
+		}
 	}
 	var items []*ast.Item
 	err = safeParse(func() error {

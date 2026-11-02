@@ -1,11 +1,13 @@
 package typeck
 
 import (
+	"math/big"
 	"strconv"
 	"strings"
 
 	"rustgo/compiler/ast"
 	. "rustgo/compiler/middle"
+	"rustgo/compiler/resolve"
 )
 
 // ConstValue caches an evaluated constant item.
@@ -31,6 +33,7 @@ const (
 	cvUnit cvKind = iota
 	cvInt
 	cvBool
+	cvFloat
 	cvStr
 	cvArr // arrays and slices
 	cvTuple
@@ -39,23 +42,17 @@ const (
 
 type cval struct {
 	k     cvKind
-	i     int64
+	n     *big.Int // cvInt (never mutated once built)
+	b     bool     // cvBool
+	f     float64  // cvFloat
+	f32   bool     // cvFloat: an f32
 	ity   IntTy
-	typed bool // ity is known (literal suffix, cast, declared type)
+	typed bool // cvInt: ity is known (literal suffix, cast, declared type); cvFloat: width known
 	s     string
 	elems []*cval
 	def   *Def     // cvStruct: struct or variant def
 	names []string // cvStruct: field names parallel to elems
 }
-
-func cvI(v int64, it IntTy, typed bool) *cval {
-	if typed {
-		v = truncInt(v, it)
-	}
-	return &cval{k: cvInt, i: v, ity: it, typed: typed}
-}
-
-func cvB(b bool) *cval { return &cval{k: cvBool, i: b2i(b)} }
 
 func (v *cval) copy() *cval {
 	if v == nil {
@@ -77,7 +74,11 @@ func cvEqual(a, b *cval) bool {
 	}
 	switch a.k {
 	case cvInt, cvBool:
-		return (b.k == cvInt || b.k == cvBool) && a.i == b.i
+		x, ok1 := intOf(a)
+		y, ok2 := intOf(b)
+		return ok1 && ok2 && x.Cmp(y) == 0
+	case cvFloat:
+		return b.k == cvFloat && a.f == b.f
 	case cvStr:
 		return b.k == cvStr && a.s == b.s
 	case cvUnit:
@@ -92,15 +93,6 @@ func cvEqual(a, b *cval) bool {
 		}
 	}
 	return true
-}
-
-// retype converts an integer value to the given type (if it is an integer
-// type).
-func retype(v *cval, ty Ty) *cval {
-	if v != nil && v.k == cvInt && ty != nil && ty.Kind == TInt {
-		return cvI(v.i, ty.IntKind(), true)
-	}
-	return v
 }
 
 type ctlKind uint8
@@ -122,6 +114,10 @@ type constEval struct {
 	t     *Tcx
 	steps int
 	depth int
+	// hint is the expected type of the expression being evaluated (consumed
+	// by calls to infer omitted generic args, e.g. `const P: [u32; 4] =
+	// primes();`).
+	hint Ty
 }
 
 type cframe struct {
@@ -138,10 +134,25 @@ const (
 // enum discriminants, const generic arguments).
 func (t *Tcx) evalConstInt(ac *astConv, e ast.Expr) (int64, bool) {
 	v, ok := t.evalConstValue(ac, e)
-	if !ok || v == nil || (v.k != cvInt && v.k != cvBool) {
+	if !ok || v == nil {
 		return 0, false
 	}
-	return v.i, true
+	return cvToInt64(v)
+}
+
+// cvToInt64 converts an integer/bool value to int64 (u64 values as their
+// bit pattern).
+func cvToInt64(v *cval) (int64, bool) {
+	n, ok := intOf(v)
+	switch {
+	case !ok:
+		return 0, false
+	case n.IsInt64():
+		return n.Int64(), true
+	case n.IsUint64():
+		return int64(n.Uint64()), true
+	}
+	return 0, false
 }
 
 // evalConstValue evaluates a constant expression to a value.
@@ -224,13 +235,21 @@ func (ev *constEval) cond(fr *cframe, e ast.Expr) (bool, bool) {
 		return ev.cond(fr, be.R)
 	}
 	v, ok := ev.eval(fr, e)
-	if !ok || (v.k != cvBool && v.k != cvInt) {
+	if !ok {
 		return false, false
 	}
-	return v.i != 0, true
+	return truthy(v)
+}
+
+// evalExpect evaluates e with an expected type.
+func (ev *constEval) evalExpect(fr *cframe, e ast.Expr, ty Ty) (*cval, bool) {
+	ev.hint = ty
+	return ev.eval(fr, e)
 }
 
 func (ev *constEval) eval(fr *cframe, e ast.Expr) (*cval, bool) {
+	hint := ev.hint
+	ev.hint = nil
 	ev.steps++
 	if ev.steps > constMaxSteps {
 		return nil, false
@@ -239,21 +258,34 @@ func (ev *constEval) eval(fr *cframe, e ast.Expr) (*cval, bool) {
 	case *ast.LitExpr:
 		switch x.Kind {
 		case ast.LitInt:
+			n := new(big.Int).SetUint64(x.IntVal)
 			if x.Big != "" {
-				return nil, false
-			}
-			if x.Suffix != "" {
-				it, ok := IntTyByName(x.Suffix)
-				if !ok {
+				if _, ok := n.SetString(x.Big, 10); !ok {
 					return nil, false
 				}
-				return cvI(int64(x.IntVal), it, true), true
 			}
-			return cvI(int64(x.IntVal), 0, false), true
+			switch x.Suffix {
+			case "":
+				return cvI(n, 0, false), true
+			case "f32", "f64":
+				f, _ := new(big.Float).SetInt(n).Float64()
+				return cvF(f, x.Suffix == "f32", true), true
+			}
+			it, ok := IntTyByName(x.Suffix)
+			if !ok {
+				return nil, false
+			}
+			return cvI(n, it, true), true
+		case ast.LitFloat:
+			f, err := strconv.ParseFloat(strings.ReplaceAll(x.Value, "_", ""), 64)
+			if err != nil {
+				return nil, false
+			}
+			return cvF(f, x.Suffix == "f32", x.Suffix != ""), true
 		case ast.LitChar:
-			return cvI(int64(x.IntVal), 0, false), true
+			return cvIi(int64(x.IntVal), 0, false), true
 		case ast.LitByte:
-			return cvI(int64(x.IntVal), U8, true), true
+			return cvIi(int64(x.IntVal), U8, true), true
 		case ast.LitBool:
 			return cvB(x.Value == "true"), true
 		case ast.LitStr:
@@ -261,13 +293,11 @@ func (ev *constEval) eval(fr *cframe, e ast.Expr) (*cval, bool) {
 		case ast.LitByteStr:
 			arr := &cval{k: cvArr, elems: make([]*cval, len(x.Value))}
 			for i := 0; i < len(x.Value); i++ {
-				arr.elems[i] = cvI(int64(x.Value[i]), U8, true)
+				arr.elems[i] = cvIi(int64(x.Value[i]), U8, true)
 			}
 			return arr, true
 		}
 		return nil, false
-	case *ast.ParenExpr:
-		return ev.eval(fr, x.X)
 	case *ast.BlockExpr:
 		if x.Async {
 			return nil, false
@@ -283,19 +313,11 @@ func (ev *constEval) eval(fr *cframe, e ast.Expr) (*cval, bool) {
 		if !ok {
 			return nil, false
 		}
-		ty := fr.ac.lowerTy(x.Ty)
+		ty := fr.ac.sub(fr.ac.lowerTy(x.Ty))
 		switch ty.Kind {
-		case TInt:
-			if v.k != cvInt && v.k != cvBool {
-				return nil, false
-			}
-			return cvI(v.i, ty.IntKind(), true), true
-		case TChar:
-			if v.k != cvInt {
-				return nil, false
-			}
-			return cvI(v.i, 0, false), true
-		case TFloat, TError:
+		case TInt, TFloat, TChar, TBool:
+			return castTo(v, ty)
+		case TError:
 			return nil, false
 		}
 		return v, true
@@ -304,24 +326,7 @@ func (ev *constEval) eval(fr *cframe, e ast.Expr) (*cval, bool) {
 		if !ok {
 			return nil, false
 		}
-		switch x.Op {
-		case ast.UnNeg:
-			if v.k != cvInt {
-				return nil, false
-			}
-			return cvI(-v.i, v.ity, v.typed), true
-		case ast.UnNot:
-			switch v.k {
-			case cvBool:
-				return cvB(v.i == 0), true
-			case cvInt:
-				return cvI(^v.i, v.ity, v.typed), true
-			}
-			return nil, false
-		case ast.UnDeref:
-			return v, true
-		}
-		return nil, false
+		return unop(x.Op, v)
 	case *ast.RefExpr:
 		if x.Raw {
 			return nil, false
@@ -352,7 +357,9 @@ func (ev *constEval) eval(fr *cframe, e ast.Expr) (*cval, bool) {
 		}
 		return binop(x.Op, a, b)
 	case *ast.CallExpr:
-		return ev.evalCall(fr, x)
+		return ev.evalCall(fr, x, hint)
+	case *ast.ParenExpr:
+		return ev.evalExpect(fr, x.X, hint)
 	case *ast.MethodCallExpr:
 		return ev.evalMethod(fr, x)
 	case *ast.IfExpr:
@@ -446,14 +453,18 @@ func (ev *constEval) eval(fr *cframe, e ast.Expr) (*cval, bool) {
 		if !typed {
 			it, typed = hi.ity, hi.typed
 		}
-		end := hi.i
+		start, ok1 := smallInt(lo)
+		end, ok2 := smallInt(hi)
+		if !ok1 || !ok2 {
+			return nil, false
+		}
 		if r.Inclusive {
 			end++
 		}
-		for i := lo.i; i < end; i++ {
+		for i := start; i < end; i++ {
 			n := len(fr.scopes)
 			fr.scopes = append(fr.scopes, map[string]*cval{})
-			m, ok := ev.matchPat(fr, x.Pat, cvI(i, it, typed))
+			m, ok := ev.matchPat(fr, x.Pat, cvIi(i, it, typed))
 			if !ok || !m {
 				fr.scopes = fr.scopes[:n]
 				return nil, false
@@ -538,11 +549,15 @@ func (ev *constEval) eval(fr *cframe, e ast.Expr) (*cval, bool) {
 		if !ok {
 			return nil, false
 		}
-		n, ok := ev.eval(fr, x.Count)
-		if !ok || n.k != cvInt || n.i < 0 || n.i > 1<<24 {
+		nv, ok := ev.eval(fr, x.Count)
+		if !ok {
 			return nil, false
 		}
-		arr := &cval{k: cvArr, elems: make([]*cval, n.i)}
+		n, ok := smallInt(nv)
+		if !ok || n < 0 || n > 1<<24 {
+			return nil, false
+		}
+		arr := &cval{k: cvArr, elems: make([]*cval, n)}
 		for i := range arr.elems {
 			arr.elems[i] = v.copy()
 		}
@@ -617,28 +632,32 @@ func (ev *constEval) index(fr *cframe, v *cval, ie ast.Expr) (*cval, bool) {
 		// a subslice shares its elements with the base array
 		return &cval{k: cvArr, elems: v.elems[lo:hi:hi]}, true
 	}
-	i, ok := ev.eval(fr, ie)
-	if !ok || i.k != cvInt || i.i < 0 || i.i >= int64(len(v.elems)) {
+	iv, ok := ev.eval(fr, ie)
+	if !ok || iv.k != cvInt {
 		return nil, false
 	}
-	return v.elems[i.i], true
+	i, ok := smallInt(iv)
+	if !ok || i < 0 || i >= int64(len(v.elems)) {
+		return nil, false
+	}
+	return v.elems[i], true
 }
 
 func (ev *constEval) rangeBounds(fr *cframe, r *ast.RangeExpr, n int) (int, int, bool) {
 	lo, hi := int64(0), int64(n)
 	if r.Start != nil {
 		v, ok := ev.eval(fr, r.Start)
-		if !ok || v.k != cvInt {
+		if !ok || v.k != cvInt || !v.n.IsInt64() {
 			return 0, 0, false
 		}
-		lo = v.i
+		lo = v.n.Int64()
 	}
 	if r.End != nil {
 		v, ok := ev.eval(fr, r.End)
-		if !ok || v.k != cvInt {
+		if !ok || v.k != cvInt || !v.n.IsInt64() {
 			return 0, 0, false
 		}
-		hi = v.i
+		hi = v.n.Int64()
 		if r.Inclusive {
 			hi++
 		}
@@ -685,7 +704,12 @@ func (ev *constEval) place(fr *cframe, e ast.Expr) (*cval, bool) {
 func (ev *constEval) evalBlock(fr *cframe, b *ast.Block) (*cval, bool) {
 	n := len(fr.scopes)
 	fr.scopes = append(fr.scopes, map[string]*cval{})
-	defer func() { fr.scopes = fr.scopes[:n] }()
+	scope := fr.ac.scope
+	if m := ev.t.R.BlockMods[b.ID]; m != nil {
+		// items declared in the block (`const N: usize = ..;`)
+		fr.ac.scope = m
+	}
+	defer func() { fr.scopes = fr.scopes[:n]; fr.ac.scope = scope }()
 	last := &cval{k: cvUnit}
 	for i, st := range b.Stmts {
 		switch x := st.(type) {
@@ -701,13 +725,16 @@ func (ev *constEval) evalBlock(fr *cframe, b *ast.Block) (*cval, bool) {
 				fr.declare(ip.Name.Name, nil)
 				continue
 			}
+			var lty Ty
+			if x.Ty != nil {
+				lty = fr.ac.sub(fr.ac.lowerTy(x.Ty))
+				ev.hint = lty
+			}
 			v, ok := ev.valueOf(fr, x.Init)
 			if !ok {
 				return nil, false
 			}
-			if x.Ty != nil && v.k == cvInt {
-				v = retype(v, fr.ac.lowerTy(x.Ty))
-			}
+			v = retype(v, lty)
 			m, ok := ev.matchPat(fr, x.Pat, v)
 			if !ok || !m {
 				return nil, false
@@ -757,117 +784,6 @@ func (ev *constEval) labeledBlock(fr *cframe, x *ast.BlockExpr) (v *cval, ok boo
 		}
 	}()
 	return ev.evalBlock(fr, x.Block)
-}
-
-func binop(op ast.BinOp, a, b *cval) (*cval, bool) {
-	if a.k != cvInt || b.k != cvInt {
-		if a.k == cvBool && b.k == cvBool {
-			switch op {
-			case ast.BinBitAnd:
-				return cvB(a.i&b.i != 0), true
-			case ast.BinBitOr:
-				return cvB(a.i|b.i != 0), true
-			case ast.BinBitXor:
-				return cvB(a.i != b.i), true
-			}
-		}
-		switch op {
-		case ast.BinEq:
-			return cvB(cvEqual(a, b)), true
-		case ast.BinNe:
-			return cvB(!cvEqual(a, b)), true
-		}
-		if (a.k == cvBool || a.k == cvInt) && (b.k == cvBool || b.k == cvInt) {
-			switch op {
-			case ast.BinLt:
-				return cvB(a.i < b.i), true
-			case ast.BinLe:
-				return cvB(a.i <= b.i), true
-			case ast.BinGt:
-				return cvB(a.i > b.i), true
-			case ast.BinGe:
-				return cvB(a.i >= b.i), true
-			}
-		}
-		return nil, false
-	}
-	it, typed := a.ity, a.typed
-	if !typed && op != ast.BinShl && op != ast.BinShr {
-		it, typed = b.ity, b.typed
-	}
-	unsigned := typed && !it.Signed()
-	x, y := a.i, b.i
-	ux, uy := uint64(x), uint64(y)
-	var r int64
-	switch op {
-	case ast.BinAdd:
-		r = x + y
-	case ast.BinSub:
-		r = x - y
-	case ast.BinMul:
-		r = x * y
-	case ast.BinDiv, ast.BinRem:
-		if y == 0 {
-			return nil, false
-		}
-		switch {
-		case unsigned && op == ast.BinDiv:
-			r = int64(ux / uy)
-		case unsigned:
-			r = int64(ux % uy)
-		case op == ast.BinDiv:
-			r = x / y
-		default:
-			r = x % y
-		}
-	case ast.BinShl:
-		if y < 0 || y >= 128 {
-			return nil, false
-		}
-		r = x << uint(y)
-	case ast.BinShr:
-		if y < 0 || y >= 128 {
-			return nil, false
-		}
-		if unsigned {
-			r = int64(ux >> uint(y))
-		} else {
-			r = x >> uint(y)
-		}
-	case ast.BinBitAnd:
-		r = x & y
-	case ast.BinBitOr:
-		r = x | y
-	case ast.BinBitXor:
-		r = x ^ y
-	case ast.BinEq:
-		return cvB(x == y), true
-	case ast.BinNe:
-		return cvB(x != y), true
-	case ast.BinLt, ast.BinLe, ast.BinGt, ast.BinGe:
-		var c int
-		switch {
-		case unsigned && ux < uy, !unsigned && x < y:
-			c = -1
-		case x == y:
-			c = 0
-		default:
-			c = 1
-		}
-		switch op {
-		case ast.BinLt:
-			return cvB(c < 0), true
-		case ast.BinLe:
-			return cvB(c <= 0), true
-		case ast.BinGt:
-			return cvB(c > 0), true
-		default:
-			return cvB(c >= 0), true
-		}
-	default:
-		return nil, false
-	}
-	return cvI(r, it, typed), true
 }
 
 // ---------------------------------------------------------------------------
@@ -926,7 +842,7 @@ func (ev *constEval) matchPat(fr *cframe, p ast.Pat, v *cval) (bool, bool) {
 			if !ok {
 				return false, false
 			}
-			if c, _ := binop(ast.BinLt, v, lo); c == nil || c.i != 0 {
+			if c, _ := binop(ast.BinLt, v, lo); c == nil || c.b {
 				return false, c != nil
 			}
 		}
@@ -939,7 +855,7 @@ func (ev *constEval) matchPat(fr *cframe, p ast.Pat, v *cval) (bool, bool) {
 			if x.Inclusive {
 				op = ast.BinGt
 			}
-			if c, _ := binop(op, v, hi); c == nil || c.i != 0 {
+			if c, _ := binop(op, v, hi); c == nil || c.b {
 				return false, c != nil
 			}
 		}
@@ -1178,25 +1094,20 @@ func (ev *constEval) evalPath(fr *cframe, x *ast.PathExpr) (*cval, bool) {
 				tr.Args[i] = ac.sub(tr.Args[i])
 			}
 		}
+		if v, ok := primConst(self, rest[0].Ident.Name); ok {
+			return v, true
+		}
 		item, args := ev.assocItem(self, tr, rest[0].Ident.Name, DefConst)
 		if item == nil {
 			return nil, false
 		}
 		return ev.itemConst(item, args)
 	}
-	if len(segs) == 2 && IsPrimInt(segs[0]) {
-		it, _ := IntTyByName(segs[0])
-		switch segs[1] {
-		case "MAX":
-			return cvI(intMax(it), it, true), true
-		case "MIN":
-			return cvI(intMin(it), it, true), true
-		case "BITS":
-			return cvI(int64(it.Bits()), U32, true), true
-		}
-	}
 	pr, err := t.R.ResolvePath(ac.scope, segs, x.Path.Global, ValueNS, ac.firstLookup)
 	if err != nil {
+		if len(segs) == 2 && resolve.IsPrimName(segs[0]) {
+			return primConst(primTy(segs[0]), segs[1])
+		}
 		return nil, false
 	}
 	if pr.Consumed == len(segs) {
@@ -1209,6 +1120,9 @@ func (ev *constEval) evalPath(fr *cframe, x *ast.PathExpr) (*cval, bool) {
 	self := ev.baseTy(ac, pr.Res, x.Path.Segments[pr.Consumed-1])
 	if self == nil {
 		return nil, false
+	}
+	if v, ok := primConst(self, segs[len(segs)-1]); ok {
+		return v, true
 	}
 	item, args := ev.assocItem(self, nil, segs[len(segs)-1], DefConst)
 	if item == nil {
@@ -1238,7 +1152,7 @@ func (ev *constEval) resValue(fr *cframe, res Res) (*cval, bool) {
 			if ty.Kind != TConst {
 				return nil, false
 			}
-			v := cvI(int64(ty.Val), 0, false)
+			v := cvI(new(big.Int).SetUint64(ty.Val), 0, false)
 			if gp.ConstTy != nil {
 				v = retype(v, gp.ConstTy)
 				if gp.ConstTy.Kind == TBool {
@@ -1314,7 +1228,7 @@ func (ev *constEval) assocItem(self Ty, tr *TraitRef, name string, kind DefKind)
 		return ev.traitItem(tr, name, kind)
 	}
 	if key := SimplifyKey(self); key != "" {
-		for _, impl := range t.inherent[key] {
+		for _, impl := range ev.inherentImpls(self, key) {
 			item, ok := impl.Impl.Items[name]
 			if !ok || item.Kind != kind {
 				continue
@@ -1359,7 +1273,13 @@ func (ev *constEval) traitItem(tr *TraitRef, name string, kind DefKind) (*Def, [
 		if !ok || decl.Kind != kind {
 			continue
 		}
-		impl, args := t.SelectImplSimple(st)
+		var impl *Def
+		var args []Ty
+		if t.implsIndexed {
+			impl, args = t.SelectImplSimple(st)
+		} else {
+			impl, args = ev.selectImplUnindexed(st)
+		}
 		if impl == nil {
 			return nil, nil
 		}
@@ -1367,6 +1287,60 @@ func (ev *constEval) traitItem(tr *TraitRef, name string, kind DefKind) (*Def, [
 			return item, args
 		}
 		return decl, st.Args
+	}
+	return nil, nil
+}
+
+// While BuildImpls is still running (struct fields and impl headers are
+// lowered first, and may contain array lengths using associated consts) the
+// impl index is incomplete, so impls are found by scanning the AST instead.
+
+func (ev *constEval) inherentImpls(self Ty, key string) []*Def {
+	t := ev.t
+	if t.implsIndexed {
+		return t.inherent[key]
+	}
+	name := ""
+	switch self.Kind {
+	case TAdt:
+		name = self.Def.Name
+	case TInt, TFloat, TBool, TChar, TStr:
+		name = self.String()
+	}
+	var out []*Def
+	for _, impl := range t.R.Impls {
+		ia := impl.Impl.Ast
+		if ia == nil || ia.Trait != nil {
+			continue
+		}
+		if pt, ok := ia.SelfTy.(*ast.PathType); ok && name != "" && pt.QSelf == nil &&
+			pt.Path.Segments[len(pt.Path.Segments)-1].Ident.Name != name {
+			continue
+		}
+		t.ImplHeader(impl)
+		if impl.Impl.SelfTy != nil && SimplifyKey(impl.Impl.SelfTy) == key {
+			out = append(out, impl)
+		}
+	}
+	return out
+}
+
+func (ev *constEval) selectImplUnindexed(tr *TraitRef) (*Def, []Ty) {
+	t := ev.t
+	for _, impl := range t.R.Impls {
+		ia := impl.Impl.Ast
+		if ia == nil || ia.Trait == nil || ia.Negative ||
+			ia.Trait.Segments[len(ia.Trait.Segments)-1].Ident.Name != tr.Trait.Name {
+			continue
+		}
+		t.ImplHeader(impl)
+		if impl.Impl.TraitRef == nil || impl.Impl.TraitRef.Trait != tr.Trait {
+			continue
+		}
+		ic := newInferCtxt(t)
+		if args, ok, ambig := ic.matchImpl(impl, tr, 0); ok && !ambig {
+			return impl, ic.resolveList(args)
+		}
 	}
 	return nil, nil
 }
@@ -1394,6 +1368,9 @@ func (ev *constEval) itemConst(d *Def, args []Ty) (*cval, bool) {
 	var v *cval
 	ok := false
 	if sub.depth <= constMaxDepth {
+		if cty := t.ConstTy(d); !cty.HasError() {
+			sub.hint = ac.sub(cty)
+		}
 		v, ok = sub.evalTop(ac, d.Const.Expr)
 	}
 	ev.steps += sub.steps
@@ -1408,8 +1385,8 @@ func (ev *constEval) itemConst(d *Def, args []Ty) (*cval, bool) {
 	}
 	if cache {
 		cv := &ConstValue{OK: ok, V: v}
-		if ok && (v.k == cvInt || v.k == cvBool) {
-			cv.Val = v.i
+		if ok {
+			cv.Val, _ = cvToInt64(v)
 		}
 		t.constCache[d] = cv
 	}
@@ -1419,7 +1396,7 @@ func (ev *constEval) itemConst(d *Def, args []Ty) (*cval, bool) {
 // ---------------------------------------------------------------------------
 // Calls
 
-func (ev *constEval) evalCall(fr *cframe, x *ast.CallExpr) (*cval, bool) {
+func (ev *constEval) evalCall(fr *cframe, x *ast.CallExpr, exp Ty) (*cval, bool) {
 	t := ev.t
 	ac := fr.ac
 	pe, isPath := x.Fn.(*ast.PathExpr)
@@ -1449,7 +1426,7 @@ func (ev *constEval) evalCall(fr *cframe, x *ast.CallExpr) (*cval, bool) {
 		if item == nil {
 			return nil, false
 		}
-		return ev.callFn(fr, item, args, last, x.Args, nil)
+		return ev.callFn(fr, item, args, last, x.Args, nil, exp)
 	}
 	segs := pathSegs(pe.Path)
 	pr, err := t.R.ResolvePath(ac.scope, segs, pe.Path.Global, ValueNS, ac.firstLookup)
@@ -1465,7 +1442,7 @@ func (ev *constEval) evalCall(fr *cframe, x *ast.CallExpr) (*cval, bool) {
 				if d.IsAssoc() {
 					return nil, false
 				}
-				return ev.callFn(fr, d, nil, last, x.Args, nil)
+				return ev.callFn(fr, d, nil, last, x.Args, nil, exp)
 			case DefStruct, DefVariant:
 				return ev.tupleCtor(fr, d, x.Args)
 			}
@@ -1483,6 +1460,23 @@ func (ev *constEval) evalCall(fr *cframe, x *ast.CallExpr) (*cval, bool) {
 	if self == nil {
 		return nil, false
 	}
+	if self.Kind == TInt || self.Kind == TFloat {
+		args := make([]*cval, len(x.Args))
+		argsOK := true
+		for i, a := range x.Args {
+			v, ok := ev.eval(fr, a)
+			if !ok {
+				argsOK = false
+				break
+			}
+			args[i] = v
+		}
+		if argsOK {
+			if v, ok := ev.primAssocFn(self, last.Ident.Name, args); ok {
+				return v, true
+			}
+		}
+	}
 	if self.Kind == TAdt && self.Def.Kind == DefEnum {
 		// Self::Variant(..) through an alias / Self
 		for _, v := range self.Def.Adt.Variants {
@@ -1495,7 +1489,119 @@ func (ev *constEval) evalCall(fr *cframe, x *ast.CallExpr) (*cval, bool) {
 	if item == nil {
 		return nil, false
 	}
-	return ev.callFn(fr, item, args, last, x.Args, nil)
+	return ev.callFn(fr, item, args, last, x.Args, nil, exp)
+}
+
+// inferArgs infers the callee's own generic args that were not given
+// explicitly (TyErr in subst) from the expected type of the call.
+func (ev *constEval) inferArgs(d *Def, g *Generics, subst []Ty, exp Ty, vals []*cval) {
+	missing := false
+	for i := g.OwnStart; i < len(subst); i++ {
+		if subst[i] == TyErr {
+			missing = true
+		}
+	}
+	if !missing {
+		return
+	}
+	t := ev.t
+	ic := newInferCtxt(t)
+	vs := append([]Ty(nil), subst...)
+	for i := g.OwnStart; i < len(vs); i++ {
+		if vs[i] == TyErr {
+			vs[i] = ic.newVar()
+		}
+	}
+	sig := t.FnSig(d)
+	off := len(sig.Inputs) - len(vals)
+	for i, v := range vals {
+		if off+i < 0 {
+			continue
+		}
+		pt := Subst(sig.Inputs[off+i], vs)
+		for pt.Kind == TRef || pt.Kind == TPtr {
+			pt = pt.Elem
+		}
+		if vt := ev.valTy(ic, v); vt != nil {
+			s := ic.snapshot()
+			if !ic.unify(pt, vt) {
+				ic.rollback(s)
+			}
+		}
+	}
+	if exp != nil && !exp.HasError() && !exp.HasParam() {
+		s := ic.snapshot()
+		if !ic.unify(Subst(sig.Output, vs), exp) {
+			ic.rollback(s)
+		}
+	}
+	r := ic.resolveList(vs)
+	for i := g.OwnStart; i < len(subst); i++ {
+		if subst[i] == TyErr && !r[i].HasInfer() && !r[i].HasError() {
+			subst[i] = r[i]
+		}
+	}
+}
+
+// valTy approximates the type of a value, for generic arg inference (unknown
+// parts are inference variables).
+func (ev *constEval) valTy(ic *InferCtxt, v *cval) Ty {
+	switch v.k {
+	case cvInt:
+		if v.typed {
+			return IntT(v.ity)
+		}
+	case cvBool:
+		return TyBool
+	case cvFloat:
+		if v.typed {
+			if v.f32 {
+				return TyF32
+			}
+			return TyF64
+		}
+	case cvStr:
+		return TyStr
+	case cvUnit:
+		return TyUnit
+	case cvArr:
+		var et Ty
+		if len(v.elems) > 0 {
+			et = ev.valTy(ic, v.elems[0])
+		}
+		if et == nil {
+			et = ic.newVar()
+		}
+		return ArrayN(et, uint64(len(v.elems)))
+	case cvTuple:
+		es := make([]Ty, len(v.elems))
+		for i, e := range v.elems {
+			if es[i] = ev.valTy(ic, e); es[i] == nil {
+				es[i] = ic.newVar()
+			}
+		}
+		return Tuple(es)
+	}
+	return ic.newVar()
+}
+
+// intrinsic evaluates the compiler intrinsics usable in constants.
+func (ev *constEval) intrinsic(name string, targs []Ty) (*cval, bool) {
+	if len(targs) != 1 {
+		return nil, false
+	}
+	switch name {
+	case "size_of", "align_of", "min_align_of", "pref_align_of":
+		size, align, ok := ev.t.CLayout(targs[0])
+		if !ok {
+			return nil, false
+		}
+		if name == "size_of" {
+			return cvIi(int64(size), Usize, true), true
+		}
+		return cvIi(int64(align), Usize, true), true
+	}
+	return nil, false
 }
 
 func (ev *constEval) tupleCtor(fr *cframe, d *Def, argExprs []ast.Expr) (*cval, bool) {
@@ -1514,10 +1620,10 @@ func (ev *constEval) tupleCtor(fr *cframe, d *Def, argExprs []ast.Expr) (*cval, 
 // callFn evaluates a call of fn d. parentArgs are the args of its parent
 // impl/trait generics; seg carries explicit generic args (turbofish); recv is
 // the receiver of a method call (nil for path calls).
-func (ev *constEval) callFn(fr *cframe, d *Def, parentArgs []Ty, seg *ast.PathSegment, argExprs []ast.Expr, recv *cval) (res *cval, ok bool) {
+func (ev *constEval) callFn(fr *cframe, d *Def, parentArgs []Ty, seg *ast.PathSegment, argExprs []ast.Expr, recv *cval, exp Ty) (res *cval, ok bool) {
 	t := ev.t
 	fa := d.Fn.Ast
-	if fa == nil || fa.Body == nil || d.Fn.Extern || fa.Async {
+	if fa == nil || (fa.Body == nil && d.Intrinsic == "") || d.Fn.Extern && d.Intrinsic == "" || fa.Async {
 		return nil, false
 	}
 	nparams := len(fa.Decl.Params)
@@ -1563,20 +1669,28 @@ func (ev *constEval) callFn(fr *cframe, d *Def, parentArgs []Ty, seg *ast.PathSe
 					ce = &ast.PathExpr{Path: pt.Path}
 				}
 				v, ok := ev.eval(fr, ce)
-				if !ok || (v.k != cvInt && v.k != cvBool) {
+				if !ok {
 					return nil, false
 				}
-				subst[gp.Index] = ConstVal(uint64(v.i))
+				n, ok := intOf(v)
+				if !ok {
+					return nil, false
+				}
+				subst[gp.Index] = ConstVal(wrapInt(n, U64).Uint64())
 			} else if a.Type != nil {
 				subst[gp.Index] = fr.ac.sub(fr.ac.lowerTy(a.Type))
 			}
 		}
 	}
-	sig := t.FnSig(d)
-	t.Generics(d)
-	fac := t.itemConv(d)
-	fac.subst = subst
-	nfr := &cframe{ac: fac, scopes: []map[string]*cval{{}}}
+	// evaluate the arguments (in the caller's frame)
+	var sig *FnSig
+	if fa.Body != nil {
+		sig = t.FnSig(d)
+	}
+	off := 0
+	if hasSelf {
+		off = 1
+	}
 	ai := 0
 	if hasSelf {
 		if recv == nil {
@@ -1589,17 +1703,31 @@ func (ev *constEval) callFn(fr *cframe, d *Def, parentArgs []Ty, seg *ast.PathSe
 		} else if fa.Decl.SelfParam.Kind == ast.SelfValue {
 			recv = recv.copy()
 		}
-		nfr.declare("self", recv)
 	}
-	off := 0
-	if hasSelf {
-		off = 1
-	}
-	for i, p := range fa.Decl.Params {
+	vals := make([]*cval, len(fa.Decl.Params))
+	for i := range fa.Decl.Params {
+		if sig != nil && off+i < len(sig.Inputs) {
+			ev.hint = Subst(sig.Inputs[off+i], subst)
+		}
 		v, ok := ev.valueOf(fr, argExprs[ai+i])
 		if !ok {
 			return nil, false
 		}
+		vals[i] = v
+	}
+	ev.inferArgs(d, g, subst, exp, vals)
+	if d.Intrinsic != "" && fa.Body == nil {
+		return ev.intrinsic(d.Intrinsic, subst[g.OwnStart:])
+	}
+	t.Generics(d)
+	fac := t.itemConv(d)
+	fac.subst = subst
+	nfr := &cframe{ac: fac, scopes: []map[string]*cval{{}}}
+	if hasSelf {
+		nfr.declare("self", recv)
+	}
+	for i, p := range fa.Decl.Params {
+		v := vals[i]
 		if off+i < len(sig.Inputs) {
 			v = retype(v, Subst(sig.Inputs[off+i], subst))
 		}
@@ -1647,13 +1775,13 @@ func (ev *constEval) evalMethod(fr *cframe, x *ast.MethodCallExpr) (*cval, bool)
 	case cvStr:
 		switch name {
 		case "len":
-			return cvI(int64(len(recv.s)), Usize, true), true
+			return cvIi(int64(len(recv.s)), Usize, true), true
 		case "is_empty":
 			return cvB(len(recv.s) == 0), true
 		case "as_bytes":
 			arr := &cval{k: cvArr, elems: make([]*cval, len(recv.s))}
 			for i := 0; i < len(recv.s); i++ {
-				arr.elems[i] = cvI(int64(recv.s[i]), U8, true)
+				arr.elems[i] = cvIi(int64(recv.s[i]), U8, true)
 			}
 			return arr, true
 		case "starts_with", "ends_with", "contains":
@@ -1672,7 +1800,7 @@ func (ev *constEval) evalMethod(fr *cframe, x *ast.MethodCallExpr) (*cval, bool)
 	case cvArr:
 		switch name {
 		case "len":
-			return cvI(int64(len(recv.elems)), Usize, true), true
+			return cvIi(int64(len(recv.elems)), Usize, true), true
 		case "is_empty":
 			return cvB(len(recv.elems) == 0), true
 		case "as_slice", "as_mut_slice":
@@ -1683,12 +1811,44 @@ func (ev *constEval) evalMethod(fr *cframe, x *ast.MethodCallExpr) (*cval, bool)
 		if name == "then_some" || name == "then" {
 			return nil, false
 		}
-	case cvInt:
+	case cvInt, cvFloat:
 		if !evalArgs() {
 			return nil, false
 		}
-		return intMethod(recv, name, args)
+		if v, ok := ev.numMethod(recv, name, args); ok {
+			return v, true
+		}
+		// a (trait) method on a primitive defined in Rust source
+		var self Ty
+		switch {
+		case recv.k == cvFloat && recv.typed:
+			self = TyF64
+			if recv.f32 {
+				self = TyF32
+			}
+		case recv.k == cvInt && recv.typed:
+			self = IntT(recv.ity)
+		default:
+			return nil, false
+		}
+		item, iargs := ev.assocItem(self, nil, name, DefFn)
+		if item == nil || item.Fn.Ast == nil || item.Fn.Ast.Decl.SelfParam == nil {
+			return nil, false
+		}
+		seg := &ast.PathSegment{Ident: x.Method, Args: x.Generics}
+		return ev.callFn(fr, item, iargs, seg, x.Args, recv, nil)
 	case cvStruct:
+		if v, ok := ev.optionMethod(recv, name, nil); ok && len(x.Args) == 0 {
+			return v, true
+		}
+		if name == "unwrap_or" && len(x.Args) == 1 {
+			if !evalArgs() {
+				return nil, false
+			}
+			if v, ok := ev.optionMethod(recv, name, args); ok {
+				return v, true
+			}
+		}
 		d := recv.def
 		if d.Kind == DefVariant {
 			d = d.Parent
@@ -1707,243 +1867,13 @@ func (ev *constEval) evalMethod(fr *cframe, x *ast.MethodCallExpr) (*cval, bool)
 			}
 		}
 		seg := &ast.PathSegment{Ident: x.Method, Args: x.Generics}
-		return ev.callFn(fr, item, iargs, seg, x.Args, recv)
+		return ev.callFn(fr, item, iargs, seg, x.Args, recv, nil)
 	}
 	return nil, false
-}
-
-func intMethod(v *cval, name string, args []*cval) (*cval, bool) {
-	it, typed := v.ity, v.typed
-	bits := 0
-	if typed {
-		bits = it.Bits()
-		if bits > 64 {
-			return nil, false
-		}
-	}
-	u := uint64(v.i)
-	if typed && bits < 64 {
-		u &= uint64(1)<<bits - 1
-	}
-	arg := func(i int) (int64, bool) {
-		if i >= len(args) || (args[i].k != cvInt && args[i].k != cvBool) {
-			return 0, false
-		}
-		return args[i].i, true
-	}
-	switch name {
-	case "wrapping_add", "wrapping_sub", "wrapping_mul", "min", "max", "pow", "wrapping_pow", "abs_diff",
-		"wrapping_shl", "wrapping_shr", "rotate_left", "rotate_right", "saturating_add", "saturating_sub",
-		"wrapping_div", "wrapping_rem", "div_euclid", "rem_euclid":
-		if len(args) != 1 {
-			return nil, false
-		}
-	default:
-		if len(args) != 0 {
-			return nil, false
-		}
-	}
-	switch name {
-	case "wrapping_add":
-		b, _ := arg(0)
-		return cvI(v.i+b, it, typed), true
-	case "wrapping_sub":
-		b, _ := arg(0)
-		return cvI(v.i-b, it, typed), true
-	case "wrapping_mul":
-		b, _ := arg(0)
-		return cvI(v.i*b, it, typed), true
-	case "wrapping_div", "wrapping_rem", "div_euclid", "rem_euclid":
-		op := ast.BinDiv
-		if name == "wrapping_rem" || name == "rem_euclid" {
-			op = ast.BinRem
-		}
-		r, ok := binop(op, v, args[0])
-		if ok && name == "rem_euclid" && r.i < 0 {
-			b, _ := arg(0)
-			if b < 0 {
-				b = -b
-			}
-			r = cvI(r.i+b, r.ity, r.typed)
-		}
-		return r, ok
-	case "min", "max":
-		lt, ok := binop(ast.BinLt, v, args[0])
-		if !ok {
-			return nil, false
-		}
-		if (lt.i != 0) == (name == "min") {
-			return v, true
-		}
-		return retype(args[0], nil), true
-	case "pow", "wrapping_pow":
-		e, _ := arg(0)
-		if e < 0 {
-			return nil, false
-		}
-		r := int64(1)
-		for i := int64(0); i < e; i++ {
-			r *= v.i
-		}
-		return cvI(r, it, typed), true
-	case "abs":
-		if v.i < 0 {
-			return cvI(-v.i, it, typed), true
-		}
-		return v, true
-	case "abs_diff":
-		gt, ok := binop(ast.BinGt, v, args[0])
-		if !ok {
-			return nil, false
-		}
-		if gt.i != 0 {
-			return binop(ast.BinSub, v, args[0])
-		}
-		return binop(ast.BinSub, args[0], v)
-	case "is_power_of_two":
-		return cvB(u != 0 && u&(u-1) == 0), true
-	case "next_power_of_two":
-		p := uint64(1)
-		for p < u {
-			p <<= 1
-		}
-		return cvI(int64(p), it, typed), true
-	case "saturating_add", "saturating_sub":
-		if !typed {
-			return nil, false
-		}
-		b, _ := arg(0)
-		var r int64
-		if name == "saturating_add" {
-			r = v.i + b
-		} else {
-			r = v.i - b
-		}
-		if !it.Signed() && bits == 64 {
-			ub := uint64(b)
-			if name == "saturating_add" && uint64(r) < u {
-				return cvI(-1, it, true), true
-			}
-			if name == "saturating_sub" && ub > u {
-				return cvI(0, it, true), true
-			}
-			return cvI(r, it, true), true
-		}
-		if bits < 64 {
-			if r > intMax(it) {
-				r = intMax(it)
-			}
-			if r < intMin(it) {
-				r = intMin(it)
-			}
-		}
-		return cvI(r, it, true), true
-	}
-	if !typed {
-		return nil, false
-	}
-	switch name {
-	case "count_ones", "count_zeros", "leading_zeros", "trailing_zeros", "leading_ones", "trailing_ones":
-		n := 0
-		switch name {
-		case "count_ones", "count_zeros":
-			for i := 0; i < bits; i++ {
-				if u&(1<<uint(i)) != 0 {
-					n++
-				}
-			}
-			if name == "count_zeros" {
-				n = bits - n
-			}
-		case "leading_zeros", "leading_ones":
-			want := name == "leading_ones"
-			for i := bits - 1; i >= 0 && (u&(1<<uint(i)) != 0) == want; i-- {
-				n++
-			}
-		default:
-			want := name == "trailing_ones"
-			for i := 0; i < bits && (u&(1<<uint(i)) != 0) == want; i++ {
-				n++
-			}
-		}
-		return cvI(int64(n), U32, true), true
-	case "rotate_left", "rotate_right", "wrapping_shl", "wrapping_shr":
-		s, _ := arg(0)
-		s = s % int64(bits)
-		if s < 0 {
-			s += int64(bits)
-		}
-		mask := uint64(1)<<uint(bits) - 1
-		if bits == 64 {
-			mask = ^uint64(0)
-		}
-		var r uint64
-		switch name {
-		case "rotate_left":
-			r = (u<<uint(s) | u>>uint(int64(bits)-s)) & mask
-		case "rotate_right":
-			r = (u>>uint(s) | u<<uint(int64(bits)-s)) & mask
-		case "wrapping_shl":
-			r = (u << uint(s)) & mask
-		default:
-			if it.Signed() {
-				return cvI(v.i>>uint(s), it, true), true
-			}
-			r = u >> uint(s)
-		}
-		return cvI(int64(r), it, true), true
-	case "swap_bytes", "to_be", "reverse_bits":
-		return nil, false
-	}
-	return nil, false
-}
-
-func b2i(b bool) int64 {
-	if b {
-		return 1
-	}
-	return 0
 }
 
 // IsPrimInt reports whether s names an integer type.
 func IsPrimInt(s string) bool {
 	_, ok := IntTyByName(s)
 	return ok && !strings.HasPrefix(s, "f")
-}
-
-func intMax(it IntTy) int64 {
-	bits := it.Bits()
-	if bits >= 64 {
-		if it.Signed() {
-			return 1<<63 - 1
-		}
-		return -1 // u64::MAX as bit pattern
-	}
-	if it.Signed() {
-		return 1<<(bits-1) - 1
-	}
-	return 1<<bits - 1
-}
-
-func intMin(it IntTy) int64 {
-	if !it.Signed() {
-		return 0
-	}
-	if it.Bits() >= 64 {
-		return -1 << 63
-	}
-	return -1 << (it.Bits() - 1)
-}
-
-func truncInt(v int64, it IntTy) int64 {
-	bits := it.Bits()
-	if bits >= 64 {
-		return v
-	}
-	mask := int64(1)<<bits - 1
-	v &= mask
-	if it.Signed() && v&(int64(1)<<(bits-1)) != 0 {
-		v -= int64(1) << bits
-	}
-	return v
 }

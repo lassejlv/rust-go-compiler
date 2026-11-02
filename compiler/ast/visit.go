@@ -44,6 +44,15 @@ func Walk(n any, v Visitor) {
 		Walk(x.Body, v)
 	case *Path:
 		walkPath(x, v)
+	case *Bound:
+		walkBound(x, v)
+	case *WherePredicate:
+		if x.Ty != nil {
+			Walk(x.Ty, v)
+		}
+		for _, b := range x.Bounds {
+			walkBound(b, v)
+		}
 	}
 }
 

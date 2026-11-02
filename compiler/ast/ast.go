@@ -23,6 +23,7 @@ func NewID() NodeID { nextID++; return nextID }
 type Ident struct {
 	Name string
 	Span Span
+	Hyg  uint32 // macro hygiene mark (see lexer.Token.Hyg)
 }
 
 // ---------------------------------------------------------------------------
@@ -30,11 +31,11 @@ type Ident struct {
 
 // TokenTree is either a single token (Delim == 0) or a delimited group.
 type TokenTree struct {
-	Tok    Token       // valid when Delim == 0
-	Delim  byte        // 0, '(', '[', '{'
-	Open   Span        // span of the opening delimiter (groups only)
-	Close  Span        // span of the closing delimiter (groups only)
-	Inner  []TokenTree // group contents
+	Tok   Token       // valid when Delim == 0
+	Delim byte        // 0, '(', '[', '{'
+	Open  Span        // span of the opening delimiter (groups only)
+	Close Span        // span of the closing delimiter (groups only)
+	Inner []TokenTree // group contents
 }
 
 // ---------------------------------------------------------------------------
@@ -115,9 +116,9 @@ type TypeBase struct {
 	ID   NodeID
 }
 
-func (t *TypeBase) typeNode()       {}
-func (t *TypeBase) GetSpan() Span   { return t.Span }
-func (t *TypeBase) GetID() NodeID   { return t.ID }
+func (t *TypeBase) typeNode()     {}
+func (t *TypeBase) GetSpan() Span { return t.Span }
+func (t *TypeBase) GetID() NodeID { return t.ID }
 
 // PathType: a named type, possibly qualified (<T as Trait>::Assoc). "Self" is
 // a PathType with a single segment "Self".
@@ -205,14 +206,14 @@ const (
 )
 
 type GenericParam struct {
-	Kind    GenericParamKind
-	Name    Ident
-	Bounds  []*Bound // for type params; lifetime bounds as Bound{Lifetime:..}
-	Default Type     // type default (or nil)
-	ConstTy Type     // for const params
+	Kind         GenericParamKind
+	Name         Ident
+	Bounds       []*Bound // for type params; lifetime bounds as Bound{Lifetime:..}
+	Default      Type     // type default (or nil)
+	ConstTy      Type     // for const params
 	ConstDefault Expr
-	Attrs   []*Attr
-	ID      NodeID
+	Attrs        []*Attr
+	ID           NodeID
 }
 
 type Generics struct {
@@ -354,11 +355,11 @@ type EnumItem struct {
 }
 
 type TraitItem struct {
-	Generics   *Generics
+	Generics    *Generics
 	Supertraits []*Bound
-	Items      []*Item // FnItem, TypeAliasItem (assoc types), ConstItem
-	Unsafe     bool
-	Auto       bool
+	Items       []*Item // FnItem, TypeAliasItem (assoc types), ConstItem
+	Unsafe      bool
+	Auto        bool
 }
 
 // ImplItem is `impl<G> Trait for Ty { ... }` or `impl<G> Ty { ... }`.
@@ -397,9 +398,9 @@ type ModItem struct {
 
 // UseTree: `a::b::{c, d as e, f::*}`.
 type UseTree struct {
-	Prefix *Path     // may have zero segments for `use {a, b}` / `use ::*`
+	Prefix *Path // may have zero segments for `use {a, b}` / `use ::*`
 	Kind   UseKind
-	Rename *Ident    // for UseSimple: `as name` (name "_" allowed)
+	Rename *Ident // for UseSimple: `as name` (name "_" allowed)
 	Nested []*UseTree
 	Span   Span
 	ID     NodeID
@@ -458,6 +459,14 @@ type Crate struct {
 	Attrs []*Attr
 	Items []*Item
 	Span  Span
+	// Dir is the directory holding the root module's out-of-line child
+	// modules, in the terms of LoadMod.
+	Dir string
+	// LoadMod, if set, loads the file of an out-of-line `mod name;` item
+	// (unless already loaded) declared in a module whose children live in
+	// dir, and returns the directory of the new module's own children. The
+	// expander uses it for modules produced by macro expansion.
+	LoadMod func(it *Item, dir string) (string, error)
 }
 
 // ---------------------------------------------------------------------------
@@ -501,6 +510,10 @@ type LetStmt struct {
 type ExprStmt struct {
 	Expr Expr
 	Semi bool
+	// ImplicitSemi: a block-like expression statement with no `;` that is
+	// not at the end of its block (it becomes the tail if cfg-stripping
+	// removes the statements after it).
+	ImplicitSemi bool
 }
 
 type ItemStmt struct {
@@ -538,9 +551,9 @@ type ExprBase struct {
 	Attrs []*Attr
 }
 
-func (e *ExprBase) exprNode()      {}
-func (e *ExprBase) GetSpan() Span  { return e.Span }
-func (e *ExprBase) GetID() NodeID  { return e.ID }
+func (e *ExprBase) exprNode()     {}
+func (e *ExprBase) GetSpan() Span { return e.Span }
+func (e *ExprBase) GetID() NodeID { return e.ID }
 
 type LitKind int
 
@@ -791,6 +804,7 @@ type FieldInit struct {
 	Expr      Expr
 	Shorthand bool
 	Span      Span
+	Attrs     []*Attr
 }
 
 // StructExpr: Path { a: x, b, ..base }

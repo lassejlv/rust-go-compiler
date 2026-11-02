@@ -36,6 +36,15 @@ type Resolver struct {
 	// before resolution, so imports/re-exports of them (`pub(crate) use m;`,
 	// `use crate::m;`) are accepted without binding anything.
 	IsCrateMacro func(crate, name string) bool
+
+	// bindingImport maps import bindings to the import that created them
+	// (an import must not resolve to its own binding).
+	bindingImport map[*NameBinding]*Import
+	// forcing is set once import resolution has stalled: names that might
+	// still be defined by pending imports are then taken as absent.
+	forcing bool
+	// changed records that an import pass added or changed a binding.
+	changed bool
 }
 
 func (r *Resolver) isMacro(c *Crate, name string) bool {
@@ -51,6 +60,8 @@ func New() *Resolver {
 		LangItems: map[string]*Def{},
 		BlockMods: map[ast.NodeID]*Module{},
 		ItemDefs:  map[*ast.Item]*Def{},
+
+		bindingImport: map[*NameBinding]*Import{},
 	}
 }
 
@@ -414,7 +425,11 @@ func (r *Resolver) allModules() []*Module {
 	return out
 }
 
-// ResolveImports resolves all `use` declarations to a fixpoint.
+// ResolveImports resolves all `use` declarations to a fixpoint. As in
+// rustc, an import is only settled once each namespace of the imported name
+// is determined: found, or certainly absent because no pending import can
+// still define it. If resolution stalls (cyclic dependencies between
+// imports), undetermined names are taken as absent and resolution resumes.
 func (r *Resolver) ResolveImports() {
 	if r.Std != nil {
 		if pm := r.Std.Root.Lookup("prelude", TypeNS); pm != nil && pm.Res.Def != nil && pm.Res.Def.Mod != nil {
@@ -422,9 +437,8 @@ func (r *Resolver) ResolveImports() {
 		}
 	}
 	mods := r.allModules()
-	for {
-		progress := false
-		pending := 0
+	pass := func() (progress bool, pending int) {
+		r.changed = false
 		for _, m := range mods {
 			for _, imp := range m.Imports {
 				if imp.Done {
@@ -438,10 +452,24 @@ func (r *Resolver) ResolveImports() {
 				}
 			}
 		}
-		if pending == 0 || !progress {
+		return progress || r.changed, pending
+	}
+	for iter := 0; iter < 10000; iter++ {
+		progress, pending := pass()
+		if pending == 0 {
+			break
+		}
+		if progress {
+			continue
+		}
+		r.forcing = true
+		progress, _ = pass()
+		r.forcing = false
+		if !progress {
 			break
 		}
 	}
+	r.forcing = true
 	for _, m := range mods {
 		for _, imp := range m.Imports {
 			if !imp.Done {
@@ -449,6 +477,7 @@ func (r *Resolver) ResolveImports() {
 			}
 		}
 	}
+	r.forcing = false
 	// prelude may be defined via imports
 	if r.Std != nil && r.Prelude == nil {
 		if pm := r.Std.Root.Lookup("prelude", TypeNS); pm != nil && pm.Res.Def != nil && pm.Res.Def.Mod != nil {
@@ -457,10 +486,98 @@ func (r *Resolver) ResolveImports() {
 	}
 }
 
+// undetermined reports whether a pending import (other than self) of module
+// m, or of a module m glob-imports, may still define name.
+func (r *Resolver) undetermined(m *Module, name string, self *Import) bool {
+	if r.forcing {
+		return false
+	}
+	return r.undeterminedIn(m, name, self, map[*Module]bool{})
+}
+
+func (r *Resolver) undeterminedIn(m *Module, name string, self *Import, seen map[*Module]bool) bool {
+	if m == nil || seen[m] {
+		return false
+	}
+	seen[m] = true
+	for _, imp := range m.Imports {
+		if imp.Done || imp == self {
+			continue
+		}
+		if imp.Glob || imp.Name == name {
+			return true
+		}
+	}
+	for _, g := range m.Globs {
+		if r.undeterminedIn(g, name, self, seen) {
+			return true
+		}
+	}
+	return false
+}
+
+// lookupDet looks up name in module m on behalf of import self (whose own
+// binding is skipped). determined=false means a pending import may still
+// define the name there.
+func (r *Resolver) lookupDet(m *Module, name string, ns Namespace, self *Import) (b *NameBinding, determined bool) {
+	tbl := m.Types
+	if ns == ValueNS {
+		tbl = m.Values
+	}
+	// Items are final; so are import bindings, which are only made once
+	// their namespace is determined.
+	if b, ok := tbl[name]; ok && (self == nil || r.bindingImport[b] != self) {
+		return b, true
+	}
+	if r.undetermined(m, name, self) {
+		return nil, false
+	}
+	for _, g := range m.Globs {
+		if b := g.Lookup(name, ns); b != nil && (self == nil || r.bindingImport[b] != self) {
+			return b, true
+		}
+	}
+	return nil, true
+}
+
+// lookupUseFirst resolves the first segment of a 2018 `use` path (or a
+// single-segment import) from module/block scope m: items and imports of
+// the enclosing blocks and module, then the extern prelude, then the std
+// prelude.
+func (r *Resolver) lookupUseFirst(m *Module, name string, ns Namespace, self *Import) (res Res, found, determined bool) {
+	for x := m; x != nil; x = x.Parent {
+		b, det := r.lookupDet(x, name, ns, self)
+		if !det {
+			return Res{}, false, false
+		}
+		if b != nil {
+			return b.Res, true, true
+		}
+		if !x.Block {
+			break
+		}
+	}
+	if ns == TypeNS {
+		if cr := r.ExternCrate(m.Crate, name); cr != nil {
+			return defRes(cr.Def), true, true
+		}
+	}
+	if r.Prelude != nil {
+		b, det := r.lookupDet(r.Prelude, name, ns, self)
+		if !det {
+			return Res{}, false, false
+		}
+		if b != nil {
+			return b.Res, true, true
+		}
+	}
+	return Res{}, false, true
+}
+
 func (r *Resolver) tryImport(imp *Import, report bool) bool {
 	m := imp.Module
 	if imp.Glob {
-		res, ok := r.resolveModulePath(m, imp.Path, imp.Global, report, imp.Span)
+		res, ok := r.resolveModulePath(m, imp.Path, imp.Global, report, imp.Span, imp)
 		if !ok {
 			return false
 		}
@@ -471,66 +588,98 @@ func (r *Resolver) tryImport(imp *Import, report bool) bool {
 			return report
 		}
 		m.Globs = append(m.Globs, res.Def.Mod)
+		r.changed = true
 		return true
 	}
-	// Single import: resolve prefix as module, then look up last name.
+	last := imp.Path[len(imp.Path)-1]
+	// lookup finds the imported name in one namespace.
+	var lookup func(ns Namespace) (res Res, found, determined bool)
+	var macroCrate *Crate
 	if len(imp.Path) == 1 {
-		name := imp.Path[0]
-		// `use std;` or `use foo;` (crate) or `use self::x` style single names
-		if cr := r.ExternCrate(m.Crate, name); cr != nil && (imp.Global || m.Lookup(name, TypeNS) == nil || !m.Crate.Is2015()) {
-			r.define(m, imp.Name, TypeNS, defRes(cr.Def), imp.Span)
-			if b := m.Types[imp.Name]; b != nil {
-				b.Import = true
+		// `use foo;` / `use foo as bar;`
+		macroCrate = m.Crate
+		switch {
+		case imp.Global && !m.Crate.Is2015():
+			lookup = func(ns Namespace) (Res, bool, bool) {
+				if ns == TypeNS {
+					if cr := r.ExternCrate(m.Crate, last); cr != nil {
+						return defRes(cr.Def), true, true
+					}
+				}
+				return Res{}, false, true
 			}
-			return true
+		case m.Crate.Is2015() && !(m.Block && !imp.Global):
+			// 2015: relative to the crate root, then extern crates
+			root := m.Crate.Root
+			lookup = func(ns Namespace) (Res, bool, bool) {
+				if !imp.Global || !r.injectedStd(m.Crate, last) {
+					b, det := r.lookupDet(root, last, ns, imp)
+					if !det {
+						return Res{}, false, false
+					}
+					if b != nil {
+						return b.Res, true, true
+					}
+				}
+				if ns == TypeNS {
+					if cr := r.ExternCrate(m.Crate, last); cr != nil {
+						return defRes(cr.Def), true, true
+					}
+				}
+				return Res{}, false, true
+			}
+		default:
+			lookup = func(ns Namespace) (Res, bool, bool) {
+				return r.lookupUseFirst(m, last, ns, imp)
+			}
 		}
-		if imp.Global {
+	} else {
+		prefix := imp.Path[:len(imp.Path)-1]
+		res, ok := r.resolveModulePath(m, prefix, imp.Global, report, imp.Span, imp)
+		if !ok {
+			return false
+		}
+		if res.Def == nil || res.Def.Mod == nil {
 			if report {
-				r.errorf(imp.Span, "unresolved import `%s`", name)
+				r.errorf(imp.Span, "unresolved import `%s`: `%s` is not a module", strings.Join(imp.Path, "::"), strings.Join(prefix, "::"))
 			}
 			return report
 		}
-		found := false
-		for _, ns := range []Namespace{TypeNS, ValueNS} {
-			if res, ok := r.lookupLexicalNoPrelude(m.Parent, name, ns); ok && m.Parent != nil {
-				r.bindImport(m, imp.Name, ns, res, imp.Span)
-				found = true
+		target := res.Def.Mod
+		macroCrate = target.Crate
+		lookup = func(ns Namespace) (Res, bool, bool) {
+			b, det := r.lookupDet(target, last, ns, imp)
+			if b == nil {
+				return Res{}, false, det
 			}
+			return b.Res, true, true
 		}
-		if !found && r.IsCrateMacro != nil && r.IsCrateMacro(m.Crate.Name, name) {
-			return true // a macro_rules! macro in textual scope
-		}
-		if !found && report {
-			r.errorf(imp.Span, "unresolved import `%s`", name)
-		}
-		return found || report
 	}
-	prefix := imp.Path[:len(imp.Path)-1]
-	last := imp.Path[len(imp.Path)-1]
-	res, ok := r.resolveModulePath(m, prefix, imp.Global, report, imp.Span)
-	if !ok {
-		return false
-	}
-	if res.Def == nil || res.Def.Mod == nil {
-		if report {
-			r.errorf(imp.Span, "unresolved import `%s`: `%s` is not a module", strings.Join(imp.Path, "::"), strings.Join(prefix, "::"))
-		}
-		return report
-	}
-	target := res.Def.Mod
-	found := false
+	found, determined := false, true
 	for _, ns := range []Namespace{TypeNS, ValueNS} {
-		if b := target.Lookup(last, ns); b != nil {
-			r.bindImport(m, imp.Name, ns, b.Res, imp.Span)
+		res, ok, det := lookup(ns)
+		if !det {
+			determined = false
+			continue
+		}
+		if ok {
+			r.bindImport(m, imp, ns, res)
 			found = true
 		}
 	}
-	if !found && r.isMacro(target.Crate, last) {
+	if !determined {
+		return false
+	}
+	if !found && r.isMacro(macroCrate, last) {
 		return true // macros live in a namespace we don't model
 	}
 	if !found {
 		if report {
-			r.errorf(imp.Span, "unresolved import `%s`: no `%s` in `%s`", strings.Join(imp.Path, "::"), last, strings.Join(prefix, "::"))
+			if len(imp.Path) == 1 {
+				r.errorf(imp.Span, "unresolved import `%s`", last)
+			} else {
+				r.errorf(imp.Span, "unresolved import `%s`: no `%s` in `%s`", strings.Join(imp.Path, "::"), last, strings.Join(imp.Path[:len(imp.Path)-1], "::"))
+			}
 			return true
 		}
 		return false
@@ -538,10 +687,17 @@ func (r *Resolver) tryImport(imp *Import, report bool) bool {
 	return true
 }
 
-func (r *Resolver) bindImport(m *Module, name string, ns Namespace, res Res, sp lexer.Span) {
+func (r *Resolver) bindImport(m *Module, imp *Import, ns Namespace, res Res) {
+	name := imp.Name
 	if name == "_" {
 		if res.Def != nil && res.Def.Kind == DefTrait {
+			for _, t := range m.AnonTraits {
+				if t == res.Def {
+					return
+				}
+			}
 			m.AnonTraits = append(m.AnonTraits, res.Def)
+			r.changed = true
 		}
 		return
 	}
@@ -552,15 +708,23 @@ func (r *Resolver) bindImport(m *Module, name string, ns Namespace, res Res, sp 
 	if ns == ValueNS {
 		tbl = m.Values
 	}
-	if old, ok := tbl[name]; ok && !old.Import {
+	old, ok := tbl[name]
+	if ok && !old.Import {
 		return // items shadow imports
 	}
-	tbl[name] = &NameBinding{Res: res, Import: true, Span: sp}
+	if ok && old.Res == res {
+		return
+	}
+	b := &NameBinding{Res: res, Import: true, Span: imp.Span}
+	tbl[name] = b
+	r.bindingImport[b] = imp
+	r.changed = true
 }
 
 // resolveModulePath resolves a path whose every segment must be a module-like
-// (module, crate, enum, trait).
-func (r *Resolver) resolveModulePath(m *Module, segs []string, global bool, report bool, sp lexer.Span) (Res, bool) {
+// (module, crate, enum, trait) on behalf of import imp. ok=false without a
+// reported error means the path may still resolve once pending imports are.
+func (r *Resolver) resolveModulePath(m *Module, segs []string, global bool, report bool, sp lexer.Span, imp *Import) (Res, bool) {
 	if len(segs) == 0 {
 		return defRes(m.Normal.Def), true
 	}
@@ -582,7 +746,11 @@ func (r *Resolver) resolveModulePath(m *Module, segs []string, global bool, repo
 		start = 1
 	case m.Crate.Is2015() && segs[0] != "self" && segs[0] != "super" && segs[0] != "crate" && segs[0] != "Self":
 		// 2015 `use` paths are relative to the crate root
-		if b := m.Crate.Root.Lookup(segs[0], TypeNS); b != nil {
+		b, det := r.lookupDet(m.Crate.Root, segs[0], TypeNS, imp)
+		if !det {
+			return Res{}, false
+		}
+		if b != nil {
 			cur = b.Res
 			start = 1
 		} else if cr := r.ExternCrate(m.Crate, segs[0]); cr != nil {
@@ -609,7 +777,10 @@ func (r *Resolver) resolveModulePath(m *Module, segs []string, global bool, repo
 		}
 		cur = defRes(pm.Def)
 	default:
-		res, ok := r.LookupLexical(m, segs[0], TypeNS)
+		res, ok, det := r.lookupUseFirst(m, segs[0], TypeNS, imp)
+		if !det {
+			return Res{}, false
+		}
 		if !ok {
 			if report {
 				r.errorf(sp, "unresolved import: cannot find `%s`", segs[0])
@@ -626,7 +797,10 @@ func (r *Resolver) resolveModulePath(m *Module, segs []string, global bool, repo
 			}
 			return Res{}, false
 		}
-		b := cur.Def.Mod.Lookup(s, TypeNS)
+		b, det := r.lookupDet(cur.Def.Mod, s, TypeNS, imp)
+		if !det {
+			return Res{}, false
+		}
 		if b == nil {
 			if report {
 				r.errorf(sp, "cannot find `%s` in `%s`", s, cur.Def.Name)
@@ -699,7 +873,24 @@ type FirstLookup func(name string, ns Namespace) (Res, bool)
 
 // ResolvePath resolves segments of a path appearing in scope m. ns is the
 // namespace of the final segment.
+//
+// Like rustc, a path `prim::rest` whose first segment names a primitive
+// type but resolves to a module (`use core::char;`) falls back to the
+// primitive type when the path fails to resolve or resolves to a module:
+// `char::from(b)` is `<char>::from(b)` since `core::char` has no `from`.
 func (r *Resolver) ResolvePath(m *Module, segs []string, global bool, ns Namespace, first FirstLookup) (PathResult, error) {
+	pr, err := r.resolvePath(m, segs, global, ns, first)
+	if !global && len(segs) > 0 && primTypes[segs[0]] && (ns == TypeNS || len(segs) > 1) {
+		isMod := err == nil && pr.Consumed == len(segs) && pr.Res.Kind == ResDef && pr.Res.Def != nil &&
+			(pr.Res.Def.Kind == DefMod || pr.Res.Def.Kind == DefCrate)
+		if err != nil || isMod {
+			return PathResult{Res: Res{Kind: ResPrim, Prim: segs[0]}, Consumed: 1}, nil
+		}
+	}
+	return pr, err
+}
+
+func (r *Resolver) resolvePath(m *Module, segs []string, global bool, ns Namespace, first FirstLookup) (PathResult, error) {
 	if len(segs) == 0 {
 		return PathResult{}, fmt.Errorf("empty path")
 	}

@@ -136,7 +136,7 @@ func (p *Parser) parseItemAfterAttrs(lo lexer.Pos, attrs []*ast.Attr) *ast.Item 
 				p.next()
 				if p.is("self") {
 					t := p.next()
-					it.Name = ast.Ident{Name: t.Text, Span: t.Span}
+					it.Name = ast.Ident{Name: t.Text, Span: t.Span, Hyg: t.Hyg}
 				} else {
 					it.Name = p.parseIdentTok()
 				}
@@ -190,7 +190,7 @@ func (p *Parser) parseAnyIdent() ast.Ident {
 		p.errExpected("identifier")
 	}
 	p.next()
-	return ast.Ident{Name: t.Text, Span: t.Span}
+	return ast.Ident{Name: t.Text, Span: t.Span, Hyg: t.Hyg}
 }
 
 func (p *Parser) parseFn(it *ast.Item, q fnQuals) *ast.FnItem {
@@ -481,7 +481,7 @@ func (p *Parser) parseImpl(unsafe bool) *ast.ImplItem {
 		default:
 			p.errorf("expected a trait path in impl")
 		}
-		im.SelfTy = p.parseTypeNoPlus()
+		im.SelfTy = p.parseType()
 	} else {
 		im.SelfTy = ty
 	}

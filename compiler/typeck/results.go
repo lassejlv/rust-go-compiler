@@ -34,13 +34,13 @@ type Adjustment struct {
 type CalleeKind int
 
 const (
-	CallFn       CalleeKind = iota // static call to Def with Args
-	CallVirtual                    // trait-object method: Def = trait method, Args[0] = dyn type
-	CallCtor                       // tuple struct / variant constructor: Def = struct or variant
-	CallFnPtr                      // indirect call through a fn pointer value
-	CallClosure                    // direct call of a closure value; Ty = closure type
-	CallDynFn                      // call of a dyn Fn* trait object; Ty = dyn type
-	CallBuiltin                    // builtin operation (e.g. Clone of a Copy type, Fn impls) — see Def/Args
+	CallFn      CalleeKind = iota // static call to Def with Args
+	CallVirtual                   // trait-object method: Def = trait method, Args[0] = dyn type
+	CallCtor                      // tuple struct / variant constructor: Def = struct or variant
+	CallFnPtr                     // indirect call through a fn pointer value
+	CallClosure                   // direct call of a closure value; Ty = closure type
+	CallDynFn                     // call of a dyn Fn* trait object; Ty = dyn type
+	CallBuiltin                   // builtin operation (e.g. Clone of a Copy type, Fn impls) — see Def/Args
 )
 
 // Callee describes the target of a call, method call, or overloaded operator.
@@ -55,12 +55,12 @@ type Callee struct {
 type ValueResKind int
 
 const (
-	VLocal ValueResKind = iota
-	VFn                  // function item value (Def, Args) — includes ctor fns
-	VConst               // const item (Def, Args)
-	VStatic              // static item
-	VUnitCtor            // unit struct / variant value (Def = struct/variant, Args = adt args)
-	VConstParam          // const generic value (Value)
+	VLocal      ValueResKind = iota
+	VFn                      // function item value (Def, Args) — includes ctor fns
+	VConst                   // const item (Def, Args)
+	VStatic                  // static item
+	VUnitCtor                // unit struct / variant value (Def = struct/variant, Args = adt args)
+	VConstParam              // const generic value (Value)
 )
 
 type ValueRes struct {
@@ -125,11 +125,11 @@ type ForInfo struct {
 type TryInfo struct {
 	IsOption bool
 	// From converts the error (Result only), nil if the error types match.
-	From      *Callee
-	ErrTy     Ty // source error type
-	OutErrTy  Ty // target error type
-	OkTy      Ty
-	OutTy     Ty // the enclosing fn/closure return type
+	From     *Callee
+	ErrTy    Ty // source error type
+	OutErrTy Ty // target error type
+	OkTy     Ty
+	OutTy    Ty // the enclosing fn/closure return type
 }
 
 // Results holds the type-checking results of one body instance.

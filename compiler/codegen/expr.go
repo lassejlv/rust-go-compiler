@@ -462,6 +462,11 @@ func (fc *fnGen) pathOperand(x *ast.PathExpr, t Ty) operand {
 		if d.InTrait() {
 			d, args = fc.resolveAssocConst(d, args)
 		}
+		if fc.g.constCached(d, t) && !fc.inConst {
+			// a place in the const's static cache: `&CONST[..]` and
+			// `&CONST.field` borrow 'static data (rvalue promotion)
+			return operand{s: "(*" + fc.g.fnName(d, args) + "_p())", place: true, ty: t}
+		}
 		return operand{s: fc.g.fnName(d, args) + "()", ty: t}
 	case typeck.VStatic:
 		return operand{s: fc.g.staticVar(vr.Def), place: true, ty: t}
@@ -1022,6 +1027,9 @@ func (fc *fnGen) callExpr(x *ast.CallExpr, t Ty) string {
 		op := fc.asPlace(fc.adjusted(x.Fn))
 		args := fc.argValues(x.Args)
 		ci := fc.g.tcx.Closures[c.Ty]
+		if ci == nil {
+			fc.g.fatalf("%s: internal error: call of `%s` resolved to non-closure type", x.Span.Lo, c.Ty)
+		}
 		name := fc.g.closureFn(c.Ty)
 		all := append([]string{"&" + op.s}, args...)
 		res := fc.finishCall(fmt.Sprintf("%s(%s)", name, strings.Join(all, ", ")), t)
@@ -1250,10 +1258,40 @@ func (fc *fnGen) promotableDyn(e ast.Expr) bool {
 			return ok(x.X)
 		case *ast.PathExpr:
 			vr := fc.r.Paths[x.ID]
-			if vr != nil && vr.Kind == typeck.VConst {
+			if vr != nil && (vr.Kind == typeck.VConst || vr.Kind == typeck.VFn) {
 				hasConst = true
 				return true
 			}
+		case *ast.FieldExpr:
+			// `&CONST.field`
+			return ok(x.X) && hasConst
+		case *ast.StructExpr:
+			if x.Base != nil || x.Rest {
+				return false
+			}
+			for _, f := range x.Fields {
+				if !ok(f.Expr) {
+					return false
+				}
+			}
+			hasConst = true
+			return true
+		case *ast.CallExpr:
+			pe, isPath := unparen(x.Fn).(*ast.PathExpr)
+			if !isPath {
+				return false
+			}
+			vr := fc.r.Paths[pe.ID]
+			if vr == nil || vr.Kind != typeck.VFn || (vr.Def.Kind != DefStruct && vr.Def.Kind != DefVariant) {
+				return false
+			}
+			for _, a := range x.Args {
+				if !ok(a) {
+					return false
+				}
+			}
+			hasConst = true
+			return true
 		case *ast.TupleExpr:
 			for _, el := range x.Elems {
 				if !ok(el) {
@@ -1263,7 +1301,7 @@ func (fc *fnGen) promotableDyn(e ast.Expr) bool {
 			return true
 		case *ast.ArrayExpr:
 			for _, el := range x.Elems {
-				if !ok(el) || len(fc.r.Adjust[el.GetID()]) > 0 {
+				if !ok(el) {
 					return false
 				}
 			}

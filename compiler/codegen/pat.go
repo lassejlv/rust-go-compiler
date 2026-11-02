@@ -351,7 +351,10 @@ func (fc *fnGen) pbind(p ast.Pat, pl pplace, t Ty, moves *[]string, inOr bool) {
 			return // handled by slice binding
 		}
 		name := fc.localName(l)
-		if l.ByRef {
+		// or-pattern alternatives share the local but may bind it by value
+		// in one alternative and by reference in another
+		byRef := l.ByRef && t != l.Ty
+		if byRef {
 			if pl.unsized {
 				fc.line("%s = %s;", name, pl.s)
 			} else {

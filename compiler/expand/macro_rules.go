@@ -14,8 +14,11 @@ import (
 type macroDef struct {
 	name  string
 	crate string // defining crate ("std" => $crate is ::std)
-	rules []*macroRule
-	span  lexer.Span
+	// exported reports #[macro_export]: the macro lives at its crate's
+	// root and is visible to other crates.
+	exported bool
+	rules    []*macroRule
+	span     lexer.Span
 }
 
 type macroRule struct {
@@ -557,7 +560,8 @@ func (e *Expander) invokeMacroRules(def *macroDef, mac *ast.MacCall) ([]ast.Toke
 			return nil, errAt(mac.Span, "macro `%s!` matching is too complex", def.name)
 		}
 		if ok {
-			t := &transcriber{def: def, binds: binds, call: mac.Span}
+			hygieneMarks++
+			t := &transcriber{def: def, binds: binds, call: mac.Span, mark: hygieneMarks}
 			return t.emit(r.rhs, nil)
 		}
 	}
@@ -575,7 +579,11 @@ type transcriber struct {
 	def   *macroDef
 	binds *bindList
 	call  lexer.Span
+	mark  uint32 // hygiene mark for identifiers from the macro body
 }
+
+// hygieneMarks numbers macro_rules expansions (hygiene of local variables).
+var hygieneMarks uint32
 
 func (t *transcriber) lookup(name string, idx []int) (*mnode, bool) {
 	n := t.binds.lookup(name)
@@ -599,7 +607,13 @@ func (t *transcriber) emit(ns []*tnode, idx []int) ([]ast.TokenTree, error) {
 	for _, n := range ns {
 		switch n.kind {
 		case tTok:
-			out = append(out, n.tt)
+			tt := n.tt
+			if tt.Delim == 0 && tt.Tok.Kind == lexer.Ident && tt.Tok.Text != "self" && tt.Tok.Text != "Self" {
+				// local variables named by the macro body are distinct
+				// from the caller's (macro_rules hygiene)
+				tt.Tok.Hyg = t.mark
+			}
+			out = append(out, tt)
 		case tGroup:
 			inner, err := t.emit(n.sub, idx)
 			if err != nil {

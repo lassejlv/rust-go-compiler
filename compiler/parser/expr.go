@@ -340,7 +340,7 @@ func (p *Parser) parseDotSuffix(e ast.Expr, lo lexer.Pos) ast.Expr {
 	switch t.Kind {
 	case lexer.Int:
 		p.next()
-		return &ast.FieldExpr{ExprBase: p.eb(lo), X: e, Name: ast.Ident{Name: t.Text, Span: t.Span}}
+		return &ast.FieldExpr{ExprBase: p.eb(lo), X: e, Name: ast.Ident{Name: t.Text, Span: t.Span, Hyg: t.Hyg}}
 	case lexer.Float:
 		// `x.0.1` lexed as a float `0.1`
 		p.next()
@@ -361,7 +361,7 @@ func (p *Parser) parseDotSuffix(e ast.Expr, lo lexer.Pos) ast.Expr {
 			return &ast.AwaitExpr{ExprBase: p.eb(lo), X: e}
 		}
 		p.next()
-		name := ast.Ident{Name: t.Text, Span: t.Span}
+		name := ast.Ident{Name: t.Text, Span: t.Span, Hyg: t.Hyg}
 		var gargs *ast.GenericArgs
 		if p.is("::") {
 			p.next()
@@ -725,7 +725,7 @@ func (p *Parser) parseStructLit(lo lexer.Pos, qself *ast.QSelf, path *ast.Path) 
 	p.expect("{")
 	se := &ast.StructExpr{QSelf: qself, Path: path}
 	for !p.is("}") {
-		p.parseOuterAttrs()
+		fattrs := p.parseOuterAttrs()
 		if p.eat("..") {
 			if !p.is("}") {
 				se.Base = p.parseExpr()
@@ -740,14 +740,14 @@ func (p *Parser) parseStructLit(lo lexer.Pos, qself *ast.QSelf, path *ast.Path) 
 		switch {
 		case t.Kind == lexer.Int:
 			p.next()
-			name = ast.Ident{Name: t.Text, Span: t.Span}
+			name = ast.Ident{Name: t.Text, Span: t.Span, Hyg: t.Hyg}
 		case t.Kind == lexer.Ident:
 			p.next()
-			name = ast.Ident{Name: t.Text, Span: t.Span}
+			name = ast.Ident{Name: t.Text, Span: t.Span, Hyg: t.Hyg}
 		default:
 			p.errExpected("field name")
 		}
-		fi := &ast.FieldInit{Name: name}
+		fi := &ast.FieldInit{Name: name, Attrs: fattrs}
 		if p.eat(":") {
 			fi.Expr = p.parseExpr()
 		} else {

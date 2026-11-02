@@ -6,7 +6,11 @@ mod iter;
 mod sort;
 
 pub use self::index::{range, SliceIndex};
-pub use self::iter::{Chunks, ChunksExact, ChunksExactMut, ChunksMut, Iter, IterMut, RChunks, Split, Windows};
+pub use self::iter::{
+    ChunkBy, ChunkByMut, Chunks, ChunksExact, ChunksExactMut, ChunksMut, Iter, IterMut, RChunks, RChunksExact,
+    RChunksExactMut, RChunksMut, RSplit, RSplitMut, RSplitN, RSplitNMut, Split, SplitInclusive, SplitInclusiveMut,
+    SplitMut, SplitN, SplitNMut, Windows,
+};
 pub use crate::ascii::EscapeAscii;
 
 use crate::cmp::Ordering;
@@ -35,6 +39,27 @@ pub fn from_ref<T>(s: &T) -> &[T] {
 pub fn from_mut<T>(s: &mut T) -> &mut [T] {
     unsafe { from_raw_parts_mut(s as *mut T, 1) }
 }
+
+/// The error type returned by [`get_disjoint_mut`][`slice::get_disjoint_mut`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GetDisjointMutError {
+    /// An index provided was out-of-bounds for the slice.
+    IndexOutOfBounds,
+    /// Two indices provided were overlapping.
+    OverlappingIndices,
+}
+
+impl crate::fmt::Display for GetDisjointMutError {
+    fn fmt(&self, f: &mut crate::fmt::Formatter<'_>) -> crate::fmt::Result {
+        let msg = match self {
+            GetDisjointMutError::IndexOutOfBounds => "an index is out of bounds",
+            GetDisjointMutError::OverlappingIndices => "there were overlapping indices",
+        };
+        crate::fmt::Display::fmt(msg, f)
+    }
+}
+
+impl crate::error::Error for GetDisjointMutError {}
 
 #[inline(never)]
 #[track_caller]
@@ -328,6 +353,216 @@ impl<T> [T] {
         }
     }
 
+    /// Divides one mutable slice into two at an index, returning `None` if the slice is too short.
+    #[inline]
+    pub fn split_at_mut_checked(&mut self, mid: usize) -> Option<(&mut [T], &mut [T])> {
+        if mid <= self.len() {
+            Some(self.split_at_mut(mid))
+        } else {
+            None
+        }
+    }
+
+    /// Divides one slice into two at an index, without doing bounds checking.
+    #[inline]
+    pub unsafe fn split_at_unchecked(&self, mid: usize) -> (&[T], &[T]) {
+        let len = self.len();
+        let p = self.as_ptr();
+        (from_raw_parts(p, mid), from_raw_parts(p.add(mid), len - mid))
+    }
+
+    /// Divides one mutable slice into two at an index, without doing bounds checking.
+    #[inline]
+    pub unsafe fn split_at_mut_unchecked(&mut self, mid: usize) -> (&mut [T], &mut [T]) {
+        let len = self.len();
+        let p = self.as_mut_ptr();
+        (from_raw_parts_mut(p, mid), from_raw_parts_mut(p.add(mid), len - mid))
+    }
+
+    /// Returns an array reference to the first `N` items in the slice.
+    #[inline]
+    pub fn first_chunk<const N: usize>(&self) -> Option<&[T; N]> {
+        if self.len() < N {
+            None
+        } else {
+            Some(unsafe { &*(self.as_ptr() as *const [T; N]) })
+        }
+    }
+
+    /// Returns a mutable array reference to the first `N` items in the slice.
+    #[inline]
+    pub fn first_chunk_mut<const N: usize>(&mut self) -> Option<&mut [T; N]> {
+        if self.len() < N {
+            None
+        } else {
+            Some(unsafe { &mut *(self.as_mut_ptr() as *mut [T; N]) })
+        }
+    }
+
+    /// Returns an array reference to the first `N` items in the slice and the remaining slice.
+    #[inline]
+    pub fn split_first_chunk<const N: usize>(&self) -> Option<(&[T; N], &[T])> {
+        if self.len() < N {
+            None
+        } else {
+            let len = self.len();
+            let p = self.as_ptr();
+            unsafe { Some((&*(p as *const [T; N]), from_raw_parts(p.add(N), len - N))) }
+        }
+    }
+
+    /// Returns a mutable array reference to the first `N` items in the slice and the remaining slice.
+    #[inline]
+    pub fn split_first_chunk_mut<const N: usize>(&mut self) -> Option<(&mut [T; N], &mut [T])> {
+        if self.len() < N {
+            None
+        } else {
+            let len = self.len();
+            let p = self.as_mut_ptr();
+            unsafe { Some((&mut *(p as *mut [T; N]), from_raw_parts_mut(p.add(N), len - N))) }
+        }
+    }
+
+    /// Returns an array reference to the last `N` items in the slice and the remaining slice.
+    #[inline]
+    pub fn split_last_chunk<const N: usize>(&self) -> Option<(&[T], &[T; N])> {
+        if self.len() < N {
+            None
+        } else {
+            let len = self.len();
+            let p = self.as_ptr();
+            unsafe { Some((from_raw_parts(p, len - N), &*(p.add(len - N) as *const [T; N]))) }
+        }
+    }
+
+    /// Returns a mutable array reference to the last `N` items in the slice and the remaining slice.
+    #[inline]
+    pub fn split_last_chunk_mut<const N: usize>(&mut self) -> Option<(&mut [T], &mut [T; N])> {
+        if self.len() < N {
+            None
+        } else {
+            let len = self.len();
+            let p = self.as_mut_ptr();
+            unsafe { Some((from_raw_parts_mut(p, len - N), &mut *(p.add(len - N) as *mut [T; N]))) }
+        }
+    }
+
+    /// Returns an array reference to the last `N` items in the slice.
+    #[inline]
+    pub fn last_chunk<const N: usize>(&self) -> Option<&[T; N]> {
+        if self.len() < N {
+            None
+        } else {
+            let len = self.len();
+            Some(unsafe { &*(self.as_ptr().add(len - N) as *const [T; N]) })
+        }
+    }
+
+    /// Returns a mutable array reference to the last `N` items in the slice.
+    #[inline]
+    pub fn last_chunk_mut<const N: usize>(&mut self) -> Option<&mut [T; N]> {
+        if self.len() < N {
+            None
+        } else {
+            let len = self.len();
+            Some(unsafe { &mut *(self.as_mut_ptr().add(len - N) as *mut [T; N]) })
+        }
+    }
+
+    /// Splits the slice into a slice of `N`-element arrays, starting at the beginning
+    /// of the slice, and a remainder slice with length strictly less than `N`.
+    #[inline]
+    #[track_caller]
+    pub fn as_chunks<const N: usize>(&self) -> (&[[T; N]], &[T]) {
+        if N == 0 {
+            crate::rt::panic_str("chunk size must be non-zero", file!(), line!(), column!());
+        }
+        let len = self.len();
+        let n = len / N;
+        let p = self.as_ptr();
+        unsafe { (from_raw_parts(p as *const [T; N], n), from_raw_parts(p.add(n * N), len - n * N)) }
+    }
+
+    /// Splits the slice into a slice of `N`-element arrays, starting at the end
+    /// of the slice, and a remainder slice with length strictly less than `N`.
+    #[inline]
+    #[track_caller]
+    pub fn as_rchunks<const N: usize>(&self) -> (&[T], &[[T; N]]) {
+        if N == 0 {
+            crate::rt::panic_str("chunk size must be non-zero", file!(), line!(), column!());
+        }
+        let len = self.len();
+        let n = len / N;
+        let r = len - n * N;
+        let p = self.as_ptr();
+        unsafe { (from_raw_parts(p, r), from_raw_parts(p.add(r) as *const [T; N], n)) }
+    }
+
+    /// Splits the slice into a slice of `N`-element arrays (mutable), and a remainder slice.
+    #[inline]
+    #[track_caller]
+    pub fn as_chunks_mut<const N: usize>(&mut self) -> (&mut [[T; N]], &mut [T]) {
+        if N == 0 {
+            crate::rt::panic_str("chunk size must be non-zero", file!(), line!(), column!());
+        }
+        let len = self.len();
+        let n = len / N;
+        let p = self.as_mut_ptr();
+        unsafe { (from_raw_parts_mut(p as *mut [T; N], n), from_raw_parts_mut(p.add(n * N), len - n * N)) }
+    }
+
+    /// Splits the slice into a slice of `N`-element arrays, assuming that there's no remainder.
+    #[inline]
+    pub unsafe fn as_chunks_unchecked<const N: usize>(&self) -> &[[T; N]] {
+        from_raw_parts(self.as_ptr() as *const [T; N], self.len() / N)
+    }
+
+    /// Returns the two raw pointers spanning the slice.
+    #[inline]
+    pub fn as_ptr_range(&self) -> crate::ops::Range<*const T> {
+        let p = self.as_ptr();
+        unsafe { p..p.add(self.len()) }
+    }
+
+    /// Returns the two unsafe mutable pointers spanning the slice.
+    #[inline]
+    pub fn as_mut_ptr_range(&mut self) -> crate::ops::Range<*mut T> {
+        let len = self.len();
+        let p = self.as_mut_ptr();
+        unsafe { p..p.add(len) }
+    }
+
+    /// Swaps two elements in the slice, without doing bounds checking.
+    #[inline]
+    pub unsafe fn swap_unchecked(&mut self, a: usize, b: usize) {
+        let p = self.as_mut_ptr();
+        crate::ptr::swap(p.add(a), p.add(b));
+    }
+
+    /// Returns mutable references to many indices at once.
+    pub fn get_disjoint_mut<const N: usize>(
+        &mut self,
+        indices: [usize; N],
+    ) -> Result<[&mut T; N], GetDisjointMutError> {
+        let len = self.len();
+        let mut i = 0;
+        while i < N {
+            if indices[i] >= len {
+                return Err(GetDisjointMutError::IndexOutOfBounds);
+            }
+            let mut j = 0;
+            while j < i {
+                if indices[i] == indices[j] {
+                    return Err(GetDisjointMutError::OverlappingIndices);
+                }
+                j += 1;
+            }
+            i += 1;
+        }
+        let p = self.as_mut_ptr();
+        Ok(crate::array::from_fn(|k| unsafe { &mut *p.add(indices[k]) }))
+    }
+
     /// Returns an iterator over subslices separated by elements that match `pred`.
     #[inline]
     pub fn split<F>(&self, pred: F) -> Split<'_, T, F>
@@ -335,6 +570,195 @@ impl<T> [T] {
         F: FnMut(&T) -> bool,
     {
         Split::new(self, pred)
+    }
+
+    /// Returns an iterator over mutable subslices separated by elements that match `pred`.
+    #[inline]
+    pub fn split_mut<F>(&mut self, pred: F) -> SplitMut<'_, T, F>
+    where
+        F: FnMut(&T) -> bool,
+    {
+        SplitMut::new(self, pred)
+    }
+
+    /// Returns an iterator over subslices separated by elements that match `pred`.
+    /// The matched element is contained in the end of the previous subslice as a terminator.
+    #[inline]
+    pub fn split_inclusive<F>(&self, pred: F) -> SplitInclusive<'_, T, F>
+    where
+        F: FnMut(&T) -> bool,
+    {
+        SplitInclusive::new(self, pred)
+    }
+
+    /// Returns an iterator over mutable subslices separated by elements that match `pred`,
+    /// including the terminator.
+    #[inline]
+    pub fn split_inclusive_mut<F>(&mut self, pred: F) -> SplitInclusiveMut<'_, T, F>
+    where
+        F: FnMut(&T) -> bool,
+    {
+        SplitInclusiveMut::new(self, pred)
+    }
+
+    /// Returns an iterator over subslices separated by elements that match `pred`,
+    /// starting at the end of the slice and working backwards.
+    #[inline]
+    pub fn rsplit<F>(&self, pred: F) -> RSplit<'_, T, F>
+    where
+        F: FnMut(&T) -> bool,
+    {
+        RSplit::new(self, pred)
+    }
+
+    /// Returns an iterator over mutable subslices separated by elements that match `pred`,
+    /// starting at the end of the slice and working backwards.
+    #[inline]
+    pub fn rsplit_mut<F>(&mut self, pred: F) -> RSplitMut<'_, T, F>
+    where
+        F: FnMut(&T) -> bool,
+    {
+        RSplitMut::new(self, pred)
+    }
+
+    /// Returns an iterator over subslices separated by elements that match `pred`,
+    /// limited to returning at most `n` items.
+    #[inline]
+    pub fn splitn<F>(&self, n: usize, pred: F) -> SplitN<'_, T, F>
+    where
+        F: FnMut(&T) -> bool,
+    {
+        SplitN::wrap(Split::new(self, pred), n)
+    }
+
+    /// Returns an iterator over mutable subslices separated by elements that match `pred`,
+    /// limited to returning at most `n` items.
+    #[inline]
+    pub fn splitn_mut<F>(&mut self, n: usize, pred: F) -> SplitNMut<'_, T, F>
+    where
+        F: FnMut(&T) -> bool,
+    {
+        SplitNMut::wrap(SplitMut::new(self, pred), n)
+    }
+
+    /// Returns an iterator over subslices separated by elements that match `pred`
+    /// limited to returning at most `n` items, starting from the end of the slice.
+    #[inline]
+    pub fn rsplitn<F>(&self, n: usize, pred: F) -> RSplitN<'_, T, F>
+    where
+        F: FnMut(&T) -> bool,
+    {
+        RSplitN::wrap(RSplit::new(self, pred), n)
+    }
+
+    /// Returns an iterator over mutable subslices separated by elements that match `pred`
+    /// limited to returning at most `n` items, starting from the end of the slice.
+    #[inline]
+    pub fn rsplitn_mut<F>(&mut self, n: usize, pred: F) -> RSplitNMut<'_, T, F>
+    where
+        F: FnMut(&T) -> bool,
+    {
+        RSplitNMut::wrap(RSplitMut::new(self, pred), n)
+    }
+
+    /// Returns an iterator over `chunk_size` elements of the slice at a time (mutable),
+    /// starting at the end of the slice.
+    #[inline]
+    #[track_caller]
+    pub fn rchunks_mut(&mut self, chunk_size: usize) -> RChunksMut<'_, T> {
+        if chunk_size == 0 {
+            chunk_size_zero();
+        }
+        RChunksMut::new(self, chunk_size)
+    }
+
+    /// Returns an iterator over exactly `chunk_size` elements of the slice at a time,
+    /// starting at the end of the slice.
+    #[inline]
+    #[track_caller]
+    pub fn rchunks_exact(&self, chunk_size: usize) -> RChunksExact<'_, T> {
+        if chunk_size == 0 {
+            chunk_size_zero();
+        }
+        RChunksExact::new(self, chunk_size)
+    }
+
+    /// Returns an iterator over exactly `chunk_size` elements of the slice at a time (mutable),
+    /// starting at the end of the slice.
+    #[inline]
+    #[track_caller]
+    pub fn rchunks_exact_mut(&mut self, chunk_size: usize) -> RChunksExactMut<'_, T> {
+        if chunk_size == 0 {
+            chunk_size_zero();
+        }
+        RChunksExactMut::new(self, chunk_size)
+    }
+
+    /// Returns an iterator over the slice producing non-overlapping runs of elements
+    /// using the predicate to separate them.
+    #[inline]
+    pub fn chunk_by<F>(&self, pred: F) -> ChunkBy<'_, T, F>
+    where
+        F: FnMut(&T, &T) -> bool,
+    {
+        ChunkBy::new(self, pred)
+    }
+
+    /// Returns an iterator over the slice producing non-overlapping mutable runs of
+    /// elements using the predicate to separate them.
+    #[inline]
+    pub fn chunk_by_mut<F>(&mut self, pred: F) -> ChunkByMut<'_, T, F>
+    where
+        F: FnMut(&T, &T) -> bool,
+    {
+        ChunkByMut::new(self, pred)
+    }
+
+    /// Transmutes the slice to a slice of another type, ensuring alignment of the types is maintained.
+    pub unsafe fn align_to<U>(&self) -> (&[T], &[U], &[T]) {
+        let tsize = crate::mem::size_of::<T>();
+        let usize_ = crate::mem::size_of::<U>();
+        if usize_ == 0 || tsize == 0 {
+            return (self, &[], &[]);
+        }
+        let ptr = self.as_ptr();
+        let offset = ptr.align_offset(crate::mem::align_of::<U>());
+        let len = self.len();
+        if offset > len {
+            return (self, &[], &[]);
+        }
+        let rest_bytes = (len - offset) * tsize;
+        let us_len = rest_bytes / usize_;
+        let used = us_len * usize_;
+        if used % tsize != 0 {
+            // The middle part must consist of whole `T`s on both ends.
+            let mut n = us_len;
+            while n > 0 && (n * usize_) % tsize != 0 {
+                n -= 1;
+            }
+            let ts_used = n * usize_ / tsize;
+            return (
+                from_raw_parts(ptr, offset),
+                from_raw_parts(ptr.add(offset) as *const U, n),
+                from_raw_parts(ptr.add(offset + ts_used), len - offset - ts_used),
+            );
+        }
+        let ts_used = used / tsize;
+        (
+            from_raw_parts(ptr, offset),
+            from_raw_parts(ptr.add(offset) as *const U, us_len),
+            from_raw_parts(ptr.add(offset + ts_used), len - offset - ts_used),
+        )
+    }
+
+    /// Transmutes the mutable slice to a mutable slice of another type, ensuring alignment of the types is maintained.
+    pub unsafe fn align_to_mut<U>(&mut self) -> (&mut [T], &mut [U], &mut [T]) {
+        let (a, b, c) = self.align_to::<U>();
+        (
+            from_raw_parts_mut(a.as_ptr() as *mut T, a.len()),
+            from_raw_parts_mut(b.as_ptr() as *mut U, b.len()),
+            from_raw_parts_mut(c.as_ptr() as *mut T, c.len()),
+        )
     }
 
     /// Returns `true` if the slice contains an element with the given value.
@@ -571,6 +995,35 @@ impl<T> [T] {
         (left, pivot, right)
     }
 
+    /// Reorders the slice with a comparator function such that the element at `index` is at its final sorted position.
+    pub fn select_nth_unstable_by<F>(&mut self, index: usize, compare: F) -> (&mut [T], &mut T, &mut [T])
+    where
+        F: FnMut(&T, &T) -> Ordering,
+    {
+        let len = self.len();
+        if index >= len {
+            crate::rt::panic_fmt(
+                format_args!("partition_at_index index {index} greater than length of slice {len}"),
+                file!(),
+                line!(),
+                column!(),
+            );
+        }
+        self.sort_unstable_by(compare);
+        let (left, rest) = self.split_at_mut(index);
+        let (pivot, right) = rest.split_first_mut().unwrap();
+        (left, pivot, right)
+    }
+
+    /// Reorders the slice with a key extraction function such that the element at `index` is at its final sorted position.
+    pub fn select_nth_unstable_by_key<K, F>(&mut self, index: usize, mut f: F) -> (&mut [T], &mut T, &mut [T])
+    where
+        F: FnMut(&T) -> K,
+        K: Ord,
+    {
+        self.select_nth_unstable_by(index, |a, b| f(a).cmp(&f(b)))
+    }
+
     /// Checks if the elements of this slice are sorted.
     pub fn is_sorted(&self) -> bool
     where
@@ -790,6 +1243,21 @@ impl<T> [T] {
         Self: Join<Separator>,
     {
         Join::join(self, sep)
+    }
+}
+
+impl<T, const N: usize> [[T; N]] {
+    /// Takes a `&[[T; N]]`, and flattens it to a `&[T]`.
+    #[inline]
+    pub fn as_flattened(&self) -> &[T] {
+        unsafe { from_raw_parts(self.as_ptr() as *const T, self.len() * N) }
+    }
+
+    /// Takes a `&mut [[T; N]]`, and flattens it to a `&mut [T]`.
+    #[inline]
+    pub fn as_flattened_mut(&mut self) -> &mut [T] {
+        let len = self.len() * N;
+        unsafe { from_raw_parts_mut(self.as_mut_ptr() as *mut T, len) }
     }
 }
 
@@ -1103,7 +1571,7 @@ macro_rules! __std_slice_vec_concat {
     };
 }
 
-__std_slice_vec_concat! { Vec<T>, &'x [T], &'x Vec<T>, Box<[T]> }
+__std_slice_vec_concat! { Vec<T>, &'x [T], &'x mut [T], &'x Vec<T>, Box<[T]>, crate::borrow::Cow<'x, [T]>, crate::rc::Rc<[T]>, crate::sync::Arc<[T]> }
 
 impl<T: Clone, const N: usize> Concat for [[T; N]] {
     type Output = Vec<T>;

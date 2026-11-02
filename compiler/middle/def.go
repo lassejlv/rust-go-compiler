@@ -1,6 +1,7 @@
 package middle
 
 import (
+	"strconv"
 	"strings"
 
 	"rustgo/compiler/ast"
@@ -55,7 +56,7 @@ type Def struct {
 	Trait   *TraitInfo
 	Impl    *ImplInfo
 	Fn      *FnInfo
-	Const   *ConstInfo  // const / static
+	Const   *ConstInfo // const / static
 	AssocTy *AssocTyInfo
 	Alias   *AliasInfo
 
@@ -212,7 +213,7 @@ type FnInfo struct {
 	Ast     *ast.FnItem
 	Sig     *FnSig // lowered lazily
 	HasSelf bool
-	Extern  bool   // extern "C" foreign fn
+	Extern  bool // extern "C" foreign fn
 	// Opaque types (impl Trait in return position) declared by the signature:
 	// OpaqueBounds[i] are the bounds of Opaque(def, args, i).
 	OpaqueBounds [][]*Predicate
@@ -251,14 +252,14 @@ type AliasInfo struct {
 // Generics
 
 type GenericParamDef struct {
-	Name    string
-	Index   int
-	Const   bool
-	ConstTy Ty
-	Default ast.Type
-	Def     *Def // the TyParam/ConstParam def
-	Owner   *Def
-	Ast     *ast.GenericParam
+	Name      string
+	Index     int
+	Const     bool
+	ConstTy   Ty
+	Default   ast.Type
+	Def       *Def // the TyParam/ConstParam def
+	Owner     *Def
+	Ast       *ast.GenericParam
 	Synthetic bool // impl Trait in argument position
 	// MaybeUnsized: the param has a `?Sized` bound (otherwise it is
 	// implicitly Sized).
@@ -353,13 +354,13 @@ const (
 type ResKind int
 
 const (
-	ResErr ResKind = iota
-	ResDef         // Def
-	ResPrim        // Prim (a primitive type name)
-	ResSelfTy      // Def = impl or trait providing Self
-	ResLocal       // Local (typeck)
-	ResSelfCtor    // Def = impl (Self(..) / Self in value ns for tuple/unit structs)
-	ResCtor        // Def = struct or variant used as constructor in value NS
+	ResErr      ResKind = iota
+	ResDef              // Def
+	ResPrim             // Prim (a primitive type name)
+	ResSelfTy           // Def = impl or trait providing Self
+	ResLocal            // Local (typeck)
+	ResSelfCtor         // Def = impl (Self(..) / Self in value ns for tuple/unit structs)
+	ResCtor             // Def = struct or variant used as constructor in value NS
 )
 
 type Res struct {
@@ -394,7 +395,7 @@ type Module struct {
 	// Pending imports to resolve.
 	Imports []*Import
 	// AnonTraits are traits imported with `use Trait as _`.
-	AnonTraits []*Def
+	AnonTraits    []*Def
 	traitsInScope map[*Def]bool
 }
 
@@ -437,8 +438,8 @@ func (m *Module) TraitsInScope(prelude *Module) map[*Def]bool {
 
 // Import is a single resolved-or-pending `use` binding.
 type Import struct {
-	Module *Module    // importing module
-	Path   []string   // full path segments (may start with "crate", "self", "super", "::")
+	Module *Module  // importing module
+	Path   []string // full path segments (may start with "crate", "self", "super", "::")
 	Global bool
 	Name   string // binding name ("" for glob)
 	Glob   bool
@@ -501,4 +502,22 @@ func (m *Module) ParentModule() *Module {
 		return n
 	}
 	return n.Parent.Normal
+}
+
+// ReprAlign returns N for #[repr(align(N))] (0 if absent).
+func (d *Def) ReprAlign() uint64 {
+	for _, a := range d.Attrs {
+		if a.Path != "repr" || len(a.Tokens) == 0 || a.Tokens[0].Delim != '(' {
+			continue
+		}
+		in := a.Tokens[0].Inner
+		for i := 0; i+1 < len(in); i++ {
+			if in[i].Delim == 0 && in[i].Tok.Text == "align" && in[i+1].Delim == '(' && len(in[i+1].Inner) == 1 {
+				if n, err := strconv.ParseUint(strings.ReplaceAll(in[i+1].Inner[0].Tok.Text, "_", ""), 0, 64); err == nil {
+					return n
+				}
+			}
+		}
+	}
+	return 0
 }

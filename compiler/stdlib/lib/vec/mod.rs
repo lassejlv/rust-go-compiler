@@ -1,9 +1,11 @@
 //! A contiguous growable array type, `Vec<T>`.
 
 mod drain;
+mod extract_if;
 mod into_iter;
 
 pub use self::drain::Drain;
+pub use self::extract_if::ExtractIf;
 pub use self::into_iter::IntoIter;
 
 /// A splicing iterator for `Vec` (yields the removed elements).
@@ -203,6 +205,23 @@ impl<T> Vec<T> {
     pub fn try_reserve(&mut self, additional: usize) -> Result<(), crate::collections::TryReserveError> {
         self.reserve(additional);
         Ok(())
+    }
+
+    /// Tries to reserve the minimum capacity for at least `additional` elements.
+    pub fn try_reserve_exact(&mut self, additional: usize) -> Result<(), crate::collections::TryReserveError> {
+        self.reserve_exact(additional);
+        Ok(())
+    }
+
+    /// Creates an iterator which uses a closure to determine if an element in the range should be removed.
+    pub fn extract_if<F, R>(&mut self, range: R, filter: F) -> ExtractIf<'_, T, F>
+    where
+        F: FnMut(&mut T) -> bool,
+        R: RangeBounds<usize>,
+    {
+        let len = self.len;
+        let r = slice::range(range, len);
+        ExtractIf::new(self, filter, r.start, r.end)
     }
 
     /// Shrinks the capacity of the vector as much as possible.
@@ -798,6 +817,24 @@ __std_vec_eq! { [] [T], Vec<U> }
 __std_vec_eq! { [const N: usize,] Vec<T>, [U; N] }
 __std_vec_eq! { ['b, const N: usize,] Vec<T>, &'b [U; N] }
 
+macro_rules! __std_cow_slice_eq {
+    ([$($vars:tt)*] $rhs:ty) => {
+        impl<'a, $($vars)* T, U> PartialEq<$rhs> for crate::borrow::Cow<'a, [T]>
+        where
+            T: PartialEq<U> + Clone,
+        {
+            #[inline]
+            fn eq(&self, other: &$rhs) -> bool {
+                self[..] == other[..]
+            }
+        }
+    };
+}
+
+__std_cow_slice_eq! { ['b,] &'b [U] }
+__std_cow_slice_eq! { ['b,] &'b mut [U] }
+__std_cow_slice_eq! { [] Vec<U> }
+
 impl<T: Eq> Eq for Vec<T> {}
 
 impl<T: PartialOrd> PartialOrd for Vec<T> {
@@ -915,5 +952,30 @@ impl<T, const N: usize> TryFrom<Vec<T>> for [T; N] {
             let p = vec.as_ptr() as *const [T; N];
             Ok(intrinsics::read(p))
         }
+    }
+}
+
+impl<T, const N: usize> Vec<[T; N]> {
+    /// Takes a `Vec<[T; N]>` and flattens it into a `Vec<T>`.
+    pub fn into_flattened(self) -> Vec<T> {
+        let mut me = mem::ManuallyDrop::new(self);
+        let len = me.len();
+        let cap = me.capacity();
+        let p = me.as_mut_ptr() as *mut T;
+        if mem::size_of::<T>() == 0 || N == 0 {
+            // Zero-sized elements: no allocation to reuse.
+            let mut v = Vec::new();
+            let mut i = 0;
+            while i < len {
+                unsafe {
+                    let arr = crate::ptr::read(me.as_ptr().add(i));
+                    v.extend(arr);
+                }
+                i += 1;
+            }
+            unsafe { me.set_len(0); mem::ManuallyDrop::drop(&mut me); }
+            return v;
+        }
+        unsafe { Vec::from_raw_parts(p, len * N, cap * N) }
     }
 }

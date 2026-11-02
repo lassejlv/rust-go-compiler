@@ -43,7 +43,7 @@ func (fcx *FnCtxt) checkPathExpr(x *ast.PathExpr, expected Ty) Ty {
 func (fcx *FnCtxt) resolveValuePath(qself *ast.QSelf, p *ast.Path, sp lexer.Span, pattern bool, expected Ty) (*ValueRes, Ty) {
 	segs := p.Segments
 	if qself == nil && !pattern && len(segs) == 1 && segs[0].Args == nil && !p.Global {
-		if l := fcx.lookupLocal(segs[0].Ident.Name); l != nil {
+		if l := fcx.lookupLocal(segs[0].Ident.Name, segs[0].Ident.Hyg); l != nil {
 			return &ValueRes{Kind: VLocal, Local: l}, l.Ty
 		}
 	}
@@ -247,6 +247,28 @@ func (fcx *FnCtxt) typeRelativeValue(base Ty, seg *ast.PathSegment, sp lexer.Spa
 		fcx.errorf(sp, "type annotations needed to resolve `%s`", name)
 		return nil, TyErr
 	}
+	// where-clauses on this type first (`E::from_error_kind(..)` with
+	// `E: ParseError<I>` fixes the trait args; in monomorphized bodies the
+	// env holds the substituted bounds)
+	var envRef *TraitRef
+	for _, e := range fcx.ic.env {
+		if fcx.resolve(e.Args[0]) != fcx.resolve(b) {
+			continue
+		}
+		for _, st := range fcx.t.AllSupertraits(e) {
+			if it, ok := st.Trait.Trait.Items[name]; ok && (it.Kind == DefFn || it.Kind == DefConst) {
+				if envRef != nil && !sameArgs(envRef.Args, st.Args) {
+					envRef = nil
+					goto noEnv
+				}
+				envRef = st
+			}
+		}
+	}
+	if envRef != nil {
+		return fcx.traitItemValue(&TraitRef{Trait: envRef.Trait, Args: append([]Ty{}, envRef.Args...)}, seg, sp)
+	}
+noEnv:
 	var best *TraitRef
 	var bestKind SelKind
 	for _, tr := range fcx.t.traitsByItem[name] {
@@ -306,6 +328,38 @@ func (fcx *FnCtxt) findInherentItem(b Ty, name string, needSelf bool) (*Def, []T
 	return nil, nil
 }
 
+// opaqueFnSig returns the call signature of an inference variable standing
+// for a pending `impl Fn*(..) -> R` value.
+func (fcx *FnCtxt) opaqueFnSig(v Ty) ([]Ty, Ty, bool) {
+	ic := fcx.ic
+	fnOnce := fcx.t.LangOpt("fn_once")
+	if fnOnce == nil {
+		return nil, nil, false
+	}
+	for _, o := range ic.obligations {
+		if o.Done || o.Proj == nil || o.Proj.Kind != TOpaque || ic.shallow(o.Var) != v {
+			continue
+		}
+		op := Opaque(o.Proj.Def, ic.resolveList(o.Proj.Args), o.Proj.Index)
+		b := ic.opaqueBound(op, fnOnce)
+		if b == nil || len(b.Trait.Args) < 2 {
+			continue
+		}
+		a := ic.shallow(b.Trait.Args[1])
+		if a.Kind != TTuple {
+			continue
+		}
+		out := TyUnit
+		for _, bd := range b.Bindings {
+			if bd.Name == "Output" {
+				out = bd.Ty
+			}
+		}
+		return a.Elems, out, true
+	}
+	return nil, nil, false
+}
+
 // traitItemValue resolves Trait::name with the given trait ref.
 func (fcx *FnCtxt) traitItemValue(tr *TraitRef, seg *ast.PathSegment, sp lexer.Span) (*ValueRes, Ty) {
 	name := seg.Ident.Name
@@ -348,8 +402,9 @@ func (fcx *FnCtxt) checkCall(x *ast.CallExpr, expected Ty) Ty {
 			}
 			if expected != nil && !out.HasError() {
 				// use the expectation to guide inference of generic returns
+				expVar := fcx.shallow(expected).Kind == TInfer // before unify resolves it
 				s := fcx.ic.snapshot()
-				if !fcx.ic.unify(out, expected) || fcx.shallow(expected).Kind == TInfer {
+				if expVar || !fcx.ic.unify(out, expected) {
 					fcx.ic.rollback(s)
 				} else {
 					es := fcx.shallow(expected)
@@ -404,6 +459,14 @@ func (fcx *FnCtxt) checkCall(x *ast.CallExpr, expected Ty) Ty {
 				return out
 			}
 		case TInfer:
+			// an `impl Fn*` value whose hidden type is not revealed yet
+			// (its generic args are still being inferred): call through
+			// its declared bound; the callee kind is fixed in writeback
+			if ins, out, ok := fcx.opaqueFnSig(t); ok && i == 0 {
+				fcx.checkArgs(x.Args, ins, false, x.Span)
+				fcx.r.Callees[x.ID] = &Callee{Kind: CallClosure, Ty: t}
+				return out
+			}
 			fcx.errorf(x.Span, "type annotations needed: cannot call value of unknown type")
 			return TyErr
 		}
@@ -449,6 +512,9 @@ func (fcx *FnCtxt) checkArgs(args []ast.Expr, ins []Ty, variadic bool, sp lexer.
 							continue
 						}
 					}
+				}
+				if fcx.coerceToHint(a, i, ins[i]) {
+					continue
 				}
 				fcx.checkExprCoerce(a, ins[i])
 			} else {
@@ -586,6 +652,38 @@ func (fcx *FnCtxt) checkStructExpr(x *ast.StructExpr, expected Ty) Ty {
 }
 
 func isUnion(t Ty) bool { return t.Kind == TAdt && t.Def.Adt.Kind == AdtUnion }
+
+// coerceToHint handles an argument whose formal type still has inference
+// variables but whose expectation (from the expected return type) is fully
+// known: like rustc, the argument is coerced to the expected input type and
+// that type is then required to equal the formal one (e.g. `from_ref(&box)`
+// with expected `&[H]` deref-coerces `&Box<H>` to `&H`). Falls back to the
+// formal type when that fails. Reports whether the argument was handled.
+func (fcx *FnCtxt) coerceToHint(a ast.Expr, i int, formal Ty) bool {
+	if i >= len(fcx.argHints) || fcx.argHints[i] == nil {
+		return false
+	}
+	h := fcx.resolve(fcx.argHints[i])
+	if h.HasInfer() || h.HasError() || h.IsUnsized() || !fcx.resolve(formal).HasInfer() {
+		return false
+	}
+	switch unparen(a).(type) {
+	case *ast.BlockExpr, *ast.IfExpr, *ast.MatchExpr:
+		return false
+	}
+	ty := fcx.checkExpr(a, h)
+	s := fcx.ic.snapshot()
+	prev := append([]Adjustment(nil), fcx.r.Adjust[a.GetID()]...)
+	if fcx.coerce(a, ty, h) && fcx.ic.unify(formal, h) {
+		return true
+	}
+	fcx.ic.rollback(s)
+	fcx.r.Adjust[a.GetID()] = prev
+	if !fcx.coerce(a, ty, formal) {
+		fcx.errorf(a.GetSpan(), "mismatched types: expected `%s`, found `%s`", fcx.resolve(formal), fcx.resolve(ty))
+	}
+	return true
+}
 
 // expectedInputs derives hint types for arguments from the expected
 // result type (without committing inference).

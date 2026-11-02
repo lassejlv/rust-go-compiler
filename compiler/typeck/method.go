@@ -7,26 +7,41 @@ import (
 )
 
 type methodCand struct {
-	item    *Def
-	impl    *Def      // inherent impl (nil for trait candidates)
-	trait   *TraitRef // trait candidate (Self is a fresh var bound during matching)
-	object  bool      // trait object candidate
+	item             *Def
+	impl             *Def      // inherent impl (nil for trait candidates)
+	trait            *TraitRef // trait candidate (Self is a fresh var bound during matching)
+	object           bool      // trait object candidate
 	inherentFromStep int
 }
 
 // pick is a successful method lookup.
 type pick struct {
-	item      *Def
-	parent    []Ty // container args (impl args or trait args incl. Self)
-	adjust    []Adjustment
-	recvTy    Ty // adjusted receiver type
-	virtual   bool
+	item    *Def
+	parent  []Ty // container args (impl args or trait args incl. Self)
+	adjust  []Adjustment
+	recvTy  Ty // adjusted receiver type
+	virtual bool
 }
 
 func (fcx *FnCtxt) checkMethodCall(x *ast.MethodCallExpr, expected Ty) Ty {
 	rt := fcx.checkExpr(x.Receiver, nil)
+	if fcx.resolve(rt).HasInfer() {
+		// e.g. `P<?A, ?B>` from a call whose projections are pending
+		fcx.selectWherePossible()
+	}
 	rs := fcx.structurally(rt)
-	if rs.Kind == TInfer {
+	var early *pick
+	if rs.Kind == TInfer && rs.Sub == 1 {
+		// `{integer}` receiver: a trait method (e.g. Ord::max)
+		// applies without fixing the type; inherent ones need the default
+		s := fcx.ic.snapshot()
+		if p := fcx.lookupMethod(rt, x.Method.Name, x.Span); p != nil && p.item.InTrait() && !p.virtual {
+			early = p
+		} else {
+			fcx.ic.rollback(s)
+		}
+	}
+	if early == nil && rs.Kind == TInfer {
 		switch rs.Sub {
 		case 1:
 			fcx.ic.unify(rs, TyI32)
@@ -40,7 +55,10 @@ func (fcx *FnCtxt) checkMethodCall(x *ast.MethodCallExpr, expected Ty) Ty {
 			return TyErr
 		}
 	}
-	p := fcx.lookupMethod(rt, x.Method.Name, x.Span)
+	p := early
+	if p == nil {
+		p = fcx.lookupMethod(rt, x.Method.Name, x.Span)
+	}
 	if p == nil {
 		fcx.errorf(x.Method.Span, "no method named `%s` found for `%s`", x.Method.Name, fcx.resolve(rt))
 		for _, a := range x.Args {
@@ -69,6 +87,8 @@ func (fcx *FnCtxt) checkMethodCall(x *ast.MethodCallExpr, expected Ty) Ty {
 	// resolve what the receiver determines (e.g. `Box<T>: AsRef<?U>`)
 	// before arguments and the result are coerced against expectations
 	fcx.selectWherePossible()
+	// like calls: argument expectations from the expected result type
+	fcx.nextHints = fcx.expectedInputs(ins, out, expected)
 	fcx.checkArgs(x.Args, ins, false, x.Span)
 	if o := fcx.shallow(out); o.Kind == TInfer && o.Sub == 0 {
 		// the result is a pending projection: resolve it now that the
@@ -117,8 +137,18 @@ func (fcx *FnCtxt) lookupMethod(recv Ty, name string, sp lexer.Span) *pick {
 	}
 	var traitCands []methodCand
 	inScope := fcx.curMod().TraitsInScope(fcx.t.R.Prelude)
+	// the trait being implemented is in scope inside its impl
+	var implTrait *Def
+	for d := fcx.def; d != nil; d = d.Parent {
+		if d.Kind == DefImpl {
+			if d.Impl.TraitRef != nil {
+				implTrait = d.Impl.TraitRef.Trait
+			}
+			break
+		}
+	}
 	for _, tr := range fcx.t.traitsByItem[name] {
-		if !inScope[tr] {
+		if !inScope[tr] && tr != implTrait {
 			continue
 		}
 		item := tr.Trait.Items[name]

@@ -316,6 +316,12 @@ impl<T> From<T> for Rc<T> {
     }
 }
 
+impl From<crate::string::String> for Rc<str> {
+    fn from(v: crate::string::String) -> Rc<str> {
+        Rc::from(v.as_str())
+    }
+}
+
 impl From<&str> for Rc<str> {
     fn from(v: &str) -> Rc<str> {
         unsafe {
@@ -479,3 +485,73 @@ impl<T: ?Sized> fmt::Debug for Weak<T> {
     }
 }
 
+
+// ---------------------------------------------------------------------------
+// Uninitialized values and downcasting
+
+impl<T> Rc<T> {
+    /// Constructs a new `Rc` with uninitialized contents.
+    pub fn new_uninit() -> Rc<mem::MaybeUninit<T>> {
+        Rc::new(mem::MaybeUninit::uninit())
+    }
+
+    /// Constructs a new `Rc` with uninitialized contents, with the memory being filled with `0` bytes.
+    pub fn new_zeroed() -> Rc<mem::MaybeUninit<T>> {
+        Rc::new(mem::MaybeUninit::zeroed())
+    }
+
+    /// Constructs a new reference-counted slice with uninitialized contents.
+    pub fn new_uninit_slice(len: usize) -> Rc<[mem::MaybeUninit<T>]> {
+        unsafe {
+            let (p, _) = allocate_for_slice::<mem::MaybeUninit<T>>(len);
+            Rc { ptr: p }
+        }
+    }
+
+    /// Constructs a new reference-counted slice with uninitialized contents, with the memory being filled with `0` bytes.
+    pub fn new_zeroed_slice(len: usize) -> Rc<[mem::MaybeUninit<T>]> {
+        unsafe {
+            let (p, elems) = allocate_for_slice::<mem::MaybeUninit<T>>(len);
+            intrinsics::write_bytes(elems as *mut u8, 0, len * mem::size_of::<T>());
+            Rc { ptr: p }
+        }
+    }
+}
+
+impl<T> Rc<mem::MaybeUninit<T>> {
+    /// Converts to `Rc<T>`.
+    pub unsafe fn assume_init(self) -> Rc<T> {
+        let p = self.ptr as *mut RcBox<T>;
+        mem::forget(self);
+        Rc { ptr: p }
+    }
+}
+
+impl<T> Rc<[mem::MaybeUninit<T>]> {
+    /// Converts to `Rc<[T]>`.
+    pub unsafe fn assume_init(self) -> Rc<[T]> {
+        let p = self.ptr as *mut RcBox<[T]>;
+        mem::forget(self);
+        Rc { ptr: p }
+    }
+}
+
+impl Rc<dyn crate::any::Any> {
+    /// Attempts to downcast the `Rc<dyn crate::any::Any>` to a concrete type.
+    pub fn downcast<T: crate::any::Any>(self) -> Result<Rc<T>, Self> {
+        if (*self).is::<T>() {
+            let p = self.ptr as *mut RcBox<T>;
+            mem::forget(self);
+            Ok(Rc { ptr: p })
+        } else {
+            Err(self)
+        }
+    }
+}
+
+impl<T> Rc<T> {
+    /// Decrements the strong reference count on the `Rc<T>` associated with the provided pointer by one.
+    pub unsafe fn decrement_strong_count(ptr: *const T) {
+        drop(Rc::<T>::from_raw(ptr));
+    }
+}

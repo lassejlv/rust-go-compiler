@@ -1129,3 +1129,174 @@ impl u8 {
         *self < 32 || *self == 127
     }
 }
+
+macro_rules! __std_int_common_extra {
+    ($t:ident) => {
+        impl $t {
+            /// Unchecked integer addition. Results in undefined behavior on overflow.
+            #[inline]
+            pub unsafe fn unchecked_add(self, rhs: $t) -> $t {
+                self.wrapping_add(rhs)
+            }
+
+            /// Unchecked integer subtraction. Results in undefined behavior on overflow.
+            #[inline]
+            pub unsafe fn unchecked_sub(self, rhs: $t) -> $t {
+                self.wrapping_sub(rhs)
+            }
+
+            /// Unchecked integer multiplication. Results in undefined behavior on overflow.
+            #[inline]
+            pub unsafe fn unchecked_mul(self, rhs: $t) -> $t {
+                self.wrapping_mul(rhs)
+            }
+
+            /// Unchecked shift left. Results in undefined behavior if `rhs >= Self::BITS`.
+            #[inline]
+            pub unsafe fn unchecked_shl(self, rhs: u32) -> $t {
+                self.wrapping_shl(rhs)
+            }
+
+            /// Unchecked shift right. Results in undefined behavior if `rhs >= Self::BITS`.
+            #[inline]
+            pub unsafe fn unchecked_shr(self, rhs: u32) -> $t {
+                self.wrapping_shr(rhs)
+            }
+
+            /// Unbounded shift left: returns 0 when `rhs >= Self::BITS`.
+            #[inline]
+            pub fn unbounded_shl(self, rhs: u32) -> $t {
+                if rhs < Self::BITS { self << rhs } else { 0 }
+            }
+        }
+    };
+}
+
+macro_rules! __std_int_signed_extra {
+    ($t:ident, $ut:ident) => {
+        __std_int_common_extra! { $t }
+
+        impl $t {
+            /// Wrapping (modular) addition with an unsigned integer.
+            #[inline]
+            pub fn wrapping_add_unsigned(self, rhs: $ut) -> $t {
+                self.wrapping_add(rhs as $t)
+            }
+
+            /// Wrapping (modular) subtraction with an unsigned integer.
+            #[inline]
+            pub fn wrapping_sub_unsigned(self, rhs: $ut) -> $t {
+                self.wrapping_sub(rhs as $t)
+            }
+
+            /// Calculates `self + rhs` with an unsigned `rhs`, returning a tuple of the
+            /// addition along with a boolean indicating whether an arithmetic overflow would occur.
+            #[inline]
+            pub fn overflowing_add_unsigned(self, rhs: $ut) -> ($t, bool) {
+                let rhs = rhs as $t;
+                let (res, overflowed) = self.overflowing_add(rhs);
+                (res, overflowed ^ (rhs < 0))
+            }
+
+            /// Calculates `self - rhs` with an unsigned `rhs`, returning a tuple of the
+            /// subtraction along with a boolean indicating whether an arithmetic overflow would occur.
+            #[inline]
+            pub fn overflowing_sub_unsigned(self, rhs: $ut) -> ($t, bool) {
+                let rhs = rhs as $t;
+                let (res, overflowed) = self.overflowing_sub(rhs);
+                (res, overflowed ^ (rhs < 0))
+            }
+
+            /// Checked subtraction with an unsigned integer.
+            #[inline]
+            pub fn checked_sub_unsigned(self, rhs: $ut) -> Option<$t> {
+                let (a, b) = self.overflowing_sub_unsigned(rhs);
+                if b { None } else { Some(a) }
+            }
+
+            /// Saturating addition with an unsigned integer.
+            #[inline]
+            pub fn saturating_add_unsigned(self, rhs: $ut) -> $t {
+                match self.checked_add_unsigned(rhs) {
+                    Some(x) => x,
+                    None => $t::MAX,
+                }
+            }
+
+            /// Saturating subtraction with an unsigned integer.
+            #[inline]
+            pub fn saturating_sub_unsigned(self, rhs: $ut) -> $t {
+                match self.checked_sub_unsigned(rhs) {
+                    Some(x) => x,
+                    None => $t::MIN,
+                }
+            }
+
+            /// Returns the bit pattern of `self` reinterpreted as an unsigned integer of the same size.
+            #[inline]
+            pub fn cast_unsigned(self) -> $ut {
+                self as $ut
+            }
+
+            /// Unbounded shift right: returns 0 or -1 when `rhs >= Self::BITS`.
+            #[inline]
+            pub fn unbounded_shr(self, rhs: u32) -> $t {
+                if rhs < Self::BITS { self >> rhs } else if self < 0 { -1 } else { 0 }
+            }
+        }
+    };
+}
+
+macro_rules! __std_int_unsigned_extra {
+    ($t:ident, $st:ident) => {
+        __std_int_common_extra! { $t }
+
+        impl $t {
+            /// Calculates `self + rhs` with a signed `rhs`, returning a tuple of the addition
+            /// along with a boolean indicating whether an arithmetic overflow would occur.
+            #[inline]
+            pub fn overflowing_add_signed(self, rhs: $st) -> ($t, bool) {
+                let (res, overflowed) = self.overflowing_add(rhs as $t);
+                (res, overflowed ^ (rhs < 0))
+            }
+
+            /// Returns the bit pattern of `self` reinterpreted as a signed integer of the same size.
+            #[inline]
+            pub fn cast_signed(self) -> $st {
+                self as $st
+            }
+
+            /// Calculates the smallest value greater than or equal to `self` that is a multiple
+            /// of `rhs`. Returns `None` if `rhs` is zero or the operation would overflow.
+            #[inline]
+            pub fn checked_next_multiple_of(self, rhs: $t) -> Option<$t> {
+                if rhs == 0 {
+                    return None;
+                }
+                match self % rhs {
+                    0 => Some(self),
+                    r => self.checked_add(rhs - r),
+                }
+            }
+
+            /// Unbounded shift right: returns 0 when `rhs >= Self::BITS`.
+            #[inline]
+            pub fn unbounded_shr(self, rhs: u32) -> $t {
+                if rhs < Self::BITS { self >> rhs } else { 0 }
+            }
+        }
+    };
+}
+
+__std_int_signed_extra! { i8, u8 }
+__std_int_signed_extra! { i16, u16 }
+__std_int_signed_extra! { i32, u32 }
+__std_int_signed_extra! { i64, u64 }
+__std_int_signed_extra! { i128, u128 }
+__std_int_signed_extra! { isize, usize }
+__std_int_unsigned_extra! { u8, i8 }
+__std_int_unsigned_extra! { u16, i16 }
+__std_int_unsigned_extra! { u32, i32 }
+__std_int_unsigned_extra! { u64, i64 }
+__std_int_unsigned_extra! { u128, i128 }
+__std_int_unsigned_extra! { usize, isize }

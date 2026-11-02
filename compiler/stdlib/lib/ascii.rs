@@ -161,3 +161,66 @@ impl<'a> fmt::Debug for EscapeAscii<'a> {
         f.debug_struct("EscapeAscii").finish_non_exhaustive()
     }
 }
+
+/// Extension methods for ASCII-subset only operations.
+#[deprecated(note = "use inherent methods instead")]
+pub trait AsciiExt {
+    /// Container type for copied ASCII characters.
+    type Owned;
+
+    /// Checks if the value is within the ASCII range.
+    fn is_ascii(&self) -> bool;
+
+    /// Makes a copy of the value in its ASCII upper case equivalent.
+    fn to_ascii_uppercase(&self) -> Self::Owned;
+
+    /// Makes a copy of the value in its ASCII lower case equivalent.
+    fn to_ascii_lowercase(&self) -> Self::Owned;
+
+    /// Checks that two values are an ASCII case-insensitive match.
+    fn eq_ignore_ascii_case(&self, other: &Self) -> bool;
+
+    /// Converts this type to its ASCII upper case equivalent in-place.
+    fn make_ascii_uppercase(&mut self);
+
+    /// Converts this type to its ASCII lower case equivalent in-place.
+    fn make_ascii_lowercase(&mut self);
+}
+
+macro_rules! __ascii_ext_impl {
+    ($t:ty, $owned:ty) => {
+        #[allow(deprecated)]
+        impl AsciiExt for $t {
+            type Owned = $owned;
+            #[inline]
+            fn is_ascii(&self) -> bool {
+                <$t>::is_ascii(self)
+            }
+            #[inline]
+            fn to_ascii_uppercase(&self) -> $owned {
+                <$t>::to_ascii_uppercase(self)
+            }
+            #[inline]
+            fn to_ascii_lowercase(&self) -> $owned {
+                <$t>::to_ascii_lowercase(self)
+            }
+            #[inline]
+            fn eq_ignore_ascii_case(&self, o: &Self) -> bool {
+                <$t>::eq_ignore_ascii_case(self, o)
+            }
+            #[inline]
+            fn make_ascii_uppercase(&mut self) {
+                <$t>::make_ascii_uppercase(self)
+            }
+            #[inline]
+            fn make_ascii_lowercase(&mut self) {
+                <$t>::make_ascii_lowercase(self)
+            }
+        }
+    };
+}
+
+__ascii_ext_impl!(u8, u8);
+__ascii_ext_impl!(char, char);
+__ascii_ext_impl!([u8], Vec<u8>);
+__ascii_ext_impl!(str, String);

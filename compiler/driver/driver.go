@@ -57,53 +57,82 @@ func LoadCrateFS(fsys fs.FS, root, displayPrefix string) (*ast.Crate, error) {
 		return nil, err
 	}
 	_ = base
+	c.Dir = dir
+	c.LoadMod = func(it *ast.Item, dir string) (string, error) {
+		return loadMod(fsys, it, dir, displayPrefix)
+	}
 	return c, nil
 }
 
 func loadMods(fsys fs.FS, items []*ast.Item, dir, prefix string) error {
 	for _, it := range items {
-		m, ok := it.Kind.(*ast.ModItem)
-		if !ok {
+		if _, ok := it.Kind.(*ast.ModItem); !ok {
 			continue
 		}
-		name := it.Name.Name
-		for _, a := range it.Attrs {
-			if a.Path == "path" && len(a.Tokens) >= 2 {
-				name = strings.TrimSuffix(a.Tokens[1].Tok.Text, ".rs")
-			}
-		}
-		if m.Inline {
-			if err := loadMods(fsys, m.Items, path.Join(dir, name), prefix); err != nil {
-				return err
-			}
-			continue
-		}
-		if m.Loaded {
-			continue
-		}
-		cands := []string{path.Join(dir, name+".rs"), path.Join(dir, name, "mod.rs")}
-		var file string
-		var src []byte
-		for _, cand := range cands {
-			if b, err := fs.ReadFile(fsys, cand); err == nil {
-				file, src = cand, b
-				break
-			}
-		}
-		if file == "" {
-			return fmt.Errorf("%s: error: file not found for module `%s` (tried %s)", it.Span.Lo, name, strings.Join(cands, ", "))
-		}
-		c, err := parser.ParseCrate(lexer.AddFile(prefix+file, string(src)), string(src))
-		if err != nil {
-			return err
-		}
-		m.Items = c.Items
-		m.Loaded = true
-		if err := loadMods(fsys, m.Items, path.Join(dir, name), prefix); err != nil {
+		if _, err := loadMod(fsys, it, dir, prefix); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// loadMod loads the file of the module item it (declared in a module whose
+// children live in dir) unless it is inline or already loaded, together
+// with its own out-of-line children, and returns the directory of its
+// children.
+func loadMod(fsys fs.FS, it *ast.Item, dir, prefix string) (string, error) {
+	m := it.Kind.(*ast.ModItem)
+	name := it.Name.Name
+	pathAttr := ""
+	hasCfg := false
+	for _, a := range it.Attrs {
+		if a.Path == "path" && len(a.Tokens) >= 2 {
+			pathAttr = strings.Trim(a.Tokens[1].Tok.Text, "\"")
+		}
+		if a.Path == "cfg" || a.Path == "cfg_attr" {
+			hasCfg = true
+		}
+	}
+	child := path.Join(dir, name)
+	if m.Inline {
+		return child, loadMods(fsys, m.Items, child, prefix)
+	}
+	if m.Loaded {
+		return child, nil
+	}
+	cands := []string{path.Join(dir, name+".rs"), path.Join(dir, name, "mod.rs")}
+	if pathAttr != "" {
+		// #[path]: relative to the declaring file's directory (dir for
+		// mod.rs-style parents, its parent for `foo.rs` parents)
+		cands = []string{path.Join(dir, pathAttr), path.Join(path.Dir(dir), pathAttr)}
+	}
+	var file string
+	var src []byte
+	for _, cand := range cands {
+		if b, err := fs.ReadFile(fsys, cand); err == nil {
+			file, src = cand, b
+			break
+		}
+	}
+	if file == "" {
+		if hasCfg {
+			// probably configured out (e.g. #[cfg(doc)] #[path = "x.md"]);
+			// the expander strips it, or reports the unloaded module
+			return child, nil
+		}
+		return "", fmt.Errorf("%s: error: file not found for module `%s` (tried %s)", it.Span.Lo, name, strings.Join(cands, ", "))
+	}
+	if pathAttr != "" {
+		child = path.Dir(file)
+	}
+	c, err := parser.ParseCrate(lexer.AddFile(prefix+file, string(src)), string(src))
+	if err != nil {
+		return "", err
+	}
+	m.Items = c.Items
+	it.Attrs = append(it.Attrs, c.Attrs...) // the file's inner attributes (#![cfg(..)])
+	m.Loaded = true
+	return child, loadMods(fsys, m.Items, child, prefix)
 }
 
 // Frontend runs everything up to (and including) typeck setup and returns

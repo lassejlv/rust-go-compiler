@@ -78,6 +78,7 @@ func loadMods(addFile func(name, src string) int, items []*ast.Item, dir string)
 			return err
 		}
 		m.Items = c.Items
+		it.Attrs = append(it.Attrs, c.Attrs...) // the file's inner attributes (#![cfg(..)])
 		m.Loaded = true
 		if err := loadMods(addFile, m.Items, childDir); err != nil {
 			return err

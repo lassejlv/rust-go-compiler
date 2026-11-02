@@ -94,16 +94,16 @@ func (fcx *FnCtxt) checkPatInner(p ast.Pat, expected Ty, bm bindingMode, oc *orC
 		}
 		var l *Local
 		if oc != nil && !oc.first {
-			l = oc.locals[x.Name.Name]
+			l = oc.locals[hygKey(x.Name.Name, x.Name.Hyg)]
 			if l != nil {
 				fcx.demandEq(x.Span, l.Ty, lty)
-				fcx.scopes[len(fcx.scopes)-1][x.Name.Name] = l
+				fcx.bindLocal(x.Name.Name, x.Name.Hyg, l)
 			}
 		}
 		if l == nil {
-			l = fcx.newLocal(x.Name.Name, lty, x.Mut && mode == bmByValue, x.Name.Span, x.ID)
+			l = fcx.newLocal(x.Name.Name, x.Name.Hyg, lty, x.Mut && mode == bmByValue, x.Name.Span, x.ID)
 			if oc != nil {
-				oc.locals[x.Name.Name] = l
+				oc.locals[hygKey(x.Name.Name, x.Name.Hyg)] = l
 			}
 		}
 		l.ByRef = mode != bmByValue
@@ -240,9 +240,22 @@ func (fcx *FnCtxt) checkPatInner(p ast.Pat, expected Ty, bm bindingMode, oc *orC
 					} else if !isArray {
 						fcx.errorf(ip.Span, "cannot bind a slice by value")
 					}
-					l := fcx.newLocal(ip.Name.Name, lty, ip.Mut && mode == bmByValue, ip.Name.Span, ip.ID)
-					l.ByRef = mode != bmByValue
-					l.RefMut = mode == bmByRefMut
+					var l *Local
+					if oc != nil && !oc.first {
+						// later or-pattern alternative: same local
+						if l = oc.locals[hygKey(ip.Name.Name, ip.Name.Hyg)]; l != nil {
+							fcx.demandEq(ip.Span, l.Ty, lty)
+							fcx.bindLocal(ip.Name.Name, ip.Name.Hyg, l)
+						}
+					}
+					if l == nil {
+						l = fcx.newLocal(ip.Name.Name, ip.Name.Hyg, lty, ip.Mut && mode == bmByValue, ip.Name.Span, ip.ID)
+						if oc != nil {
+							oc.locals[hygKey(ip.Name.Name, ip.Name.Hyg)] = l
+						}
+						l.ByRef = mode != bmByValue
+						l.RefMut = mode == bmByRefMut
+					}
 					fcx.r.Locals[ip.ID] = l
 					if ip.Sub != nil {
 						fcx.record(ip.Sub.GetID(), st)

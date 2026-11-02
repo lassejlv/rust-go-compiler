@@ -32,6 +32,7 @@ type Tcx struct {
 	inherent     map[string][]*Def // simplified self type -> inherent impls
 	traitsByItem map[string][]*Def // assoc item name -> traits declaring it
 	implsBuilt   bool
+	implsIndexed bool // BuildImpls finished (traitImpls/inherent complete)
 
 	paramOf   map[*Def]*GenericParamDef
 	synthetic map[ast.NodeID]int // impl-Trait-in-arg-position type node -> param index
@@ -187,6 +188,7 @@ func (t *Tcx) BuildImpls() {
 	for _, tr := range t.R.Traits {
 		sort.SliceStable(t.traitImpls[tr], func(i, j int) bool { return t.traitImpls[tr][i].ID < t.traitImpls[tr][j].ID })
 	}
+	t.implsIndexed = true
 }
 
 // TraitImpls returns all impls of a trait.

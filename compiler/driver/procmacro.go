@@ -127,10 +127,12 @@ func buildProcMacroServer(opts *Options, pm *crateUnit, all map[string]*crateUni
 			decls = scanProcMacros(c)
 		}
 		exp.Config = &expand.CrateConfig{Features: u.features, Cfgs: u.cfgs, Env: cargoEnv(u)}
+		exp.Externs = u.deps
 		if err := exp.ExpandCrate(c, u.key); err != nil {
 			return nil, fmt.Errorf("crate %s: %v", u.name, err)
 		}
 		exp.Config = nil
+		exp.Externs = nil
 		cr := r.AddCrate(u.key, c)
 		cr.Edition = u.edition
 		cr.Externs = map[string]*Crate{"proc_macro": pmCrate}

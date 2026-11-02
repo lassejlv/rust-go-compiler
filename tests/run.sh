@@ -9,7 +9,8 @@
 #   --no-build  do not run `go build` first (use the existing ./rustgo)
 #
 # Environment: RUSTGO=path overrides the compiler executable (default ./rustgo;
-# implies nothing about building), JOBS, COMPILE_TIMEOUT, RUN_TIMEOUT.
+# implies nothing about building), JOBS, COMPILE_TIMEOUT, RUN_TIMEOUT, OUTDIR
+# (default tests/out; use a separate one when running suites concurrently).
 #
 # For every tests/run-pass/NNN_name.rs (matching the pattern) this:
 #   1. compiles it with `./rustgo file.rs -o tests/out/NNN_name`   (timeout 60s)
@@ -23,7 +24,7 @@ set -u
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TESTDIR="tests/run-pass"
-OUTDIR="tests/out"
+OUTDIR="${OUTDIR:-tests/out}"  # set OUTDIR to run several suites concurrently
 COMPILE_TIMEOUT="${COMPILE_TIMEOUT:-60}"
 RUN_TIMEOUT="${RUN_TIMEOUT:-10}"
 RUSTGO="${RUSTGO:-./rustgo}"
