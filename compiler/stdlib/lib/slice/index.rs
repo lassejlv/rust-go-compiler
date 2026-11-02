@@ -1,7 +1,7 @@
 //! Indexing slices: the `SliceIndex` trait.
 
 use crate::intrinsics;
-use crate::ops::{Index, IndexMut, Range, RangeFrom, RangeFull, RangeInclusive, RangeTo, RangeToInclusive};
+use crate::ops::{Bound, Index, IndexMut, Range, RangeFrom, RangeFull, RangeInclusive, RangeTo, RangeToInclusive};
 
 /// A helper trait used for indexing operations on slices and string slices.
 pub trait SliceIndex<T: ?Sized> {
@@ -381,7 +381,6 @@ impl<T, I: SliceIndex<[T]>> IndexMut<I> for [T] {
 /// Performs bounds checking of a range, converting any `RangeBounds<usize>` to a `Range<usize>`.
 #[track_caller]
 pub fn range<R: crate::ops::RangeBounds<usize>>(range: R, len: usize) -> Range<usize> {
-    use crate::ops::Bound;
     let start = match range.start_bound() {
         Bound::Included(&start) => start,
         Bound::Excluded(&start) => match start.checked_add(1) {

@@ -24,6 +24,33 @@ pub trait FromResidual<R> {
     fn from_residual(residual: R) -> Self;
 }
 
+impl<T> FromResidual<Option<crate::convert::Infallible>> for Option<T> {
+    #[inline]
+    fn from_residual(_residual: Option<crate::convert::Infallible>) -> Self {
+        None
+    }
+}
+
+impl<T, E, F: From<E>> FromResidual<Result<crate::convert::Infallible, E>> for Result<T, F> {
+    #[inline]
+    fn from_residual(residual: Result<crate::convert::Infallible, E>) -> Self {
+        match residual {
+            Err(e) => Err(From::from(e)),
+            Ok(never) => match never {},
+        }
+    }
+}
+
+impl<B, C> FromResidual<ControlFlow<B, crate::convert::Infallible>> for ControlFlow<B, C> {
+    #[inline]
+    fn from_residual(residual: ControlFlow<B, crate::convert::Infallible>) -> Self {
+        match residual {
+            ControlFlow::Break(b) => ControlFlow::Break(b),
+            ControlFlow::Continue(never) => match never {},
+        }
+    }
+}
+
 impl<T> Try for Option<T> {
     type Output = T;
     type Residual = Option<crate::convert::Infallible>;

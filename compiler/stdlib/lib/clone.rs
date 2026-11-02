@@ -25,7 +25,12 @@ macro_rules! __std_clone_by_copy {
     };
 }
 
-__std_clone_by_copy! { i8 i16 i32 i64 i128 isize u8 u16 u32 u64 u128 usize f32 f64 bool char () }
+__std_clone_by_copy! { i8 i16 i32 i64 i128 isize u8 u16 u32 u64 u128 usize f32 f64 bool char }
+
+impl Clone for () {
+    #[inline]
+    fn clone(&self) -> Self {}
+}
 
 impl<T: ?Sized> Clone for &T {
     #[inline]

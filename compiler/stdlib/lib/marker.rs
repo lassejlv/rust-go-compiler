@@ -16,6 +16,7 @@ pub trait Copy: Clone {}
 pub unsafe auto trait Send {}
 
 /// Types for which it is safe to share references between threads.
+#[lang = "sync"]
 pub unsafe auto trait Sync {}
 
 /// Types that do not require pinning.

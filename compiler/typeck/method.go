@@ -127,6 +127,11 @@ func (fcx *FnCtxt) lookupMethod(recv Ty, name string, sp lexer.Span) *pick {
 			}
 		}
 	}
+	// Where-clause candidates first: in the generic source the receiver
+	// was likely a type parameter whose methods come from its bounds.
+	if p := fcx.envMethod(steps, name, sp); p != nil {
+		return p
+	}
 	for si, st := range steps {
 		u := st.ty
 		if u.Kind == TInfer && u.Sub == 0 {
@@ -268,4 +273,50 @@ func (fcx *FnCtxt) methodSelfTy(item *Def, parent []Ty) Ty {
 		args[i] = fcx.ic.newVar()
 	}
 	return fcx.normalizeInBody(Subst(sig.Inputs[0], args), item.Span)
+}
+
+// envMethod probes methods of traits from the body's where-clauses.
+func (fcx *FnCtxt) envMethod(steps []autoderefStep, name string, sp lexer.Span) *pick {
+	var envs []*TraitRef
+	for _, e := range fcx.ic.env {
+		for _, st := range fcx.t.AllSupertraits(e) {
+			if it, ok := st.Trait.Trait.Items[name]; ok && it.Kind == DefFn && it.Fn.HasSelf {
+				envs = append(envs, st)
+			}
+		}
+	}
+	if len(envs) == 0 {
+		return nil
+	}
+	for si, st := range steps {
+		u := st.ty
+		if u.Kind == TInfer {
+			break
+		}
+		for mode := 0; mode < 3; mode++ {
+			adjusted := u
+			if mode > 0 {
+				adjusted = Ref(u, mode == 2)
+			}
+			for _, e := range envs {
+				if e.Args[0] != u && !(mode == 0 && u.Kind == TRef) {
+					continue
+				}
+				item := e.Trait.Trait.Items[name]
+				selfTy := fcx.methodSelfTy(item, e.Args)
+				s := fcx.ic.snapshot()
+				if !fcx.ic.unify(selfTy, adjusted) {
+					fcx.ic.rollback(s)
+					continue
+				}
+				adj := adjustmentsFor(steps, si)
+				if mode > 0 {
+					adj = append(adj, Adjustment{Kind: AdjBorrow, Mut: mode == 2, Target: adjusted})
+				}
+				fcx.ic.obligations = append(fcx.ic.obligations, &Obligation{Pred: &Predicate{Trait: e}, Span: sp})
+				return &pick{item: item, parent: e.Args, adjust: adj, recvTy: adjusted, virtual: e.Args[0].Kind == TDyn}
+			}
+		}
+	}
+	return nil
 }

@@ -708,7 +708,7 @@ impl<'a, T: Copy + 'a> crate::iter::Extend<&'a T> for Vec<T> {
 
 macro_rules! __std_vec_eq {
     ([$($vars:tt)*] $lhs:ty, $rhs:ty) => {
-        impl<T, U, $($vars)*> PartialEq<$rhs> for $lhs
+        impl<$($vars)* T, U> PartialEq<$rhs> for $lhs
         where
             T: PartialEq<U>,
         {
@@ -721,14 +721,14 @@ macro_rules! __std_vec_eq {
 }
 
 __std_vec_eq! { [] Vec<T>, Vec<U> }
-__std_vec_eq! { ['b] Vec<T>, &'b [U] }
-__std_vec_eq! { ['b] Vec<T>, &'b mut [U] }
-__std_vec_eq! { ['b] &'b [T], Vec<U> }
-__std_vec_eq! { ['b] &'b mut [T], Vec<U> }
+__std_vec_eq! { ['b,] Vec<T>, &'b [U] }
+__std_vec_eq! { ['b,] Vec<T>, &'b mut [U] }
+__std_vec_eq! { ['b,] &'b [T], Vec<U> }
+__std_vec_eq! { ['b,] &'b mut [T], Vec<U> }
 __std_vec_eq! { [] Vec<T>, [U] }
 __std_vec_eq! { [] [T], Vec<U> }
-__std_vec_eq! { [const N: usize] Vec<T>, [U; N] }
-__std_vec_eq! { ['b, const N: usize] Vec<T>, &'b [U; N] }
+__std_vec_eq! { [const N: usize,] Vec<T>, [U; N] }
+__std_vec_eq! { ['b, const N: usize,] Vec<T>, &'b [U; N] }
 
 impl<T: Eq> Eq for Vec<T> {}
 
