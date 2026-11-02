@@ -33,6 +33,9 @@ type Expander struct {
 	modPath    []string
 	site       *lexer.Span // outermost user-macro call site, for line!/file!/panic locations
 	assoc      bool        // expanding trait/impl items (item macros parse as associated items)
+	// aliases maps names introduced by renaming imports (`use m as n;`) to
+	// the imported name, per crate; consulted for macro names only.
+	aliases map[string]map[string]string
 }
 
 // New creates an Expander.
@@ -40,6 +43,7 @@ func New() *Expander {
 	return &Expander{
 		RecursionLimit: DefaultRecursionLimit,
 		macros:         map[string]map[string]*macroDef{},
+		aliases:        map[string]map[string]string{},
 	}
 }
 
@@ -78,6 +82,8 @@ func (e *Expander) collectItems(items []*ast.Item) {
 			if def, err := parseMacroRules(it.Name.Name, k.Body, e.crate, it.Span); err == nil {
 				e.defineMacro(def)
 			}
+		case *ast.UseItem:
+			e.collectUseAliases(k.Tree)
 		case *ast.ModItem:
 			e.collectItems(k.Items)
 		case *ast.FnItem:
@@ -88,6 +94,32 @@ func (e *Expander) collectItems(items []*ast.Item) {
 			e.collectItems(k.Items)
 		case *ast.TraitItem:
 			e.collectItems(k.Items)
+		}
+	}
+}
+
+// collectUseAliases records renaming imports (`use a::m as n;`) so that a
+// macro imported under another name can be invoked by that name.
+func (e *Expander) collectUseAliases(t *ast.UseTree) {
+	if t == nil {
+		return
+	}
+	switch t.Kind {
+	case ast.UseSimple:
+		if t.Rename == nil || t.Rename.Name == "_" || t.Prefix == nil || len(t.Prefix.Segments) == 0 {
+			return
+		}
+		orig := t.Prefix.Segments[len(t.Prefix.Segments)-1].Ident.Name
+		if orig == t.Rename.Name {
+			return
+		}
+		if e.aliases[e.crate] == nil {
+			e.aliases[e.crate] = map[string]string{}
+		}
+		e.aliases[e.crate][t.Rename.Name] = orig
+	case ast.UseNested:
+		for _, n := range t.Nested {
+			e.collectUseAliases(n)
 		}
 	}
 }

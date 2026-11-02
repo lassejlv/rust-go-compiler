@@ -7,8 +7,27 @@ import (
 )
 
 // lookupMacro resolves a macro by name: macro_rules! of the current crate,
-// then builtins, then macro_rules! of previously expanded crates (std).
+// then builtins, then macro_rules! of previously expanded crates (std), then
+// names a macro was imported under (`use crate::m as n;`).
 func (e *Expander) lookupMacro(name string) (*macroDef, builtinFn) {
+	if d, b := e.lookupMacroName(name); d != nil || b != nil {
+		return d, b
+	}
+	// follow (possibly chained) renames
+	for i := 0; i < 16; i++ {
+		orig, ok := e.aliases[e.crate][name]
+		if !ok || orig == name {
+			break
+		}
+		if d, b := e.lookupMacroName(orig); d != nil || b != nil {
+			return d, b
+		}
+		name = orig
+	}
+	return nil, nil
+}
+
+func (e *Expander) lookupMacroName(name string) (*macroDef, builtinFn) {
 	if d, ok := e.macros[e.crate][name]; ok {
 		return d, nil
 	}
@@ -25,6 +44,30 @@ func (e *Expander) lookupMacro(name string) (*macroDef, builtinFn) {
 		}
 	}
 	return nil, nil
+}
+
+// IsCrateMacro reports whether crate (as named in ExpandCrate) defines a
+// macro_rules! macro called name, or imports a macro under that name.
+func (e *Expander) IsCrateMacro(crate, name string) bool {
+	for i := 0; i < 16; i++ {
+		if _, ok := e.macros[crate][name]; ok {
+			return true
+		}
+		orig, ok := e.aliases[crate][name]
+		if !ok || orig == name {
+			return false
+		}
+		name = orig
+		if _, ok := builtins[name]; ok {
+			return true
+		}
+		for _, c := range e.crateOrder {
+			if _, ok := e.macros[c][name]; ok {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // macTokens expands a macro call to tokens. user reports whether a

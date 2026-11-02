@@ -484,8 +484,13 @@ func matchFragment(frag string, in []ast.TokenTree, pos int) (int, bool) {
 	case "path":
 		n, err = parsePrefix(rest, func(p *parser.Parser) error { _, err := p.ParseTypePath(); return err })
 	case "meta":
-		n, err = parsePrefix(rest, func(p *parser.Parser) error { _, err := p.ParseTypePath(); return err })
-		if err == nil && n < len(rest) {
+		// simple path (no generics: `cfg(..)` is not Fn-sugar), then
+		// an optional delimited group or `= expr`
+		n = metaPathLen(rest)
+		if n == 0 {
+			return 0, false
+		}
+		if n < len(rest) {
 			if rest[n].Delim != 0 {
 				n++
 			} else if isPunct(rest[n], "=") {
@@ -691,4 +696,24 @@ func macName(mac *ast.MacCall) string {
 		return ""
 	}
 	return mac.Path.Segments[len(mac.Path.Segments)-1].Ident.Name
+}
+
+// metaPathLen returns the token length of a simple path `a::b::c` (with an
+// optional leading `::`) at the start of ts, or 0.
+func metaPathLen(ts []ast.TokenTree) int {
+	n := 0
+	if n < len(ts) && isPunct(ts[n], "::") {
+		n++
+	}
+	for {
+		if n >= len(ts) || ts[n].Delim != 0 || ts[n].Tok.Kind != lexer.Ident {
+			return 0
+		}
+		n++
+		if n < len(ts) && isPunct(ts[n], "::") {
+			n++
+			continue
+		}
+		return n
+	}
 }

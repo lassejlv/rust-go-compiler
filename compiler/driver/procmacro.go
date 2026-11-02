@@ -106,6 +106,7 @@ func buildProcMacroServer(opts *Options, pm *crateUnit, all map[string]*crateUni
 	}
 	r := resolve.New()
 	r.IsBuiltinMacro = expand.IsBuiltinMacro
+	r.IsCrateMacro = exp.IsCrateMacro
 	r.AddCrate("std", stdCrate)
 	pmCrate := r.AddCrate("proc_macro", pmc)
 	pmCrate.Externs = map[string]*Crate{}

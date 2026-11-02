@@ -380,6 +380,7 @@ func (bs *buildState) compileProgram(units []*crateUnit, binIdx int) (string, er
 	}
 	r := resolve.New()
 	r.IsBuiltinMacro = expand.IsBuiltinMacro
+	r.IsCrateMacro = exp.IsCrateMacro
 	r.AddCrate("std", stdCrate)
 	crates := map[string]*Crate{}
 	var binCrate *Crate

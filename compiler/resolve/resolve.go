@@ -31,6 +31,18 @@ type Resolver struct {
 	// IsBuiltinMacro reports names of builtin macros (imports of them,
 	// e.g. `use std::pin::pin;`, are accepted).
 	IsBuiltinMacro func(string) bool
+	// IsCrateMacro reports whether the named crate defines a macro_rules!
+	// macro `name`. Macros are expanded (and their definitions removed)
+	// before resolution, so imports/re-exports of them (`pub(crate) use m;`,
+	// `use crate::m;`) are accepted without binding anything.
+	IsCrateMacro func(crate, name string) bool
+}
+
+func (r *Resolver) isMacro(c *Crate, name string) bool {
+	if r.IsBuiltinMacro != nil && r.IsBuiltinMacro(name) {
+		return true
+	}
+	return c != nil && r.IsCrateMacro != nil && r.IsCrateMacro(c.Name, name)
 }
 
 func New() *Resolver {
@@ -485,6 +497,9 @@ func (r *Resolver) tryImport(imp *Import, report bool) bool {
 				found = true
 			}
 		}
+		if !found && r.IsCrateMacro != nil && r.IsCrateMacro(m.Crate.Name, name) {
+			return true // a macro_rules! macro in textual scope
+		}
 		if !found && report {
 			r.errorf(imp.Span, "unresolved import `%s`", name)
 		}
@@ -510,7 +525,7 @@ func (r *Resolver) tryImport(imp *Import, report bool) bool {
 			found = true
 		}
 	}
-	if !found && r.IsBuiltinMacro != nil && r.IsBuiltinMacro(last) {
+	if !found && r.isMacro(target.Crate, last) {
 		return true // macros live in a namespace we don't model
 	}
 	if !found {
@@ -552,7 +567,7 @@ func (r *Resolver) resolveModulePath(m *Module, segs []string, global bool, repo
 	var cur Res
 	start := 0
 	switch {
-	case global && m.Crate.Is2015():
+	case global && m.Crate.Is2015() && !r.injectedStd(m.Crate, segs[0]):
 		// 2015: `::a::b` is relative to the crate root
 		cur = defRes(m.Crate.Def)
 	case global:
@@ -697,7 +712,7 @@ func (r *Resolver) ResolvePath(m *Module, segs []string, global bool, ns Namespa
 		return TypeNS
 	}
 	switch {
-	case global && m.Crate.Is2015():
+	case global && m.Crate.Is2015() && !r.injectedStd(m.Crate, segs[0]):
 		cur = defRes(m.Crate.Def)
 	case global:
 		cr := r.ExternCrate(m.Crate, segs[0])
@@ -785,6 +800,16 @@ func (r *Resolver) ResolvePath(m *Module, segs []string, global bool, ns Namespa
 		}
 	}
 	return PathResult{Res: cur, Consumed: i}, nil
+}
+
+// injectedStd reports whether a 2015 crate-root path `::name` refers to the
+// implicitly injected `extern crate std;` (or core/alloc) because the root
+// defines nothing else under that name.
+func (r *Resolver) injectedStd(c *Crate, name string) bool {
+	if name != "std" && name != "core" && name != "alloc" {
+		return false
+	}
+	return c.Root == nil || c.Root.Lookup(name, TypeNS) == nil
 }
 
 // ExternCrate looks up a crate name in from's extern prelude.
