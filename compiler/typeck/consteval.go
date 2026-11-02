@@ -16,6 +16,99 @@ type ConstValue struct {
 // evalConstInt evaluates simple integer constant expressions (array
 // lengths, enum discriminants, const items used in types).
 func (t *Tcx) evalConstInt(ac *astConv, e ast.Expr) (int64, bool) {
+	return t.evalConstEnv(ac, e, nil)
+}
+
+type constEnv struct {
+	vars  map[string]int64
+	steps int
+}
+
+type constReturn struct{ v int64 }
+type constBreak struct{}
+type constFail struct{}
+
+// evalConstEnv evaluates with local variables (for const fn bodies).
+func (t *Tcx) evalConstEnv(ac *astConv, e ast.Expr, env *constEnv) (v int64, ok bool) {
+	if env != nil {
+		env.steps++
+		if env.steps > 1000000 {
+			return 0, false
+		}
+	}
+	switch x := e.(type) {
+	case *ast.PathExpr:
+		if env != nil && x.QSelf == nil && len(x.Path.Segments) == 1 {
+			if v, ok := env.vars[x.Path.Segments[0].Ident.Name]; ok {
+				return v, true
+			}
+		}
+	case *ast.CallExpr:
+		return t.evalConstCall(ac, x, env)
+	case *ast.IfExpr:
+		c, ok := t.evalConstEnv(ac, x.Cond, env)
+		if !ok {
+			return 0, false
+		}
+		if c != 0 {
+			return t.evalConstBlock(ac, x.Then, env)
+		}
+		if x.Else == nil {
+			return 0, true
+		}
+		return t.evalConstEnv(ac, x.Else, env)
+	case *ast.ReturnExpr:
+		if env == nil || x.Value == nil {
+			return 0, false
+		}
+		v, ok := t.evalConstEnv(ac, x.Value, env)
+		if !ok {
+			return 0, false
+		}
+		panic(constReturn{v})
+	case *ast.WhileExpr:
+		if env == nil {
+			return 0, false
+		}
+		for {
+			c, ok := t.evalConstEnv(ac, x.Cond, env)
+			if !ok {
+				return 0, false
+			}
+			if c == 0 {
+				return 0, true
+			}
+			if _, ok := t.evalConstBlock(ac, x.Body, env); !ok {
+				return 0, false
+			}
+		}
+	case *ast.AssignExpr:
+		if env == nil {
+			return 0, false
+		}
+		if p, ok := x.L.(*ast.PathExpr); ok && len(p.Path.Segments) == 1 {
+			v, ok := t.evalConstEnv(ac, x.R, env)
+			if !ok {
+				return 0, false
+			}
+			env.vars[p.Path.Segments[0].Ident.Name] = v
+			return 0, true
+		}
+		return 0, false
+	case *ast.AssignOpExpr:
+		if env == nil {
+			return 0, false
+		}
+		if p, ok := x.L.(*ast.PathExpr); ok && len(p.Path.Segments) == 1 {
+			v, ok := t.evalConstEnv(ac, &ast.BinaryExpr{Op: x.Op, L: x.L, R: x.R}, env)
+			if !ok {
+				return 0, false
+			}
+			env.vars[p.Path.Segments[0].Ident.Name] = v
+			return 0, true
+		}
+		return 0, false
+	}
 	switch x := e.(type) {
 	case *ast.LitExpr:
 		switch x.Kind {
@@ -28,13 +121,16 @@ func (t *Tcx) evalConstInt(ac *astConv, e ast.Expr) (int64, bool) {
 			return 0, true
 		}
 	case *ast.ParenExpr:
-		return t.evalConstInt(ac, x.X)
+		return t.evalConstEnv(ac, x.X, env)
 	case *ast.BlockExpr:
 		if tail := blockTail(x.Block); tail != nil && len(x.Block.Stmts) == 1 {
-			return t.evalConstInt(ac, tail)
+			return t.evalConstEnv(ac, tail, env)
+		}
+		if env != nil {
+			return t.evalConstBlock(ac, x.Block, env)
 		}
 	case *ast.CastExpr:
-		v, ok := t.evalConstInt(ac, x.X)
+		v, ok := t.evalConstEnv(ac, x.X, env)
 		if !ok {
 			return 0, false
 		}
@@ -44,7 +140,7 @@ func (t *Tcx) evalConstInt(ac *astConv, e ast.Expr) (int64, bool) {
 		}
 		return v, true
 	case *ast.UnaryExpr:
-		v, ok := t.evalConstInt(ac, x.X)
+		v, ok := t.evalConstEnv(ac, x.X, env)
 		if !ok {
 			return 0, false
 		}
@@ -55,8 +151,8 @@ func (t *Tcx) evalConstInt(ac *astConv, e ast.Expr) (int64, bool) {
 			return ^v, true
 		}
 	case *ast.BinaryExpr:
-		a, ok1 := t.evalConstInt(ac, x.L)
-		b, ok2 := t.evalConstInt(ac, x.R)
+		a, ok1 := t.evalConstEnv(ac, x.L, env)
+		b, ok2 := t.evalConstEnv(ac, x.R, env)
 		if !ok1 || !ok2 {
 			return 0, false
 		}
@@ -210,4 +306,77 @@ func truncInt(v int64, it IntTy) int64 {
 		v -= int64(1) << bits
 	}
 	return v
+}
+
+func (t *Tcx) evalConstBlock(ac *astConv, b *ast.Block, env *constEnv) (int64, bool) {
+	var last int64
+	for i, st := range b.Stmts {
+		switch x := st.(type) {
+		case *ast.LetStmt:
+			ip, ok := x.Pat.(*ast.IdentPat)
+			if !ok || x.Init == nil {
+				return 0, false
+			}
+			v, ok := t.evalConstEnv(ac, x.Init, env)
+			if !ok {
+				return 0, false
+			}
+			env.vars[ip.Name.Name] = v
+		case *ast.ExprStmt:
+			v, ok := t.evalConstEnv(ac, x.Expr, env)
+			if !ok {
+				return 0, false
+			}
+			if i == len(b.Stmts)-1 && !x.Semi {
+				last = v
+			}
+		default:
+			return 0, false
+		}
+	}
+	return last, true
+}
+
+// evalConstCall evaluates a call to a const fn with integer arguments.
+func (t *Tcx) evalConstCall(ac *astConv, x *ast.CallExpr, env *constEnv) (res int64, ok bool) {
+	pe, isPath := x.Fn.(*ast.PathExpr)
+	if !isPath || pe.QSelf != nil {
+		return 0, false
+	}
+	pr, err := t.R.ResolvePath(ac.scope, pathSegs(pe.Path), pe.Path.Global, ValueNS, ac.firstLookup)
+	if err != nil || pr.Consumed != len(pe.Path.Segments) || pr.Res.Kind != ResDef || pr.Res.Def.Kind != DefFn {
+		return 0, false
+	}
+	d := pr.Res.Def
+	fa := d.Fn.Ast
+	if fa.Body == nil || len(fa.Decl.Params) != len(x.Args) {
+		return 0, false
+	}
+	nenv := &constEnv{vars: map[string]int64{}}
+	if env != nil {
+		nenv.steps = env.steps
+	}
+	for i, p := range fa.Decl.Params {
+		ip, ok := p.Pat.(*ast.IdentPat)
+		if !ok {
+			return 0, false
+		}
+		v, ok := t.evalConstEnv(ac, x.Args[i], env)
+		if !ok {
+			return 0, false
+		}
+		nenv.vars[ip.Name.Name] = v
+	}
+	t.Generics(d)
+	fac := t.itemConv(d)
+	defer func() {
+		if r := recover(); r != nil {
+			if cr, isRet := r.(constReturn); isRet {
+				res, ok = cr.v, true
+				return
+			}
+			panic(r)
+		}
+	}()
+	return t.evalConstBlock(fac, fa.Body, nenv)
 }

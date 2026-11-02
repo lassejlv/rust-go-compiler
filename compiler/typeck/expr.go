@@ -751,7 +751,7 @@ func (fcx *FnCtxt) checkRef(x *ast.RefExpr, expected Ty) Ty {
 	var hint Ty
 	if expected != nil {
 		et := fcx.shallow(expected)
-		if (et.Kind == TRef || et.Kind == TPtr) && (!et.Elem.IsUnsized() || et.Elem.Kind == TDyn) {
+		if et.Kind == TRef || et.Kind == TPtr {
 			hint = et.Elem
 		}
 	}

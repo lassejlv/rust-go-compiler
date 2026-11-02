@@ -218,6 +218,14 @@ func (fc *fnGen) operand(e ast.Expr) operand {
 	case *ast.IndexExpr:
 		return fc.indexOperand(x, t)
 	case *ast.RefExpr:
+		if !x.Mut && fc.promotable(x.X) && len(fc.r.Adjust[x.X.GetID()]) == 0 {
+			it := fc.ty(x.X)
+			v := fc.constC(x.X)
+			name := fc.newName("prom")
+			fc.g.defineByValue(it)
+			fmt.Fprintf(&fc.g.statics, "static %s %s = %s;\n", fc.g.ctype(it), name, v)
+			return val("(&" + name + ")")
+		}
 		inner := fc.adjusted(x.X)
 		if x.Mut {
 			// ensure place
@@ -1122,4 +1130,66 @@ func (g *Gen) closurePtrThunk(t Ty) string {
 	fmt.Fprintf(&g.protos, "static %s %s(%s);\n", g.ctype(ci.Output), name, joinParams(ps))
 	fmt.Fprintf(&g.fns, "static %s %s(%s) { %s env = {}; return %s(%s); }\n", g.ctype(ci.Output), name, joinParams(ps), g.ctype(t), cf, strings.Join(append([]string{"&env"}, as...), ", "))
 	return name
+}
+
+// promotable reports whether e is a constant expression that rustc would
+// promote to a 'static allocation when borrowed.
+func (fc *fnGen) promotable(e ast.Expr) bool {
+	switch x := e.(type) {
+	case *ast.LitExpr:
+		return x.Kind != ast.LitByteStr
+	case *ast.ParenExpr:
+		return fc.promotable(x.X)
+	case *ast.UnaryExpr:
+		if x.Op == ast.UnNeg {
+			if _, ok := unparen(x.X).(*ast.LitExpr); ok {
+				return fc.r.Callees[x.ID] == nil
+			}
+		}
+	case *ast.TupleExpr:
+		for _, el := range x.Elems {
+			if !fc.promotable(el) {
+				return false
+			}
+		}
+		return true
+	case *ast.ArrayExpr:
+		for _, el := range x.Elems {
+			if !fc.promotable(el) || len(fc.r.Adjust[el.GetID()]) > 0 {
+				return false
+			}
+		}
+		return true
+	case *ast.PathExpr:
+		vr := fc.r.Paths[x.ID]
+		return vr != nil && vr.Kind == typeck.VUnitCtor
+	}
+	return false
+}
+
+// constC renders a promotable constant expression as a C constant.
+func (fc *fnGen) constC(e ast.Expr) string {
+	t := fc.ty(e)
+	switch x := e.(type) {
+	case *ast.ParenExpr:
+		return fc.constC(x.X)
+	case *ast.TupleExpr:
+		if len(x.Elems) == 0 {
+			return fc.unit()
+		}
+		var vs []string
+		for i, el := range x.Elems {
+			vs = append(vs, fmt.Sprintf(".f%d = %s", i, fc.constC(el)))
+		}
+		fc.g.defineByValue(t)
+		return fmt.Sprintf("((%s){ %s })", fc.g.ctype(t), strings.Join(vs, ", "))
+	case *ast.ArrayExpr:
+		var vs []string
+		for _, el := range x.Elems {
+			vs = append(vs, fc.constC(el))
+		}
+		fc.g.defineByValue(t)
+		return fmt.Sprintf("((%s){ { %s } })", fc.g.ctype(t), strings.Join(vs, ", "))
+	}
+	return fc.value(e)
 }
