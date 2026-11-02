@@ -78,6 +78,12 @@ targets other than x86_64-linux-gnu, incremental compilation.
   out of struct fields, temporaries with Rust's temporary-lifetime rules, and
   unwinding on panic (a cleanup stack runs pending destructors before the
   process exits with code 101).
+* **Type layouts** follow rustc's repr(Rust) rules: fields are reordered by
+  alignment, enum tags are as small as possible and niches (null pointers,
+  invalid bools/chars, unused tag values) store other variants, so
+  `size_of` matches rustc (`Option<&T>` = 8, `Option<u32>` = 8,
+  `Result<u64, String>` = 24) and `repr(C)`/`repr(u8)` types are
+  FFI-compatible.
 * **Integer overflow** panics like a debug build of rustc (wraps with
   `--release`); bounds checks, division by zero etc. produce rustc's panic
   messages at the same source locations (including `#[track_caller]`).
