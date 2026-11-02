@@ -622,8 +622,8 @@ func TestLiteralBuiltins(t *testing.T) {
 	s := crateString(c)
 	contains(t, s, `let m = "main::a::b";`)
 
-	mustErr(t, `fn main() { let x = env!("HOME"); }`, "environment variable `HOME` not defined")
-	mustErr(t, `fn main() { let x = include_str!("a.txt"); }`, "`include_str!` is not supported")
+	mustErr(t, `fn main() { let x = env!("RUSTGO_SURELY_UNSET_VAR"); }`, "environment variable `RUSTGO_SURELY_UNSET_VAR` not defined")
+	mustErr(t, `fn main() { let x = include_str!("a_missing_file.txt"); }`, "couldn't read")
 	mustErr(t, `compile_error!("custom failure");`, "custom failure")
 	mustErr(t, `fn main() { compile_error!("in fn"); }`, "in fn")
 	mustErr(t, `fn main() { nosuch!(1); }`, "cannot find macro `nosuch` in this scope")

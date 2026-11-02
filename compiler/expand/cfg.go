@@ -43,7 +43,8 @@ var (
 // CrateConfig holds per-crate cfg settings.
 type CrateConfig struct {
 	Features []string
-	Cfgs     []string // `name` or `name="value"`
+	Cfgs     []string          // `name` or `name="value"`
+	Env      map[string]string // compile-time environment for env!
 }
 
 func applyCrateConfig(c *CrateConfig) {

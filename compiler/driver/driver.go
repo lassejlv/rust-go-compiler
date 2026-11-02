@@ -298,3 +298,11 @@ func truncate(s string, n int) string {
 	}
 	return s
 }
+
+// loadStd loads the std crate (embedded or from opts.StdDir).
+func loadStd(opts *Options) (*ast.Crate, error) {
+	if opts.StdDir != "" {
+		return LoadCrateFS(os.DirFS(opts.StdDir), "lib.rs", opts.StdDir+"/")
+	}
+	return loadEmbeddedStd()
+}

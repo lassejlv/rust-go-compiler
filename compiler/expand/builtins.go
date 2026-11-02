@@ -2,6 +2,8 @@ package expand
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -56,9 +58,9 @@ func init() {
 		"cfg":             (*Expander).cfgMac,
 		"env":             (*Expander).envMac,
 		"option_env":      (*Expander).optionEnvMac,
-		"include":         unsupportedMac,
-		"include_str":     unsupportedMac,
-		"include_bytes":   unsupportedMac,
+		"include":         (*Expander).includeMac,
+		"include_str":     (*Expander).includeStrMac,
+		"include_bytes":   (*Expander).includeBytesMac,
 		"concat_idents":   unsupportedMac,
 		"compile_error":   (*Expander).compileErrorMac,
 	}
@@ -179,7 +181,7 @@ func (e *Expander) litString(tts []ast.TokenTree, mac *ast.MacCall) (string, boo
 	if len(tts) >= 3 && tts[len(tts)-1].Delim != 0 && isPunct(tts[len(tts)-2], "!") && isIdentTT(tts[len(tts)-3]) {
 		name := tts[len(tts)-3].Tok.Text
 		switch name {
-		case "concat", "stringify", "file", "line", "column", "module_path":
+		case "concat", "stringify", "file", "line", "column", "module_path", "env":
 			g := tts[len(tts)-1]
 			inner := &ast.MacCall{Path: &ast.Path{Segments: []*ast.PathSegment{{Ident: ast.Ident{Name: name, Span: tts[0].Tok.Span}}}},
 				Delim: g.Delim, Args: g.Inner, Span: ttsSpan(tts, mac.Span)}
@@ -580,16 +582,115 @@ func (e *Expander) cfgMac(mac *ast.MacCall) ([]ast.TokenTree, error) {
 	return litTok(lexer.Token{Kind: lexer.Ident, Text: strconv.FormatBool(v)}, mac), nil
 }
 
+func (e *Expander) envName(mac *ast.MacCall) (string, error) {
+	parts := splitTop(mac.Args, ",")
+	if len(parts) == 0 || len(parts[0]) == 0 {
+		return "", errAt(mac.Span, "env! takes 1 or 2 arguments")
+	}
+	name, isStr, err := e.litString(parts[0], mac)
+	if err != nil {
+		return "", err
+	}
+	if !isStr {
+		return "", errAt(mac.Span, "expected string literal")
+	}
+	return name, nil
+}
+
+// lookupEnv consults the crate's compile-time environment (Cargo-provided
+// variables and build-script `rustc-env`), then the process environment.
+func (e *Expander) lookupEnv(name string) (string, bool) {
+	if e.Config != nil {
+		if v, ok := e.Config.Env[name]; ok {
+			return v, true
+		}
+	}
+	return os.LookupEnv(name)
+}
+
 func (e *Expander) envMac(mac *ast.MacCall) ([]ast.TokenTree, error) {
-	name := TokensString(mac.Args)
-	if parts := splitTop(mac.Args, ","); len(parts) > 0 && len(parts[0]) == 1 && parts[0][0].Tok.Kind == lexer.Str {
-		name = parts[0][0].Tok.Text
+	name, err := e.envName(mac)
+	if err != nil {
+		return nil, err
+	}
+	if v, ok := e.lookupEnv(name); ok {
+		return tmpl(mac.Span, rustStr(v))
 	}
 	return nil, errAt(mac.Span, "environment variable `%s` not defined at compile time", name)
 }
 
 func (e *Expander) optionEnvMac(mac *ast.MacCall) ([]ast.TokenTree, error) {
+	name, err := e.envName(mac)
+	if err != nil {
+		return nil, err
+	}
+	if v, ok := e.lookupEnv(name); ok {
+		return tmpl(mac.Span, "::std::option::Option::Some::<&'static str>("+rustStr(v)+")")
+	}
 	return tmpl(mac.Span, "::std::option::Option::None::<&'static str>")
+}
+
+// includePath resolves an include!-family path relative to the file
+// containing the invocation.
+func (e *Expander) includePath(mac *ast.MacCall) (string, error) {
+	p, isStr, err := e.litString(mac.Args, mac)
+	if err != nil {
+		return "", err
+	}
+	if !isStr {
+		return "", errAt(mac.Span, "argument must be a string literal")
+	}
+	if !filepath.IsAbs(p) {
+		p = filepath.Join(filepath.Dir(lexer.FileName(mac.Span.Lo.File)), p)
+	}
+	return p, nil
+}
+
+func (e *Expander) includeStrMac(mac *ast.MacCall) ([]ast.TokenTree, error) {
+	p, err := e.includePath(mac)
+	if err != nil {
+		return nil, err
+	}
+	b, err := os.ReadFile(p)
+	if err != nil {
+		return nil, errAt(mac.Span, "couldn't read `%s`: %v", p, err)
+	}
+	return tmpl(mac.Span, rustStr(string(b)))
+}
+
+func (e *Expander) includeBytesMac(mac *ast.MacCall) ([]ast.TokenTree, error) {
+	p, err := e.includePath(mac)
+	if err != nil {
+		return nil, err
+	}
+	b, err := os.ReadFile(p)
+	if err != nil {
+		return nil, errAt(mac.Span, "couldn't read `%s`: %v", p, err)
+	}
+	var sb strings.Builder
+	sb.WriteString("&[")
+	for i, c := range b {
+		if i > 0 {
+			sb.WriteString(", ")
+		}
+		sb.WriteString(strconv.Itoa(int(c)))
+		sb.WriteString("u8")
+	}
+	sb.WriteString("]")
+	return tmpl(mac.Span, sb.String())
+}
+
+// includeMac includes a file's tokens (as an expression or items).
+func (e *Expander) includeMac(mac *ast.MacCall) ([]ast.TokenTree, error) {
+	p, err := e.includePath(mac)
+	if err != nil {
+		return nil, err
+	}
+	b, err := os.ReadFile(p)
+	if err != nil {
+		return nil, errAt(mac.Span, "couldn't read `%s`: %v", p, err)
+	}
+	return parser.TokenizeToTrees(lexer.AddFile(p, string(b)), string(b))
 }
 
 func (e *Expander) compileErrorMac(mac *ast.MacCall) ([]ast.TokenTree, error) {

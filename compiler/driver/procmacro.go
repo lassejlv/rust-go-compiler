@@ -73,7 +73,7 @@ func loadProcMacroCrate() (*ast.Crate, error) {
 
 // buildProcMacroServer compiles the macro server for proc-macro crate pm
 // and returns the macros it provides.
-func buildProcMacroServer(opts *Options, pm *crateUnit, all map[string]*crateUnit, order []*crateUnit) (map[string]*expand.ProcMacro, error) {
+func buildProcMacroServer(opts *Options, pm *crateUnit, all map[string]*crateUnit, order []*crateUnit, _ map[string]map[string]*expand.ProcMacro) (map[string]*expand.ProcMacro, error) {
 	// dependency closure of pm, in build order
 	need := map[string]bool{}
 	var mark func(u *crateUnit)
@@ -125,7 +125,7 @@ func buildProcMacroServer(opts *Options, pm *crateUnit, all map[string]*crateUni
 		if u == pm {
 			decls = scanProcMacros(c)
 		}
-		exp.Config = &expand.CrateConfig{Features: u.features}
+		exp.Config = &expand.CrateConfig{Features: u.features, Cfgs: u.cfgs, Env: cargoEnv(u)}
 		if err := exp.ExpandCrate(c, u.key); err != nil {
 			return nil, fmt.Errorf("crate %s: %v", u.name, err)
 		}

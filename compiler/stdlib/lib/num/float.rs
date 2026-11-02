@@ -51,6 +51,12 @@ fn clamp_failed<T: crate::fmt::Debug>(min: T, max: T) -> ! {
 // $t: float type, $bits: unsigned type of same width, $sbits: signed type
 // of same width, $m: module with the math intrinsics, $nbits: width,
 // $mant: number of explicit mantissa bits, $bytes: width in bytes.
+// Reinterprets the bits of a value (usable in const fns, unlike transmute).
+union FloatBits<A: Copy, B: Copy> {
+    a: A,
+    b: B,
+}
+
 macro_rules! __std_float_impl {
     ($t:ident, $bits:ident, $sbits:ident, $m:ident, $nbits:expr, $mant:expr, $bytes:expr) => {
         impl $t {
@@ -219,7 +225,7 @@ macro_rules! __std_float_impl {
             /// Raw transmutation from the unsigned integer of the same width.
             #[inline]
             pub const fn from_bits(v: $bits) -> $t {
-                unsafe { intrinsics::transmute::<$bits, $t>(v) }
+                unsafe { FloatBits::<$bits, $t> { a: v }.b }
             }
 
             /// Returns the memory representation of this number as a little-endian byte array.

@@ -43,7 +43,7 @@ impl Duration {
     /// Creates a new `Duration` from the specified number of whole seconds and additional nanoseconds.
     #[inline]
     #[track_caller]
-    pub const fn new(secs: u64, nanos: u32) -> Duration {
+    pub fn new(secs: u64, nanos: u32) -> Duration {
         if nanos < NANOS_PER_SEC {
             Duration { secs, nanos }
         } else {
@@ -83,7 +83,7 @@ impl Duration {
     /// Creates a new `Duration` from the specified number of minutes.
     #[inline]
     #[track_caller]
-    pub const fn from_mins(mins: u64) -> Duration {
+    pub fn from_mins(mins: u64) -> Duration {
         match mins.checked_mul(60) {
             Some(secs) => Duration::from_secs(secs),
             None => panic!("overflow in Duration::from_mins"),
@@ -93,7 +93,7 @@ impl Duration {
     /// Creates a new `Duration` from the specified number of hours.
     #[inline]
     #[track_caller]
-    pub const fn from_hours(hours: u64) -> Duration {
+    pub fn from_hours(hours: u64) -> Duration {
         match hours.checked_mul(3600) {
             Some(secs) => Duration::from_secs(secs),
             None => panic!("overflow in Duration::from_hours"),
@@ -156,7 +156,7 @@ impl Duration {
 
     /// Checked `Duration` addition.
     #[inline]
-    pub const fn checked_add(self, rhs: Duration) -> Option<Duration> {
+    pub fn checked_add(self, rhs: Duration) -> Option<Duration> {
         if let Some(mut secs) = self.secs.checked_add(rhs.secs) {
             let mut nanos = self.nanos + rhs.nanos;
             if nanos >= NANOS_PER_SEC {
@@ -175,7 +175,7 @@ impl Duration {
 
     /// Saturating `Duration` addition.
     #[inline]
-    pub const fn saturating_add(self, rhs: Duration) -> Duration {
+    pub fn saturating_add(self, rhs: Duration) -> Duration {
         match self.checked_add(rhs) {
             Some(res) => res,
             None => Duration::MAX,
@@ -184,7 +184,7 @@ impl Duration {
 
     /// Checked `Duration` subtraction.
     #[inline]
-    pub const fn checked_sub(self, rhs: Duration) -> Option<Duration> {
+    pub fn checked_sub(self, rhs: Duration) -> Option<Duration> {
         if let Some(mut secs) = self.secs.checked_sub(rhs.secs) {
             let nanos = if self.nanos >= rhs.nanos {
                 self.nanos - rhs.nanos
@@ -202,7 +202,7 @@ impl Duration {
 
     /// Saturating `Duration` subtraction.
     #[inline]
-    pub const fn saturating_sub(self, rhs: Duration) -> Duration {
+    pub fn saturating_sub(self, rhs: Duration) -> Duration {
         match self.checked_sub(rhs) {
             Some(res) => res,
             None => Duration::ZERO,
@@ -211,7 +211,7 @@ impl Duration {
 
     /// Checked `Duration` multiplication.
     #[inline]
-    pub const fn checked_mul(self, rhs: u32) -> Option<Duration> {
+    pub fn checked_mul(self, rhs: u32) -> Option<Duration> {
         let total_nanos = self.nanos as u64 * rhs as u64;
         let extra_secs = total_nanos / (NANOS_PER_SEC as u64);
         let nanos = (total_nanos % (NANOS_PER_SEC as u64)) as u32;
@@ -225,7 +225,7 @@ impl Duration {
 
     /// Saturating `Duration` multiplication.
     #[inline]
-    pub const fn saturating_mul(self, rhs: u32) -> Duration {
+    pub fn saturating_mul(self, rhs: u32) -> Duration {
         match self.checked_mul(rhs) {
             Some(res) => res,
             None => Duration::MAX,
@@ -234,7 +234,7 @@ impl Duration {
 
     /// Checked `Duration` division.
     #[inline]
-    pub const fn checked_div(self, rhs: u32) -> Option<Duration> {
+    pub fn checked_div(self, rhs: u32) -> Option<Duration> {
         if rhs != 0 {
             let secs = self.secs / (rhs as u64);
             let carry = self.secs - secs * (rhs as u64);

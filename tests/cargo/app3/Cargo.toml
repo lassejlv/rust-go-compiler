@@ -1,0 +1,9 @@
+[package]
+name = "app3"
+version = "1.4.2"
+edition = "2021"
+description = "build script test"
+
+[features]
+default = ["shiny"]
+shiny = []
