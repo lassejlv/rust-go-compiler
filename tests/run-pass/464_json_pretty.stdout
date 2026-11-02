@@ -1,0 +1,50 @@
+{
+  "name": "rustgo",
+  "version": 15,
+  "tags": [
+    "compiler",
+    "go",
+    "été"
+  ],
+  "nested": {
+    "empty_obj": {},
+    "empty_arr": [],
+    "deep": [
+      [
+        1,
+        2
+      ],
+      [
+        3,
+        [
+          4,
+          null
+        ]
+      ]
+    ]
+  },
+  "flags": {
+    "fast": true,
+    "safe": false
+  },
+  "escape": "line\nbreak \"q\" \\ /",
+  "neg": -0.25
+}
+{"name":"rustgo","version":15,"tags":["compiler","go","été"],"nested":{"empty_obj":{},"empty_arr":[],"deep":[[1,2],[3,[4,null]]]},"flags":{"fast":true,"safe":false},"escape":"line\nbreak \"q\" \\ /","neg":-0.25}
+name -> Some("\"rustgo\"")
+tags.2 -> Some("\"été\"")
+nested.deep.1.1.0 -> Some("4")
+nested.deep.1.1.1 -> Some("null")
+flags.safe -> Some("false")
+nope -> None
+tags.9 -> None
+version -> Some("15")
+roundtrip equal: true
+"[1, 2" -> Err("expected , or ] at 5")
+"{\"a\" 1}" -> Err("expected : at 5")
+"tru" -> Err("bad literal at 0")
+"[1,]" -> Err("unexpected byte at 3")
+"\"abc" -> Err("unterminated string at 4")
+"{} x" -> Err("trailing data at 3")
+"-" -> Err("bad number \"-\"")
+"[\"\\q\"]" -> Err("bad escape at 3")

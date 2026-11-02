@@ -1,0 +1,20 @@
+Some(Health(100))
+Some(Position(1.0, 2.5)) Some(Health(80)) Some(Name("hero"))
+None
+Some(Health(55))
+Some(Name("hero")) None
+["Health", "Name", "Position"]
+i32 5
+String "hi"
+&str "lit"
+Position(0.0, -1.0)
+unit
+bytes [1, 2]
+unknown
+int sum 5
+["counter(6)", "logger[3]", "counter(16)"]
+counters 2
+["round 0", "round 1", "round 2"]
+true false
+core::option::Option<alloc::vec::Vec<i32>> | &str | (u8, char)
+not a position; is health: true

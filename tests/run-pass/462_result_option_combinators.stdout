@@ -1,0 +1,36 @@
+Some(8) None
+Some(1) None
+Some(9) Some(10)
+5 -1
+Ok(4) Err("missing 1")
+None Some(4)
+Some(4) None None
+Some((4, 'a')) None
+Some(1) Some("one")
+true false true
+Some(3) None
+Ok(Some(5)) None
+Some("text") Some(4) 0
+Some(5) Some(6)
+Some(10) None
+None Some(1)
+Some(100) 101
+[4] iter=[4]
+Some(36) None
+None
+results:
+Ok(20) Err(3)
+Err("div 10 by zero") Ok(3)
+Ok(0) Ok(1)
+Err("x") Err("bad")
+Some(10) None None Some("bad")
+3 0
+30 -3
+true true
+Some(10) None
+Err("inner")
+Ok(7)
+Some("div 1 by zero") 8
+Err("div 1 by zero")
+-1
+zero!

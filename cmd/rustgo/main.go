@@ -33,7 +33,7 @@ options:
   --std <dir>       use a std library from a directory instead of the built-in one
   --cc <compiler>   C compiler to use (default: gcc, or $RUSTGO_CC)
   -O <level>        C optimization level (default 1)
-  --edition <ed>    accepted for rustc compatibility (ignored)
+  --edition <ed>    Rust edition of the input (2015, 2018, 2021 default, 2024)
   -v                verbose timings
 `)
 }
@@ -93,8 +93,9 @@ func main() {
 		case strings.HasPrefix(a, "-O") && len(a) > 2:
 			opts.OptLevel = a[2:]
 		case a == "--edition":
-			next()
+			opts.Edition = next()
 		case strings.HasPrefix(a, "--edition="):
+			opts.Edition = strings.TrimPrefix(a, "--edition=")
 		case a == "--check-all":
 			opts.CheckAll = true
 		case a == "--release":

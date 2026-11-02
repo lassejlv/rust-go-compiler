@@ -1,0 +1,14 @@
+kahn: ["assets", "util", "config", "core", "lib", "docs", "ui", "app", "tests"]
+dfs:  ["util", "config", "core", "lib", "assets", "ui", "app", "docs", "tests"]
+valid: true
+valid: true
+level 0: ["assets", "util"]
+level 1: ["config", "core"]
+level 2: ["lib", "ui"]
+level 3: ["app", "docs"]
+level 4: ["tests"]
+critical: (20, ["util", "core", "lib", "app", "tests"])
+kahn cyclic: Err(["a", "b", "c"])
+dfs cyclic: Err(["a", "b", "c", "a"])
+Err(["x"]) Err(["x", "x"])
+Ok([]) Ok([])

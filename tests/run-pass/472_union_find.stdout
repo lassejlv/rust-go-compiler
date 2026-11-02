@@ -1,0 +1,16 @@
+mst [(0, 3, 5), (2, 4, 5), (3, 5, 6), (0, 1, 7), (1, 4, 7), (4, 6, 9)] total 39 sets 1
+components {'a': [3], 'b': [3], 'c': [3], 'd': [3], 'e': [3]}
+[(1, 2), (2, 3), (3, 4)] -> cycle edge None
+[(1, 2), (2, 3), (3, 1)] -> cycle edge Some((3, 1))
+[(0, 0)] -> cycle edge Some((0, 0))
+ann-bob merged=true
+cat-dan merged=true
+bob-eve merged=true
+fay-fay merged=false
+dan-gus merged=true
+eve-ann merged=false
+[["ann", "bob", "eve"], ["cat", "dan", "gus"], ["fay"]] sets=3
+ann ~ eve: true
+ann ~ gus: false
+cat ~ gus: true
+fay ~ fay: true

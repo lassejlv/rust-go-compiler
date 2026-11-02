@@ -1,0 +1,20 @@
+1 + 2 * 3              => 1 + 2 * 3 = 7
+(1 + 2) * 3            => (1 + 2) * 3 = 9
+2 ^ 3 ^ 2              => 2 ^ 3 ^ 2 = 512
+(2 ^ 3) ^ 2            => 2 ^ 3 ^ 2 = 64
+-x ^ 2                 => -x ^ 2 = -9
+x - y - 1              => x - y - 1 = 4
+x - (y - 1)            => x - (y - 1) = 6
+max(1, x, y * -4, 2)   => max(1, x, y * -4, 2) = 8
+min(x)                 => min(x) = 3
+abs(y) + abs(-7.5)     => abs(y) + abs(-7.5) = 9.5
+2 * π                  => 2 * π = 6.283185307179586
+10 / 4 / 5             => 10 / 4 / 5 = 0.5
+1 +                    => error: unexpected end at 3
+foo(1, 2)              => error: bad call foo/2
+z * 2                  => error: unknown variable z
+max()                  => error: bad call max/0
+3 $ 4                  => error: unexpected '$' at 2
+(1 + 2                 => error: expected )
+1.2.3                  => error: bad number "1.2.3" at 0
+max(1 2)               => error: expected , or ) at 6 got Num(2.0)

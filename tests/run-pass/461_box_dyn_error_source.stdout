@@ -1,0 +1,20 @@
+["a"] => 1
+["a", "b"] => [other] sum 3 too large
+["a", "zzz"] => [not-found] looking up "zzz"
+  caused by: zzz not found
+["num"] => [parse] looking up "num"
+  caused by: invalid digit found in string
+["empty"] => [other] looking up "empty"
+  caused by: empty key given
+[] => 0
+downcast ok: NotFound("cfg")
+"plain message"
+true
+owned msg / true
+thread err: parsing w
+  caused by: invalid digit found in string
+2 ok, 1 err
+["x not found"]
+disk not found | inner=Some("disk not found")
+saving file
+  caused by: disk not found

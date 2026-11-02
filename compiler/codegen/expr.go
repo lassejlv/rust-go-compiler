@@ -313,15 +313,12 @@ func (fc *fnGen) operand(e ast.Expr) operand {
 			return val(fc.unit())
 		}
 		var vs []string
-		for i, el := range x.Elems {
-			vs = append(vs, fmt.Sprintf(".f%d = %s", i, fc.spillIfNeeded(fc.value(el), fc.aty(el))))
+		for i, v := range fc.evalOperands(x.Elems) {
+			vs = append(vs, fmt.Sprintf(".f%d = %s", i, v))
 		}
 		return val(fmt.Sprintf("((%s){ %s })", fc.ctype(t), strings.Join(vs, ", ")))
 	case *ast.ArrayExpr:
-		var vs []string
-		for _, el := range x.Elems {
-			vs = append(vs, fc.spillIfNeeded(fc.value(el), fc.aty(el)))
-		}
+		vs := fc.evalOperands(x.Elems)
 		return val(fmt.Sprintf("((%s){ { %s } })", fc.ctype(t), strings.Join(vs, ", ")))
 	case *ast.RepeatExpr:
 		v := fc.spill(fc.value(x.Elem), fc.aty(x.Elem))
@@ -904,9 +901,12 @@ func intMaxStr(t Ty) string {
 func (fc *fnGen) structLit(x *ast.StructExpr, t Ty) string {
 	v := fc.r.Variants[x.ID]
 	vals := make([]string, len(v.Fields))
-	for _, f := range x.Fields {
-		i := v.FieldIndex(f.Name.Name)
-		vals[i] = fc.spillIfNeeded(fc.value(f.Expr), fc.aty(f.Expr))
+	fes := make([]ast.Expr, len(x.Fields))
+	for k, f := range x.Fields {
+		fes[k] = f.Expr
+	}
+	for k, fv := range fc.evalOperands(fes) {
+		vals[v.FieldIndex(x.Fields[k].Name.Name)] = fv
 	}
 	if x.Base != nil {
 		base := fc.spill(fc.value(x.Base), t)
@@ -1014,15 +1014,62 @@ func (fc *fnGen) tryExpr(x *ast.TryExpr, t Ty) string {
 
 // argValues lowers call arguments left to right.
 func (fc *fnGen) argValues(args []ast.Expr) []string {
-	var out []string
-	for _, a := range args {
-		v := fc.value(a)
-		if !isSimple(v) && !strings.HasPrefix(v, "((") {
-			v = fc.spill(v, fc.aty(a))
+	return fc.evalOperands(args)
+}
+
+// evalOperands evaluates operands left to right (call arguments, aggregate
+// fields). An owned operand that is followed by an operand that may panic is
+// kept in a drop-flagged temporary on the cleanup stack, so unwinding out of
+// a later operand drops it; once all operands are evaluated, ownership passes
+// to the aggregate or callee and the flags are cleared.
+func (fc *fnGen) evalOperands(es []ast.Expr) []string {
+	out := make([]string, len(es))
+	var flags []string
+	for i, e := range es {
+		v := fc.value(e)
+		t := fc.aty(e)
+		if t != nil && !isZST(t) && fc.g.needsDrop(t) && anyMayPanic(es[i+1:]) {
+			n, fl := fc.materialize(v, t)
+			if fl != "" {
+				flags = append(flags, fl)
+			}
+			v = n
+		} else if !isSimple(v) && !strings.HasPrefix(v, "((") {
+			v = fc.spill(v, t)
 		}
-		out = append(out, v)
+		out[i] = v
+	}
+	for _, fl := range flags {
+		fc.line("%s = 0;", fl)
 	}
 	return out
+}
+
+// anyMayPanic reports whether evaluating any of es might panic (conservative:
+// only literals, paths, closures and borrows of paths are known not to).
+func anyMayPanic(es []ast.Expr) bool {
+	for _, e := range es {
+		if mayPanic(e) {
+			return true
+		}
+	}
+	return false
+}
+
+func mayPanic(e ast.Expr) bool {
+	switch x := e.(type) {
+	case *ast.LitExpr, *ast.PathExpr, *ast.ClosureExpr:
+		return false
+	case *ast.ParenExpr:
+		return mayPanic(x.X)
+	case *ast.RefExpr:
+		return mayPanic(x.X)
+	case *ast.FieldExpr:
+		// plain field projections of paths (autoderef through Deref impls
+		// would be a call, but those don't panic in practice)
+		return mayPanic(x.X)
+	}
+	return true
 }
 
 func (fc *fnGen) callExpr(x *ast.CallExpr, t Ty) string {
@@ -1103,11 +1150,8 @@ func (fc *fnGen) finishCall(call string, t Ty) string {
 
 func (fc *fnGen) methodCall(x *ast.MethodCallExpr, t Ty) string {
 	c := fc.r.Callees[x.ID]
-	recv := fc.value(x.Receiver)
-	if !isSimple(recv) && !strings.HasPrefix(recv, "((") {
-		recv = fc.spill(recv, fc.aty(x.Receiver))
-	}
-	args := fc.argValues(x.Args)
+	ops := fc.evalOperands(append([]ast.Expr{x.Receiver}, x.Args...))
+	recv, args := ops[0], ops[1:]
 	if c.Kind == typeck.CallVirtual {
 		dyn := c.Args[0]
 		idx := fc.g.vtableIndex(dyn, c.Def)

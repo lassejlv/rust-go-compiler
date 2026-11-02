@@ -93,6 +93,15 @@ func (fc *fnGen) dummy(t Ty) string {
 // ---------------------------------------------------------------------------
 // Scopes and drops
 
+// edition2024 reports whether the body being generated belongs to a crate
+// using Rust 2024 (which changed temporary scopes of if-let and block tails).
+func (fc *fnGen) edition2024() bool {
+	if fc.r == nil || fc.r.Inst.Def == nil || fc.r.Inst.Def.Crate == nil {
+		return false
+	}
+	return fc.r.Inst.Def.Crate.Edition >= "2024"
+}
+
 func (fc *fnGen) pushScope() { fc.scopes = append(fc.scopes, &scope{}) }
 
 func (fc *fnGen) popScope() {
@@ -331,12 +340,20 @@ func (fc *fnGen) blockValue(b *ast.Block, want Ty) string {
 		fc.stmt(s)
 	}
 	if tail != nil {
+		sc := fc.scopes[len(fc.scopes)-1]
+		mark := len(sc.drops)
 		v := fc.value(tail)
 		tt := fc.aty(tail)
 		if res != "" && tt.Kind != TNever {
 			fc.line("%s = %s;", res, v)
 		} else if v != fc.unit() && !isSimple(v) {
 			fc.line("(void)%s;", v)
+		}
+		if !fc.edition2024() && mark > 0 && len(sc.drops) > mark {
+			// Before Rust 2024, temporaries of a block's tail expression
+			// outlive the block's locals: drop the locals first.
+			temps := append([]dropEntry(nil), sc.drops[mark:]...)
+			sc.drops = append(temps, sc.drops[:mark]...)
 		}
 	}
 	fc.popScope()
@@ -425,8 +442,22 @@ func (fc *fnGen) extendsTemps(e ast.Expr) bool {
 				return fc.extendsTemps(t)
 			}
 		}
-	case *ast.IfExpr, *ast.MatchExpr:
-		return true // conservative
+	case *ast.IfExpr:
+		// temporaries are extended through the branches' tails only; the
+		// condition's temporaries never are
+		if x.Then != nil {
+			if t := blockTail(x.Then); t != nil && fc.extendsTemps(t) {
+				return true
+			}
+		}
+		return x.Else != nil && fc.extendsTemps(x.Else)
+	case *ast.MatchExpr:
+		// likewise through the arm bodies, never the scrutinee
+		for _, a := range x.Arms {
+			if fc.extendsTemps(a.Body) {
+				return true
+			}
+		}
 	}
 	return false
 }
@@ -777,21 +808,10 @@ func (fc *fnGen) ifExpr(x *ast.IfExpr, t Ty) string {
 	}
 	elseL := fc.newName("else")
 	endL := fc.newName("endif")
-	fc.line("{")
-	fc.ind++
-	depth := len(fc.scopes)
-	fc.pushScope()
-	fc.condJump(x.Cond, elseL, depth)
-	v := fc.blockValue(x.Then, t)
-	if res != "" {
-		fc.line("%s = %s;", res, v)
-	}
-	fc.popScope()
-	fc.line("goto %s;", endL)
-	fc.ind--
-	fc.line("}")
-	fc.line("%s:;", elseL)
-	if x.Else != nil {
+	elseBranch := func() {
+		if x.Else == nil {
+			return
+		}
 		var ev string
 		switch e := x.Else.(type) {
 		case *ast.BlockExpr:
@@ -802,6 +822,40 @@ func (fc *fnGen) ifExpr(x *ast.IfExpr, t Ty) string {
 		if res != "" {
 			fc.line("%s = %s;", res, ev)
 		}
+	}
+	fc.line("{")
+	fc.ind++
+	depth := len(fc.scopes)
+	fc.pushScope()
+	// Before Rust 2024 the temporaries of an `if let` scrutinee live until
+	// the end of the whole if/else: the else branch runs inside that scope.
+	_, isLet := unparen(x.Cond).(*ast.LetExpr)
+	keepTemps := isLet && x.Else != nil && !fc.edition2024()
+	if keepTemps {
+		fc.condJump(x.Cond, elseL, depth+1)
+	} else {
+		fc.condJump(x.Cond, elseL, depth)
+	}
+	v := fc.blockValue(x.Then, t)
+	if res != "" {
+		fc.line("%s = %s;", res, v)
+	}
+	if keepTemps {
+		thenEnd := fc.newName("thenend")
+		fc.line("goto %s;", thenEnd)
+		fc.line("%s:;", elseL)
+		elseBranch()
+		fc.line("%s:;", thenEnd)
+		fc.popScope()
+		fc.ind--
+		fc.line("}")
+	} else {
+		fc.popScope()
+		fc.line("goto %s;", endL)
+		fc.ind--
+		fc.line("}")
+		fc.line("%s:;", elseL)
+		elseBranch()
 	}
 	fc.line("%s:;", endL)
 	if res != "" {

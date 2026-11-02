@@ -1,0 +1,13 @@
+ok Item { id: 1, qty: 2, price: 3.5 }
+err: invalid integer <- invalid digit found in string | Some("invalid digit found in string")
+err: field error: qty = 0 out of range [1, 100] <- qty = 0 out of range [1, 100] | Some("qty = 0 out of range [1, 100]")
+err: invalid float <- invalid float literal | Some("invalid float literal")
+err: field error: missing field `id` <- missing field `id` | Some("missing field `id`")
+err: field error: missing field `price` <- missing field `price` | Some("missing field `price`")
+err: invalid utf-8 <- invalid utf-8 sequence of 1 bytes from index 0 | Some("invalid utf-8 sequence of 1 bytes from index 0")
+ok Item { id: 5, qty: 100, price: 0.25 }
+err: invalid integer <- number too large to fit in target type | Some("number too large to fit in target type")
+Ok(32.0)
+total failed: error on line 2 <- field error: qty = 500 out of range [1, 100] <- qty = 500 out of range [1, 100]
+true
+Some(2)

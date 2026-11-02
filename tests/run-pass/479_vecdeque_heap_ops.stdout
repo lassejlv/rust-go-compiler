@@ -1,0 +1,25 @@
+[-1, 0, 1, 2, 3] len=5 front=Some(-1) back=Some(3)
+rotl [1, 2, 3, -1, 0]
+rotr [0, 1, 2, 3, -1] [2]=2 get(9)=None
+slices total 5
+sorted [-1, 0, 1, 2, 3] [-1, 0, 1, 2, 3]
+drained [0, 1] left [-1, 2, 3]
+retained [3, 11, 12, 13]
+split [3, 11] [12, 13]
+append [3, 11, 12, 13] true
+range [11, 12, 13]
+[11, 100, 12, 13] contains 100: true pos Some(1)
+[11, 55, 100] remove(0)=Some(11)
+[100, 55]
+defABC
+"CAe"
+[3, 3, 5, 5, 6, 7]
+[9, 8, 7]
+[0, 1, 2, 3, 4, 5, 9, 10, 11]
+peek Some(9) len 8
+peek after Some(6)
+popped [7, 6, 5]
+rest [0, 1, 1, 2, 3, 4] sorted [0, 1, 1, 2, 3, 4]
+["9:hotfix", "5:deploy", "5:build", "2:write", "2:read"]
+Some("apple")
+[1, 3, 5, 7] 0

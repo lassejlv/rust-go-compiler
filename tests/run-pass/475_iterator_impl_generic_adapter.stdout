@@ -1,0 +1,14 @@
+interleave: [1, 10, 2, 11, 3, 12, 13, 14, 15]
+hint (2, Some(6))
+interleave str: ['a', 'X', 'b', 'Y', 'c', 'Z']
+batched: [[1, 2, 3], [4, 5, 6], [7, 8, 9], [10]]
+batched words: ["ab", "cd", "e"]
+dedup: [(1, 2), (2, 1), (3, 3), (1, 1)]
+dedup len: [("aa", 2), ("c", 1), ("dd", 1), ("e", 2)]
+pairwise: [3, 5, 7]
+pairwise one: []
+hint (5, Some(5))
+my_map rev: [25, 16, 9, 4, 1]
+chain all: ["\0c\u{3}d", "\u{6}e\tf", "\u{c}g\u{f}h", "\u{12}"]
+["APPLE", "FIG", "PEAR"]
+[([1, 2, 3, 4], 3)]

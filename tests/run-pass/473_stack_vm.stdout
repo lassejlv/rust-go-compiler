@@ -1,0 +1,15 @@
+fact (17 ins): Ok(([], [3628800], 109))
+gcd (11 ins): Ok(([], [21], 25))
+primes (33 ins): Ok(([], [2, 3, 5, 7, 11, 13, 17, 19, 23, 29], 1073))
+  0: push 1071
+  1: push 462
+  2: dup
+  3: jz @8
+  4: swap
+  5: over
+Err(DivZero(2))
+Err(StackUnderflow(1))
+Err(StepLimit)
+Err(BadLocal(1, 9))
+Err(PcOut(1))
+Ok(([], [-9223372036854775808], 5))

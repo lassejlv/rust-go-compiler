@@ -37,8 +37,9 @@ type Options struct {
 	OptLevel string
 	Verbose  bool
 	KeepC    bool
-	CheckAll bool // type-check every non-generic function in all crates
-	Release  bool // optimize (gcc -O2) and disable integer overflow checks
+	CheckAll bool   // type-check every non-generic function in all crates
+	Release  bool   // optimize (gcc -O2) and disable integer overflow checks
+	Edition  string // "2015", "2018", "2021" (default) or "2024"
 	LinkArgs []string
 }
 
@@ -170,6 +171,7 @@ func Frontend(opts *Options) (*typeck.Tcx, *Def, error) {
 	r.IsCrateMacro = exp.IsCrateMacro
 	r.AddCrate("std", stdCrate)
 	user := r.AddCrate("main", userCrate)
+	user.Edition = opts.Edition
 	r.ResolveImports()
 	if err := r.Err(); err != nil {
 		return nil, nil, err
