@@ -402,6 +402,10 @@ impl<T: fmt::Debug, const N: usize> fmt::Debug for IntoIter<T, N> {
 }
 
 impl<T, const N: usize> IntoIterator for [T; N] {
+    #[inline]
+    fn __flatten_bounds() -> (usize, Option<usize>) {
+        (N, Some(N))
+    }
     type Item = T;
     type IntoIter = IntoIter<T, N>;
     #[inline]
@@ -411,6 +415,10 @@ impl<T, const N: usize> IntoIterator for [T; N] {
 }
 
 impl<'a, T, const N: usize> IntoIterator for &'a [T; N] {
+    #[inline]
+    fn __flatten_bounds() -> (usize, Option<usize>) {
+        (N, Some(N))
+    }
     type Item = &'a T;
     type IntoIter = crate::slice::Iter<'a, T>;
     #[inline]
@@ -420,6 +428,10 @@ impl<'a, T, const N: usize> IntoIterator for &'a [T; N] {
 }
 
 impl<'a, T, const N: usize> IntoIterator for &'a mut [T; N] {
+    #[inline]
+    fn __flatten_bounds() -> (usize, Option<usize>) {
+        (N, Some(N))
+    }
     type Item = &'a mut T;
     type IntoIter = crate::slice::IterMut<'a, T>;
     #[inline]

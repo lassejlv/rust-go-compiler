@@ -1011,6 +1011,17 @@ pub trait IntoIterator {
     type IntoIter: Iterator<Item = Self::Item>;
     /// Creates an iterator from a value.
     fn into_iter(self) -> Self::IntoIter;
+
+    /// Bounds on the number of items of every value of this type (core's
+    /// `ConstSizeIntoIterator`/`BoundedSize` specializations, used by
+    /// `Flatten`/`FlatMap::size_hint`).
+    #[doc(hidden)]
+    fn __flatten_bounds() -> (usize, Option<usize>)
+    where
+        Self: Sized,
+    {
+        (0, None)
+    }
 }
 
 impl<I: Iterator> IntoIterator for I {

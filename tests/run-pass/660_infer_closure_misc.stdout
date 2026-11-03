@@ -1,0 +1,36 @@
+45
+["<2>", "<2>", "<2>", "<2>", "<3>"]
+[5] 4
+100 3
+[7, 7, 7]
+one two
+2 2
+clone 3
+4 4
+6 6 6
+drop 3
+drop 3
+clone_from 9 <- 1
+clone 2
+drop 6
+clone_from 7 <- 1
+clone_from 8 <- 2
+2
+drop 1
+drop 2
+drop 1
+drop 2
+drop 1
+drop 2
+(4, Some(4))
+(3, Some(3))
+(0, Some(3))
+(0, None)
+(0, None)
+(5, Some(5))
+4..=3 true
+5..=6
+0..=255 (exhausted) true
+None
+9..=5
+CharIndices { front_offset: 3, iter: Chars(['l', 'l', 'o']) }

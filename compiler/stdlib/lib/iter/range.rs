@@ -40,6 +40,19 @@ pub trait Step: Clone + PartialOrd + Sized {
     unsafe fn backward_unchecked(start: Self, count: usize) -> Self {
         Step::backward(start, count)
     }
+
+    /// `start + count` wrapping around on overflow, for types that wrap
+    /// (integers); `None` for the others.
+    #[doc(hidden)]
+    fn __forward_wrapping(start: Self, count: usize) -> Option<Self> {
+        None
+    }
+
+    /// `start - count` wrapping around on overflow (see `__forward_wrapping`).
+    #[doc(hidden)]
+    fn __backward_wrapping(start: Self, count: usize) -> Option<Self> {
+        None
+    }
 }
 
 // Integers no wider than 64 bits: exact arithmetic in i128.
@@ -100,6 +113,14 @@ macro_rules! __std_step_narrow {
                 unsafe fn backward_unchecked(start: $t, n: usize) -> $t {
                     start.wrapping_sub(n as $t)
                 }
+                #[inline]
+                fn __forward_wrapping(start: $t, n: usize) -> Option<$t> {
+                    Some(start.wrapping_add(n as $t))
+                }
+                #[inline]
+                fn __backward_wrapping(start: $t, n: usize) -> Option<$t> {
+                    Some(start.wrapping_sub(n as $t))
+                }
             }
 
             impl ExactSizeIterator for Range<$t> {}
@@ -155,6 +176,14 @@ impl Step for u128 {
     unsafe fn backward_unchecked(start: u128, n: usize) -> u128 {
         start.wrapping_sub(n as u128)
     }
+    #[inline]
+    fn __forward_wrapping(start: u128, n: usize) -> Option<u128> {
+        Some(start.wrapping_add(n as u128))
+    }
+    #[inline]
+    fn __backward_wrapping(start: u128, n: usize) -> Option<u128> {
+        Some(start.wrapping_sub(n as u128))
+    }
 }
 
 impl Step for i128 {
@@ -200,6 +229,14 @@ impl Step for i128 {
     #[inline]
     unsafe fn backward_unchecked(start: i128, n: usize) -> i128 {
         start.wrapping_sub(n as i128)
+    }
+    #[inline]
+    fn __forward_wrapping(start: i128, n: usize) -> Option<i128> {
+        Some(start.wrapping_add(n as i128))
+    }
+    #[inline]
+    fn __backward_wrapping(start: i128, n: usize) -> Option<i128> {
+        Some(start.wrapping_sub(n as i128))
     }
 }
 
@@ -387,6 +424,39 @@ impl<A: Step> FusedIterator for RangeFrom<A> {}
 // ---------------------------------------------------------------------------
 // RangeInclusive<A>
 
+impl<A: Step> RangeInclusive<A> {
+    /// Moves `start` forward by `k` (past `end` when it was the last
+    /// value); an overflowing step marks the range exhausted.
+    #[inline]
+    fn __advance_start(&mut self, k: Option<usize>) {
+        if let Some(k) = k {
+            if let Some(v) = Step::forward_checked(self.start.clone(), k) {
+                self.start = v;
+                return;
+            }
+            if let Some(v) = Step::__forward_wrapping(self.start.clone(), k) {
+                self.start = v;
+            }
+        }
+        self.exhausted = true;
+    }
+
+    /// Moves `end` backward by `k` (see `__advance_start`).
+    #[inline]
+    fn __retreat_end(&mut self, k: Option<usize>) {
+        if let Some(k) = k {
+            if let Some(v) = Step::backward_checked(self.end.clone(), k) {
+                self.end = v;
+                return;
+            }
+            if let Some(v) = Step::__backward_wrapping(self.end.clone(), k) {
+                self.end = v;
+            }
+        }
+        self.exhausted = true;
+    }
+}
+
 impl<A: Step> Iterator for RangeInclusive<A> {
     type Item = A;
 
@@ -395,14 +465,13 @@ impl<A: Step> Iterator for RangeInclusive<A> {
         if self.exhausted || !(self.start <= self.end) {
             return None;
         }
-        let is_iterating = self.start < self.end;
-        Some(if is_iterating {
+        if self.start < self.end {
             let n = unsafe { Step::forward_unchecked(self.start.clone(), 1) };
-            mem::replace(&mut self.start, n)
-        } else {
-            self.exhausted = true;
-            self.start.clone()
-        })
+            return Some(mem::replace(&mut self.start, n));
+        }
+        let r = self.start.clone();
+        self.__advance_start(Some(1));
+        Some(r)
     }
 
     #[inline]
@@ -438,19 +507,12 @@ impl<A: Step> Iterator for RangeInclusive<A> {
         if self.exhausted || !(self.start <= self.end) {
             return None;
         }
-        if let Some(plus_n) = Step::forward_checked(self.start.clone(), n) {
-            if plus_n < self.end {
-                self.start = unsafe { Step::forward_unchecked(plus_n.clone(), 1) };
-                return Some(plus_n);
-            } else if plus_n == self.end {
-                self.start = plus_n.clone();
-                self.exhausted = true;
-                return Some(plus_n);
-            }
-        }
-        self.start = self.end.clone();
-        self.exhausted = true;
-        None
+        let r = match Step::forward_checked(self.start.clone(), n) {
+            Some(plus_n) if plus_n <= self.end => Some(plus_n),
+            _ => None,
+        };
+        self.__advance_start(n.checked_add(1));
+        r
     }
 
     #[inline]
@@ -484,14 +546,13 @@ impl<A: Step> DoubleEndedIterator for RangeInclusive<A> {
         if self.exhausted || !(self.start <= self.end) {
             return None;
         }
-        let is_iterating = self.start < self.end;
-        Some(if is_iterating {
+        if self.start < self.end {
             let n = unsafe { Step::backward_unchecked(self.end.clone(), 1) };
-            mem::replace(&mut self.end, n)
-        } else {
-            self.exhausted = true;
-            self.end.clone()
-        })
+            return Some(mem::replace(&mut self.end, n));
+        }
+        let r = self.end.clone();
+        self.__retreat_end(Some(1));
+        Some(r)
     }
 
     #[inline]
@@ -499,19 +560,12 @@ impl<A: Step> DoubleEndedIterator for RangeInclusive<A> {
         if self.exhausted || !(self.start <= self.end) {
             return None;
         }
-        if let Some(minus_n) = Step::backward_checked(self.end.clone(), n) {
-            if minus_n > self.start {
-                self.end = unsafe { Step::backward_unchecked(minus_n.clone(), 1) };
-                return Some(minus_n);
-            } else if minus_n == self.start {
-                self.end = minus_n.clone();
-                self.exhausted = true;
-                return Some(minus_n);
-            }
-        }
-        self.end = self.start.clone();
-        self.exhausted = true;
-        None
+        let r = match Step::backward_checked(self.end.clone(), n) {
+            Some(minus_n) if minus_n >= self.start => Some(minus_n),
+            _ => None,
+        };
+        self.__retreat_end(n.checked_add(1));
+        r
     }
 }
 

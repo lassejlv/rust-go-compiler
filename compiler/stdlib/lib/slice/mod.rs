@@ -1274,7 +1274,7 @@ impl<T> [T] {
         let n = self.len();
         let mut i = 0;
         while i < n {
-            self[i] = src[i].clone();
+            self[i].clone_from(&src[i]);
             i += 1;
         }
     }
