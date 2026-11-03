@@ -597,6 +597,20 @@ func (fcx *FnCtxt) checkUninferredLocals() {
 		}
 	}
 	sort.Slice(ls, func(i, j int) bool { return ls[i].ID < ls[j].ID })
+	// variables standing for closure results are left alone: a closure
+	// whose body diverges returns `!`, which falls back to `()` (rustgo
+	// may not have recorded it as diverging)
+	closureVars := map[Ty]bool{}
+	for _, ci := range fcx.r.Closures {
+		if ci.Output != nil {
+			Walk(fcx.ic.resolve(ci.Output), func(x Ty) bool {
+				if x.Kind == TInfer {
+					closureVars[x] = true
+				}
+				return true
+			})
+		}
+	}
 	for _, l := range ls {
 		t := fcx.ic.resolve(l.Ty)
 		if t.HasProj() {
@@ -604,7 +618,7 @@ func (fcx *FnCtxt) checkUninferredLocals() {
 		}
 		unresolved := false
 		Walk(t, func(x Ty) bool {
-			if x.Kind == TInfer && x.Sub == 0 {
+			if x.Kind == TInfer && x.Sub == 0 && !closureVars[x] {
 				unresolved = true
 			}
 			return !unresolved

@@ -79,11 +79,11 @@ func (cx *patCx) bail() { panic(errBail{}) }
 func (cx *patCx) run(f func()) (ok bool) {
 	defer func() {
 		if e := recover(); e != nil {
-			if _, isBail := e.(errBail); isBail {
-				ok = false
-				return
+			if _, fatal := e.(fatalError); fatal {
+				panic(e)
 			}
-			panic(e)
+			// errBail, or anything unexpected: no verdict
+			ok = false
 		}
 	}()
 	f()

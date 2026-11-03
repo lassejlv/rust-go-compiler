@@ -95,7 +95,10 @@ func (ev *miniEval) run(r *Results, e ast.Expr) (err string) {
 				err = s.err
 				return
 			}
-			panic(x)
+			if _, fatal := x.(fatalError); fatal {
+				panic(x)
+			}
+			err = "" // unexpected: no verdict
 		}
 	}()
 	ev.eval(&mframe{r: r, locals: map[*Local]*big.Int{}}, e)
