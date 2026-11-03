@@ -865,6 +865,10 @@ func (ic *InferCtxt) normalizeProjectionUncached(trait *Def, args []Ty, name str
 				return b.Ty
 			}
 		}
+		// bindings on the principal's supertraits (`trait Sub: Base<Item = X>`)
+		if ty := t.dynSuperBinding(self, trait, name); ty != nil {
+			return ty
+		}
 	}
 	if self.Kind == TOpaque {
 		for _, st := range t.AllSupertraits(&TraitRef{Trait: trait, Args: args}) {
@@ -1074,4 +1078,45 @@ func (ic *InferCtxt) canonicalKey(tr *TraitRef) (string, bool) {
 func (t *Tcx) sealedClosure(c Ty) bool {
 	ci := t.Closures[c]
 	return ci != nil && ci.Sealed
+}
+
+// dynSuperBinding finds an associated type binding `name` of trait declared
+// on a supertrait bound of a trait object's principal trait (transitively).
+func (t *Tcx) dynSuperBinding(self Ty, trait *Def, name string) Ty {
+	if self.Def == nil {
+		return nil
+	}
+	type item struct {
+		tr   *Def
+		args []Ty // args of tr including Self
+	}
+	work := []item{{self.Def, append([]Ty{self}, self.Args...)}}
+	seen := map[*Def]bool{}
+	for len(work) > 0 {
+		it := work[0]
+		work = work[1:]
+		if seen[it.tr] {
+			continue
+		}
+		seen[it.tr] = true
+		g := t.Generics(it.tr)
+		if len(it.args) != len(g.Params) {
+			continue
+		}
+		for _, p := range g.Predicates {
+			if p.Trait == nil || len(p.Trait.Args) == 0 || p.Trait.Args[0].Kind != TParam || p.Trait.Args[0].Index != 0 {
+				continue // only bounds on Self
+			}
+			sp := p.Subst(it.args)
+			if sp.Trait.Trait == trait {
+				for _, b := range sp.Bindings {
+					if b.Name == name {
+						return b.Ty
+					}
+				}
+			}
+			work = append(work, item{sp.Trait.Trait, sp.Trait.Args})
+		}
+	}
+	return nil
 }
