@@ -15,6 +15,10 @@ pub struct LocalKey<T: 'static> {
     init: fn() -> T,
 }
 
+// (each thread has its own value: the key is shared, the values are not)
+unsafe impl<T: 'static> Sync for LocalKey<T> {}
+unsafe impl<T: 'static> Send for LocalKey<T> {}
+
 /// An error returned by `LocalKey::try_with`.
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub struct AccessError {

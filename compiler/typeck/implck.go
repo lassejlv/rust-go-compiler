@@ -55,6 +55,9 @@ func (t *Tcx) checkImpls() {
 			continue
 		}
 		t.checkUnusedConst(d)
+		if d.Kind == DefStatic && !d.Const.Mut {
+			t.checkStaticSync(d)
+		}
 		if d.Kind == DefConst {
 			t.checkConstPanic(d)
 		}
@@ -886,4 +889,20 @@ func (t *Tcx) certainlyNotCopy(ty Ty, c *Crate) bool {
 		return d.Crate == c && t.adtCopyImpl(d) == nil
 	}
 	return false
+}
+
+// checkStaticSync reports a (non-mut) static whose type is not Sync (E0277):
+// it is shared between threads.
+func (t *Tcx) checkStaticSync(d *Def) {
+	ty := t.ConstTy(d)
+	if ty == nil || ty.HasError() || ty.HasParam() || ty.HasProj() {
+		return
+	}
+	if !newInferCtxt(t).autoHolds("Sync", ty, 0, map[autoKey]bool{}) {
+		sp := d.Span
+		if d.Const.TyAst != nil {
+			sp = d.Const.TyAst.GetSpan()
+		}
+		t.ErrorCode(sp, "E0277", "`%s` cannot be shared between threads safely", ty)
+	}
 }
