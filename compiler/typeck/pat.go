@@ -1,10 +1,10 @@
 package typeck
 
 import (
-	"strings"
 	"rustgo/compiler/ast"
 	"rustgo/compiler/lexer"
 	. "rustgo/compiler/middle"
+	"strings"
 )
 
 type bindingMode int

@@ -16,8 +16,8 @@ func (p *Parser) parseItem() *ast.Item {
 
 type fnQuals struct {
 	Const, Async, Unsafe, Safe bool
-	Abi                  string
-	hasAbi               bool
+	Abi                        string
+	hasAbi                     bool
 }
 
 // parseFnQuals parses `const async unsafe extern "abi"` before `fn`.
