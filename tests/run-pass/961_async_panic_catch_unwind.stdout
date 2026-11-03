@@ -1,0 +1,21 @@
+drop inner local
+drop outer local
+drop block_on frame
+ok: 3
+drop inner local
+drop outer local
+drop block_on frame
+caught: inner panicked with 5
+poll 0: pending
+drop block local
+poll 1: caught Some("static msg")
+poll 2: caught Some("`async fn` resumed after panicking")
+drop inner block
+drop outer block
+drop block_on frame
+nested: true
+f2 poll 0: Pending
+drop inner local
+f2 poll 1: err Some("inner panicked with 9") None
+f2 poll 2: err None Some("`async fn` resumed after panicking")
+end

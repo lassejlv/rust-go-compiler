@@ -32,6 +32,10 @@ func csCount(ds []dropEntry) int {
 
 type scope struct {
 	drops []dropEntry
+	// tail: the tail expression of the (non-terminating) block owning this
+	// scope is being lowered; before Rust 2024 the temporaries it creates
+	// belong to the enclosing temporary scope (see tempScope).
+	tail bool
 }
 
 type loopInfo struct {
@@ -43,6 +47,23 @@ type loopInfo struct {
 	depth     int // scope depth at loop entry (scopes above are exited by break)
 	contDepth int
 	isBlock   bool
+	// labeled blocks: the cleanup entries of tail temporaries created in
+	// the block that belong to a scope outside it (esc), and the breaks out
+	// of the block (brks), which must add the entries created after them
+	// (with cleared flags) so that the cleanup stack has the same layout
+	// on every path to the end of the block
+	esc  []escEntry
+	brks []brkSite
+}
+
+type escEntry struct {
+	place, drop, flag string
+	target            int // index of the scope owning it
+}
+
+type brkSite struct {
+	token string // placeholder line, replaced at the end of the block
+	n     int    // len(esc) at the break
 }
 
 type fnGen struct {
@@ -98,6 +119,20 @@ type fnGen struct {
 	// when set, collects the parts instead.
 	resQueue   *[]resPart
 	resCollect *[]resPart
+	// hoisted: declarations emitted at the top of the C function (the
+	// temporaries that outlive the C block they are created in)
+	hoisted []string
+	// escIndex: the index of the scope tempScope returned last
+	escIndex int
+}
+
+// body returns the C body of the function: the hoisted declarations, then
+// the generated statements.
+func (fc *fnGen) body() string {
+	if len(fc.hoisted) == 0 {
+		return fc.b.String()
+	}
+	return "  " + strings.Join(fc.hoisted, "\n  ") + "\n" + fc.b.String()
 }
 
 // resPart is a part of a local left by a pattern moving other parts out.
@@ -1000,6 +1035,17 @@ func (fc *fnGen) spill(v string, t Ty) string {
 // the current scope. Returns the place and its drop flag.
 func (fc *fnGen) materialize(v string, t Ty) (string, string) {
 	n := fc.newName("t")
+	if sc, k := fc.tempScope(); sc != nil && fc.g.needsDrop(t) {
+		// a temporary of a block's tail expression: it outlives the
+		// block's locals
+		fc.hoisted = append(fc.hoisted, fmt.Sprintf("%s %s;", fc.ctype(t), n))
+		fc.line("%s = %s;", n, v)
+		flag := "d" + n
+		fc.hoistFlag(flag)
+		sc.drops = append(sc.drops, dropEntry{place: n, flag: flag, ty: t})
+		fc.escPush(k, n, fc.g.dropFn(t), flag)
+		return n, flag
+	}
 	fc.line("%s %s = %s;", fc.ctype(t), n, v)
 	if fc.g.needsDrop(t) {
 		flag := "d" + n
@@ -1011,11 +1057,60 @@ func (fc *fnGen) materialize(v string, t Ty) (string, string) {
 	return n, ""
 }
 
+// tempScope reports where a temporary created now is dropped when that is
+// not the innermost scope: before Rust 2024, the temporaries of a block's
+// tail expression live until the end of the enclosing temporary scope (the
+// enclosing statement, or the terminating scope of an `if` branch, a loop
+// or function body, a match arm, ...), so after the block's locals. It
+// returns that scope and the number of cleanup-stack entries above it that
+// belong to the blocks in between (the temporary's cleanup entry goes
+// below them, so that unwinding drops it after their locals too), or nil.
+func (fc *fnGen) tempScope() (*scope, int) {
+	k := 0
+	i := len(fc.scopes) - 1
+	for ; i > 0 && fc.scopes[i].tail; i-- {
+		k += csCount(fc.scopes[i].drops)
+	}
+	if i == len(fc.scopes)-1 {
+		return nil, 0
+	}
+	fc.escIndex = i
+	return fc.scopes[i], k
+}
+
+// escPush emits the cleanup entry of a temporary owned by an enclosing
+// scope (see tempScope), k entries below the top.
+func (fc *fnGen) escPush(k int, place, drop, flag string) {
+	fc.line("RG_CS_INS(%d, &%s, %s, &%s);", k, place, drop, flag)
+	for _, li := range fc.loops {
+		if li.isBlock && fc.escIndex < li.depth {
+			li.esc = append(li.esc, escEntry{place: place, drop: drop, flag: flag, target: fc.escIndex})
+		}
+	}
+}
+
+// hoistFlag declares a (cleared) drop flag at the top of the C function and
+// sets it.
+func (fc *fnGen) hoistFlag(flag string) {
+	fc.hoisted = append(fc.hoisted, fmt.Sprintf("uint8_t %s = 0;", flag))
+	fc.line("%s = 1;", flag)
+}
+
 // ---------------------------------------------------------------------------
 // Blocks and statements
 
-// blockValue lowers a block and returns its value (coerced tail).
-func (fc *fnGen) blockValue(b *ast.Block, want Ty) string {
+// blockValue lowers a block and returns its value (coerced tail). A
+// terminating block (a function or loop body, an `if` branch, ...) is the
+// temporary scope of its tail expression: before Rust 2024 those
+// temporaries are dropped when it ends, after its locals. Other blocks
+// leave them to the enclosing temporary scope.
+func (fc *fnGen) blockValue(b *ast.Block, want Ty, term bool) string {
+	if term && !fc.edition2024() {
+		fc.pushScope()
+		v := fc.blockValue(b, want, false)
+		fc.popScope()
+		return v
+	}
 	if want == nil {
 		want = fc.r.NodeTypes[b.ID]
 	}
@@ -1038,6 +1133,7 @@ func (fc *fnGen) blockValue(b *ast.Block, want Ty) string {
 	if tail != nil {
 		sc := fc.scopes[len(fc.scopes)-1]
 		mark := len(sc.drops)
+		sc.tail = !fc.edition2024()
 		v := fc.value(tail)
 		tt := fc.aty(tail)
 		if res != "" && tt.Kind != TNever {
@@ -1045,6 +1141,7 @@ func (fc *fnGen) blockValue(b *ast.Block, want Ty) string {
 		} else if v != fc.unit() && !isSimple(v) {
 			fc.line("(void)%s;", v)
 		}
+		sc.tail = false
 		if !fc.edition2024() && mark > 0 && len(sc.drops) > mark {
 			// Before Rust 2024, temporaries of a block's tail expression
 			// outlive the block's locals: drop the locals first.
@@ -1319,7 +1416,7 @@ func (fc *fnGen) letInit(x *ast.LetStmt) {
 		test := fc.patTest(x.Pat, op.s, it)
 		fc.line("if (!(%s)) {", test)
 		fc.ind++
-		fc.blockValue(x.Else, nil)
+		fc.blockValue(x.Else, nil, true)
 		fc.ind--
 		fc.line("}")
 	}
@@ -1389,7 +1486,7 @@ func (fc *fnGen) loopExpr(x *ast.LoopExpr, t Ty) string {
 	fc.ind++
 	fc.pushScope()
 	li.contDepth = len(fc.scopes) - 1 // continue also drops this iteration's bindings
-	fc.blockValue(x.Body, TyUnit)
+	fc.blockValue(x.Body, TyUnit, true)
 	fc.popScope()
 	fc.line("%s:;", li.cont)
 	fc.ind--
@@ -1414,7 +1511,7 @@ func (fc *fnGen) whileExpr(x *ast.WhileExpr) string {
 	fc.pushScope()
 	li.contDepth = len(fc.scopes) - 1 // continue also drops this iteration's bindings
 	fc.condJump(x.Cond, li.brk, li.depth)
-	fc.blockValue(x.Body, TyUnit)
+	fc.blockValue(x.Body, TyUnit, true)
 	fc.popScope()
 	fc.line("%s:;", li.cont)
 	fc.ind--
@@ -1446,7 +1543,7 @@ func (fc *fnGen) forExpr(x *ast.ForExpr) string {
 	fc.line("if (!%s) goto %s;", fc.g.enumIs(optTy, n, someV), li.brk)
 	item := fmt.Sprintf("%s.f0", fc.g.enumPayload(optTy, n, someV.Index))
 	fc.bindOwnedPat(x.Pat, item, info.ItemTy, nil, false)
-	fc.blockValue(x.Body, TyUnit)
+	fc.blockValue(x.Body, TyUnit, true)
 	fc.popScope()
 	fc.line("%s:;", li.cont)
 	fc.ind--
@@ -1470,6 +1567,11 @@ func (fc *fnGen) breakExpr(x *ast.BreakExpr) {
 		}
 	}
 	fc.emitDropsFrom(li.depth)
+	if li.isBlock {
+		tok := fmt.Sprintf("/*@%s_%d@*/", li.brk, len(li.brks))
+		fc.line("%s", tok)
+		li.brks = append(li.brks, brkSite{token: tok, n: len(li.esc)})
+	}
 	fc.line("goto %s;", li.brk)
 }
 
@@ -1489,9 +1591,27 @@ func (fc *fnGen) labeledBlock(x *ast.BlockExpr, t Ty) string {
 	}
 	li.depth = len(fc.scopes)
 	fc.loops = append(fc.loops, li)
-	v := fc.blockValue(x.Block, t)
+	v := fc.blockValue(x.Block, t, false)
 	if li.result != "" && v != fc.unit() {
 		fc.line("%s = %s;", li.result, v)
+	}
+	if len(li.brks) > 0 {
+		// a break skips the creation of the tail temporaries that outlive
+		// the block: give it their (inactive) cleanup entries
+		src := fc.b.String()
+		for _, site := range li.brks {
+			var b strings.Builder
+			for _, e := range li.esc[site.n:] {
+				k := 0
+				for j := e.target + 1; j < li.depth; j++ {
+					k += csCount(fc.scopes[j].drops)
+				}
+				fmt.Fprintf(&b, "RG_CS_INS(%d, &%s, %s, &%s); ", k, e.place, e.drop, e.flag)
+			}
+			src = strings.Replace(src, site.token, b.String(), 1)
+		}
+		fc.b.Reset()
+		fc.b.WriteString(src)
 	}
 	fc.line("%s:;", li.brk)
 	fc.loops = fc.loops[:len(fc.loops)-1]
@@ -1587,7 +1707,7 @@ func (fc *fnGen) ifExpr(x *ast.IfExpr, t Ty) string {
 		var ev string
 		switch e := x.Else.(type) {
 		case *ast.BlockExpr:
-			ev = fc.blockValue(e.Block, t)
+			ev = fc.blockValue(e.Block, t, true)
 		default:
 			ev = fc.coerceValue(x.Else, t)
 		}
@@ -1608,7 +1728,7 @@ func (fc *fnGen) ifExpr(x *ast.IfExpr, t Ty) string {
 	} else {
 		fc.condJump(x.Cond, elseL, depth)
 	}
-	v := fc.blockValue(x.Then, t)
+	v := fc.blockValue(x.Then, t, true)
 	if res != "" {
 		fc.line("%s = %s;", res, v)
 	}

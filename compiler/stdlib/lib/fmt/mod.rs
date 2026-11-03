@@ -193,6 +193,14 @@ pub fn format(args: Arguments<'_>) -> crate::string::String {
     args.into_string()
 }
 
+/// `format!` expands to `__must_use({ let res = ..; res })` like std's
+/// (the temporaries of the arguments die with the `let`).
+#[doc(hidden)]
+#[inline]
+pub fn __must_use<T>(t: T) -> T {
+    t
+}
+
 /// Writes formatted output into a `Write` sink.
 pub fn write<W: Write + ?Sized>(output: &mut W, args: Arguments<'_>) -> Result {
     args.write_pieces(output)

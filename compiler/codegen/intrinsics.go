@@ -20,7 +20,7 @@ func (g *Gen) genIntrinsicFn(name string, d *Def, args []Ty) {
 	body := fg.intrinsic(d, args, vs, out, d.Span)
 	sig := fmt.Sprintf("static %s %s(%s)", g.ctype(out), name, joinParams(ps))
 	fmt.Fprintf(&g.protos, "%s;\n", sig)
-	fmt.Fprintf(&g.fns, "%s {\n%s  return %s;\n}\n", sig, fg.b.String(), body)
+	fmt.Fprintf(&g.fns, "%s {\n%s  return %s;\n}\n", sig, fg.body(), body)
 }
 
 func isUnsignedTy(t Ty) bool { return t.Kind == TInt && !t.IsSigned() }

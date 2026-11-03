@@ -51,13 +51,17 @@ func templExpr(src string, subs map[string]ast.Expr, sp lexer.Span) (ast.Expr, e
 	}), nil
 }
 
-func asyncBlockCall(body ast.Expr, move bool, ret ast.Type, sp lexer.Span) (ast.Expr, error) {
+// asyncBlockCall builds `__async_block(move? || body)`. The call is
+// #[track_caller]: its span `loc` is where the future reports being polled
+// after completion or after panicking (the `async` keyword of a block, the
+// body of an async fn or closure, like rustc).
+func asyncBlockCall(body ast.Expr, move bool, ret ast.Type, sp, loc lexer.Span) (ast.Expr, error) {
 	fn, err := templExpr("::std::future::__async_block", nil, sp)
 	if err != nil {
 		return nil, err
 	}
 	clo := &ast.ClosureExpr{ExprBase: ast.ExprBase{Span: sp, ID: ast.NewID()}, Move: move, Body: body, Ret: ret}
-	return &ast.CallExpr{ExprBase: ast.ExprBase{Span: sp, ID: ast.NewID()}, Fn: fn, Args: []ast.Expr{clo}}, nil
+	return &ast.CallExpr{ExprBase: ast.ExprBase{Span: loc, ID: ast.NewID()}, Fn: fn, Args: []ast.Expr{clo}}, nil
 }
 
 func futureOutputType(ret ast.Type, sp lexer.Span) ast.Type {
@@ -167,7 +171,7 @@ func desugarAsync(c *ast.Crate) error {
 			}
 			e.Async = false
 			body := &ast.BlockExpr{ExprBase: ast.ExprBase{Span: e.Span, ID: ast.NewID()}, Block: e.Block}
-			r, err := asyncBlockCall(body, e.Move, nil, e.Span)
+			r, err := asyncBlockCall(body, e.Move, nil, e.Span, e.Span)
 			if err != nil {
 				fail(err)
 				return x
@@ -179,7 +183,7 @@ func desugarAsync(c *ast.Crate) error {
 			}
 			e.Async = false
 			body := prependStmts(moveClosureParams(e), e.Body, e.Body.GetSpan())
-			inner, err := asyncBlockCall(body, true, e.Ret, e.Span)
+			inner, err := asyncBlockCall(body, true, e.Ret, e.Span, e.Body.GetSpan())
 			if err != nil {
 				fail(err)
 				return x
@@ -221,7 +225,7 @@ func desugarAsync(c *ast.Crate) error {
 					}
 					var body ast.Expr = &ast.BlockExpr{ExprBase: ast.ExprBase{Span: k.Body.Span, ID: ast.NewID()}, Block: k.Body}
 					body = prependStmts(moveAsyncParams(k.Decl), body, k.Body.Span)
-					call, err := asyncBlockCall(body, true, ret, it.Span)
+					call, err := asyncBlockCall(body, true, ret, it.Span, k.Body.Span)
 					if err != nil {
 						fail(err)
 						continue

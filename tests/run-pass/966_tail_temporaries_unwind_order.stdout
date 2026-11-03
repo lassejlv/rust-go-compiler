@@ -1,0 +1,30 @@
+-- f ok
+drop local b
+drop local a
+drop tail temp
+-- f panic
+drop local b
+drop local a
+drop tail temp
+-- g ok
+drop inner local
+drop second temp
+drop inner tail temp
+-- g panic
+drop inner local
+drop inner tail temp
+-- h ok
+drop arm temp
+drop h local
+drop scrutinee
+-- h panic
+drop arm temp
+drop h local
+drop scrutinee
+-- closure
+drop closure local
+drop closure tail
+-- unsafe/nested block
+drop nested local
+drop outer local
+drop nested tail

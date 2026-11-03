@@ -1,0 +1,68 @@
+-- with_param
+drop fn local
+drop fn tail
+drop param
+drop fn local
+drop fn tail
+drop param
+-- scrutinee
+drop arm local
+drop arm tail
+drop fn local
+drop scrut
+drop arm local
+drop arm tail
+drop fn local
+drop scrut
+-- ref_tail
+drop block local
+use_ref borrowed tail
+drop borrowed tail
+after call
+-- fields
+drop inner
+drop p0
+drop p1
+drop fields local
+drop t0
+drop t1
+drop inner
+drop p0
+drop p1
+drop fields local
+drop t0
+drop t1
+-- loop
+drop loop body temp
+drop iter local
+drop loop body temp
+drop iter local
+drop loop body temp
+drop iter local
+drop loop body temp
+drop iter local
+-- if
+drop cond
+drop then local
+drop then tail
+drop if fn local
+drop cond
+drop then local
+drop then tail
+drop if fn local
+-- question
+drop q block local
+drop q tail
+drop q local
+Some(2)
+drop q block local
+drop q tail
+drop q local
+None
+-- closure with capture
+drop closure local
+drop closure tail
+drop closure local
+drop closure tail
+drop captured
+end

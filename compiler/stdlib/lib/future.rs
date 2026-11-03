@@ -13,6 +13,7 @@ mod coro {
         pub fn coro_resume(co: *mut u8) -> bool;
         pub fn coro_yield();
         pub fn coro_free(co: *mut u8);
+        pub fn coro_panicked(co: *mut u8) -> bool;
         pub fn coro_get_cx() -> *mut u8;
         pub fn coro_set_cx(cx: *mut u8);
     }
@@ -147,11 +148,30 @@ pub struct AsyncBlock<F, T> {
     result: Option<T>,
     co: *mut u8,
     done: bool,
+    // where the async block (the body of the async fn / closure) starts:
+    // the location of the "resumed after completion/panicking" panics
+    loc: &'static crate::panic::Location<'static>,
 }
 
 #[doc(hidden)]
+#[track_caller]
 pub fn __async_block<F: FnOnce() -> T, T>(f: F) -> AsyncBlock<F, T> {
-    AsyncBlock { f: Some(f), result: None, co: 0 as *mut u8, done: false }
+    AsyncBlock { f: Some(f), result: None, co: 0 as *mut u8, done: false, loc: crate::panic::Location::caller() }
+}
+
+#[cold]
+fn async_resumed(msg: &'static str, loc: &'static crate::panic::Location<'static>) -> ! {
+    crate::panicking::begin_panic_static(msg, loc.file(), loc.line(), loc.column())
+}
+
+// Restores the polling context of an enclosing async block when a panic of
+// the polled body unwinds out of `poll`.
+struct RestoreCx(*mut u8);
+
+impl Drop for RestoreCx {
+    fn drop(&mut self) {
+        unsafe { coro::coro_set_cx(self.0) };
+    }
 }
 
 fn async_trampoline<F: FnOnce() -> T, T>(p: *mut u8) {
@@ -166,15 +186,21 @@ impl<F: FnOnce() -> T, T> Future for AsyncBlock<F, T> {
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<T> {
         let this = unsafe { self.get_unchecked_mut() };
         if this.done {
-            panic!("`async fn` resumed after completion");
+            async_resumed("`async fn` resumed after completion", this.loc);
         }
         if this.co.is_null() {
             let entry: fn(*mut u8) = async_trampoline::<F, T>;
             this.co = unsafe { coro::coro_new(entry, this as *mut AsyncBlock<F, T> as *mut u8) };
+        } else if unsafe { coro::coro_panicked(this.co) } {
+            // a panic unwound out of the body (its values were dropped)
+            async_resumed("`async fn` resumed after panicking", this.loc);
         }
         let prev = unsafe { coro::coro_get_cx() };
         unsafe { coro::coro_set_cx(cx as *mut Context<'_> as *mut u8) };
+        // a panic of the body continues unwinding from coro_resume
+        let guard = RestoreCx(prev);
         let finished = unsafe { coro::coro_resume(this.co) };
+        crate::mem::forget(guard);
         unsafe { coro::coro_set_cx(prev) };
         if finished {
             unsafe { coro::coro_free(this.co) };

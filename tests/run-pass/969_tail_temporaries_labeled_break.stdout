@@ -1,0 +1,64 @@
+drop break temp
+drop lab local
+drop lab fn local
+10
+drop lab local
+drop lab fn local
+drop lab tail
+8
+drop loop local
+drop break block local
+drop break block tail
+drop loop local
+16
+drop opt block local
+drop opt local
+drop opt tail
+Some(9)
+drop opt block local
+drop opt local
+drop opt tail
+None
+drop map temp
+drop res block local
+drop res local
+Ok(9)
+drop res block local
+drop res local
+Err("e")
+drop guard temp
+drop guard arm local
+drop guard arm tail
+drop guard local
+14
+drop guard temp
+drop other arm
+drop guard local
+7
+drop guard temp
+drop guard arm local
+drop guard arm tail
+drop guard local
+drop inner arg local
+drop inner arg tail
+drop fmt temp 1
+drop strs block local
+drop strs local
+fmt temp 1-14
+drop inner arg local
+drop inner arg tail
+drop fmt temp 1
+drop strs block local
+drop strs local
+drop wl inner local
+drop wl inner tail
+drop wl local
+drop wl inner local
+drop wl inner tail
+drop wl local
+29
+drop q
+drop vec elem
+drop closure local
+drop t
+true

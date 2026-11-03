@@ -91,7 +91,14 @@ func (fc *fnGen) asPlace(op operand) operand {
 func (fc *fnGen) materializeFields(op operand) operand {
 	t := op.ty
 	n := fc.newName("t")
-	fc.line("%s %s = %s;", fc.ctype(t), n, op.s)
+	sc, k := fc.tempScope()
+	if sc != nil {
+		// a temporary of a block's tail expression (see materialize)
+		fc.hoisted = append(fc.hoisted, fmt.Sprintf("%s %s;", fc.ctype(t), n))
+		fc.line("%s = %s;", n, op.s)
+	} else {
+		fc.line("%s %s = %s;", fc.ctype(t), n, op.s)
+	}
 	flag := "d" + n
 	fts := fc.fieldTys(t)
 	for i := len(fts) - 1; i >= 0; i-- { // dropped in declaration order
@@ -100,6 +107,12 @@ func (fc *fnGen) materializeFields(op operand) operand {
 		}
 		f := fmt.Sprintf("%s_%d", flag, i)
 		pl := n + fieldSel(t, i)
+		if sc != nil {
+			fc.hoistFlag(f)
+			sc.drops = append(sc.drops, dropEntry{place: pl, flag: f, ty: fts[i]})
+			fc.escPush(k, pl, fc.g.dropFn(fts[i]), f)
+			continue
+		}
 		fc.line("uint8_t %s = 1;", f)
 		fc.addDrop(pl, f, fts[i])
 		fc.line("RG_CS_PUSH(&%s, %s, &%s);", pl, fc.g.dropFn(fts[i]), f)
@@ -345,7 +358,7 @@ func (fc *fnGen) operand(e ast.Expr) operand {
 		if x.Label != "" {
 			return val(fc.labeledBlock(x, t))
 		}
-		return val(fc.blockValue(x.Block, t))
+		return val(fc.blockValue(x.Block, t, false))
 	case *ast.IfExpr:
 		return val(fc.ifExpr(x, t))
 	case *ast.MatchExpr:

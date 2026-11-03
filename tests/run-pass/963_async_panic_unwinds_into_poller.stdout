@@ -1,0 +1,11 @@
+drop boom a
+drop outer
+v = 101
+any: Some(42)
+drop boom thread
+thread caught: true
+drop boom thread2
+join err: true
+drop boom final
+drop last
+drop main local

@@ -329,10 +329,10 @@ func (g *Gen) genFunction(inst instance) {
 			fg.bindOwnedPat(p.Pat, fg.localName(l), l.Ty, l, false)
 		}
 	}
-	v := fg.blockValue(fa.Body, r.RetTy)
+	v := fg.blockValue(fa.Body, r.RetTy, true)
 	fg.emitReturn(v)
 	fg.popScopeNoDrop()
-	fmt.Fprintf(&g.fns, "%s {\n%s}\n", sig, fg.b.String())
+	fmt.Fprintf(&g.fns, "%s {\n%s}\n", sig, fg.body())
 }
 
 func joinParams(ps []string) string {
@@ -446,7 +446,7 @@ func (g *Gen) genConstFn(name string, d *Def, args []Ty) {
 	}
 	fg.emitReturn(v)
 	fg.popScopeNoDrop()
-	fmt.Fprintf(&g.fns, "%s {\n%s}\n", sig, fg.b.String())
+	fmt.Fprintf(&g.fns, "%s {\n%s}\n", sig, fg.body())
 }
 
 // staticVar returns the C global for a static item.
@@ -620,7 +620,7 @@ func (g *Gen) genClosure(t Ty) {
 	v := fg.coerceValue(ci.Expr.Body, ci.Output)
 	fg.emitReturn(v)
 	fg.popScopeNoDrop()
-	fmt.Fprintf(&g.fns, "static %s %s(%s) {\n%s}\n", g.ctype(ci.Output), name, strings.Join(ps, ", "), fg.b.String())
+	fmt.Fprintf(&g.fns, "static %s %s(%s) {\n%s}\n", g.ctype(ci.Output), name, strings.Join(ps, ", "), fg.body())
 }
 
 // fnValue returns a C expression naming the function behind a FnDef type

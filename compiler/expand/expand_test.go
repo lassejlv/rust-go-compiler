@@ -489,7 +489,7 @@ func TestPrintMacros(t *testing.T) {
 		`::std::io::_print(::std::fmt::Arguments::new_const("\n"));`,
 		`::std::io::_eprint(::std::fmt::Arguments::new_const("c"));`,
 		`(::std::io::__eprint(&["d ", "\n"], &[], &[::std::fmt::__Arg::new_display(&x)]));`,
-		`let s = (::std::fmt::__format(&["", "-"], &[], &[::std::fmt::__Arg::new_display(&a), ::std::fmt::__Arg::new_display(&b)]));`,
+		`let s = ::std::fmt::__must_use({ let res = (::std::fmt::__format(&["", "-"], &[], &[::std::fmt::__Arg::new_display(&a), ::std::fmt::__Arg::new_display(&b)])); res });`,
 	)
 	mustErr(t, `fn main() { print!(); }`, "requires at least a format string argument")
 }

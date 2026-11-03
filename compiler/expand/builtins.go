@@ -297,10 +297,14 @@ func (e *Expander) formatMac(mac *ast.MacCall) ([]ast.TokenTree, error) {
 	if err != nil {
 		return nil, err
 	}
+	// like std's `must_use({ let res = fmt::format(format_args!(..)); res })`:
+	// the temporaries of the arguments die with the `let`, before the
+	// locals of a block whose tail the format! is (and the call keeps an
+	// unsized expectation like `&str` in `&format!(..)` off the block)
 	if direct {
-		return fa, nil
+		return tmpl(mac.Span, "::std::fmt::__must_use({ let res = $0; res })", fa)
 	}
-	return tmpl(mac.Span, "::std::fmt::format($0)", fa)
+	return tmpl(mac.Span, "::std::fmt::__must_use({ let res = ::std::fmt::format($0); res })", fa)
 }
 
 func writeMac(nl bool) builtinFn {
