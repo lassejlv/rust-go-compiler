@@ -786,6 +786,9 @@ func (ac *astConv) genericArgsFor(d *Def, seg *ast.PathSegment, prefix []Ty, sp 
 	if seg != nil && seg.Args != nil && !seg.Args.Parenthesized {
 		for _, a := range seg.Args.Args {
 			if a.Lifetime != "" {
+				if len(given) > 0 && !t.isStd(d) {
+					t.ErrorCode(sp, "E0747", "lifetime provided when a type was expected")
+				}
 				nlt++
 				continue
 			}
@@ -863,6 +866,17 @@ func (ac *astConv) genericArgsFor(d *Def, seg *ast.PathSegment, prefix []Ty, sp 
 	if gi < len(given) {
 		t.ErrorCode(sp, "E0107", "too many generic arguments for `%s`", d.Name)
 	}
+	// implicit `Sized` bounds of an ADT's type parameters
+	if (d.Kind == DefStruct || d.Kind == DefEnum || d.Kind == DefUnion) && ac.owner != nil && !t.isStd(ac.owner) {
+		for _, p := range own {
+			if p.Const || p.Synthetic || p.MaybeUnsized || p.Index >= len(args) {
+				continue
+			}
+			if a := args[p.Index]; a != nil && a.IsUnsized() {
+				t.ErrorCode(sp, "E0277", "the size for values of type `%s` cannot be known at compilation time", a)
+			}
+		}
+	}
 	return args
 }
 
@@ -911,6 +925,13 @@ func (ac *astConv) lowerPathType(x *ast.PathType) Ty {
 	segs := x.Path.Segments
 	base := ac.resToTy(pr.Res, segs[pr.Consumed-1], x.Span)
 	if pr.Consumed < len(segs) {
+		// `Type::Assoc` on a concrete type (not `Self` or a type
+		// parameter) needs `<Type as Trait>::Assoc`
+		if d := pr.Res.Def; (pr.Res.Kind == ResPrim || (pr.Res.Kind == ResDef && d != nil && (d.Kind == DefStruct || d.Kind == DefEnum || d.Kind == DefUnion))) &&
+			ac.owner != nil && !t.isStd(ac.owner) && !base.HasParam() && !fromMacro(x.Path) {
+			t.ErrorCode(x.Span, "E0223", "ambiguous associated type: use fully-qualified syntax `<%s as Example>::%s`", base, segs[pr.Consumed].Ident.Name)
+			return TyErr
+		}
 		return ac.assocTypeOn(base, segs[pr.Consumed:], x.Span)
 	}
 	return base

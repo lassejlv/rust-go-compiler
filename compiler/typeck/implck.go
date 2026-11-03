@@ -53,6 +53,9 @@ func (t *Tcx) checkImpls() {
 			continue
 		}
 		t.checkUnusedConst(d)
+		if d.Kind == DefConst {
+			t.checkConstPanic(d)
+		}
 	}
 }
 
@@ -323,7 +326,14 @@ func (t *Tcx) isLocalTy(ty Ty, c *Crate) bool {
 
 func (t *Tcx) checkOrphan(impl *Def) {
 	tr := impl.Impl.TraitRef
-	if tr.Trait.Crate == impl.Crate || t.Generics(impl).Count() != 0 {
+	if tr.Trait.Crate == impl.Crate {
+		return
+	}
+	if t.Generics(impl).Count() != 0 {
+		// a foreign trait implemented for an uncovered type parameter
+		if len(tr.Args) > 0 && tr.Args[0].Kind == TParam && tr.Args[0].Sub == 0 {
+			t.ErrorCode(impl.Span, "E0210", "type parameter `%s` must be used as the type parameter for some local type", tr.Args[0].Name)
+		}
 		return
 	}
 	for _, a := range tr.Args {
@@ -362,11 +372,15 @@ func (t *Tcx) checkInherentDups() {
 // applies to every trait ref of impl b.
 func (t *Tcx) blanketCovers(a, b *Def) bool {
 	ga := t.Generics(a)
+	var preds []*Predicate // bounds checked once the params are bound
 	for _, p := range ga.Predicates {
 		if p.Maybe || (p.Trait != nil && p.Trait.Trait.LangItem == "sized") {
 			continue
 		}
-		return false
+		if p.Trait == nil || len(p.Bindings) > 0 || len(p.Trait.Args) != 1 || p.Trait.Args[0].Kind != TParam {
+			return false
+		}
+		preds = append(preds, p)
 	}
 	for _, p := range ga.Params {
 		if p.Const {
@@ -424,6 +438,12 @@ func (t *Tcx) blanketCovers(a, b *Def) bool {
 	}
 	for i := range ar {
 		if !match(ar[i], br[i]) {
+			return false
+		}
+	}
+	for _, p := range preds {
+		self, ok := binds[p.Trait.Args[0].Index]
+		if !ok || self.HasParam() || self.HasInfer() || !t.Implements(self, p.Trait.Trait) {
 			return false
 		}
 	}

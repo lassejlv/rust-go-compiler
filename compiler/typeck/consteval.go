@@ -15,6 +15,8 @@ type ConstValue struct {
 	Val int64
 	OK  bool
 	V   *cval // the full value (nil when evaluation failed / in progress)
+	// Panicked: the evaluation reached a panic
+	Panicked bool
 }
 
 // ---------------------------------------------------------------------------
@@ -118,6 +120,9 @@ type constEval struct {
 	// by calls to infer omitted generic args, e.g. `const P: [u32; 4] =
 	// primes();`).
 	hint Ty
+	// panicked: evaluation reached a panic (an E0080 error for the
+	// constant, rather than "cannot evaluate at compile time")
+	panicked bool
 }
 
 type cframe struct {
@@ -1360,6 +1365,7 @@ func (ev *constEval) itemConst(d *Def, args []Ty) (*cval, bool) {
 	cache := len(args) == 0
 	if cache {
 		if cv, ok := t.constCache[d]; ok {
+			ev.panicked = ev.panicked || cv.Panicked
 			return cv.V, cv.OK
 		}
 		t.constCache[d] = &ConstValue{}
@@ -1379,6 +1385,7 @@ func (ev *constEval) itemConst(d *Def, args []Ty) (*cval, bool) {
 		v, ok = sub.evalTop(ac, d.Const.Expr)
 	}
 	ev.steps += sub.steps
+	ev.panicked = ev.panicked || sub.panicked
 	if ok {
 		ty := t.ConstTy(d)
 		if len(args) > 0 {
@@ -1389,7 +1396,7 @@ func (ev *constEval) itemConst(d *Def, args []Ty) (*cval, bool) {
 		v = nil
 	}
 	if cache {
-		cv := &ConstValue{OK: ok, V: v}
+		cv := &ConstValue{OK: ok, V: v, Panicked: sub.panicked}
 		if ok {
 			cv.Val, _ = cvToInt64(v)
 		}
@@ -1627,6 +1634,10 @@ func (ev *constEval) tupleCtor(fr *cframe, d *Def, argExprs []ast.Expr) (*cval, 
 // the receiver of a method call (nil for path calls).
 func (ev *constEval) callFn(fr *cframe, d *Def, parentArgs []Ty, seg *ast.PathSegment, argExprs []ast.Expr, recv *cval, exp Ty) (res *cval, ok bool) {
 	t := ev.t
+	if t.isStd(d) && d.Parent != nil && d.Parent.Name == "rt" && (strings.HasPrefix(d.Name, "panic") || d.Name == "assert_failed" || d.Name == "runtime_panic") {
+		ev.panicked = true
+		return nil, false
+	}
 	fa := d.Fn.Ast
 	if fa == nil || (fa.Body == nil && d.Intrinsic == "") || d.Fn.Extern && d.Intrinsic == "" || fa.Async {
 		return nil, false
@@ -1904,4 +1915,17 @@ func (t *Tcx) ScalarConst(d *Def, args []Ty) (*big.Int, bool) {
 		return nil, false
 	}
 	return n, true
+}
+
+// checkConstPanic reports a non-generic constant whose evaluation panics
+// (E0080).
+func (t *Tcx) checkConstPanic(d *Def) {
+	ev := &constEval{t: t}
+	if _, ok := ev.itemConst(d, nil); !ok && ev.panicked {
+		sp := d.Span
+		if d.Const != nil && d.Const.Expr != nil {
+			sp = d.Const.Expr.GetSpan()
+		}
+		t.ErrorCode(sp, "E0080", "evaluation of constant value failed: the evaluated program panicked")
+	}
 }

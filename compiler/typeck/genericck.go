@@ -33,6 +33,7 @@ func (t *Tcx) checkGenericParams() {
 			}
 		}
 		t.checkSigLifetimes(d)
+		t.checkNeverType(d)
 		for _, a := range d.Item.Attrs {
 			if a.Path != "repr" || len(a.Tokens) == 0 || a.Tokens[0].Delim != '(' {
 				continue
@@ -182,6 +183,64 @@ func (t *Tcx) checkSigLifetimes(d *Def) {
 			for _, b := range w.Bounds {
 				walkBound(b, s)
 			}
+		}
+	}
+}
+
+// checkNeverType reports the `!` type outside a function's (or fn
+// pointer's) return type: elsewhere it is unstable (E0658).
+func (t *Tcx) checkNeverType(d *Def) {
+	var visit func(n any) bool
+	walkRet := func(ret ast.Type) {
+		if _, ok := ret.(*ast.NeverType); ok || ret == nil {
+			return
+		}
+		ast.Walk(ret, visit)
+	}
+	visit = func(n any) bool {
+		switch x := n.(type) {
+		case *ast.ItemStmt, *ast.MacroType:
+			return false
+		case *ast.NeverType:
+			t.ErrorCode(x.Span, "E0658", "the `!` type is experimental")
+			return false
+		case *ast.FnPtrType:
+			for _, in := range x.Inputs {
+				ast.Walk(in, visit)
+			}
+			walkRet(x.Output)
+			return false
+		case *ast.ClosureExpr:
+			walkRet(x.Ret)
+			ast.Walk(x.Body, visit)
+			return false
+		}
+		return true
+	}
+	switch k := d.Item.Kind.(type) {
+	case *ast.FnItem:
+		if k.Decl != nil {
+			for _, p := range k.Decl.Params {
+				ast.Walk(p.Ty, visit)
+			}
+			walkRet(k.Decl.Output)
+		}
+		if k.Body != nil {
+			ast.Walk(k.Body, visit)
+		}
+	case *ast.StructItem:
+		for _, f := range k.Fields {
+			ast.Walk(f.Ty, visit)
+		}
+	case *ast.EnumItem:
+		for _, v := range k.Variants {
+			for _, f := range v.Fields {
+				ast.Walk(f.Ty, visit)
+			}
+		}
+	case *ast.TypeAliasItem:
+		if k.Ty != nil {
+			ast.Walk(k.Ty, visit)
 		}
 	}
 }

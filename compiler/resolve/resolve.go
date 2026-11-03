@@ -45,6 +45,7 @@ type Resolver struct {
 	// bindingImport maps import bindings to the import that created them
 	// (an import must not resolve to its own binding).
 	bindingImport map[*NameBinding]*Import
+	reexportChecked map[*Import]bool // imports already checked for E0364/E0365
 	// forcing is set once import resolution has stalled: names that might
 	// still be defined by pending imports are then taken as absent.
 	forcing bool
@@ -649,6 +650,7 @@ func (r *Resolver) tryImport(imp *Import, report bool) bool {
 	// privacy of the imported item (same crate; E0603)
 	var privRes Res
 	pubSeen := false
+	var tooPrivate *Def // a same-crate item re-exported more visibly than it is
 	if len(imp.Path) == 1 {
 		// `use foo;` / `use foo as bar;`
 		macroCrate = m.Crate
@@ -720,6 +722,11 @@ func (r *Resolver) tryImport(imp *Import, report bool) bool {
 				} else if privRes.Def == nil {
 					privRes = b.Res
 				}
+				// a re-export may not be more visible than the item
+				if target.Def != nil && target.Def.Kind != DefEnum && target.Def.Kind != DefTrait && b.Res.Kind == ResDef && b.Res.Def != nil &&
+					((imp.Vis == ast.VisPub && b.Vis != ast.VisPub) || (imp.Vis == ast.VisCrate && b.Vis == ast.VisPrivate && target != m.Crate.Root)) {
+					tooPrivate = b.Res.Def
+				}
 			}
 			return b.Res, true, true
 		}
@@ -738,6 +745,17 @@ func (r *Resolver) tryImport(imp *Import, report bool) bool {
 	}
 	if !determined {
 		return false
+	}
+	if found && tooPrivate != nil && !r.reexportChecked[imp] {
+		if r.reexportChecked == nil {
+			r.reexportChecked = map[*Import]bool{}
+		}
+		r.reexportChecked[imp] = true
+		code := "E0364"
+		if tooPrivate.Kind == DefMod {
+			code = "E0365"
+		}
+		r.Errors = append(r.Errors, fmt.Sprintf("%s: error[%s]: `%s` is private, and cannot be re-exported", imp.Span.Lo, code, last))
 	}
 	if found && privRes.Def != nil && !pubSeen {
 		kind := privRes.Def.Kind.String()

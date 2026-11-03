@@ -522,9 +522,17 @@ func (fcx *FnCtxt) selectWherePossible() {
 				rt := &TraitRef{Trait: tr.Trait, Args: ic.resolveList(tr.Args)}
 				hasInfer := false
 				for _, a := range rt.Args {
-					if a.HasInfer() || a.HasError() {
+					if a.HasError() {
 						hasInfer = true
 					}
+					// (`{integer}`/`{float}` variables: no numeric type
+					// implements the trait, so it is an error already)
+					Walk(a, func(x Ty) bool {
+						if x.Kind == TInfer && x.Sub == 0 {
+							hasInfer = true
+						}
+						return !hasInfer
+					})
 				}
 				if !hasInfer {
 					switch t := fcx.t; t.autoKind(rt.Trait) {

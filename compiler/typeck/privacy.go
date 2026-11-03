@@ -25,6 +25,17 @@ func fromMacro(p *ast.Path) bool {
 	return false
 }
 
+// generatedPath reports a path made by the compiler (test and doc-test
+// harnesses mark theirs with hygiene marks from 0x7ffffff0 up).
+func generatedPath(p *ast.Path) bool {
+	for _, s := range p.Segments {
+		if s.Ident.Hyg >= 0x7ffffff0 {
+			return true
+		}
+	}
+	return false
+}
+
 func (t *Tcx) isStd(d *Def) bool {
 	return d != nil && d.Crate != nil && t.R.Std != nil && d.Crate == t.R.Std
 }
@@ -32,11 +43,17 @@ func (t *Tcx) isStd(d *Def) bool {
 // reportPrivatePath reports E0603 for a path whose segment PrivSeg names an
 // item that is not visible.
 func (t *Tcx) reportPrivatePath(p *ast.Path, pr resolve.PathResult) {
-	if fromMacro(p) || pr.PrivSeg >= len(p.Segments) {
+	if pr.PrivSeg >= len(p.Segments) {
 		return
 	}
 	d := pr.PrivRes.Def
 	if d == nil {
+		return
+	}
+	// macro_rules paths are not exempt from privacy, but rustgo's std
+	// macros may name std internals, and generated test harnesses name
+	// private test functions
+	if fromMacro(p) && (t.isStd(d) || generatedPath(p)) {
 		return
 	}
 	kind := d.Kind.String()

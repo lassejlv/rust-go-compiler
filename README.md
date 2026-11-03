@@ -87,9 +87,13 @@ merged one does not compile).
   (E0133), trait impl conformance (E0046/E0407/E0050/E0053), coherence and
   orphan rules (E0119/E0117), duplicate definitions (E0428/E0592/E0201),
   generic parameter and lifetime declarations (E0403/E0261/E0262/E0107/
-  E0229/E0207), Copy/Drop impl rules (E0184/E0204/E0120), `.await` outside
-  async (E0728), casts, dyn compatibility, constant evaluation errors (E0080;
-  unused constants are checked too) and more. These
+  E0229/E0207/E0747), Copy/Drop impl rules (E0184/E0204/E0120), `.await`
+  outside async (E0728), re-exports more visible than their item
+  (E0364/E0365), foreign traits for uncovered type parameters (E0210),
+  ambiguous associated types (E0223) and numeric literals (E0689), the `!`
+  type outside return types (E0658), casts, dyn compatibility, constant
+  evaluation errors and panics (E0080; unused constants are checked too),
+  Send/Sync as structural auto traits (E0277) and more. These
   checks give up silently on anything they do not model, and items of the
   embedded std (whose visibilities and signatures do not mirror the real
   std's in every detail) are exempt from the privacy and impl checks.

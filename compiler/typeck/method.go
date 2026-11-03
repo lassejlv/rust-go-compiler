@@ -31,8 +31,9 @@ func (fcx *FnCtxt) checkMethodCall(x *ast.MethodCallExpr, expected Ty) Ty {
 	}
 	rs := fcx.structurally(rt)
 	var early *pick
-	if rs.Kind == TInfer && rs.Sub == 1 {
-		// `{integer}` receiver: a trait method (e.g. Ord::max)
+	ambiguousNum := rs.Kind == TInfer && rs.Sub != 0
+	if rs.Kind == TInfer && rs.Sub != 0 {
+		// `{integer}`/`{float}` receiver: a trait method (e.g. Ord::max)
 		// applies without fixing the type; inherent ones need the default
 		s := fcx.ic.snapshot()
 		if p := fcx.lookupMethod(rt, x.Method.Name, x.Span); p != nil && p.item.InTrait() && !p.virtual {
@@ -63,6 +64,14 @@ func (fcx *FnCtxt) checkMethodCall(x *ast.MethodCallExpr, expected Ty) Ty {
 		p = fcx.lookupMethod(rt, x.Method.Name, x.Span)
 		fcx.checkPriv = false
 		fcx.methodNode = 0
+	}
+	if p != nil && early == nil && ambiguousNum && !p.item.InTrait() && x.Method.Hyg == 0 && fcx.def != nil && !fcx.t.isStd(fcx.def) {
+		// rustc does not pick a numeric type for inherent methods
+		num := "{integer}"
+		if rs.Sub == 2 {
+			num = "{float}"
+		}
+		fcx.t.ErrorCode(x.Method.Span, "E0689", "can't call method `%s` on ambiguous numeric type `%s`", x.Method.Name, num)
 	}
 	if p == nil {
 		if fcx.privMethod != nil {
