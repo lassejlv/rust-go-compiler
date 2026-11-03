@@ -803,7 +803,7 @@ fn main() {
 		`let c = "ident";`,
 		`let d: &'static str = "";`,
 		"let e = std::collections::HashMap::<i32, i32>::new();",
-		"let f = match v { Some(1) | None => 1, _ => 0, };",
+		"let f = match v { (Some(1) | None) => 1, _ => 0, };",
 		"let g = match v { 1 | 2 => 1, _ => 0, };",
 		"let h = { let x = 1; x + 1; };",
 		`let i = ["derive(Debug)", "allow(dead_code)"];`,

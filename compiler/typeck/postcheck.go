@@ -137,8 +137,9 @@ func (t *Tcx) checkPatBindings(r *Results, p ast.Pat) {
 }
 
 type patBinding struct {
-	name string
-	sp   ast.Span
+	name  string // hygiene-aware key (E0416)
+	plain string // plain name (E0408)
+	sp    ast.Span
 }
 
 func (t *Tcx) patBinds(r *Results, p ast.Pat) []patBinding {
@@ -156,9 +157,7 @@ func (t *Tcx) patBinds(r *Results, p ast.Pat) []patBinding {
 	switch x := p.(type) {
 	case *ast.IdentPat:
 		if r.Paths[x.ID] == nil {
-			// plain names: macro repetitions may give one binding
-			// different hygiene marks in different alternatives
-			out = append(out, patBinding{x.Name.Name, x.Name.Span})
+			out = append(out, patBinding{hygKey(x.Name.Name, x.Name.Hyg), x.Name.Name, x.Name.Span})
 		}
 		if x.Sub != nil {
 			merge(t.patBinds(r, x.Sub))
@@ -190,9 +189,11 @@ func (t *Tcx) patBinds(r *Results, p ast.Pat) []patBinding {
 		for _, a := range x.Alts {
 			alts = append(alts, t.patBinds(r, a))
 		}
+		// plain names: macro repetitions may give one binding different
+		// hygiene marks in different alternatives
 		has := func(bs []patBinding, n string) bool {
 			for _, b := range bs {
-				if b.name == n {
+				if b.plain == n {
 					return true
 				}
 			}
@@ -202,8 +203,8 @@ func (t *Tcx) patBinds(r *Results, p ast.Pat) []patBinding {
 		for _, a := range alts {
 			for _, b := range a {
 				for _, other := range alts {
-					if !has(other, b.name) && !reported[b.name] {
-						reported[b.name] = true
+					if !has(other, b.plain) && !reported[b.plain] {
+						reported[b.plain] = true
 						t.ErrorCode(b.sp, "E0408", "variable `%s` is not bound in all patterns", displayName(b.name))
 					}
 				}

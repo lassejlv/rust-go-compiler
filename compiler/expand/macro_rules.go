@@ -683,6 +683,14 @@ func emitFragment(f *fragment) []ast.TokenTree {
 		if len(f.tts) > 1 {
 			return parenWrap(f.tts)
 		}
+	case "pat":
+		// an or-pattern fragment is one pattern (`c @ $p` with `$p = A | B`
+		// is `c @ (A | B)`)
+		for _, t := range f.tts {
+			if t.Delim == 0 && t.Tok.Text == "|" {
+				return parenWrap(f.tts)
+			}
+		}
 	case "path":
 		return turbofish(f.tts)
 	}
