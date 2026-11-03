@@ -236,7 +236,7 @@ impl<T: ?Sized + Hash> Hash for ManuallyDrop<T> {
 
 impl<T: ?Sized + fmt::Debug> fmt::Debug for ManuallyDrop<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("ManuallyDrop").field("value", &self.value).finish()
+        f.debug_struct("ManuallyDrop").field("value", &&self.value).finish()
     }
 }
 

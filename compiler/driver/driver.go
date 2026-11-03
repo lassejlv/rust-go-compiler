@@ -476,6 +476,8 @@ func compileC(opts *Options, prog *codegen.Program) error {
 	if prog.UsesAsm {
 		cflags = append(cflags, "-masm=intel") // Rust asm! templates are Intel syntax
 	}
+	// extra flags for the C compiler (experiments)
+	cflags = append(cflags, strings.Fields(os.Getenv("RUSTGO_CFLAGS"))...)
 	libs := append(append([]string{"-lm", "-lpthread"}, opts.LinkArgs...), prog.LinkArgs...)
 	units := prog.Units(unitCount(prog.FnBytes()))
 	if len(units) == 1 {
@@ -521,19 +523,33 @@ func compileC(opts *Options, prog *codegen.Program) error {
 			return err
 		}
 	}
+	cache := newCCCache(cc, cflags)
+	hits := 0
+	var hitMu sync.Mutex
 	for i, cpath := range cpaths {
 		wg.Add(1)
 		go func(i int, cpath string) {
 			defer wg.Done()
+			if cache != nil && cache.get(units[i], objs[i]) {
+				hitMu.Lock()
+				hits++
+				hitMu.Unlock()
+				return
+			}
 			sem <- struct{}{}
 			defer func() { <-sem }()
 			args := append(append([]string{}, cflags...), "-c", "-o", objs[i], cpath)
 			if out, err := exec.Command(cc, args...).CombinedOutput(); err != nil {
 				errs[i] = fmt.Errorf("C compiler failed: %v\n%s", err, truncate(string(out), 4000))
+			} else if cache != nil {
+				cache.add(units[i], objs[i])
 			}
 		}(i, cpath)
 	}
 	wg.Wait()
+	if cache != nil {
+		cache.prune()
+	}
 	for _, err := range errs {
 		if err != nil {
 			return err
@@ -545,7 +561,7 @@ func compileC(opts *Options, prog *codegen.Program) error {
 		return fmt.Errorf("linking failed: %v\n%s", err, truncate(string(out), 4000))
 	}
 	if opts.Verbose {
-		fmt.Fprintf(os.Stderr, "cc %v (%d units: compile %v, link %v)\n", time.Since(t1), len(units), t2.Sub(t1), time.Since(t2))
+		fmt.Fprintf(os.Stderr, "cc %v (%d units, %d cached: compile %v, link %v)\n", time.Since(t1), len(units), hits, t2.Sub(t1), time.Since(t2))
 	}
 	return nil
 }

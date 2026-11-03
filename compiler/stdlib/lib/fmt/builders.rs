@@ -20,12 +20,12 @@ pub(super) fn debug_struct_new<'a, 'b>(fmt: &'a mut Formatter<'b>, name: &str) -
 
 impl<'a, 'b: 'a> DebugStruct<'a, 'b> {
     /// Adds a new field to the generated struct output.
-    pub fn field<T: Debug + ?Sized>(&mut self, name: &str, value: &T) -> &mut Self {
+    pub fn field(&mut self, name: &str, value: &dyn Debug) -> &mut Self {
         if self.result.is_ok() {
             self.result = if self.fmt.alternate() {
-                pretty_struct_field(self.fmt, self.has_fields, name, &value)
+                pretty_struct_field(self.fmt, self.has_fields, name, value)
             } else {
-                plain_struct_field(self.fmt, self.has_fields, name, &value)
+                plain_struct_field(self.fmt, self.has_fields, name, value)
             };
         }
         self.has_fields = true;
@@ -104,12 +104,12 @@ pub(super) fn debug_tuple_new<'a, 'b>(fmt: &'a mut Formatter<'b>, name: &str) ->
 
 impl<'a, 'b: 'a> DebugTuple<'a, 'b> {
     /// Adds a new field to the generated tuple struct output.
-    pub fn field<T: Debug + ?Sized>(&mut self, value: &T) -> &mut Self {
+    pub fn field(&mut self, value: &dyn Debug) -> &mut Self {
         if self.result.is_ok() {
             self.result = if self.fmt.alternate() {
-                pretty_tuple_field(self.fmt, self.fields == 0, &value)
+                pretty_tuple_field(self.fmt, self.fields == 0, value)
             } else {
-                plain_tuple_field(self.fmt, self.fields == 0, &value)
+                plain_tuple_field(self.fmt, self.fields == 0, value)
             };
         }
         self.fields += 1;
@@ -182,10 +182,6 @@ struct DebugInner<'a, 'b: 'a> {
 }
 
 impl<'a, 'b: 'a> DebugInner<'a, 'b> {
-    fn entry<T: Debug + ?Sized>(&mut self, value: &T) {
-        self.entry_dyn(&value)
-    }
-
     fn entry_dyn(&mut self, value: &dyn Debug) {
         if self.result.is_ok() {
             self.result = if self.fmt.alternate() {
@@ -232,8 +228,8 @@ pub(super) fn debug_set_new<'a, 'b>(fmt: &'a mut Formatter<'b>) -> DebugSet<'a, 
 
 impl<'a, 'b: 'a> DebugSet<'a, 'b> {
     /// Adds a new entry to the set output.
-    pub fn entry<T: Debug + ?Sized>(&mut self, entry: &T) -> &mut Self {
-        self.inner.entry(entry);
+    pub fn entry(&mut self, entry: &dyn Debug) -> &mut Self {
+        self.inner.entry_dyn(entry);
         self
     }
 
@@ -245,7 +241,7 @@ impl<'a, 'b: 'a> DebugSet<'a, 'b> {
     {
         let mut it = entries.into_iter();
         while let Some(entry) = it.next() {
-            self.inner.entry(&entry);
+            self.inner.entry_dyn(&entry);
         }
         self
     }
@@ -304,8 +300,8 @@ pub(super) fn debug_list_new<'a, 'b>(fmt: &'a mut Formatter<'b>) -> DebugList<'a
 
 impl<'a, 'b: 'a> DebugList<'a, 'b> {
     /// Adds a new entry to the list output.
-    pub fn entry<T: Debug + ?Sized>(&mut self, entry: &T) -> &mut Self {
-        self.inner.entry(entry);
+    pub fn entry(&mut self, entry: &dyn Debug) -> &mut Self {
+        self.inner.entry_dyn(entry);
         self
     }
 
@@ -317,7 +313,7 @@ impl<'a, 'b: 'a> DebugList<'a, 'b> {
     {
         let mut it = entries.into_iter();
         while let Some(entry) = it.next() {
-            self.inner.entry(&entry);
+            self.inner.entry_dyn(&entry);
         }
         self
     }
@@ -352,12 +348,12 @@ pub(super) fn debug_map_new<'a, 'b>(fmt: &'a mut Formatter<'b>) -> DebugMap<'a, 
 
 impl<'a, 'b: 'a> DebugMap<'a, 'b> {
     /// Adds a new entry to the map output.
-    pub fn entry<K: Debug + ?Sized, V: Debug + ?Sized>(&mut self, key: &K, value: &V) -> &mut Self {
+    pub fn entry(&mut self, key: &dyn Debug, value: &dyn Debug) -> &mut Self {
         self.key(key).value(value)
     }
 
     /// Adds the key part of a new entry to the map output.
-    pub fn key<K: Debug + ?Sized>(&mut self, key: &K) -> &mut Self {
+    pub fn key(&mut self, key: &dyn Debug) -> &mut Self {
         if self.result.is_ok() {
             if self.has_key {
                 crate::rt::panic_str(
@@ -368,9 +364,9 @@ impl<'a, 'b: 'a> DebugMap<'a, 'b> {
                 );
             }
             self.result = if self.fmt.alternate() {
-                pretty_map_key(self.fmt, self.has_fields, &key)
+                pretty_map_key(self.fmt, self.has_fields, key)
             } else {
-                plain_map_key(self.fmt, self.has_fields, &key)
+                plain_map_key(self.fmt, self.has_fields, key)
             };
             self.has_key = true;
         }
@@ -378,14 +374,14 @@ impl<'a, 'b: 'a> DebugMap<'a, 'b> {
     }
 
     /// Adds the value part of a new entry to the map output.
-    pub fn value<V: Debug + ?Sized>(&mut self, value: &V) -> &mut Self {
+    pub fn value(&mut self, value: &dyn Debug) -> &mut Self {
         if self.result.is_ok() {
             if !self.has_key {
                 crate::rt::panic_str("attempted to format a map value before its key", file!(), line!(), column!());
             }
             self.result = if self.fmt.alternate() {
                 self.fmt.push_indent();
-                let r = pretty_entry_inner(self.fmt, &value);
+                let r = pretty_entry_inner(self.fmt, value);
                 self.fmt.pop_indent();
                 r
             } else {

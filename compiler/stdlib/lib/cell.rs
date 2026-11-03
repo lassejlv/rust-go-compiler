@@ -428,7 +428,7 @@ impl<T: ?Sized + fmt::Debug> fmt::Debug for RefCell<T> {
         let mut d = f.debug_struct("RefCell");
         match self.try_borrow() {
             Ok(borrow) => {
-                d.field("value", &*borrow);
+                d.field("value", &borrow);
             }
             Err(_) => {
                 d.field("value", &BorrowedPlaceholder);

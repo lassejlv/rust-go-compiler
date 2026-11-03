@@ -268,7 +268,14 @@ func deriveDebug(d *deriveInfo) (string, error) {
 	var body string
 	if d.strct != nil {
 		st := d.strct
-		body = debugFields(d.name, st.Shape, st.Fields, func(i int) string { return "&self." + fieldName(st.Fields[i], i) })
+		body = debugFields(d.name, st.Shape, st.Fields, func(i int) string {
+			// the builders take `&dyn Debug`: the last field may be
+			// unsized, pass a reference to a reference (like rustc)
+			if i == len(st.Fields)-1 {
+				return "&&self." + fieldName(st.Fields[i], i)
+			}
+			return "&self." + fieldName(st.Fields[i], i)
+		})
 	} else {
 		body = enumMatch(d.enum, "", func(v *ast.Variant) string {
 			return debugFields(v.Name.Name, v.Shape, v.Fields, func(i int) string { return fmt.Sprintf("__self_%d", i) })

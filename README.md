@@ -35,7 +35,13 @@ Options: `-o <out>`, `--release`, `--emit-c <file>` (dump generated C),
 
 The embedded std is parsed and macro-expanded once per compiler build and
 cached in `$RUSTGO_CACHE_DIR` (default: the user cache directory, e.g.
-`~/.cache/rustgo`); `RUSTGO_STD_CACHE=0` disables the cache.
+`~/.cache/rustgo`); `RUSTGO_STD_CACHE=0` disables the cache. The generated
+C is deterministic: the object files of the translation units of large
+programs are cached there too (`cc/`, keyed by a hash of the C compiler, its
+flags and the unit's source; at most 256 MB, least recently used first out,
+`RUSTGO_CC_CACHE_MB` changes the limit), so rebuilding an unchanged program
+only links it; `RUSTGO_CC_CACHE=0` disables this cache.
+`RUSTGO_CFLAGS` adds flags to the C compiler's command line.
 `RUSTGO_CPUPROFILE=<file>` / `RUSTGO_MEMPROFILE=<file>` write pprof CPU /
 allocation profiles of the compiler itself.
 
@@ -177,6 +183,12 @@ compilation.
 * **Trait evaluation** is cached by canonical query (inference variables
   renumbered), and generic bodies can also be checked generically to pick the
   trait a method call meant when a substituted type implements several.
+  Impl candidates whose trait arguments cannot unify with the goal are
+  rejected structurally before any inference variable is created for them.
+* **Types are interned** (pointer equality is structural equality) and carry
+  a never-reused ID that caches key on. Types mentioning inference variables
+  are interned in a table owned by their inference context rather than the
+  global one, so they are freed with the body being checked.
 * The **standard library** is regular Rust in `compiler/stdlib/lib`, built on a
   small set of compiler intrinsics (`extern "rust-intrinsic"`), and embedded
   into the binary.

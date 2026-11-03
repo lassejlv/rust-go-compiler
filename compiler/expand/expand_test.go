@@ -934,7 +934,7 @@ struct P<T: Copy, const N: usize> where T: Sized { x: T, r#type: [T; N] }
 `)
 	s := crateString(c)
 	contains(t, s,
-		`impl<T: Copy + ::std::fmt::Debug, const N: usize> ::std::fmt::Debug for P<T, N> where T: Sized { fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result { f.debug_struct("P").field("x", &self.x).field("type", &self.r#type).finish() } }`,
+		`impl<T: Copy + ::std::fmt::Debug, const N: usize> ::std::fmt::Debug for P<T, N> where T: Sized { fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result { f.debug_struct("P").field("x", &self.x).field("type", &&self.r#type).finish() } }`,
 		`impl<T: Copy + ::std::clone::Clone, const N: usize> ::std::clone::Clone for P<T, N> where T: Sized { fn clone(&self) -> Self { P { x: ::std::clone::Clone::clone(&self.x), r#type: ::std::clone::Clone::clone(&self.r#type) } } }`,
 		`impl<T: Copy + ::std::marker::Copy, const N: usize> ::std::marker::Copy for P<T, N> where T: Sized {  }`,
 		`fn eq(&self, other: &Self) -> bool { self.x == other.x && self.r#type == other.r#type }`,
@@ -964,7 +964,7 @@ struct U;
 `)
 	s := crateString(c)
 	contains(t, s,
-		`f.debug_tuple("T").field(&self.0).field(&self.1).finish()`,
+		`f.debug_tuple("T").field(&self.0).field(&&self.1).finish()`,
 		`T(::std::clone::Clone::clone(&self.0), ::std::clone::Clone::clone(&self.1))`,
 		`self.0 == other.0 && self.1 == other.1`,
 		`T(::std::default::Default::default(), ::std::default::Default::default())`,
