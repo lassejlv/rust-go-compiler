@@ -27,8 +27,15 @@ func (t *Tcx) checkUnsafety(r *Results, def *Def) {
 	}
 }
 
+// unsafeIntrinsics are the intrinsics std re-exports as unsafe fns
+// (`std::mem::transmute`); rustgo declares intrinsics without `unsafe`.
+var unsafeIntrinsics = map[string]bool{"transmute": true}
+
 // unsafeFn reports whether calling d requires an unsafe context.
 func unsafeFn(d *Def) bool {
+	if d != nil && unsafeIntrinsics[d.Intrinsic] {
+		return true
+	}
 	if d == nil || d.Fn == nil || d.Fn.Ast == nil || d.Intrinsic != "" {
 		return false
 	}

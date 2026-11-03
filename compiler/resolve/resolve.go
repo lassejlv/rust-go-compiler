@@ -46,6 +46,7 @@ type Resolver struct {
 	// (an import must not resolve to its own binding).
 	bindingImport map[*NameBinding]*Import
 	reexportChecked map[*Import]bool // imports already checked for E0364/E0365
+	dupReported     map[*Import]bool // imports reported as duplicates (E0252/E0255)
 	// forcing is set once import resolution has stalled: names that might
 	// still be defined by pending imports are then taken as absent.
 	forcing bool
@@ -820,10 +821,22 @@ func (r *Resolver) bindImport(m *Module, imp *Import, ns Namespace, res Res) {
 	}
 	old, ok := tbl[name]
 	if ok && !old.Import {
-		return // items shadow imports
+		// items shadow glob imports; a single import may not name the
+		// same thing as an item of the module (E0255)
+		if !imp.Glob && old.Res != res && r.checkDupImports(m) {
+			r.reportDupImport(imp, "E0255", name)
+		}
+		return
 	}
 	if ok && old.Res == res {
 		return
+	}
+	if ok && !imp.Glob && r.checkDupImports(m) {
+		if prev := r.bindingImport[old]; prev != nil && prev != imp && !prev.Glob && prev.Module == imp.Module {
+			// two single imports of one name in one namespace (E0252)
+			r.reportDupImport(imp, "E0252", name)
+			return
+		}
 	}
 	b := &NameBinding{Res: res, Import: true, Span: imp.Span, Vis: imp.Vis}
 	tbl[name] = b
@@ -1387,4 +1400,21 @@ func (r *Resolver) selfKeyPath(c *Crate, name string) bool {
 		return false
 	}
 	return c.Root.Lookup(name, TypeNS) == nil
+}
+
+// checkDupImports reports whether conflicting imports of module m are
+// errors (not in std, whose modules rustgo assembles loosely).
+func (r *Resolver) checkDupImports(m *Module) bool {
+	return m != nil && m.Crate != nil && m.Crate != r.Std
+}
+
+func (r *Resolver) reportDupImport(imp *Import, code, name string) {
+	if r.dupReported == nil {
+		r.dupReported = map[*Import]bool{}
+	}
+	if r.dupReported[imp] {
+		return
+	}
+	r.dupReported[imp] = true
+	r.Errors = append(r.Errors, fmt.Sprintf("%s: error[%s]: the name `%s` is defined multiple times", imp.Span.Lo, code, name))
 }

@@ -985,7 +985,7 @@ func (fcx *FnCtxt) fieldAccessible(adt *Def, f *FieldDef) bool {
 // reportPrivateField reports E0616 for a field access that only found an
 // inaccessible field.
 func (fcx *FnCtxt) reportPrivateField(x *ast.FieldExpr, t Ty, fi int) {
-	if x.Name.Hyg != 0 || fcx.t.isStd(t.Def) || fcx.t.isStd(fcx.def) {
+	if x.Name.Hyg != 0 || fcx.t.isStd(fcx.def) {
 		return
 	}
 	fcx.t.ErrorCode(x.Name.Span, "E0616", "field `%s` of %s `%s` is private", x.Name.Name, adtKindName(t.Def), t.Def.Name)

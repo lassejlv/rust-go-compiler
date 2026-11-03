@@ -383,7 +383,7 @@ impl<'a, P: Pattern> Iterator for Split<'a, P> {
     }
 }
 
-impl<'a, P: Pattern> DoubleEndedIterator for Split<'a, P> {
+impl<'a, P: super::pattern::DoubleEndedPattern> DoubleEndedIterator for Split<'a, P> {
     #[inline]
     fn next_back(&mut self) -> Option<&'a str> {
         self.next_bwd()
@@ -417,7 +417,7 @@ impl<'a, P: Pattern> Iterator for SplitInclusive<'a, P> {
     }
 }
 
-impl<'a, P: Pattern> DoubleEndedIterator for SplitInclusive<'a, P> {
+impl<'a, P: super::pattern::DoubleEndedPattern> DoubleEndedIterator for SplitInclusive<'a, P> {
     #[inline]
     fn next_back(&mut self) -> Option<&'a str> {
         self.0.next_bwd_inclusive()
@@ -465,7 +465,7 @@ macro_rules! __std_str_split_wrapper {
             }
         }
 
-        impl<'a, P: Pattern> DoubleEndedIterator for $name<'a, P> {
+        impl<'a, P: super::pattern::DoubleEndedPattern> DoubleEndedIterator for $name<'a, P> {
             #[inline]
             fn next_back(&mut self) -> Option<&'a str> {
                 self.0.$bwd()
@@ -615,7 +615,7 @@ impl<'a, P: Pattern> Iterator for Matches<'a, P> {
     }
 }
 
-impl<'a, P: Pattern> DoubleEndedIterator for Matches<'a, P> {
+impl<'a, P: super::pattern::DoubleEndedPattern> DoubleEndedIterator for Matches<'a, P> {
     #[inline]
     fn next_back(&mut self) -> Option<&'a str> {
         match self.window.next_match_back(&mut self.pat, self.haystack) {
@@ -646,7 +646,7 @@ impl<'a, P: Pattern> Iterator for RMatches<'a, P> {
     }
 }
 
-impl<'a, P: Pattern> DoubleEndedIterator for RMatches<'a, P> {
+impl<'a, P: super::pattern::DoubleEndedPattern> DoubleEndedIterator for RMatches<'a, P> {
     #[inline]
     fn next_back(&mut self) -> Option<&'a str> {
         self.0.next()
@@ -685,7 +685,7 @@ impl<'a, P: Pattern> Iterator for MatchIndices<'a, P> {
     }
 }
 
-impl<'a, P: Pattern> DoubleEndedIterator for MatchIndices<'a, P> {
+impl<'a, P: super::pattern::DoubleEndedPattern> DoubleEndedIterator for MatchIndices<'a, P> {
     #[inline]
     fn next_back(&mut self) -> Option<(usize, &'a str)> {
         match self.window.next_match_back(&mut self.pat, self.haystack) {
@@ -716,7 +716,7 @@ impl<'a, P: Pattern> Iterator for RMatchIndices<'a, P> {
     }
 }
 
-impl<'a, P: Pattern> DoubleEndedIterator for RMatchIndices<'a, P> {
+impl<'a, P: super::pattern::DoubleEndedPattern> DoubleEndedIterator for RMatchIndices<'a, P> {
     #[inline]
     fn next_back(&mut self) -> Option<(usize, &'a str)> {
         self.0.next()
@@ -813,6 +813,7 @@ impl super::pattern::CharPredicate for IsAsciiWhitespace {
 macro_rules! __std_str_ws_pattern {
     ($($t:ty)*) => {
         $(
+            impl super::pattern::DoubleEndedPattern for $t {}
             impl Pattern for $t {
                 #[inline]
                 fn find_in(&mut self, haystack: &str, start: usize, end: usize) -> Option<(usize, usize)> {

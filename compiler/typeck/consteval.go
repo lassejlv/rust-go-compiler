@@ -365,6 +365,17 @@ func (ev *constEval) eval(fr *cframe, e ast.Expr) (*cval, bool) {
 		if !ok {
 			return nil, false
 		}
+		if x.Op == ast.BinShl || x.Op == ast.BinShr {
+			// shifting by the width or more overflows (E0080)
+			it, typed := a.ity, a.typed
+			if !typed && hint != nil && hint.Kind == TInt {
+				it, typed = hint.IntKind(), true
+			}
+			if n, ok := intOf(b); ok && a.k == cvInt && typed && (n.Sign() < 0 || n.Cmp(big.NewInt(int64(it.Bits()))) >= 0) {
+				ev.panicked = true
+				return nil, false
+			}
+		}
 		return binop(x.Op, a, b)
 	case *ast.CallExpr:
 		return ev.evalCall(fr, x, hint)

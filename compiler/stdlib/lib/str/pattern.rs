@@ -141,6 +141,17 @@ impl CharPredicate for char {
     }
 }
 
+/// Patterns that can be searched from both ends with the same results
+/// (std's `DoubleEndedSearcher`): the split/match iterators are
+/// double-ended only for these (char-like patterns, not string ones).
+#[doc(hidden)]
+pub trait DoubleEndedPattern: Pattern {}
+impl DoubleEndedPattern for char {}
+impl<F: FnMut(char) -> bool> DoubleEndedPattern for F {}
+impl<const N: usize> DoubleEndedPattern for [char; N] {}
+impl<'b, const N: usize> DoubleEndedPattern for &'b [char; N] {}
+impl<'b> DoubleEndedPattern for &'b [char] {}
+
 impl Pattern for char {
     #[inline]
     fn find_in(&mut self, haystack: &str, start: usize, end: usize) -> Option<(usize, usize)> {
