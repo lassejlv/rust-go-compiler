@@ -372,7 +372,14 @@ func (fc *fnGen) bindPatDeferred(p ast.Pat, place string, t Ty, op operand) []st
 			mark := len(sc.drops)
 			var act []string
 			fc.resActivate = &act
+			if parts, ok := fc.resParts[p]; ok && fc.patLocal(p, place) {
+				// the parts left are dropped with the local: arm their
+				// flags (declared with it)
+				q := append([]resPart(nil), parts...)
+				fc.resQueue = &q
+			}
 			fc.residualDrops(p, place, t, false)
+			fc.resQueue = nil
 			fc.resActivate = nil
 			fc.resSrcFlag = nil
 			out = append(out, act...)
@@ -416,6 +423,19 @@ func (fc *fnGen) bindPatDeferred(p ast.Pat, place string, t Ty, op operand) []st
 		out = append(out, fmt.Sprintf("%s = 0;", op.flag))
 	}
 	return out
+}
+
+// patLocal reports whether place is the local whose residual parts were
+// declared for p (see declResidualParts).
+func (fc *fnGen) patLocal(p ast.Pat, place string) bool {
+	for l, ps := range fc.resPats {
+		for _, q := range ps {
+			if q == p {
+				return fc.declared[l] && place == fc.localName(l)
+			}
+		}
+	}
+	return false
 }
 
 // pbind emits bindings; records in moves when a non-Copy value is moved.
@@ -619,6 +639,20 @@ func (fc *fnGen) residualDrops(p ast.Pat, place string, t Ty, now bool) {
 	}
 	whole := func(pl string, ty Ty) {
 		if !fc.g.needsDrop(ty) {
+			return
+		}
+		if fc.resCollect != nil {
+			*fc.resCollect = append(*fc.resCollect, resPart{place: pl, ty: ty})
+			return
+		}
+		if fc.resQueue != nil && len(*fc.resQueue) > 0 && (*fc.resQueue)[0].place == pl {
+			rp := (*fc.resQueue)[0]
+			*fc.resQueue = (*fc.resQueue)[1:]
+			src := "1"
+			if fc.resSrcFlag != nil {
+				src = fc.resSrcFlag(pl)
+			}
+			*fc.resActivate = append(*fc.resActivate, fmt.Sprintf("%s = %s;", rp.flag, src))
 			return
 		}
 		if now {

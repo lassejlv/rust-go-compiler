@@ -1,0 +1,15 @@
+&temp:          +borrow use 6 ~borrow
+tuple:          +tup0 +tup1 ~tup1 use 4 4 ~tup0
+array:          +arr0 +arr1 use 2 ~arr1 ~arr0
+struct lit:     +field +plain ~plain use 5 5 ~field
+block tail:     in block +blocktail use 9 ~blocktail
+&temp.field:    +proj use 4 ~proj
+method recv:    +method ~method use 6
+fn arg:         +fnarg ~fnarg use 5
+field of temp:  +byval ~byval use 5
+paren/cast:     +paren +cast use 5 true ~cast ~paren
+&*Box::new:     +deref use 5 ~deref
+if arms:        +if-arm use 6 ~if-arm
+vec owned:      +v0 +v1 use 2 ~v0 ~v1
+match value:    +scrut ~scrut use 0
+Some(&temp):    +some-arg use Some(8) ~some-arg

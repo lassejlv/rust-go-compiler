@@ -85,6 +85,34 @@ type fnGen struct {
 	// patSplit: patterns that move whole top-level fields out of a local
 	// (which then has per-field drop flags for them).
 	patSplit map[ast.Pat]patSplitInfo
+	// ext: lifetime-extended temporaries of the let statement being lowered
+	ext *extCtx
+	// resPats: the patterns that move parts out of a (not split) local and
+	// leave the rest in it (`if let Some((a, _)) = o`); resParts: the parts
+	// they leave, with drop flags declared with the local, so that they are
+	// dropped where the local is (see declLocal).
+	resPats  map[*typeck.Local][]ast.Pat
+	resParts map[ast.Pat][]resPart
+	// resQueue, when set, holds the preallocated residual parts that
+	// residualDrops arms (instead of scheduling new drops); resCollect,
+	// when set, collects the parts instead.
+	resQueue   *[]resPart
+	resCollect *[]resPart
+}
+
+// resPart is a part of a local left by a pattern moving other parts out.
+type resPart struct {
+	place string
+	ty    Ty
+	flag  string
+}
+
+// extCtx describes the temporary lifetime extension of a let statement.
+type extCtx struct {
+	set   map[ast.NodeID]bool // expressions whose temporary is extended
+	scope *scope              // the block scope the temporaries live in
+	decls []string            // their declarations, emitted before the let
+	ind   int
 }
 
 type patSplitInfo struct {
@@ -150,6 +178,15 @@ func (fc *fnGen) popScope() {
 
 func (fc *fnGen) popScopeNoDrop() { fc.scopes = fc.scopes[:len(fc.scopes)-1] }
 
+// mergeScope ends the innermost scope without dropping anything: what it
+// owns is dropped with the enclosing scope.
+func (fc *fnGen) mergeScope() {
+	s := fc.scopes[len(fc.scopes)-1]
+	fc.scopes = fc.scopes[:len(fc.scopes)-1]
+	p := fc.scopes[len(fc.scopes)-1]
+	p.drops = append(p.drops, s.drops...)
+}
+
 func (fc *fnGen) emitScopeDrops(s *scope) {
 	for i := len(s.drops) - 1; i >= 0; i-- {
 		d := s.drops[i]
@@ -165,11 +202,29 @@ func (fc *fnGen) dropCode(d dropEntry) string {
 	if d.local != nil && len(fc.split[d.local]) > 0 {
 		var parts []string
 		base := fc.flagName(d.local)
-		fc.dropParts(&parts, d.local, d.place, d.ty, nil, base)
+		if fc.isBoxTy(d.local.Ty) {
+			// a box with fields moved out of it: the remaining fields,
+			// then the heap block
+			fc.dropParts(&parts, d.local, "(*"+d.place+".f0)", d.local.Ty.Args[0], nil, base)
+			parts = append(parts, fmt.Sprintf("if (%s) { %s }", base, fc.g.boxFree(d.place, d.local.Ty)))
+		} else {
+			fc.dropParts(&parts, d.local, d.place, d.ty, nil, base)
+		}
 		parts = append(parts, base+" = 0;")
 		return strings.Join(parts, " ")
 	}
-	return fmt.Sprintf("if (%s) { %s = 0; %s(&%s); }", d.flag, d.flag, fc.g.dropFn(d.ty), d.place)
+	code := fmt.Sprintf("if (%s) { %s = 0; %s(&%s); }", d.flag, d.flag, fc.g.dropFn(d.ty), d.place)
+	if d.local != nil && len(fc.resPats[d.local]) > 0 {
+		// the parts left by a partial move out of it (in field order)
+		var parts []string
+		for _, p := range fc.resPats[d.local] {
+			for _, rp := range fc.resParts[p] {
+				parts = append(parts, fmt.Sprintf("if (%s) { %s = 0; %s(&%s); }", rp.flag, rp.flag, fc.g.dropFn(rp.ty), rp.place))
+			}
+		}
+		code = strings.Join(append(parts, code), " ")
+	}
+	return code
 }
 
 // fieldTys returns the field types of a struct or tuple type (or the
@@ -242,7 +297,7 @@ func (fc *fnGen) pathFlags(l *typeck.Local, path []int) string {
 	s := fc.pathFlag(l, path)
 	var subs []string
 	if len(path) == 0 {
-		for i := range fc.fieldTys(l.Ty) {
+		for i := range fc.fieldTys(fc.splitTy(l)) {
 			if fc.split[l][i] {
 				subs = append(subs, fmt.Sprintf("%d", i))
 			}
@@ -304,6 +359,9 @@ func (fc *fnGen) declSplitFlags(l *typeck.Local, place string, init int) int {
 	// unwinding drops the parts still owned (pushed last-first so that
 	// they are dropped in order)
 	var pushes []string
+	box := fc.isBoxTy(l.Ty)
+	// walk visits the parts (p: their C selector relative to place, or to
+	// a box's contents)
 	var walk func(p string, t Ty, path []int, guard string)
 	walk = func(p string, t Ty, path []int, guard string) {
 		fts := fc.fieldTys(t)
@@ -329,14 +387,69 @@ func (fc *fnGen) declSplitFlags(l *typeck.Local, place string, init int) int {
 				walk(sp, ft, sub, g)
 				continue
 			}
-			pushes = append(pushes, fmt.Sprintf("RG_CS_PUSH(&%s, %s, &%s);", sp, fc.g.dropFn(ft), g))
+			if box {
+				// the parts' addresses depend on the box pointer, which
+				// is not initialized yet
+				pushes = append(pushes, fmt.Sprintf("RG_CS_PUSH(&%s, %s, &%s);", place, fc.g.boxPartFn(l.Ty, sp, ft), g))
+				continue
+			}
+			pushes = append(pushes, fmt.Sprintf("RG_CS_PUSH(&%s%s, %s, &%s);", place, sp, fc.g.dropFn(ft), g))
 		}
 	}
-	walk(place, l.Ty, nil, fc.flagName(l))
+	n := 0
+	if box {
+		// the heap block of a box with fields moved out of it is freed
+		// after its remaining fields are dropped
+		fc.line("RG_CS_PUSH(&%s, %s, &%s);", place, fc.g.boxFreeFn(l.Ty), fc.flagName(l))
+		n++
+	}
+	walk("", fc.splitTy(l), nil, fc.flagName(l))
 	for i := len(pushes) - 1; i >= 0; i-- {
 		fc.line("%s", pushes[i])
 	}
-	return len(pushes)
+	return n + len(pushes)
+}
+
+// splitTy is the type whose fields a split local's flags track: its own,
+// or its contents for a box (fields moved out of `*b`).
+func (fc *fnGen) splitTy(l *typeck.Local) Ty {
+	if fc.isBoxTy(l.Ty) {
+		return l.Ty.Args[0]
+	}
+	return l.Ty
+}
+
+// boxLocal returns the local of e if e is a box local dereferenced
+// (implicitly when adjusted, else explicitly: `(*b)`), whose fields can be
+// moved out of individually.
+func (fc *fnGen) boxLocal(e ast.Expr, adjusted bool) *typeck.Local {
+	if adjusted {
+		adj := fc.r.Adjust[e.GetID()]
+		if len(adj) != 1 || adj[0].Kind != typeck.AdjDeref {
+			return nil
+		}
+	} else {
+		u, ok := unparen(e).(*ast.UnaryExpr)
+		if !ok || u.Op != ast.UnDeref || len(fc.r.Adjust[u.X.GetID()]) > 0 {
+			return nil
+		}
+		if _, overloaded := fc.r.Callees[u.ID]; overloaded {
+			return nil
+		}
+		e = u.X
+	}
+	pe, ok := unparen(e).(*ast.PathExpr)
+	if !ok {
+		return nil
+	}
+	vr := fc.r.Paths[pe.ID]
+	if vr == nil || vr.Kind != typeck.VLocal || vr.Local.ByRef || !fc.isBoxTy(vr.Local.Ty) {
+		return nil
+	}
+	if ct := vr.Local.Ty.Args[0]; ct.IsUnsized() || !fc.splittable(ct) {
+		return nil
+	}
+	return vr.Local
 }
 
 // fieldSel is the C selector of field (or array element) i.
@@ -396,6 +509,19 @@ func (fc *fnGen) computeSplit(body any) {
 	fc.split = map[*typeck.Local]map[int]bool{}
 	fc.patSplit = map[ast.Pat]patSplitInfo{}
 	fc.nested = map[*typeck.Local]map[string]bool{}
+	fc.resPats = map[*typeck.Local][]ast.Pat{}
+	fc.resParts = map[ast.Pat][]resPart{}
+	type patSrc struct {
+		p   ast.Pat
+		src ast.Expr
+	}
+	var pats []patSrc
+	defer func() {
+		// after the split locals are known
+		for _, ps := range pats {
+			fc.residualPat(ps.p, ps.src)
+		}
+	}()
 	ast.Walk(body, func(n any) bool {
 		switch x := n.(type) {
 		case *ast.StructExpr:
@@ -404,14 +530,17 @@ func (fc *fnGen) computeSplit(body any) {
 		case *ast.LetStmt:
 			if x.Init != nil {
 				fc.splitPatMove(x.Pat, x.Init)
+				pats = append(pats, patSrc{x.Pat, x.Init})
 			}
 			return true
 		case *ast.LetExpr:
 			fc.splitPatMove(x.Pat, x.Expr)
+			pats = append(pats, patSrc{x.Pat, x.Expr})
 			return true
 		case *ast.MatchExpr:
 			for _, a := range x.Arms {
 				fc.splitPatMove(a.Pat, x.Scrutinee)
+				pats = append(pats, patSrc{a.Pat, x.Scrutinee})
 			}
 			return true
 		case *ast.ClosureExpr:
@@ -426,6 +555,12 @@ func (fc *fnGen) computeSplit(body any) {
 			if ft := fc.r.NodeTypes[fe.ID]; ft != nil && fc.g.needsDrop(ft) {
 				fc.trackPath(l, path)
 			}
+		} else if l != nil && fc.isBoxTy(l.Ty) {
+			// a field of a box's contents (`b.x`, `(*b).x`)
+			if ft := fc.r.NodeTypes[fe.ID]; ft != nil && fc.g.needsDrop(ft) {
+				fc.trackPath(l, path)
+			}
+			return true
 		}
 		base := unparen(fe.X)
 		pe, ok := base.(*ast.PathExpr)
@@ -467,18 +602,28 @@ func (fc *fnGen) fieldPath(fe *ast.FieldExpr) (*typeck.Local, []int) {
 			break
 		}
 		fr, ok := fc.r.Fields[x.ID]
-		if !ok || fr.Union || len(fc.r.Adjust[x.X.GetID()]) > 0 {
+		if !ok || fr.Union {
 			return nil, nil
 		}
 		path = append([]int{fr.Index}, path...)
+		if len(fc.r.Adjust[x.X.GetID()]) > 0 {
+			// `b.x` with b a box: a path in its contents
+			if l := fc.boxLocal(x.X, true); l != nil {
+				return l, path
+			}
+			return nil, nil
+		}
 		e = x.X
+	}
+	if l := fc.boxLocal(e, false); l != nil {
+		return l, path // `(*b).x`
 	}
 	pe, ok := unparen(e).(*ast.PathExpr)
 	if !ok || len(fc.r.Adjust[e.GetID()]) > 0 {
 		return nil, nil
 	}
 	vr := fc.r.Paths[pe.ID]
-	if vr == nil || vr.Kind != typeck.VLocal || vr.Local.ByRef {
+	if vr == nil || vr.Kind != typeck.VLocal || vr.Local.ByRef || fc.isBoxTy(vr.Local.Ty) {
 		return nil, nil
 	}
 	return vr.Local, path
@@ -490,7 +635,7 @@ func (fc *fnGen) trackPath(l *typeck.Local, path []int) {
 	if len(path) == 0 || !fc.g.needsDrop(l.Ty) || len(path) > 4 {
 		return
 	}
-	t := l.Ty
+	t := fc.splitTy(l)
 	for i, f := range path {
 		if !fc.splittable(t) || (t.Kind == TArray && i > 0) {
 			path = path[:i]
@@ -738,9 +883,59 @@ func (fc *fnGen) declLocal(l *typeck.Local) {
 			return
 		}
 		fc.line("uint8_t %s = 0;", fc.flagName(l))
-		s.drops = append(s.drops, dropEntry{place: fc.localName(l), flag: fc.flagName(l), ty: l.Ty, local: l})
 		fc.line("RG_CS_PUSH(&%s, %s, &%s);", fc.localName(l), fc.g.dropFn(l.Ty), fc.flagName(l))
+		cs := 1 + fc.declResidualParts(l)
+		s.drops = append(s.drops, dropEntry{place: fc.localName(l), flag: fc.flagName(l), ty: l.Ty, local: l, cs: cs})
 	}
+}
+
+// declResidualParts declares the drop flags of the parts of l that the
+// patterns of resPats[l] leave in it when they move other parts out (and
+// pushes them on the cleanup stack). They are armed when such a pattern
+// moves out of l, and dropped with l (first, in field order). It returns
+// the number of cleanup entries pushed.
+func (fc *fnGen) declResidualParts(l *typeck.Local) int {
+	n := 0
+	for _, p := range fc.resPats[l] {
+		var parts []resPart
+		fc.resCollect = &parts
+		fc.residualDrops(p, fc.localName(l), l.Ty, false)
+		fc.resCollect = nil
+		for i := range parts {
+			parts[i].flag = fc.newName(fmt.Sprintf("drl%d_", l.ID))
+			fc.line("uint8_t %s = 0;", parts[i].flag)
+		}
+		for i := len(parts) - 1; i >= 0; i-- {
+			fc.line("RG_CS_PUSH(&%s, %s, &%s);", parts[i].place, fc.g.dropFn(parts[i].ty), parts[i].flag)
+		}
+		n += len(parts)
+		fc.resParts[p] = parts
+	}
+	return n
+}
+
+// residualPat records p (matched against src) if it moves parts out of a
+// plain local that is not split, leaving others in it.
+func (fc *fnGen) residualPat(p ast.Pat, src ast.Expr) {
+	if fc.patSplit[p].local != nil || len(fc.r.Adjust[src.GetID()]) > 0 || len(fc.r.PatDerefs[p.GetID()]) > 0 {
+		return
+	}
+	pe, ok := unparen(src).(*ast.PathExpr)
+	if !ok {
+		return
+	}
+	vr := fc.r.Paths[pe.ID]
+	if vr == nil || vr.Kind != typeck.VLocal || vr.Local.ByRef {
+		return
+	}
+	l := vr.Local
+	if !fc.g.needsDrop(l.Ty) || len(fc.split[l]) > 0 || !fc.patMoves(p) {
+		return
+	}
+	if _, isIdent := p.(*ast.IdentPat); isIdent {
+		return // moves the whole value
+	}
+	fc.resPats[l] = append(fc.resPats[l], p)
 }
 
 func (fc *fnGen) markInit(l *typeck.Local) {
@@ -893,74 +1088,117 @@ func (fc *fnGen) stmt(s ast.Stmt) {
 	}
 }
 
-// extendsTemps reports whether a let initializer borrows a temporary in an
-// extending position (`&e`, inside struct/tuple/array literals, casts,
-// ctor calls or block tails), which lives until the end of the block.
-func (fc *fnGen) extendsTemps(e ast.Expr) bool {
+// extendingExpr records the temporaries of e, an extending expression of a
+// let initializer, whose lifetime is extended to the end of the enclosing
+// block (rustc's rules): the operand of an extending borrow `&e` and the
+// places it is projected from; the operands of extending borrows, casts,
+// struct/tuple/array literals and tuple-struct constructor calls, the tails
+// of extending blocks and the branches/arms of extending if/match
+// expressions are extending expressions themselves. Other temporaries of
+// the initializer (call arguments, method receivers, non-borrowed literal
+// fields, ...) die at the end of the statement.
+func (fc *fnGen) extendingExpr(e ast.Expr, set map[ast.NodeID]bool) {
 	switch x := e.(type) {
 	case *ast.RefExpr:
-		return true
+		if x.Raw {
+			return
+		}
+		fc.extendedPlace(x.X, set)
+		fc.extendingExpr(x.X, set)
 	case *ast.ParenExpr:
-		return fc.extendsTemps(x.X)
+		fc.extendingExpr(x.X, set)
 	case *ast.CastExpr:
-		return fc.extendsTemps(x.X)
+		fc.extendingExpr(x.X, set)
 	case *ast.TupleExpr:
 		for _, el := range x.Elems {
-			if fc.extendsTemps(el) {
-				return true
-			}
+			fc.extendingExpr(el, set)
 		}
 	case *ast.ArrayExpr:
 		for _, el := range x.Elems {
-			if fc.extendsTemps(el) {
-				return true
-			}
+			fc.extendingExpr(el, set)
 		}
 	case *ast.StructExpr:
 		for _, f := range x.Fields {
-			if f.Expr != nil && fc.extendsTemps(f.Expr) {
-				return true
+			if f.Expr != nil {
+				fc.extendingExpr(f.Expr, set)
 			}
 		}
 	case *ast.CallExpr:
 		pe, ok := unparen(x.Fn).(*ast.PathExpr)
 		if !ok {
-			return false
+			return
 		}
 		vr := fc.r.Paths[pe.ID]
 		// std's pin! helper stands in for rustc's `Pin { pointer: &mut {..} }`
 		if vr == nil || vr.Kind != typeck.VFn || (vr.Def.Kind != DefStruct && vr.Def.Kind != DefVariant && vr.Def.Name != "__pin") {
-			return false
+			return
 		}
 		for _, a := range x.Args {
-			if fc.extendsTemps(a) {
-				return true
-			}
+			fc.extendingExpr(a, set)
 		}
 	case *ast.BlockExpr:
-		if x.Block != nil {
+		if x.Block != nil && !x.Async && !x.Const {
 			if t := blockTail(x.Block); t != nil {
-				return fc.extendsTemps(t)
+				fc.extendingExpr(t, set)
 			}
 		}
 	case *ast.IfExpr:
-		// temporaries are extended through the branches' tails only; the
-		// condition's temporaries never are
+		// through the branches' tails, never the condition
 		if x.Then != nil {
-			if t := blockTail(x.Then); t != nil && fc.extendsTemps(t) {
-				return true
+			if t := blockTail(x.Then); t != nil {
+				fc.extendingExpr(t, set)
 			}
 		}
-		return x.Else != nil && fc.extendsTemps(x.Else)
+		if x.Else != nil {
+			fc.extendingExpr(x.Else, set)
+		}
 	case *ast.MatchExpr:
 		// likewise through the arm bodies, never the scrutinee
 		for _, a := range x.Arms {
-			if fc.extendsTemps(a.Body) {
-				return true
-			}
+			fc.extendingExpr(a.Body, set)
 		}
 	}
-	return false
+}
+
+// extendedPlace records that the temporary holding the value of e (if e is
+// a value expression) lives until the end of the enclosing block, and so do
+// those of the places a field, index or deref expression projects from.
+func (fc *fnGen) extendedPlace(e ast.Expr, set map[ast.NodeID]bool) {
+	set[e.GetID()] = true
+	switch x := e.(type) {
+	case *ast.ParenExpr:
+		fc.extendedPlace(x.X, set)
+	case *ast.FieldExpr:
+		fc.extendedPlace(x.X, set)
+	case *ast.IndexExpr:
+		fc.extendedPlace(x.X, set)
+	case *ast.UnaryExpr:
+		if x.Op == ast.UnDeref {
+			fc.extendedPlace(x.X, set)
+		}
+	}
+}
+
+// materializeExt stores the value of op in a temporary whose lifetime was
+// extended to the end of the block of the let statement being lowered: it
+// is declared (with its drop flag and cleanup entry) before the statement
+// and dropped with the block's locals.
+func (fc *fnGen) materializeExt(op operand) operand {
+	t := op.ty
+	n := fc.newName("t")
+	ind := strings.Repeat("  ", fc.ext.ind)
+	fc.ext.decls = append(fc.ext.decls, fmt.Sprintf("%s%s %s;", ind, fc.ctype(t), n))
+	fc.line("%s = %s;", n, op.s)
+	if !fc.g.needsDrop(t) {
+		return operand{s: n, place: true, ty: t}
+	}
+	flag := "d" + n
+	fc.ext.decls = append(fc.ext.decls,
+		fmt.Sprintf("%suint8_t %s = 0;", ind, flag),
+		fmt.Sprintf("%sRG_CS_PUSH(&%s, %s, &%s);", ind, n, fc.g.dropFn(t), flag))
+	fc.line("%s = 1;", flag)
+	fc.ext.scope.drops = append(fc.ext.scope.drops, dropEntry{place: n, flag: flag, ty: t})
+	return operand{s: n, place: true, flag: flag, movable: true, ty: t}
 }
 
 func isPlaceExpr(e ast.Expr) bool {
@@ -985,7 +1223,6 @@ func isSimple(v string) bool {
 }
 
 func (fc *fnGen) letStmt(x *ast.LetStmt) {
-	pt := fc.r.NodeTypes[x.Pat.GetID()]
 	if x.Init == nil {
 		fc.declarePatLocals(x.Pat)
 		return
@@ -1007,21 +1244,50 @@ func (fc *fnGen) letStmt(x *ast.LetStmt) {
 		return
 	}
 	// temporaries of the initializer die at the end of the statement unless
-	// their lifetime is extended by a borrow in an extending position
-	temps := !isPlaceExpr(x.Init) && !fc.extendsTemps(x.Init)
+	// their lifetime is extended (borrowed in an extending position, or by
+	// a `ref` binding of a place projected from a temporary)
+	set := map[ast.NodeID]bool{}
+	fc.extendingExpr(x.Init, set)
+	if isPlaceExpr(x.Init) && fc.patBorrows(x.Pat) {
+		fc.extendedPlace(x.Init, set)
+	}
+	saved := fc.ext
+	fc.ext = nil
+	var ext *extCtx
+	mark := 0
+	if len(set) > 0 {
+		ext = &extCtx{set: set, scope: fc.scopes[len(fc.scopes)-1], ind: fc.ind}
+		fc.ext = ext
+		mark = fc.b.Len()
+	}
+	fc.letInit(x)
+	fc.ext = saved
+	if ext != nil && len(ext.decls) > 0 {
+		// declare the extended temporaries before the statement: they are
+		// initialized in nested C blocks (block tails, if branches) but
+		// live as long as the enclosing block
+		s := fc.b.String()
+		fc.b.Reset()
+		fc.b.WriteString(s[:mark])
+		for _, d := range ext.decls {
+			fc.b.WriteString(d)
+			fc.b.WriteByte('\n')
+		}
+		fc.b.WriteString(s[mark:])
+	}
+}
+
+// letInit lowers a let statement with an initializer (and a pattern other
+// than `_`).
+func (fc *fnGen) letInit(x *ast.LetStmt) {
 	if ip, ok := x.Pat.(*ast.IdentPat); ok && ip.Sub == nil && x.Else == nil {
 		if l := fc.r.Locals[ip.ID]; l != nil && !l.ByRef {
-			var v string
-			if temps {
-				fc.pushScope()
-				v = fc.value(x.Init)
-				if !isSimple(v) {
-					v = fc.spill(v, fc.aty(x.Init))
-				}
-				fc.popScope()
-			} else {
-				v = fc.value(x.Init)
+			fc.pushScope()
+			v := fc.value(x.Init)
+			if !isSimple(v) {
+				v = fc.spill(v, fc.aty(x.Init))
 			}
+			fc.popScope()
 			fc.declLocal(l)
 			if !isZST(l.Ty) {
 				fc.line("%s = %s;", fc.localName(l), v)
@@ -1036,17 +1302,16 @@ func (fc *fnGen) letStmt(x *ast.LetStmt) {
 	// applied relative to the initializer's type)
 	it := fc.aty(x.Init)
 	var op operand
+	fc.pushScope()
 	if isPlaceExpr(x.Init) {
 		op = fc.placeOp(x.Init)
+		// the pattern may move out of (or borrow) the place: temporaries
+		// it is projected from stay alive with the bindings
+		fc.mergeScope()
 	} else {
-		if temps {
-			fc.pushScope()
-		}
 		v := fc.value(x.Init)
 		p, _ := fc.materializeNoDrop(v, it)
-		if temps {
-			fc.popScope()
-		}
+		fc.popScope()
 		op = operand{s: p, place: true, ty: it}
 	}
 	fc.declarePatLocals(x.Pat)
@@ -1063,7 +1328,6 @@ func (fc *fnGen) letStmt(x *ast.LetStmt) {
 	} else {
 		fc.bindOwnedPat(x.Pat, op.s, it, nil, true)
 	}
-	_ = pt
 }
 
 // materializeNoDrop stores a value whose ownership is transferred into
@@ -1269,7 +1533,14 @@ func (fc *fnGen) condJump(c ast.Expr, target string, dropDepth int) {
 		fc.bindPatPlace(x.Pat, op.s, fc.aty(x.Expr), op)
 		return
 	}
+	// a condition (or guard, or operand of a let chain) is a terminating
+	// scope: its temporaries are dropped before the branch is taken
+	fc.pushScope()
 	v := fc.value(c)
+	if len(fc.scopes[len(fc.scopes)-1].drops) > 0 {
+		v = fc.spill(v, TyBool)
+	}
+	fc.popScope()
 	fc.line("if (!(%s)) { %s goto %s; }", v, fc.dropsString(dropDepth), target)
 }
 

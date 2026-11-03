@@ -1,0 +1,14 @@
+enum overwrite:     assign A ~b1 ~b2 assign C ~a1 now C replaced C ~a2
+option box:         ~boxed1 set2 ~boxed2 none true
+vec ops:            ~v1 indexed assign ~v0 ~v1new ~v2 cleared ~v3
+map overwrite:      old Some("h1") ~h1 ~t1 btree overwrite ~t2 removed ~h1b
+array partial:      got r0 r2 ~r2 ~r0 ~r1
+tuple partial:      x t0 rest t2 ~t2 ~t0 ~t1
+struct partial:     y sy ~sy ~sx ~sz
+box moves:          unboxed inbox moved bx ~bx ~by ~bz ~inbox
+array unwind:       ~p1 ~p0 caught true
+struct unwind:      ~fx caught true
+vec! unwind:        ~vv1 ~vv0 caught true
+tuple unwind:       ~tt1 ~tt0 caught true
+vec push unwind:    ~extra ~loop0 ~loop1 ~loop2 caught true
+enum ctor unwind:   ~eb1 caught true
