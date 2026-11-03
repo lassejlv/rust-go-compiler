@@ -428,9 +428,16 @@ func (b *builder) genericParamInfo(d *Def, decl Ty, ld *LocalDecl) {
 
 // buildClosure builds the MIR of a closure body.
 func buildClosure(tcx *typeck.Tcx, r *typeck.Results, ci *typeck.ClosureInfo, name string) *builder {
+	return buildClosureKind(tcx, r, ci, name, ci.Kind)
+}
+
+// buildClosureKind builds a closure body checked as a closure of the given
+// kind (the kind an Fn/FnMut bound requires may be stricter than the one
+// inferred from the body).
+func buildClosureKind(tcx *typeck.Tcx, r *typeck.Results, ci *typeck.ClosureInfo, name string, kind int) *builder {
 	b := newBuilder(tcx, r, name, ci.Expr.Span)
 	b.name = name
-	b.body.ClosureKind = ci.Kind
+	b.body.ClosureKind = kind
 	b.newLocal(&LocalDecl{Kind: LReturn, Ty: ci.Output, Mut: true})
 	b.retBlock = b.newBlock()
 	b.pushScope()

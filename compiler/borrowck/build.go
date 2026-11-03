@@ -56,6 +56,9 @@ type builder struct {
 	ovl map[LocalID]*ovlInfo
 	// statics referenced by the body
 	statics map[*Def]LocalID
+	// expectKind: closure expressions passed to Fn/FnMut-bounded
+	// parameters, which fixes their kind (rustc deduces it from the bound)
+	expectKind map[ast.NodeID]int
 }
 
 type ovlInfo struct {
@@ -508,7 +511,9 @@ func (b *builder) localPlace(l *typeck.Local) tplace {
 		pl := Place{Local: u.local}
 		if u.byRef {
 			k := DRef
-			if u.mutRef {
+			if u.mutRef && b.body.ClosureKind != 0 {
+				// in an Fn closure a captured `&mut` is only reachable
+				// through `&self`
 				k = DRefMut
 			}
 			return tplace{p: pl.project(Proj{Kind: PDeref, Deref: k}), ty: l.Ty}
@@ -1059,6 +1064,7 @@ func (b *builder) callExpr(x *ast.CallExpr, dest tplace) {
 		b.call(dest.p, ops, fl, "closure", sp, diverges)
 		return
 	}
+	b.expectClosureKinds(c, x.Args, 0)
 	var ops []Operand
 	if c.Kind == typeck.CallFn || c.Kind == typeck.CallVirtual || c.Kind == typeck.CallBuiltin {
 		// the callee path itself is a constant
@@ -1110,6 +1116,9 @@ func (b *builder) methodCall(x *ast.MethodCallExpr, dest tplace) {
 		t := b.temp(recv.ty, sp)
 		b.assign(t.p, Rvalue{Kind: RUse, Ops: []Operand{b.operandOf(recv)}}, sp)
 		recv = t
+	}
+	if c != nil {
+		b.expectClosureKinds(c, x.Args, 1)
 	}
 	var ops []Operand
 	for _, a := range x.Args {
@@ -1204,7 +1213,11 @@ func (b *builder) closureExpr(x *ast.ClosureExpr, dest tplace) {
 		return
 	}
 	// build the closure body now: the capture modes follow its uses
-	cb := buildClosure(b.tcx, b.r, ci, b.name+"::{closure}")
+	kind := ci.Kind
+	if k, ok := b.expectKind[x.ID]; ok && k < kind {
+		kind = k
+	}
+	cb := buildClosureKind(b.tcx, b.r, ci, b.name+"::{closure}", kind)
 	b.closures = append(b.closures, cb.body)
 	b.closures = append(b.closures, cb.closures...)
 	needMut := cb.upvarMutUses()
@@ -1226,6 +1239,41 @@ func (b *builder) closureExpr(x *ast.ClosureExpr, dest tplace) {
 		}
 	}
 	b.assign(dest.p, Rvalue{Kind: RAggregate, Ops: ops}, sp)
+}
+
+// expectClosureKinds records the Fn*-bound kind of the parameters that
+// closure expressions in args are passed to (offset: arguments before the
+// first of args, i.e. a method receiver).
+func (b *builder) expectClosureKinds(c *typeck.Callee, args []ast.Expr, offset int) {
+	if c == nil || c.Def == nil || c.Def.Fn == nil || (c.Kind != typeck.CallFn && c.Kind != typeck.CallBuiltin) {
+		return
+	}
+	var sig *FnSig
+	func() {
+		defer func() { recover() }()
+		sig = b.tcx.FnSig(c.Def)
+	}()
+	if sig == nil {
+		return
+	}
+	for i, a := range args {
+		ce, ok := unparen(a).(*ast.ClosureExpr)
+		if !ok || i+offset >= len(sig.Inputs) {
+			continue
+		}
+		pt := sig.Inputs[i+offset]
+		if pt == nil || pt.Kind != TParam {
+			continue
+		}
+		ld := &LocalDecl{FnBound: -1}
+		b.genericParamInfo(c.Def, pt, ld)
+		if ld.FnBound >= 0 {
+			if b.expectKind == nil {
+				b.expectKind = map[ast.NodeID]int{}
+			}
+			b.expectKind[ce.ID] = ld.FnBound
+		}
+	}
 }
 
 // upvarMutUses reports, per captured variable of a closure body, whether

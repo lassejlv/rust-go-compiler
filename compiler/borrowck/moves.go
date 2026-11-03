@@ -614,7 +614,7 @@ func (c *checker) isMutable(p Place, localOK bool) (bool, Place, string) {
 	if last.Kind == PDeref {
 		switch last.Deref {
 		case DRef:
-			if c.body.Locals[p.Local].Kind == LUpvar && len(base.Proj) == 0 && !c.body.Locals[p.Local].UpvarByRef {
+			if c.body.Locals[p.Local].Kind == LUpvar && len(base.Proj) == 0 && (!c.body.Locals[p.Local].UpvarByRef || c.body.ClosureKind == 0) {
 				return false, p, "upvar"
 			}
 			return false, p, "ref"
