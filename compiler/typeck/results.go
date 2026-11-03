@@ -103,14 +103,17 @@ type Capture struct {
 
 // ClosureInfo describes a closure expression in a particular instance.
 type ClosureInfo struct {
-	Ty       Ty
-	Expr     *ast.ClosureExpr
-	Inputs   []Ty
-	Output   Ty
-	Kind     int // 0 Fn, 1 FnMut, 2 FnOnce
-	Captures []*Capture
-	Results  *Results // owning body's results
-	Params   []*Local
+	Ty     Ty
+	Expr   *ast.ClosureExpr
+	Inputs []Ty
+	Output Ty
+	Kind   int // 0 Fn, 1 FnMut, 2 FnOnce
+	// MovesValue: the closure moves a captured non-reference value (it is
+	// FnOnce for certain, not because of a `&mut` passed on).
+	MovesValue bool
+	Captures   []*Capture
+	Results    *Results // owning body's results
+	Params     []*Local
 }
 
 // ForInfo records how a for loop iterates.

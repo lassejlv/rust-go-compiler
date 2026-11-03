@@ -221,6 +221,7 @@ func (fcx *FnCtxt) analyzeCaptures() {
 		sort.Slice(locals, func(i, j int) bool { return us[locals[i]].order < us[locals[j]].order })
 		kind := 0
 		ci.Captures = nil
+		ci.MovesValue = false
 		// a non-move async closure's future moves only the closure's params
 		var ownParams map[*Local]bool
 		if ce.MoveParamsOf != nil {
@@ -261,6 +262,9 @@ func (fcx *FnCtxt) analyzeCaptures() {
 			}
 			if moved {
 				kind = 2
+				if l.Ty != nil && l.Ty.Kind != TRef {
+					ci.MovesValue = true
+				}
 			} else if u.mut && kind < 1 {
 				kind = 1
 			}

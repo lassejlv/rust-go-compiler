@@ -251,7 +251,7 @@ func (ev *miniEval) eval(fr *mframe, e ast.Expr) *big.Int {
 		for i, a := range x.Args {
 			args[i] = ev.eval(fr, a)
 		}
-		cr := ev.t.CheckInstance(c.Def, nil)
+		cr := ev.t.quietCheck(c.Def)
 		if cr == nil || len(cr.Params) != len(args) {
 			unsupported()
 		}

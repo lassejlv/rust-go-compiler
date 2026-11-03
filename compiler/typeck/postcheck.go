@@ -257,7 +257,7 @@ func (t *Tcx) checkCallBounds(r *Results, c *Callee, sp ast.Span) {
 			if tr.LangItem == "fn_mut" {
 				need = 1
 			}
-			if ci.Kind > need {
+			if ci.Kind == 2 && ci.MovesValue {
 				kinds := []string{"Fn", "FnMut", "FnOnce"}
 				t.ErrorCode(ci.Expr.Span, "E0525", "expected a closure that implements the `%s` trait, but this closure only implements `%s`", kinds[need], kinds[ci.Kind])
 			}

@@ -33,6 +33,14 @@ func unsafeFn(d *Def) bool {
 		return false
 	}
 	if d.Fn.Ast.Unsafe {
+		// std::arch intrinsics: many are safe `#[target_feature]` fns in
+		// the real core (callable without unsafe from fns enabling the
+		// feature); rustgo declares them all unsafe
+		for p := d.Parent; p != nil; p = p.Parent {
+			if p.Kind == DefMod && p.Name == "arch" && p.Crate != nil && p.Crate.Name == "std" {
+				return false
+			}
+		}
 		return true
 	}
 	return d.Fn.Extern && !d.Fn.Ast.Safe

@@ -25,6 +25,14 @@ func (t *Tcx) checkDynTrait(principal *TraitRef, bindings []Binding, sp lexer.Sp
 			return
 		}
 		seen[tr] = true
+		// bindings in supertrait bounds (`trait A: Iterator<Item = u8>`)
+		for _, p := range t.Generics(tr).Predicates {
+			if p.Trait != nil && len(p.Trait.Args) > 0 && p.Trait.Args[0].Kind == TParam && p.Trait.Args[0].Index == 0 {
+				for _, b := range p.Bindings {
+					bound[b.Name] = true
+				}
+			}
+		}
 		for _, it := range tr.Trait.Order {
 			if it.Kind != DefAssocTy || bound[it.Name] || it.AssocTy == nil || it.AssocTy.TyAst != nil {
 				continue

@@ -18,6 +18,13 @@ import (
 )
 
 func (t *Tcx) checkImpls() {
+	// signatures of all functions are checked, even of unused ones (before impl
+	// methods are compared with the trait's quietly)
+	for _, d := range t.R.Defs {
+		if d.Kind == DefFn && d.Fn != nil && d.Fn.Ast != nil && !t.isStd(d) && d.Intrinsic == "" {
+			t.FnSig(d)
+		}
+	}
 	for _, impl := range t.R.Impls {
 		if t.isStd(impl) || impl.Impl == nil || impl.Impl.Ast == nil {
 			continue
@@ -31,12 +38,6 @@ func (t *Tcx) checkImpls() {
 	}
 	t.checkInherentDups()
 	t.checkLifetimes()
-	// signatures of all functions are checked, even of unused ones
-	for _, d := range t.R.Defs {
-		if d.Kind == DefFn && d.Fn != nil && d.Fn.Ast != nil && !t.isStd(d) && d.Intrinsic == "" {
-			t.FnSig(d)
-		}
-	}
 	// constants and statics are checked even when unused (their
 	// evaluation errors and non-const calls are errors)
 	for _, d := range t.R.Defs {
@@ -46,8 +47,51 @@ func (t *Tcx) checkImpls() {
 		if t.Generics(d).Count() != 0 {
 			continue
 		}
-		t.CheckInstance(d, nil)
+		t.checkUnusedConst(d)
 	}
+}
+
+// checkUnusedConst type checks a constant that may never be used (rustgo
+// otherwise only evaluates constants) and runs the body checks on it. The
+// type check itself is quiet: if it fails, the results are dropped so that
+// a later use reports the problem as before.
+func (t *Tcx) checkUnusedConst(d *Def) {
+	key := InstKey(d, nil)
+	if t.results[key] != nil || t.inProgress[key] {
+		return
+	}
+	if r := t.quietCheck(d); r != nil {
+		t.postCheck(r, d)
+	}
+}
+
+// quietCheck type checks a non-generic body without reporting errors; it
+// returns nil (and forgets the results) if that fails.
+func (t *Tcx) quietCheck(d *Def) *Results {
+	key := InstKey(d, nil)
+	if r := t.results[key]; r != nil {
+		return r
+	}
+	if t.inProgress[key] {
+		return nil
+	}
+	before := t.quietErrs
+	t.quiet++
+	var r *Results
+	func() {
+		defer func() {
+			if recover() != nil {
+				r = nil
+			}
+		}()
+		r = t.CheckInstance(d, nil)
+	}()
+	t.quiet--
+	if r == nil || t.quietErrs != before {
+		delete(t.results, key)
+		return nil
+	}
+	return r
 }
 
 // fnHasSelfSized reports whether a trait item has `where Self: Sized`.
