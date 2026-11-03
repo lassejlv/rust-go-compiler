@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"rustgo/compiler/stdlib"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -351,7 +352,7 @@ const specNone = "::std::option::Option::None"
 
 func TestFormatArgsBasic(t *testing.T) {
 	got := expandExprSrc(t, "", `format_args!("a{}b{:?}", x + 1, y)`)
-	want := `::std::fmt::Arguments::new({ let mut __fmt = ::std::fmt::Formatter::new(); match (&(x + 1), &y) { (__arg0, __arg1) => { __fmt.write_str("a"); __fmt.set_spec(' ', 0u8, 0u32, ` + specNone + `, ` + specNone + `); let _ = ::std::fmt::Display::fmt(__arg0, &mut __fmt); __fmt.write_str("b"); __fmt.set_spec(' ', 0u8, 0u32, ` + specNone + `, ` + specNone + `); let _ = ::std::fmt::Debug::fmt(__arg1, &mut __fmt); }, }; __fmt.into_string() })`
+	want := `::std::fmt::Arguments::new(::std::fmt::__format(&["a", "b"], &[], &[::std::fmt::__Arg::new_display(&(x + 1)), ::std::fmt::__Arg::new_debug(&y)]))`
 	if got != want {
 		t.Errorf("got\n%s\nwant\n%s", got, want)
 	}
@@ -364,30 +365,42 @@ func TestFormatArgsNoArgs(t *testing.T) {
 		t.Errorf("got %s want %s", got, want)
 	}
 	// raw string format strings
-	got = expandExprSrc(t, "", `format_args!(r#"say "{}""#, 1,)`)
-	contains(t, got, `__fmt.write_str("say \"")`, `__fmt.write_str("\"")`, `match (&1,)`)
+	got = expandExprSrc(t, "", `format_args!(r#"say "{}""#, v,)`)
+	contains(t, got, `__format(&["say \"", "\""], &[], &[::std::fmt::__Arg::new_display(&v)])`)
+	// literal arguments of `{}` are inlined (like rustc)
+	got = expandExprSrc(t, "", `format_args!("{} {:?} {} {}", "s", 1, x, 0x10)`)
+	contains(t, got, `__format(&["s ", " ", " 16"], &[], &[::std::fmt::__Arg::new_debug(&1), ::std::fmt::__Arg::new_display(&x)])`)
+	if got := expandExprSrc(t, "", `format_args!("{}-{}", "a", 2u8)`); got != `::std::fmt::Arguments::new_const("a-2")` {
+		t.Errorf("inlined literals: %s", got)
+	}
 }
 
 func TestFormatSpecs(t *testing.T) {
+	spec := func(fill string, align, flags int, width, prec string) string {
+		return "::std::fmt::__Spec { fill: " + fill + ", align: " + itoa(align) + "u8, flags: " + itoa(flags) + "u32, width: " + width + ", precision: " + prec + " }"
+	}
+	some := func(n string) string { return "::std::option::Option::Some(" + n + ")" }
 	cases := []struct{ src, want string }{
-		{`format_args!("{:>8}", x)`, `set_spec(' ', 2u8, 0u32, ::std::option::Option::Some(8usize), ` + specNone + `)`},
-		{`format_args!("{:*^10}", x)`, `set_spec('*', 3u8, 0u32, ::std::option::Option::Some(10usize), ` + specNone + `)`},
-		{`format_args!("{:<5}", x)`, `set_spec(' ', 1u8, 0u32, ::std::option::Option::Some(5usize), ` + specNone + `)`},
-		{`format_args!("{:+.3}", x)`, `set_spec(' ', 0u8, 1u32, ` + specNone + `, ::std::option::Option::Some(3usize))`},
-		{`format_args!("{:-}", x)`, `set_spec(' ', 0u8, 2u32,`},
-		{`format_args!("{:08.2}", x)`, `set_spec(' ', 0u8, 8u32, ::std::option::Option::Some(8usize), ::std::option::Option::Some(2usize))`},
-		{`format_args!("{:#?}", x)`, `set_spec(' ', 0u8, 4u32, ` + specNone + `, ` + specNone + `); let _ = ::std::fmt::Debug::fmt(__arg0`},
-		{`format_args!("{:#x}", x)`, `set_spec(' ', 0u8, 4u32, ` + specNone + `, ` + specNone + `); let _ = ::std::fmt::LowerHex::fmt(__arg0`},
-		{`format_args!("{:#010b}", x)`, `set_spec(' ', 0u8, 12u32, ::std::option::Option::Some(10usize), ` + specNone + `); let _ = ::std::fmt::Binary::fmt(`},
-		{`format_args!("{:x?}", x)`, `set_spec(' ', 0u8, 16u32, ` + specNone + `, ` + specNone + `); let _ = ::std::fmt::Debug::fmt(`},
-		{`format_args!("{:X?}", x)`, `set_spec(' ', 0u8, 32u32,`},
-		{`format_args!("{:X}", x)`, `::std::fmt::UpperHex::fmt(`},
-		{`format_args!("{:o}", x)`, `::std::fmt::Octal::fmt(`},
-		{`format_args!("{:e}", x)`, `::std::fmt::LowerExp::fmt(`},
-		{`format_args!("{:E}", x)`, `::std::fmt::UpperExp::fmt(`},
-		{`format_args!("{:p}", x)`, `::std::fmt::Pointer::fmt(`},
-		{`format_args!("{:'>4}", x)`, `set_spec('\'', 2u8`},
-		{`format_args!("{:\\<4}", x)`, `set_spec('\\', 1u8`},
+		{`format_args!("{:>8}", x)`, spec("' '", 2, 0, some("8usize"), specNone)},
+		{`format_args!("{:*^10}", x)`, spec("'*'", 3, 0, some("10usize"), specNone)},
+		{`format_args!("{:<5}", x)`, spec("' '", 1, 0, some("5usize"), specNone)},
+		{`format_args!("{:+.3}", x)`, spec("' '", 0, 1, specNone, some("3usize"))},
+		{`format_args!("{:-}", x)`, `align: 0u8, flags: 2u32,`},
+		{`format_args!("{:08.2}", x)`, spec("' '", 0, 8, some("8usize"), some("2usize"))},
+		{`format_args!("{:#?}", x)`, spec("' '", 0, 4, specNone, specNone) + `], &[::std::fmt::__Arg::new_debug(&x)]`},
+		{`format_args!("{:#x}", x)`, spec("' '", 0, 4, specNone, specNone) + `], &[::std::fmt::__Arg::new_lower_hex(&x)]`},
+		{`format_args!("{:#010b}", x)`, spec("' '", 0, 12, some("10usize"), specNone) + `], &[::std::fmt::__Arg::new_binary(`},
+		{`format_args!("{:x?}", x)`, spec("' '", 0, 16, specNone, specNone) + `], &[::std::fmt::__Arg::new_debug(`},
+		{`format_args!("{:X?}", x)`, `align: 0u8, flags: 32u32,`},
+		{`format_args!("{:X}", x)`, `::std::fmt::__Arg::new_upper_hex(`},
+		{`format_args!("{:o}", x)`, `::std::fmt::__Arg::new_octal(`},
+		{`format_args!("{:e}", x)`, `::std::fmt::__Arg::new_lower_exp(`},
+		{`format_args!("{:E}", x)`, `::std::fmt::__Arg::new_upper_exp(`},
+		{`format_args!("{:p}", x)`, `::std::fmt::__Arg::new_pointer(`},
+		{`format_args!("{:'>4}", x)`, `fill: '\'', align: 2u8`},
+		{`format_args!("{:\\<4}", x)`, `fill: '\\', align: 1u8`},
+		// placeholders with the default spec need no spec array
+		{`format_args!("{} {:?}", x, y)`, `__format(&["", " "], &[], &[`},
 	}
 	for _, c := range cases {
 		got := expandExprSrc(t, "", c.src)
@@ -397,37 +410,41 @@ func TestFormatSpecs(t *testing.T) {
 	}
 }
 
+func itoa(n int) string { return strconv.Itoa(n) }
+
 func TestFormatArgRefs(t *testing.T) {
 	// width from named arg
 	got := expandExprSrc(t, "", `format_args!("{:>width$}", x, width = 6)`)
-	contains(t, got, "match (&x, &6) { (__arg0, __arg1)", "set_spec(' ', 2u8, 0u32, ::std::option::Option::Some(*__arg1), "+specNone+"); let _ = ::std::fmt::Display::fmt(__arg0")
+	contains(t, got, "match (&x, &6) { (__arg0, __arg1)", "align: 2u8, flags: 0u32, width: ::std::option::Option::Some(*__arg1), precision: "+specNone+" }], &[::std::fmt::__Arg::new_display(__arg0)]")
 	// positional width
 	got = expandExprSrc(t, "", `format_args!("{:1$}", x, 7)`)
-	contains(t, got, "::std::option::Option::Some(*__arg1), "+specNone+"); let _ = ::std::fmt::Display::fmt(__arg0")
+	contains(t, got, "width: ::std::option::Option::Some(*__arg1), precision: "+specNone+" }], &[::std::fmt::__Arg::new_display(__arg0)]")
 	// .prec$
 	got = expandExprSrc(t, "", `format_args!("{:.prec$}", 1.5, prec = 2)`)
-	contains(t, got, specNone+", ::std::option::Option::Some(*__arg1)); let _ = ::std::fmt::Display::fmt(__arg0")
+	contains(t, got, "width: "+specNone+", precision: ::std::option::Option::Some(*__arg1) }], &[::std::fmt::__Arg::new_display(__arg0)]")
 	// .* takes two args: precision, then the value
 	got = expandExprSrc(t, "", `format_args!("{} {:.*} {}", a, 3, b, c)`)
 	contains(t, got, "match (&a, &3, &b, &c)",
-		"::std::fmt::Display::fmt(__arg0,",
-		specNone+", ::std::option::Option::Some(*__arg1)); let _ = ::std::fmt::Display::fmt(__arg2,",
-		"::std::fmt::Display::fmt(__arg3,")
+		"precision: ::std::option::Option::Some(*__arg1) }",
+		"&[::std::fmt::__Arg::new_display(__arg0), ::std::fmt::__Arg::new_display(__arg2), ::std::fmt::__Arg::new_display(__arg3)]")
 	// explicit index, reuse of the same argument
 	got = expandExprSrc(t, "", `format_args!("{0} {0:>5} {1:?} {0}", a, b)`)
-	contains(t, got, "match (&a, &b)", "Display::fmt(__arg0", "Some(5usize)", "Debug::fmt(__arg1")
-	if strings.Count(got, "__arg0, &mut __fmt") != 3 {
-		t.Errorf("expected 3 uses of __arg0: %s", got)
-	}
-	// named args, implicit capture, named debug
+	contains(t, got, "match (&a, &b)", "Some(5usize)", "&[::std::fmt::__Arg::new_display(__arg0), ::std::fmt::__Arg::new_display(__arg0), ::std::fmt::__Arg::new_debug(__arg1), ::std::fmt::__Arg::new_display(__arg0)]")
+	// named args, implicit capture, named debug: used in place when each
+	// is used once, in order
+	got = expandExprSrc(t, "", `format_args!("{name} {other:?}", name = n + 1)`)
+	contains(t, got, "&[::std::fmt::__Arg::new_display(&(n + 1)), ::std::fmt::__Arg::new_debug(&other)]")
 	got = expandExprSrc(t, "", `format_args!("{name} {other:?} {name}", name = n + 1)`)
-	contains(t, got, "match (&(n + 1), &other) { (__arg0, __arg1)", "Debug::fmt(__arg1")
+	contains(t, got, "match (&(n + 1), &other) { (__arg0, __arg1)", "::std::fmt::__Arg::new_debug(__arg1)")
+	// out of order: the arguments are still evaluated in order
+	got = expandExprSrc(t, "", `format_args!("{1} {0}", a, b)`)
+	contains(t, got, "match (&a, &b) { (__arg0, __arg1)", "&[::std::fmt::__Arg::new_display(__arg1), ::std::fmt::__Arg::new_display(__arg0)]")
 	// implicit capture used in width
 	got = expandExprSrc(t, "", `format_args!("{:w$}", v)`)
 	contains(t, got, "match (&v, &w)", "Some(*__arg1)")
 	// named argument referenced positionally
 	got = expandExprSrc(t, "", `format_args!("{} {}", 1, x = 2)`)
-	contains(t, got, "match (&1, &2)")
+	contains(t, got, `::std::fmt::Arguments::new_const("1 2")`)
 }
 
 func TestFormatArgsErrors(t *testing.T) {
@@ -452,39 +469,38 @@ func TestFormatArgsErrors(t *testing.T) {
 
 func TestFormatArgsConcatFormatString(t *testing.T) {
 	got := expandExprSrc(t, "", `format!(concat!("a", "{}"), 5)`)
-	contains(t, got, `__fmt.write_str("a")`, "match (&5,)")
+	contains(t, got, `::std::fmt::Arguments::new_const("a5")`)
 }
 
 func TestPrintMacros(t *testing.T) {
 	c := expandSrc(t, `fn main() {
     print!("a{}", 1);
-    println!("b{}", 2);
+    println!("b{}", y);
     println!();
     eprint!("c");
     eprintln!("d {x}");
-    let s = format!("{}-{}", 1, 2);
+    let s = format!("{}-{}", a, b);
 }`)
 	noMacros(t, c)
 	b := fnBody(t, c, "main")
 	contains(t, b,
-		`::std::io::_print(::std::fmt::Arguments::new({ let mut __fmt = ::std::fmt::Formatter::new(); match (&1,) { (__arg0,) => { __fmt.write_str("a");`,
-		`__fmt.write_str("b"); __fmt.set_spec`,
-		`let _ = ::std::fmt::Display::fmt(__arg0, &mut __fmt); __fmt.write_str("\n"); }`,
+		`::std::io::_print(::std::fmt::Arguments::new_const("a1"));`,
+		`(::std::io::__print(&["b", "\n"], &[], &[::std::fmt::__Arg::new_display(&y)]));`,
 		`::std::io::_print(::std::fmt::Arguments::new_const("\n"));`,
 		`::std::io::_eprint(::std::fmt::Arguments::new_const("c"));`,
-		`::std::io::_eprint(::std::fmt::Arguments::new({ let mut __fmt = ::std::fmt::Formatter::new(); match (&x,)`,
-		`let s = ::std::fmt::format(::std::fmt::Arguments::new({`,
+		`(::std::io::__eprint(&["d ", "\n"], &[], &[::std::fmt::__Arg::new_display(&x)]));`,
+		`let s = (::std::fmt::__format(&["", "-"], &[], &[::std::fmt::__Arg::new_display(&a), ::std::fmt::__Arg::new_display(&b)]));`,
 	)
 	mustErr(t, `fn main() { print!(); }`, "requires at least a format string argument")
 }
 
 func TestWriteMacros(t *testing.T) {
 	got := expandExprSrc(t, "", `write!(f, "{}", x)`)
-	if !strings.HasPrefix(got, "f.write_fmt(::std::fmt::Arguments::new({") {
+	if !strings.HasPrefix(got, "f.write_fmt(::std::fmt::Arguments::new(::std::fmt::__format(") {
 		t.Errorf("write!: %s", got)
 	}
 	got = expandExprSrc(t, "", `writeln!(self.out, "v={}", x)`)
-	contains(t, got, "(self.out).write_fmt(", `__fmt.write_str("v=")`, `__fmt.write_str("\n")`)
+	contains(t, got, "(self.out).write_fmt(", `__format(&["v=", "\n"]`)
 	got = expandExprSrc(t, "", `writeln!(f)`)
 	if got != `f.write_fmt(::std::fmt::Arguments::new_const("\n"))` {
 		t.Errorf("writeln!(f): %s", got)
@@ -502,14 +518,14 @@ func TestPanicMacros(t *testing.T) {
 	b := fnBody(t, c, "main")
 	contains(t, b,
 		`::std::rt::panic_str("explicit panic", "test.rs", 2, 5);`,
-		`::std::rt::panic_fmt(::std::fmt::Arguments::new({ let mut __fmt = ::std::fmt::Formatter::new(); match (&1,) { (__arg0,) => { __fmt.write_str("boom ");`,
+		`::std::rt::panic_fmt(::std::fmt::Arguments::new_const("boom 1"), "test.rs", 3, 5);`,
 		`"test.rs", 3, 5);`,
 		`::std::rt::panic_str("internal error: entered unreachable code", "test.rs", 4, 5);`,
-		`__fmt.write_str("internal error: entered unreachable code: x=");`,
+		`__format(&["internal error: entered unreachable code: x="], &[], &[::std::fmt::__Arg::new_display(&x)])`,
 		`::std::rt::panic_str("not yet implemented", "test.rs", 6, 5);`,
 		`::std::rt::panic_fmt(::std::fmt::Arguments::new_const("not yet implemented: later"), "test.rs", 7, 5);`,
 		`::std::rt::panic_str("not implemented", "test.rs", 8, 5);`,
-		`__fmt.write_str("not implemented: nope ");`,
+		`::std::rt::panic_fmt(::std::fmt::Arguments::new_const("not implemented: nope 2"), "test.rs", 9, 5);`,
 		`::std::rt::panic_fmt(::std::fmt::Arguments::new_const("plain"), "test.rs", 10, 5);`,
 	)
 	mustErr(t, `fn main() { panic!(msg); }`, "format argument must be a string literal")
@@ -530,10 +546,9 @@ func TestAssertMacros(t *testing.T) {
 	b := fnBody(t, c, "main")
 	contains(t, b,
 		`if !(v.len() > 0) { ::std::rt::panic_str("assertion failed: v.len() > 0", "test.rs", 2, 5) }`,
-		`if !(a == b) { ::std::rt::panic_fmt(::std::fmt::Arguments::new({`,
-		`__fmt.write_str("a=");`,
+		`if !(a == b) { ::std::rt::panic_fmt(::std::fmt::Arguments::new(::std::fmt::__format(&["a=", " b="], &[], &[::std::fmt::__Arg::new_display(&a), ::std::fmt::__Arg::new_display(&b)])), "test.rs", 3, 5) }`,
 		`match (&(x + 1), &(2)) { (left_val, right_val) => { if !(*left_val == *right_val) { ::std::rt::assert_failed("==", &*left_val, &*right_val, ::std::option::Option::None, "test.rs", 4, 5); } }, }`,
-		`match (&(x), &(y)) { (left_val, right_val) => { if *left_val == *right_val { ::std::rt::assert_failed("!=", &*left_val, &*right_val, ::std::option::Option::Some(::std::fmt::Arguments::new({`,
+		`match (&(x), &(y)) { (left_val, right_val) => { if *left_val == *right_val { ::std::rt::assert_failed("!=", &*left_val, &*right_val, ::std::option::Option::Some(::std::fmt::Arguments::new(::std::fmt::__format(&["msg "], &[], &[::std::fmt::__Arg::new_display(&z)]))), "test.rs", 5, 5); } }, }`,
 		`"test.rs", 5, 5); } }, }`,
 		`if !(ok) { ::std::rt::panic_str("assertion failed: ok", "test.rs", 6, 5) }`,
 		`assert_failed("==", &*left_val, &*right_val, ::std::option::Option::None, "test.rs", 7, 5)`,
@@ -589,7 +604,7 @@ func TestDbg(t *testing.T) {
 	noMacros(t, c)
 	b := fnBody(t, c, "main")
 	contains(t, b,
-		`let a = match (x * 2) { tmp => { ::std::io::_eprint(::std::fmt::Arguments::new({ let mut __fmt = ::std::fmt::Formatter::new(); match (&(&tmp),) { (__arg0,) => { __fmt.write_str("[test.rs:2:13] x * 2 = "); __fmt.set_spec(' ', 0u8, 4u32, `+specNone+`, `+specNone+`); let _ = ::std::fmt::Debug::fmt(__arg0, &mut __fmt); __fmt.write_str("\n"); }, }; __fmt.into_string() })); tmp }, };`,
+		`let a = match (x * 2) { tmp => { ::std::io::_eprint(::std::fmt::Arguments::new(::std::fmt::__format(&["[test.rs:2:13] x * 2 = ", "\n"], &[::std::fmt::__Spec { fill: ' ', align: 0u8, flags: 4u32, width: `+specNone+`, precision: `+specNone+` }], &[::std::fmt::__Arg::new_debug(&(&tmp))]))); tmp }, };`,
 		`::std::io::_eprint(::std::fmt::Arguments::new_const("[test.rs:3:5]\n"));`,
 		`let (p, q) = (match 1 { tmp =>`,
 		`"[test.rs:4:18] 1 = "`,
@@ -1152,7 +1167,7 @@ macro_rules! fwd { ($e:expr) => { inner!($e) }; }
 macro_rules! inner { ($x:expr) => { $x * 10 }; }
 `
 	got := expandExprSrc(t, extra, `p!(concat!("{}", "-"), a + 1)`)
-	contains(t, got, `match (&(a + 1),)`, `__fmt.write_str("-")`)
+	contains(t, got, `__format(&["", "-"], &[], &[::std::fmt::__Arg::new_display(&(a + 1))])`)
 	if got := expandExprSrc(t, extra, `show!(x * 2 + 1, vec![x; 3])`); got != `["x * 2 + 1", "vec![x; 3]"]` {
 		t.Errorf("show!: %s", got)
 	}

@@ -72,6 +72,9 @@ pub enum Spacing {
 #[derive(Clone, Default)]
 pub struct TokenStream {
     trees: Vec<TokenTree>,
+    // hidden[i]: tree i was immediately followed by tree i+1 in the source
+    // (rustc's `Spacing::JointHidden`; missing entries are false)
+    hidden: Vec<bool>,
 }
 
 #[derive(Debug)]
@@ -89,7 +92,7 @@ impl std::error::Error for LexError {}
 
 impl TokenStream {
     pub fn new() -> TokenStream {
-        TokenStream { trees: Vec::new() }
+        TokenStream { trees: Vec::new(), hidden: Vec::new() }
     }
     pub fn is_empty(&self) -> bool {
         self.trees.is_empty()
@@ -111,7 +114,7 @@ impl FromStr for TokenStream {
 
 impl From<TokenTree> for TokenStream {
     fn from(tree: TokenTree) -> TokenStream {
-        TokenStream { trees: vec![tree] }
+        TokenStream { trees: vec![tree], hidden: Vec::new() }
     }
 }
 
@@ -121,7 +124,7 @@ impl FromIterator<TokenTree> for TokenStream {
         for t in iter {
             trees.push(t);
         }
-        TokenStream { trees }
+        TokenStream { trees, hidden: Vec::new() }
     }
 }
 
@@ -131,7 +134,7 @@ impl FromIterator<TokenStream> for TokenStream {
         for s in iter {
             trees.extend(s.trees);
         }
-        TokenStream { trees }
+        TokenStream { trees, hidden: Vec::new() }
     }
 }
 
@@ -179,29 +182,64 @@ pub mod token_stream {
     }
 }
 
-fn write_stream(f: &mut fmt::Formatter<'_>, trees: &[TokenTree]) -> fmt::Result {
-    let mut joint = false;
+// Like rustc's pretty printer (`print_tts`): a space follows a token unless
+// it was joined to the next one in the source or `space_between` says so.
+fn write_stream(f: &mut fmt::Formatter<'_>, trees: &[TokenTree], hidden: &[bool]) -> fmt::Result {
     for (i, t) in trees.iter().enumerate() {
-        if i > 0 && !joint {
-            f.write_str(" ")?;
-        }
-        joint = false;
+        let mut alone = !hidden.get(i).copied().unwrap_or(false);
         match t {
             TokenTree::Group(g) => fmt::Display::fmt(g, f)?,
             TokenTree::Ident(id) => fmt::Display::fmt(id, f)?,
             TokenTree::Punct(p) => {
                 fmt::Display::fmt(p, f)?;
-                joint = p.spacing == Spacing::Joint;
+                if p.spacing == Spacing::Joint {
+                    alone = false;
+                }
             }
             TokenTree::Literal(l) => fmt::Display::fmt(l, f)?,
+        }
+        if let Some(next) = trees.get(i + 1) {
+            if alone && space_between(t, next) {
+                f.write_str(" ")?;
+            }
         }
     }
     Ok(())
 }
 
+fn space_between(a: &TokenTree, b: &TokenTree) -> bool {
+    let is_punct = |t: &TokenTree| matches!(t, TokenTree::Punct(_));
+    match (a, b) {
+        // `.` + NON-PUNCT: `x.y`, `tup.0`
+        (TokenTree::Punct(p), b) if p.ch == '.' && !is_punct(b) => false,
+        // `$` + IDENT: `$e`
+        (TokenTree::Punct(p), TokenTree::Ident(_)) if p.ch == '$' => false,
+        // NON-PUNCT + `,` / `;` / `.`
+        (a, TokenTree::Punct(p)) if (p.ch == ',' || p.ch == ';' || p.ch == '.') && !is_punct(a) => false,
+        // IDENT + `(` (not after most keywords): `f(3)`
+        (TokenTree::Ident(id), TokenTree::Group(g)) if g.delimiter == Delimiter::Parenthesis => {
+            !(id.raw || !is_reserved(&id.sym) || id.sym == "fn" || id.sym == "Self" || id.sym == "pub")
+        }
+        // `#` + `[`: `#[attr]`
+        (TokenTree::Punct(p), TokenTree::Group(g)) if p.ch == '#' && g.delimiter == Delimiter::Bracket => false,
+        _ => true,
+    }
+}
+
+fn is_reserved(s: &str) -> bool {
+    matches!(
+        s,
+        "_" | "as" | "break" | "const" | "continue" | "crate" | "else" | "enum" | "extern" | "false" | "fn" | "for"
+            | "if" | "impl" | "in" | "let" | "loop" | "match" | "mod" | "move" | "mut" | "pub" | "ref" | "return"
+            | "self" | "Self" | "static" | "struct" | "super" | "trait" | "true" | "type" | "unsafe" | "use"
+            | "where" | "while" | "async" | "await" | "dyn" | "abstract" | "become" | "box" | "do" | "final"
+            | "macro" | "override" | "priv" | "typeof" | "unsized" | "virtual" | "yield" | "try" | "gen"
+    )
+}
+
 impl fmt::Display for TokenStream {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write_stream(f, &self.trees)
+        write_stream(f, &self.trees, &self.hidden)
     }
 }
 
@@ -285,11 +323,13 @@ pub struct Group {
     delimiter: Delimiter,
     stream: TokenStream,
     span: Span,
+    // the open delimiter was immediately followed by the first token
+    open_hidden: bool,
 }
 
 impl Group {
     pub fn new(delimiter: Delimiter, stream: TokenStream) -> Group {
-        Group { delimiter, stream, span: Span::call_site() }
+        Group { delimiter, stream, span: Span::call_site(), open_hidden: false }
     }
     pub fn delimiter(&self) -> Delimiter { self.delimiter }
     pub fn stream(&self) -> TokenStream { self.stream.clone() }
@@ -301,14 +341,16 @@ impl Group {
 
 impl fmt::Display for Group {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let space = !self.open_hidden && !self.stream.trees.is_empty();
         let (open, close) = match self.delimiter {
             Delimiter::Parenthesis => ("(", ")"),
-            Delimiter::Brace => ("{ ", " }"),
+            Delimiter::Brace if space => ("{ ", " }"),
+            Delimiter::Brace => ("{", "}"),
             Delimiter::Bracket => ("[", "]"),
             Delimiter::None => ("", ""),
         };
         f.write_str(open)?;
-        write_stream(f, &self.stream.trees)?;
+        write_stream(f, &self.stream.trees, &self.stream.hidden)?;
         f.write_str(close)
     }
 }
@@ -709,7 +751,8 @@ pub mod __server {
     pub fn deserialize(s: &str) -> TokenStream {
         let bytes = s.as_bytes();
         let mut pos = 0usize;
-        let mut stack: Vec<(Delimiter, Vec<TokenTree>)> = vec![(Delimiter::None, Vec::new())];
+        // (delimiter, open delimiter joined, trees, hidden)
+        let mut stack: Vec<(Delimiter, bool, Vec<TokenTree>, Vec<bool>)> = vec![(Delimiter::None, false, Vec::new(), Vec::new())];
         while pos < bytes.len() {
             let tag = bytes[pos] as char;
             let mut j = pos + 1;
@@ -719,33 +762,43 @@ pub mod __server {
             let n: usize = s[pos + 1..j].parse().unwrap();
             let body = &s[j + 1..j + 1 + n];
             pos = j + 1 + n + 1;
+            let hid = body == "H";
             match tag {
-                '(' => stack.push((Delimiter::Parenthesis, Vec::new())),
-                '[' => stack.push((Delimiter::Bracket, Vec::new())),
-                '{' => stack.push((Delimiter::Brace, Vec::new())),
-                'N' => stack.push((Delimiter::None, Vec::new())),
+                '(' => stack.push((Delimiter::Parenthesis, hid, Vec::new(), Vec::new())),
+                '[' => stack.push((Delimiter::Bracket, hid, Vec::new(), Vec::new())),
+                '{' => stack.push((Delimiter::Brace, hid, Vec::new(), Vec::new())),
+                'N' => stack.push((Delimiter::None, hid, Vec::new(), Vec::new())),
                 ')' => {
-                    let (d, trees) = stack.pop().unwrap();
-                    let g = Group { delimiter: d, stream: TokenStream { trees }, span: Span::call_site() };
-                    stack.last_mut().unwrap().1.push(TokenTree::Group(g));
+                    let (d, oh, trees, hidden) = stack.pop().unwrap();
+                    let g = Group { delimiter: d, stream: TokenStream { trees, hidden }, span: Span::call_site(), open_hidden: oh };
+                    let top = stack.last_mut().unwrap();
+                    top.2.push(TokenTree::Group(g));
+                    top.3.push(hid);
                 }
-                'I' | 'R' => {
-                    let id = Ident { sym: body.to_string(), raw: tag == 'R', span: Span::call_site() };
-                    stack.last_mut().unwrap().1.push(TokenTree::Ident(id));
+                'I' | 'R' | 'i' | 'r' => {
+                    let id = Ident { sym: body.to_string(), raw: tag == 'R' || tag == 'r', span: Span::call_site() };
+                    let top = stack.last_mut().unwrap();
+                    top.2.push(TokenTree::Ident(id));
+                    top.3.push(tag == 'i' || tag == 'r');
                 }
                 'P' => {
                     let mut cs = body.chars();
                     let ch = cs.next().unwrap();
                     let sp = if cs.next() == Some('J') { Spacing::Joint } else { Spacing::Alone };
-                    stack.last_mut().unwrap().1.push(TokenTree::Punct(Punct { ch, spacing: sp, span: Span::call_site() }));
+                    let top = stack.last_mut().unwrap();
+                    top.2.push(TokenTree::Punct(Punct { ch, spacing: sp, span: Span::call_site() }));
+                    top.3.push(false);
                 }
                 _ => {
                     let l = Literal { repr: body.to_string(), span: Span::call_site() };
-                    stack.last_mut().unwrap().1.push(TokenTree::Literal(l));
+                    let top = stack.last_mut().unwrap();
+                    top.2.push(TokenTree::Literal(l));
+                    top.3.push(tag == 'l');
                 }
             }
         }
-        TokenStream { trees: stack.pop().unwrap().1 }
+        let (_, _, trees, hidden) = stack.pop().unwrap();
+        TokenStream { trees, hidden }
     }
 
     /// Asks the compiler to tokenize source text.
@@ -775,6 +828,17 @@ pub mod __server {
                 Some(l) => l,
                 None => return,
             };
+            if line == "ENV" {
+                // the invoking crate's compile-time environment (cargo's
+                // CARGO_PKG_* etc.), visible to the macros via std::env
+                let env = read_payload().unwrap_or_default();
+                for kv in env.split('\0') {
+                    if let Some((k, v)) = kv.split_once('=') {
+                        std::env::set_var(k, v);
+                    }
+                }
+                continue;
+            }
             let parts: Vec<&str> = line.split(' ').collect();
             if parts.len() != 3 || parts[0] != "REQ" {
                 return;

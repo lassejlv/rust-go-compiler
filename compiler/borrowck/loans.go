@@ -572,6 +572,9 @@ type loanChecker struct {
 	curState *lstate
 	regions  *sigRegions
 	params   []LocalID // argument locals in signature order
+	// loans by the local their place is based on (see indexLoans)
+	localLoans map[LocalID][]int
+	derefLoans map[LocalID][]int
 }
 
 var debugLoans = os.Getenv("RUSTGO_BORROWCK_DEBUG") != ""
@@ -755,38 +758,51 @@ func (lc *loanChecker) store(st *lstate, p Place, v lval) {
 // killDerefLoans removes loans of places reached through a deref of local l
 // (assigning l changes what they refer to).
 func (lc *loanChecker) killDerefLoans(st *lstate, l LocalID, v lval) {
-	for li, ln := range lc.loans {
-		if ln.place.Local != l {
-			continue
-		}
-		through := false
-		for _, pr := range ln.place.Proj {
-			if pr.Kind == PDeref && pr.Deref != DBox {
-				through = true
-			}
-		}
-		if !through {
-			continue
-		}
-		for _, h := range st.holds {
-			if h != nil {
+	lis := lc.derefLoans[l]
+	if len(lis) == 0 {
+		return
+	}
+	for _, h := range st.holds {
+		if h != nil {
+			for _, li := range lis {
 				h.clear(li)
 			}
 		}
-		// also from the value being assigned (`cur = &mut (*cur).next`)
-		for _, h := range v {
+	}
+	// also from the value being assigned (`cur = &mut (*cur).next`)
+	for _, h := range v {
+		for _, li := range lis {
 			h.clear(li)
 		}
 	}
 }
 
 func (lc *loanChecker) killLocalLoans(st *lstate, l LocalID) {
-	for li, ln := range lc.loans {
-		if ln.place.Local == l {
-			for _, h := range st.holds {
-				if h != nil {
-					h.clear(li)
-				}
+	lis := lc.localLoans[l]
+	if len(lis) == 0 {
+		return
+	}
+	for _, h := range st.holds {
+		if h != nil {
+			for _, li := range lis {
+				h.clear(li)
+			}
+		}
+	}
+}
+
+// indexLoans records, per local, the loans of places based on it (and those
+// reached through a non-Box deref of it).
+func (lc *loanChecker) indexLoans() {
+	lc.localLoans = map[LocalID][]int{}
+	lc.derefLoans = map[LocalID][]int{}
+	for li := range lc.loans {
+		p := &lc.loans[li].place
+		lc.localLoans[p.Local] = append(lc.localLoans[p.Local], li)
+		for _, pr := range p.Proj {
+			if pr.Kind == PDeref && pr.Deref != DBox {
+				lc.derefLoans[p.Local] = append(lc.derefLoans[p.Local], li)
+				break
 			}
 		}
 	}
@@ -843,6 +859,7 @@ func (c *checker) checkLoans() {
 	if lc.nLoans == 0 {
 		return
 	}
+	lc.indexLoans()
 	lc.dropUse = make([]bool, len(body.Locals))
 	for i, ld := range body.Locals {
 		lc.dropUse[i] = c.ctx.dropSignificant(ld.Ty)

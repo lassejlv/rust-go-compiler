@@ -37,6 +37,11 @@ type Resolver struct {
 	// `use crate::m;`) are accepted without binding anything.
 	IsCrateMacro func(crate, name string) bool
 
+	// LinkArgs are the linker arguments for the `#[link(name = "..")]`
+	// attributes of extern blocks.
+	LinkArgs []string
+	linkSeen []string
+
 	// bindingImport maps import bindings to the import that created them
 	// (an import must not resolve to its own binding).
 	bindingImport map[*NameBinding]*Import
@@ -274,6 +279,11 @@ func (r *Resolver) collectItem(it *ast.Item, m *Module, parent *Def) *Def {
 		}
 		return nil
 	case *ast.ExternBlockItem:
+		for _, a := range it.Attrs {
+			if a.Path == "link" {
+				r.addLinkAttr(a)
+			}
+		}
 		for _, sub := range k.Items {
 			sd := r.collectItem(sub, m, parent)
 			if sd != nil && sd.Fn != nil {
@@ -1255,4 +1265,84 @@ func (r *Resolver) StdPath(path string) *Def {
 		cur = b.Res.Def.Mod
 	}
 	return nil
+}
+
+// addLinkAttr records the library named by a `#[link(name = "...", kind =
+// "...")]` attribute on an extern block (Linux: dylib and static kinds;
+// frameworks, raw-dylib and cfg-conditional links are ignored).
+func (r *Resolver) addLinkAttr(a *ast.Attr) {
+	var args []ast.TokenTree
+	for _, t := range a.Tokens {
+		if t.Delim == '(' {
+			args = t.Inner
+			break
+		}
+	}
+	var firstStr func(ts []ast.TokenTree) (string, bool)
+	firstStr = func(ts []ast.TokenTree) (string, bool) {
+		for _, t := range ts {
+			if t.Delim == 0 && t.Tok.Kind == lexer.Str {
+				return strings.Trim(t.Tok.Text, "\""), true
+			}
+			if t.Delim != 0 {
+				if v, ok := firstStr(t.Inner); ok {
+					return v, true
+				}
+			}
+		}
+		return "", false
+	}
+	kv := map[string]string{}
+	var seg []ast.TokenTree
+	flush := func() {
+		if len(seg) > 0 && seg[0].Delim == 0 && seg[0].Tok.Kind == lexer.Ident {
+			key := seg[0].Tok.Text
+			if v, ok := firstStr(seg[1:]); ok {
+				kv[key] = v
+			} else {
+				kv[key] = ""
+			}
+		}
+		seg = nil
+	}
+	for _, t := range args {
+		if t.Delim == 0 && t.Tok.Kind == lexer.Punct && t.Tok.Text == "," {
+			flush()
+			continue
+		}
+		seg = append(seg, t)
+	}
+	flush()
+	name := kv["name"]
+	if name == "" {
+		return
+	}
+	if _, ok := kv["cfg"]; ok {
+		return
+	}
+	kind, mods, _ := strings.Cut(kv["kind"], ":")
+	if m, ok := kv["modifiers"]; ok {
+		mods = m
+	}
+	var args2 []string
+	switch kind {
+	case "", "dylib":
+		args2 = []string{"-l" + name}
+	case "static":
+		lib := []string{"-Wl,-Bstatic", "-l" + name, "-Wl,-Bdynamic"}
+		if strings.Contains(mods, "+whole-archive") {
+			lib = append(append([]string{"-Wl,--whole-archive"}, lib...), "-Wl,--no-whole-archive")
+		}
+		args2 = lib
+	default: // framework, raw-dylib, link-arg: not for Linux targets
+		return
+	}
+	key := strings.Join(args2, " ")
+	for _, have := range r.linkSeen {
+		if have == key {
+			return
+		}
+	}
+	r.linkSeen = append(r.linkSeen, key)
+	r.LinkArgs = append(r.LinkArgs, args2...)
 }

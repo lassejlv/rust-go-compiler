@@ -2,6 +2,7 @@ package codegen
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"rustgo/compiler/ast"
@@ -52,11 +53,22 @@ type fnGen struct {
 	scopes   []*scope
 	loops    []*loopInfo
 	closure  *typeck.ClosureInfo
-	capIndex map[*typeck.Local]int
-	retTy    Ty
-	declared map[*typeck.Local]bool
+	capIndex map[*typeck.Local]int // whole-variable captures
+	// pathCaps: variables captured only through places inside them
+	// (disjoint field captures, see typeck.Capture.Path)
+	pathCaps map[*typeck.Local]bool
+	// ownedUpvars: whole by-value captures of an FnOnce body that are
+	// moved out of field by field: they have per-field drop flags named
+	// like a local's (see genClosure)
+	ownedUpvars map[*typeck.Local]bool
+	retTy       Ty
+	declared    map[*typeck.Local]bool
 	// split records locals with per-field drop flags (partial moves).
 	split map[*typeck.Local]map[int]bool
+	// nested records the deeper field paths ("1.0") of split locals that
+	// have their own drop flags (moves out of `l.a.b`); every prefix of
+	// such a path is tracked too.
+	nested map[*typeck.Local]map[string]bool
 	// deferInits collects drop-flag initializations of match bindings until
 	// the arm's guard has succeeded.
 	deferInits *[]string
@@ -153,36 +165,227 @@ func (fc *fnGen) dropCode(d dropEntry) string {
 	if d.local != nil && len(fc.split[d.local]) > 0 {
 		var parts []string
 		base := fc.flagName(d.local)
-		fts := fc.fieldTys(d.ty)
-		for i, ft := range fts {
-			if !fc.g.needsDrop(ft) {
-				continue
-			}
-			if fc.split[d.local][i] {
-				f := fmt.Sprintf("%s_%d", base, i)
-				parts = append(parts, fmt.Sprintf("if (%s) { %s = 0; %s(&%s.f%d); }", f, f, fc.g.dropFn(ft), d.place, i))
-			} else {
-				parts = append(parts, fmt.Sprintf("if (%s) %s(&%s.f%d);", base, fc.g.dropFn(ft), d.place, i))
-			}
-		}
+		fc.dropParts(&parts, d.local, d.place, d.ty, nil, base)
 		parts = append(parts, base+" = 0;")
 		return strings.Join(parts, " ")
 	}
 	return fmt.Sprintf("if (%s) { %s = 0; %s(&%s); }", d.flag, d.flag, fc.g.dropFn(d.ty), d.place)
 }
 
-// fieldTys returns the field types of a struct or tuple type.
+// fieldTys returns the field types of a struct or tuple type (or the
+// elements of an array).
 func (fc *fnGen) fieldTys(t Ty) []Ty {
 	if t.Kind == TTuple {
 		return t.Elems
 	}
+	if t.Kind == TArray {
+		n := int(fc.g.arrayLen(t))
+		ts := make([]Ty, n)
+		for i := range ts {
+			ts[i] = t.Elem
+		}
+		return ts
+	}
 	return fc.g.fieldTypes(t, 0)
+}
+
+// pathKey renders a field path of a local ("1.0").
+func pathKey(path []int) string {
+	var b strings.Builder
+	for i, f := range path {
+		if i > 0 {
+			b.WriteByte('.')
+		}
+		fmt.Fprint(&b, f)
+	}
+	return b.String()
+}
+
+// tracked reports whether the field path of l has its own drop flag.
+func (fc *fnGen) tracked(l *typeck.Local, path []int) bool {
+	switch len(path) {
+	case 0:
+		return true
+	case 1:
+		return fc.split[l][path[0]]
+	}
+	return fc.nested[l][pathKey(path)]
+}
+
+// trackedBelow reports whether a field path strictly inside path has its
+// own drop flag.
+func (fc *fnGen) trackedBelow(l *typeck.Local, path []int) bool {
+	if len(path) == 0 {
+		return len(fc.split[l]) > 0
+	}
+	k := pathKey(path) + "."
+	for p := range fc.nested[l] {
+		if strings.HasPrefix(p, k) {
+			return true
+		}
+	}
+	return false
+}
+
+// pathFlag is the drop flag of a tracked field path of l.
+func (fc *fnGen) pathFlag(l *typeck.Local, path []int) string {
+	s := fc.flagName(l)
+	for _, f := range path {
+		s += fmt.Sprintf("_%d", f)
+	}
+	return s
+}
+
+// pathFlags returns "f = f_0 = ..." (the flag of a tracked field path and
+// those of the paths inside it) for chained assignment.
+func (fc *fnGen) pathFlags(l *typeck.Local, path []int) string {
+	s := fc.pathFlag(l, path)
+	var subs []string
+	if len(path) == 0 {
+		for i := range fc.fieldTys(l.Ty) {
+			if fc.split[l][i] {
+				subs = append(subs, fmt.Sprintf("%d", i))
+			}
+		}
+	}
+	prefix := pathKey(path) + "."
+	for p := range fc.nested[l] {
+		if len(path) == 0 || strings.HasPrefix(p, prefix) {
+			subs = append(subs, p)
+		}
+	}
+	sort.Strings(subs)
+	for _, p := range subs {
+		s += " = " + fc.flagName(l) + "_" + strings.ReplaceAll(p, ".", "_")
+	}
+	return s
+}
+
+// dropParts renders the drop of the parts of place (field path `path` of
+// split local l, of type t) still owned: tracked parts by their own
+// flags, the others by guard (the flag of the nearest tracked ancestor).
+func (fc *fnGen) dropParts(parts *[]string, l *typeck.Local, place string, t Ty, path []int, guard string) {
+	fts := fc.fieldTys(t)
+	order := make([]int, len(fts))
+	for i := range order {
+		order[i] = i
+	}
+	if len(path) == 0 {
+		order = fc.splitDropOrder(t, fc.split[l])
+	}
+	for _, i := range order {
+		ft := fts[i]
+		if !fc.g.needsDrop(ft) {
+			continue
+		}
+		sub := append(append([]int(nil), path...), i)
+		sp := place + fieldSel(t, i)
+		switch {
+		case fc.trackedBelow(l, sub):
+			f := fc.pathFlag(l, sub)
+			fc.dropParts(parts, l, sp, ft, sub, f)
+			*parts = append(*parts, f+" = 0;")
+		case fc.tracked(l, sub):
+			f := fc.pathFlag(l, sub)
+			*parts = append(*parts, fmt.Sprintf("if (%s) { %s = 0; %s(&%s); }", f, f, fc.g.dropFn(ft), sp))
+		default:
+			*parts = append(*parts, fmt.Sprintf("if (%s) %s(&%s);", guard, fc.g.dropFn(ft), sp))
+		}
+	}
+}
+
+// declSplitFlags declares the drop flags of split local l (initialized to
+// init) and pushes its parts on the cleanup stack; it returns the number of
+// cleanup entries pushed.
+func (fc *fnGen) declSplitFlags(l *typeck.Local, place string, init int) int {
+	for _, f := range strings.Split(fc.pathFlags(l, nil), " = ") {
+		fc.line("uint8_t %s = %d;", f, init)
+	}
+	// unwinding drops the parts still owned (pushed last-first so that
+	// they are dropped in order)
+	var pushes []string
+	var walk func(p string, t Ty, path []int, guard string)
+	walk = func(p string, t Ty, path []int, guard string) {
+		fts := fc.fieldTys(t)
+		order := make([]int, len(fts))
+		for i := range order {
+			order[i] = i
+		}
+		if len(path) == 0 {
+			order = fc.splitDropOrder(t, fc.split[l])
+		}
+		for _, i := range order {
+			ft := fts[i]
+			if !fc.g.needsDrop(ft) {
+				continue
+			}
+			sub := append(append([]int(nil), path...), i)
+			sp := p + fieldSel(t, i)
+			g := guard
+			if fc.tracked(l, sub) {
+				g = fc.pathFlag(l, sub)
+			}
+			if fc.trackedBelow(l, sub) {
+				walk(sp, ft, sub, g)
+				continue
+			}
+			pushes = append(pushes, fmt.Sprintf("RG_CS_PUSH(&%s, %s, &%s);", sp, fc.g.dropFn(ft), g))
+		}
+	}
+	walk(place, l.Ty, nil, fc.flagName(l))
+	for i := len(pushes) - 1; i >= 0; i-- {
+		fc.line("%s", pushes[i])
+	}
+	return len(pushes)
+}
+
+// fieldSel is the C selector of field (or array element) i.
+func fieldSel(t Ty, i int) string {
+	if t.Kind == TArray {
+		return fmt.Sprintf(".a[%d]", i)
+	}
+	return fmt.Sprintf(".f%d", i)
+}
+
+// splitDropOrder returns the order in which the fields of a split local
+// are dropped: declaration order, except for arrays, which rustc splits
+// into runs of elements without moves out of them and the moved-from
+// elements, dropped from the last part to the first.
+func (fc *fnGen) splitDropOrder(t Ty, moved map[int]bool) []int {
+	n := len(fc.fieldTys(t))
+	var order []int
+	if t.Kind != TArray {
+		for i := 0; i < n; i++ {
+			order = append(order, i)
+		}
+		return order
+	}
+	var parts [][2]int
+	for i := 0; i < n; {
+		j := i + 1
+		if !moved[i] {
+			for j < n && !moved[j] {
+				j++
+			}
+		}
+		parts = append(parts, [2]int{i, j})
+		i = j
+	}
+	for k := len(parts) - 1; k >= 0; k-- {
+		for i := parts[k][0]; i < parts[k][1]; i++ {
+			order = append(order, i)
+		}
+	}
+	return order
 }
 
 // splittable reports whether a local's type can have per-field flags.
 func (fc *fnGen) splittable(t Ty) bool {
 	if t.Kind == TTuple {
 		return true
+	}
+	if t.Kind == TArray {
+		return t.Len.Kind == TConst && t.Len.Val <= 64
 	}
 	return t.Kind == TAdt && t.Def.Adt.Kind == AdtStruct && fc.g.dropImpl(t) == nil && t.Def.LangItem != "manually_drop"
 }
@@ -192,6 +395,7 @@ func (fc *fnGen) splittable(t Ty) bool {
 func (fc *fnGen) computeSplit(body any) {
 	fc.split = map[*typeck.Local]map[int]bool{}
 	fc.patSplit = map[ast.Pat]patSplitInfo{}
+	fc.nested = map[*typeck.Local]map[string]bool{}
 	ast.Walk(body, func(n any) bool {
 		switch x := n.(type) {
 		case *ast.StructExpr:
@@ -210,10 +414,18 @@ func (fc *fnGen) computeSplit(body any) {
 				fc.splitPatMove(a.Pat, x.Scrutinee)
 			}
 			return true
+		case *ast.ClosureExpr:
+			fc.splitClosureMoves(x)
+			return true
 		}
 		fe, ok := n.(*ast.FieldExpr)
 		if !ok {
 			return true
+		}
+		if l, path := fc.fieldPath(fe); l != nil && len(path) > 1 {
+			if ft := fc.r.NodeTypes[fe.ID]; ft != nil && fc.g.needsDrop(ft) {
+				fc.trackPath(l, path)
+			}
 		}
 		base := unparen(fe.X)
 		pe, ok := base.(*ast.PathExpr)
@@ -244,6 +456,98 @@ func (fc *fnGen) computeSplit(body any) {
 	})
 }
 
+// fieldPath returns the local and field path of `l.a.b` (fields of
+// structs and tuples, no dereferences), or nil.
+func (fc *fnGen) fieldPath(fe *ast.FieldExpr) (*typeck.Local, []int) {
+	var path []int
+	var e ast.Expr = fe
+	for {
+		x, ok := unparen(e).(*ast.FieldExpr)
+		if !ok {
+			break
+		}
+		fr, ok := fc.r.Fields[x.ID]
+		if !ok || fr.Union || len(fc.r.Adjust[x.X.GetID()]) > 0 {
+			return nil, nil
+		}
+		path = append([]int{fr.Index}, path...)
+		e = x.X
+	}
+	pe, ok := unparen(e).(*ast.PathExpr)
+	if !ok || len(fc.r.Adjust[e.GetID()]) > 0 {
+		return nil, nil
+	}
+	vr := fc.r.Paths[pe.ID]
+	if vr == nil || vr.Kind != typeck.VLocal || vr.Local.ByRef {
+		return nil, nil
+	}
+	return vr.Local, path
+}
+
+// trackPath gives the field path of l (and its prefixes) drop flags of
+// their own, when every type along it can be split.
+func (fc *fnGen) trackPath(l *typeck.Local, path []int) {
+	if len(path) == 0 || !fc.g.needsDrop(l.Ty) || len(path) > 4 {
+		return
+	}
+	t := l.Ty
+	for i, f := range path {
+		if !fc.splittable(t) || (t.Kind == TArray && i > 0) {
+			path = path[:i]
+			break
+		}
+		fts := fc.fieldTys(t)
+		if f >= len(fts) {
+			return
+		}
+		t = fts[f]
+	}
+	if len(path) == 0 {
+		return
+	}
+	if fc.split[l] == nil {
+		fc.split[l] = map[int]bool{}
+	}
+	fc.split[l][path[0]] = true
+	for k := 2; k <= len(path); k++ {
+		if fc.nested[l] == nil {
+			fc.nested[l] = map[string]bool{}
+		}
+		fc.nested[l][pathKey(path[:k])] = true
+	}
+}
+
+// splitClosureMoves gives per-field drop flags to the locals a closure
+// moves fields out of (by-value captures of `t.1`).
+func (fc *fnGen) splitClosureMoves(x *ast.ClosureExpr) {
+	t := fc.r.NodeTypes[x.ID]
+	if t == nil || t.Kind != TClosure {
+		return
+	}
+	ci := fc.g.tcx.Closures[t]
+	if ci == nil {
+		return
+	}
+	for _, c := range ci.Captures {
+		if c.ByRef || len(c.Path) == 0 || c.Path[0].Deref || fc.g.tcx.IsCopy(c.Ty) || !fc.g.needsDrop(c.Ty) {
+			continue
+		}
+		l := c.Local
+		if l.ByRef || l.Ty.Kind == TArray {
+			continue
+		}
+		path := make([]int, len(c.Path))
+		for i, pr := range c.Path {
+			if pr.Deref {
+				path = nil
+				break
+			}
+			path[i] = pr.Field
+		}
+		fc.trackPath(l, path)
+	}
+}
+
 // splitPatMove records a pattern that moves whole top-level fields out of a
 // plain local (`let (a, _) = t;`, `match s { S { a, .. } => .. }`): those
 // fields get their own drop flags, and the rest stays in the local, which
@@ -265,7 +569,7 @@ func (fc *fnGen) splitPatMove(p ast.Pat, src ast.Expr) {
 		return
 	}
 	var subs []ast.Pat
-	var idx []int
+	var idx, rest []int
 	switch x := p.(type) {
 	case *ast.TuplePat:
 		if l.Ty.Kind != TTuple {
@@ -289,10 +593,42 @@ func (fc *fnGen) splitPatMove(p ast.Pat, src ast.Expr) {
 		for _, f := range x.Fields {
 			subs, idx = append(subs, f.Pat), append(idx, v.FieldIndex(f.Name.Name))
 		}
+	case *ast.SlicePat:
+		if l.Ty.Kind != TArray {
+			return
+		}
+		n := int(fc.g.arrayLen(l.Ty))
+		restIdx := -1
+		for i, e := range x.Elems {
+			if isRestLike(e) {
+				restIdx = i
+			}
+		}
+		for pi, e := range x.Elems {
+			fi := pi
+			if pi == restIdx {
+				ip, ok := e.(*ast.IdentPat)
+				if !ok {
+					continue
+				}
+				rl := fc.r.Locals[ip.ID]
+				if rl == nil || rl.ByRef || fc.g.tcx.IsCopy(rl.Ty) {
+					continue
+				}
+				for j := restIdx; j < n-(len(x.Elems)-restIdx-1); j++ {
+					rest = append(rest, j)
+				}
+				continue
+			}
+			if restIdx >= 0 && pi > restIdx {
+				fi = n - (len(x.Elems) - pi)
+			}
+			subs, idx = append(subs, e), append(idx, fi)
+		}
 	default:
 		return
 	}
-	var fields []int
+	fields := rest
 	for k, sp := range subs {
 		if !fc.patMoves(sp) {
 			continue
@@ -363,16 +699,10 @@ func (fc *fnGen) splitStructBase(se *ast.StructExpr) {
 
 // allFlags returns "df = df_0 = ..." for chained assignment.
 func (fc *fnGen) allFlags(l *typeck.Local) string {
-	s := fc.flagName(l)
 	if len(fc.split[l]) == 0 {
-		return s
+		return fc.flagName(l)
 	}
-	for i := range fc.fieldTys(l.Ty) {
-		if fc.split[l][i] {
-			s += fmt.Sprintf(" = %s_%d", fc.flagName(l), i)
-		}
-	}
-	return s
+	return fc.pathFlags(l, nil)
 }
 
 // emitDropsFrom emits drops for scopes[depth:] (innermost first).
@@ -400,30 +730,14 @@ func (fc *fnGen) declLocal(l *typeck.Local) {
 	fc.declared[l] = true
 	fc.line("%s %s;", fc.ctype(l.Ty), fc.localName(l))
 	if fc.g.needsDrop(l.Ty) {
-		fc.line("uint8_t %s = 0;", fc.flagName(l))
-		for i := range fc.split[l] {
-			fc.line("uint8_t %s_%d = 0;", fc.flagName(l), i)
-		}
 		s := fc.scopes[len(fc.scopes)-1]
 		if len(fc.split[l]) > 0 {
-			// per-field flags: unwinding drops the fields still owned
-			// (pushed last-first so that field 0 is dropped first)
-			fts := fc.fieldTys(l.Ty)
-			n := 0
-			for i := len(fts) - 1; i >= 0; i-- {
-				if !fc.g.needsDrop(fts[i]) {
-					continue
-				}
-				flag := fc.flagName(l)
-				if fc.split[l][i] {
-					flag = fmt.Sprintf("%s_%d", fc.flagName(l), i)
-				}
-				fc.line("RG_CS_PUSH(&%s.f%d, %s, &%s);", fc.localName(l), i, fc.g.dropFn(fts[i]), flag)
-				n++
-			}
+			// per-field flags
+			n := fc.declSplitFlags(l, fc.localName(l), 0)
 			s.drops = append(s.drops, dropEntry{place: fc.localName(l), flag: fc.flagName(l), ty: l.Ty, local: l, cs: n})
 			return
 		}
+		fc.line("uint8_t %s = 0;", fc.flagName(l))
 		s.drops = append(s.drops, dropEntry{place: fc.localName(l), flag: fc.flagName(l), ty: l.Ty, local: l})
 		fc.line("RG_CS_PUSH(&%s, %s, &%s);", fc.localName(l), fc.g.dropFn(l.Ty), fc.flagName(l))
 	}
@@ -448,12 +762,18 @@ func (fc *fnGen) localPlace(l *typeck.Local) (string, string) {
 			if c.ByRef {
 				return fmt.Sprintf("(*env->c%d)", i), ""
 			}
+			if fc.ownedUpvars[l] {
+				return fmt.Sprintf("env->c%d", i), fc.allFlags(l)
+			}
 			if fc.closure.Kind == 2 && fc.g.needsDrop(c.Ty) {
 				// FnOnce body owns its by-value captures
 				return fmt.Sprintf("env->c%d", i), fmt.Sprintf("dfc%d", i)
 			}
 			return fmt.Sprintf("env->c%d", i), ""
 		}
+	}
+	if fc.pathCaps[l] {
+		fc.g.fatalf("%s: internal error: variable `%s` is captured only partly by the closure", l.Span.Lo, l.Name)
 	}
 	if !fc.declared[l] {
 		// e.g. a local used before its declaration was emitted (shouldn't

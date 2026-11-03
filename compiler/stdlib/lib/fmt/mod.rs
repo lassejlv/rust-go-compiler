@@ -577,6 +577,108 @@ impl<W: Write + ?Sized> Write for &mut W {
     }
 }
 
+/// A `format_args!` argument with the trait it is formatted with.
+#[doc(hidden)]
+pub enum __Arg<'a> {
+    Display(&'a dyn Display),
+    Debug(&'a dyn Debug),
+    LowerHex(&'a dyn LowerHex),
+    UpperHex(&'a dyn UpperHex),
+    Octal(&'a dyn Octal),
+    Binary(&'a dyn Binary),
+    LowerExp(&'a dyn LowerExp),
+    UpperExp(&'a dyn UpperExp),
+    Pointer(&'a dyn Pointer),
+}
+
+impl<'a> __Arg<'a> {
+    #[inline]
+    pub fn new_display<T: Display>(x: &'a T) -> __Arg<'a> {
+        __Arg::Display(x)
+    }
+    #[inline]
+    pub fn new_debug<T: Debug>(x: &'a T) -> __Arg<'a> {
+        __Arg::Debug(x)
+    }
+    #[inline]
+    pub fn new_lower_hex<T: LowerHex>(x: &'a T) -> __Arg<'a> {
+        __Arg::LowerHex(x)
+    }
+    #[inline]
+    pub fn new_upper_hex<T: UpperHex>(x: &'a T) -> __Arg<'a> {
+        __Arg::UpperHex(x)
+    }
+    #[inline]
+    pub fn new_octal<T: Octal>(x: &'a T) -> __Arg<'a> {
+        __Arg::Octal(x)
+    }
+    #[inline]
+    pub fn new_binary<T: Binary>(x: &'a T) -> __Arg<'a> {
+        __Arg::Binary(x)
+    }
+    #[inline]
+    pub fn new_lower_exp<T: LowerExp>(x: &'a T) -> __Arg<'a> {
+        __Arg::LowerExp(x)
+    }
+    #[inline]
+    pub fn new_upper_exp<T: UpperExp>(x: &'a T) -> __Arg<'a> {
+        __Arg::UpperExp(x)
+    }
+    #[inline]
+    pub fn new_pointer<T: Pointer>(x: &'a T) -> __Arg<'a> {
+        __Arg::Pointer(x)
+    }
+}
+
+/// The format spec of a `format_args!` placeholder.
+#[doc(hidden)]
+pub struct __Spec {
+    pub fill: char,
+    pub align: u8,
+    pub flags: u32,
+    pub width: Option<usize>,
+    pub precision: Option<usize>,
+}
+
+/// Formats the placeholders of a `format_args!` call: `pieces[i]` is the
+/// literal text before placeholder `i` (one more piece may follow the last
+/// placeholder); `specs` is empty when every placeholder uses the default
+/// spec. Out of line, so that each use of a format macro is just a call.
+#[doc(hidden)]
+#[inline(never)]
+pub fn __format(pieces: &[&'static str], specs: &[__Spec], args: &[__Arg<'_>]) -> crate::string::String {
+    let mut f = Formatter::new();
+    let mut i = 0;
+    while i < args.len() {
+        let p = pieces[i];
+        if !p.is_empty() {
+            let _ = f.write_str(p);
+        }
+        if i < specs.len() {
+            let s = &specs[i];
+            f.set_spec(s.fill, s.align, s.flags, s.width, s.precision);
+        } else {
+            f.set_spec(' ', 0, 0, None, None);
+        }
+        let _ = match args[i] {
+            __Arg::Display(a) => a.fmt(&mut f),
+            __Arg::Debug(a) => a.fmt(&mut f),
+            __Arg::LowerHex(a) => a.fmt(&mut f),
+            __Arg::UpperHex(a) => a.fmt(&mut f),
+            __Arg::Octal(a) => a.fmt(&mut f),
+            __Arg::Binary(a) => a.fmt(&mut f),
+            __Arg::LowerExp(a) => a.fmt(&mut f),
+            __Arg::UpperExp(a) => a.fmt(&mut f),
+            __Arg::Pointer(a) => a.fmt(&mut f),
+        };
+        i += 1;
+    }
+    if i < pieces.len() && !pieces[i].is_empty() {
+        let _ = f.write_str(pieces[i]);
+    }
+    f.into_string()
+}
+
 /// `?` formatting.
 pub trait Debug {
     /// Formats the value using the given formatter.

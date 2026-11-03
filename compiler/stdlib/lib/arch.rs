@@ -12,12 +12,10 @@ pub mod x86_64 {
     use crate::intrinsics;
 
     macro_rules! vector_type {
-        ($(#[$m:meta])* $name:ident, $bytes:expr) => {
+        ($(#[$m:meta])* $name:ident, $bytes:tt) => {
             $(#[$m])*
-            // NOTE: real vector types are 16/32-byte aligned; rustgo does not
-            // implement `#[repr(align)]`, so these are byte-aligned.
             #[derive(Copy, Clone)]
-            #[repr(C)]
+            #[repr(C, align($bytes))]
             #[allow(non_camel_case_types)]
             pub struct $name {
                 bytes: [u8; $bytes],
@@ -61,6 +59,30 @@ pub mod x86_64 {
     vector_type!(
         /// 256-bit wide set of four `f64` types, x86-specific.
         __m256d, 32
+    );
+    vector_type!(
+        /// 512-bit wide set of sixteen `f32` types, x86-specific.
+        __m512, 64
+    );
+    vector_type!(
+        /// 512-bit wide set of eight `f64` types, x86-specific.
+        __m512d, 64
+    );
+    vector_type!(
+        /// 512-bit wide integer vector type, x86-specific.
+        __m512i, 64
+    );
+    vector_type!(
+        /// 512-bit wide set of thirty-two `bf16` types, x86-specific.
+        __m512bh, 64
+    );
+    vector_type!(
+        /// 256-bit wide set of sixteen `bf16` types, x86-specific.
+        __m256bh, 32
+    );
+    vector_type!(
+        /// 128-bit wide set of eight `bf16` types, x86-specific.
+        __m128bh, 16
     );
 
     /// Shared lane-wise operations of the 128-bit and 256-bit integer vectors.

@@ -160,13 +160,14 @@ func (g *Gen) GenerateProgram(mainDef *Def) (prog *Program, err error) {
 	fmt.Fprintf(&m, "  %s();\n", mainName)
 	m.WriteString("  rg_flush_stdout();\n  return 0;\n}\n")
 	return &Program{
-		types:   g.fwd.String() + g.defs.String(),
-		protos:  g.protos.String(),
-		data:    g.statics.String() + g.vtdefs.String(),
-		fns:     g.fns.String(),
-		fnEnds:  g.fns.ends,
-		main:    m.String(),
-		UsesAsm: g.usesAsm,
+		types:    g.fwd.String() + g.defs.String(),
+		protos:   g.protos.String(),
+		data:     g.statics.String() + g.vtdefs.String(),
+		fns:      g.fns.String(),
+		fnEnds:   g.fns.ends,
+		main:     m.String(),
+		UsesAsm:  g.usesAsm,
+		LinkArgs: append([]string(nil), g.tcx.R.LinkArgs...),
 	}, nil
 }
 
@@ -541,8 +542,14 @@ func (g *Gen) genClosure(t Ty) {
 	fg.computeSplit(ci.Expr.Body)
 	fg.closure = ci
 	fg.capIndex = map[*typeck.Local]int{}
+	fg.pathCaps = map[*typeck.Local]bool{}
+	fg.ownedUpvars = map[*typeck.Local]bool{}
 	for i, c := range ci.Captures {
-		fg.capIndex[c.Local] = i
+		if len(c.Path) == 0 {
+			fg.capIndex[c.Local] = i
+		} else {
+			fg.pathCaps[c.Local] = true
+		}
 	}
 	fg.retTy = ci.Output
 	var ps []string
@@ -555,6 +562,17 @@ func (g *Gen) genClosure(t Ty) {
 		// an FnOnce closure consumes its environment: by-value captures not
 		// moved out by the body are dropped when it returns
 		for i, c := range ci.Captures {
+			if !c.ByRef && g.needsDrop(c.Ty) && len(c.Path) == 0 && len(fg.split[c.Local]) > 0 && fg.splittable(c.Ty) {
+				// fields are moved out of it: per-field drop flags, as
+				// for a local (named after the captured variable)
+				l := c.Local
+				fg.ownedUpvars[l] = true
+				place := fmt.Sprintf("env->c%d", i)
+				n := fg.declSplitFlags(l, place, 1)
+				sc := fg.scopes[len(fg.scopes)-1]
+				sc.drops = append(sc.drops, dropEntry{place: place, flag: fg.flagName(l), ty: l.Ty, local: l, cs: n})
+				continue
+			}
 			if !c.ByRef && g.needsDrop(c.Ty) {
 				place := fmt.Sprintf("env->c%d", i)
 				flag := fmt.Sprintf("dfc%d", i)

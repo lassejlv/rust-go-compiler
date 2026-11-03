@@ -40,9 +40,12 @@ type builder struct {
 	cur  int // current block (-1: unreachable code)
 
 	locals map[*typeck.Local]LocalID
-	upvars map[*typeck.Local]*upvar
-	scopes []*scope
-	loops  []*loopCtx
+	upvars map[*typeck.Local]*upvar // whole-variable captures
+	// closure bodies: the closure and the upvar of each of its captures
+	closure   *typeck.ClosureInfo
+	capUpvars []*upvar
+	scopes    []*scope
+	loops     []*loopCtx
 	// temps holds the temporaries of the enclosing statements (stack of
 	// marks); they die at the end of their statement.
 	temps     []LocalID
@@ -412,6 +415,11 @@ func (b *builder) overloadedDeref(tp tplace, mut bool, target Ty, c *typeck.Call
 }
 
 func (b *builder) unadjPlace(e ast.Expr) tplace {
+	if b.closure != nil && b.closure.CapExprs != nil {
+		if i, ok := b.closure.CapExprs[e.GetID()]; ok {
+			return b.upvarPlace(b.capUpvars[i], b.nodeTy(e))
+		}
+	}
 	switch x := e.(type) {
 	case *ast.ParenExpr:
 		return b.placeOf(x.X)
@@ -508,26 +516,64 @@ func (b *builder) operandToLocal(e ast.Expr) LocalID {
 // closure bodies).
 func (b *builder) localPlace(l *typeck.Local) tplace {
 	if u, ok := b.upvars[l]; ok {
-		pl := Place{Local: u.local}
-		if u.byRef {
-			k := DRef
-			if u.mutRef && b.body.ClosureKind != 0 {
-				// in an Fn closure a captured `&mut` is only reachable
-				// through `&self`
-				k = DRefMut
-			}
-			return tplace{p: pl.project(Proj{Kind: PDeref, Deref: k}), ty: l.Ty}
-		}
-		// by-value capture accessed through the closure's self
-		switch b.body.ClosureKind {
-		case 0:
-			return tplace{p: pl.project(Proj{Kind: PDeref, Deref: DRef}), ty: l.Ty}
-		case 1:
-			return tplace{p: pl.project(Proj{Kind: PDeref, Deref: DRefMut}), ty: l.Ty}
-		}
-		return tplace{p: pl, ty: l.Ty}
+		return b.upvarPlace(u, l.Ty)
 	}
 	return tplace{p: Place{Local: b.userLocal(l)}, ty: l.Ty}
+}
+
+// upvarPlace is the place of a captured place of type ty in a closure body.
+func (b *builder) upvarPlace(u *upvar, ty Ty) tplace {
+	pl := Place{Local: u.local}
+	if u.byRef {
+		k := DRef
+		if u.mutRef && b.body.ClosureKind != 0 {
+			// in an Fn closure a captured `&mut` is only reachable
+			// through `&self`
+			k = DRefMut
+		}
+		return tplace{p: pl.project(Proj{Kind: PDeref, Deref: k}), ty: ty}
+	}
+	// by-value capture accessed through the closure's self
+	switch b.body.ClosureKind {
+	case 0:
+		return tplace{p: pl.project(Proj{Kind: PDeref, Deref: DRef}), ty: ty}
+	case 1:
+		return tplace{p: pl.project(Proj{Kind: PDeref, Deref: DRefMut}), ty: ty}
+	}
+	return tplace{p: pl, ty: ty}
+}
+
+// capturedPlace is the place a closure created in this body captures.
+func (b *builder) capturedPlace(c *typeck.Capture) tplace {
+	var tp tplace
+	rest := c.Path
+	switch {
+	case b.upvars[c.Local] != nil || b.closure == nil:
+		tp = b.localPlace(c.Local)
+	default:
+		// a part of a place this closure body captured itself
+		found := false
+		for j, oc := range b.closure.Captures {
+			if oc.Local == c.Local && typeck.PathPrefix(oc.Path, c.Path) {
+				tp = b.upvarPlace(b.capUpvars[j], oc.Ty)
+				rest = c.Path[len(oc.Path):]
+				found = true
+				break
+			}
+		}
+		if !found {
+			tp = b.localPlace(c.Local)
+		}
+	}
+	for _, pr := range rest {
+		if pr.Deref {
+			tp = tp.deref()
+			tp.ty = pr.Ty
+			continue
+		}
+		tp = tplace{p: tp.p.project(Proj{Kind: PField, Field: pr.Field, Name: pr.Name}), ty: pr.Ty}
+	}
+	return tp
 }
 
 // valueTemp evaluates e (adjusted) into a fresh temporary.
@@ -1223,20 +1269,20 @@ func (b *builder) closureExpr(x *ast.ClosureExpr, dest tplace) {
 	needMut := cb.upvarMutUses()
 	var ops []Operand
 	for _, c := range ci.Captures {
+		cp := b.capturedPlace(c)
 		if c.ByRef {
-			for _, cp := range b.capturePaths(ci, c) {
-				if cp.mut && !needMut[c.Local] {
-					cp.mut = false // only read: a shared borrow suffices
-				}
-				t := b.temp(Ref(cp.ty, cp.mut), sp)
-				b.assign(t.p, Rvalue{Kind: RRef, Place: cp.p, Mut: cp.mut}, sp)
-				ops = append(ops, Operand{Kind: OMove, Place: t.p})
+			// a mutably captured `&mut` place is captured as `*x` (a
+			// unique reborrow: `x` itself need not be mutable)
+			if cp.ty != nil && cp.ty.Kind == TRef {
+				cp = cp.deref()
 			}
+			mut := c.Mut && needMut[c.Local] // only read: a shared borrow suffices
+			t := b.temp(Ref(cp.ty, mut), sp)
+			b.assign(t.p, Rvalue{Kind: RRef, Place: cp.p, Mut: mut}, sp)
+			ops = append(ops, Operand{Kind: OMove, Place: t.p})
 			continue
 		}
-		for _, cp := range b.capturePaths(ci, c) {
-			ops = append(ops, b.operandOf(cp.tplace))
-		}
+		ops = append(ops, b.operandOf(cp))
 	}
 	b.assign(dest.p, Rvalue{Kind: RAggregate, Ops: ops}, sp)
 }
@@ -1284,6 +1330,11 @@ func (b *builder) upvarMutUses() map[*typeck.Local]bool {
 	byLocal := map[LocalID]*typeck.Local{}
 	for l, u := range b.upvars {
 		byLocal[u.local] = l
+	}
+	if b.closure != nil {
+		for i, u := range b.capUpvars {
+			byLocal[u.local] = b.closure.Captures[i].Local
+		}
 	}
 	mark := func(p Place) {
 		if l, ok := byLocal[p.Local]; ok {

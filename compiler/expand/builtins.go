@@ -212,23 +212,31 @@ func (e *Expander) litString(tts []ast.TokenTree, mac *ast.MacCall) (string, boo
 // followed by arguments. prefix/suffix are added to the format string. With
 // allowEmpty, an empty argument list means the format string "".
 func (e *Expander) formatArgsMac(mac *ast.MacCall, tts []ast.TokenTree, prefix, suffix string, allowEmpty bool) ([]ast.TokenTree, error) {
+	fa, _, err := e.formatArgsMacDirect(mac, tts, prefix, suffix, allowEmpty, "")
+	return fa, err
+}
+
+// formatArgsMacDirect is formatArgsMac with a direct consumer of the
+// formatted text (see formatInput.direct); isDirect reports whether the
+// result is a call of it rather than an `Arguments` value.
+func (e *Expander) formatArgsMacDirect(mac *ast.MacCall, tts []ast.TokenTree, prefix, suffix string, allowEmpty bool, direct string) (fa []ast.TokenTree, isDirect bool, err error) {
 	args, err := splitExprArgs(tts, true, mac)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	in := &formatInput{byName: map[string]int{}, strSp: mac.Span}
+	in := &formatInput{byName: map[string]int{}, strSp: mac.Span, direct: direct}
 	if len(args) == 0 {
 		if !allowEmpty {
-			return nil, errAt(mac.Span, "requires at least a format string argument")
+			return nil, false, errAt(mac.Span, "requires at least a format string argument")
 		}
 		in.str = prefix + suffix
 	} else {
 		if args[0].name != "" {
-			return nil, errAt(args[0].nameSp, "format argument must be a string literal")
+			return nil, false, errAt(args[0].nameSp, "format argument must be a string literal")
 		}
 		s, isStr, err := e.litString(args[0].tts, mac)
 		if err != nil || !isStr {
-			return nil, errAt(args[0].span(mac.Span), "format argument must be a string literal")
+			return nil, false, errAt(args[0].span(mac.Span), "format argument must be a string literal")
 		}
 		in.str = prefix + s + suffix
 		in.strSp = args[0].span(mac.Span)
@@ -237,18 +245,19 @@ func (e *Expander) formatArgsMac(mac *ast.MacCall, tts []ast.TokenTree, prefix, 
 			fa := &fmtArg{name: a.name, tts: a.tts, span: a.span(mac.Span)}
 			if a.name != "" {
 				if _, dup := in.byName[a.name]; dup {
-					return nil, errAt(a.nameSp, "duplicate argument named `%s`", a.name)
+					return nil, false, errAt(a.nameSp, "duplicate argument named `%s`", a.name)
 				}
 				seenNamed = true
 				in.byName[a.name] = len(in.args)
 				fa.span = a.nameSp
 			} else if seenNamed {
-				return nil, errAt(fa.span, "positional arguments cannot follow named arguments")
+				return nil, false, errAt(fa.span, "positional arguments cannot follow named arguments")
 			}
 			in.args = append(in.args, fa)
 		}
 	}
-	return buildFormatArgs(mac.Span, in)
+	fa, err = buildFormatArgs(mac.Span, in)
+	return fa, in.isDirect, err
 }
 
 // location returns "file", line, col of the (outermost) call site.
@@ -271,18 +280,25 @@ func printMac(fn string, nl bool) builtinFn {
 		if nl {
 			suffix = "\n"
 		}
-		fa, err := e.formatArgsMac(mac, mac.Args, "", suffix, nl)
+		// the text is formatted and printed out of line (a call per use)
+		fa, direct, err := e.formatArgsMacDirect(mac, mac.Args, "", suffix, nl, "::std::io::__"+strings.TrimPrefix(fn, "::std::io::_"))
 		if err != nil {
 			return nil, err
+		}
+		if direct {
+			return fa, nil
 		}
 		return tmpl(mac.Span, fn+"($0)", fa)
 	}
 }
 
 func (e *Expander) formatMac(mac *ast.MacCall) ([]ast.TokenTree, error) {
-	fa, err := e.formatArgsMac(mac, mac.Args, "", "", false)
+	fa, direct, err := e.formatArgsMacDirect(mac, mac.Args, "", "", false, "::std::fmt::__format")
 	if err != nil {
 		return nil, err
+	}
+	if direct {
+		return fa, nil
 	}
 	return tmpl(mac.Span, "::std::fmt::format($0)", fa)
 }

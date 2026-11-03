@@ -6,6 +6,7 @@ package expand
 
 import (
 	"reflect"
+	"strings"
 
 	"rustgo/compiler/ast"
 	"rustgo/compiler/lexer"
@@ -48,6 +49,19 @@ type Expander struct {
 	// aliases maps names introduced by renaming imports (`use m as n;`) to
 	// the imported name, per crate; consulted for macro names only.
 	aliases map[string]map[string]string
+	// macroImports maps `module path::local name` to the #[macro_export]ed
+	// macro of another crate imported under that name (`use dep::m;`),
+	// per crate: such an import shadows the std/builtin macro of the same
+	// name in that module.
+	macroImports map[string]map[string]macroRef
+	// collectMod is the module path (below the crate root) of the items
+	// being collected by the definition pre-pass.
+	collectMod []string
+}
+
+type macroRef struct {
+	crate, name string
+	proc        bool // a (bang) proc macro
 }
 
 // New creates an Expander.
@@ -56,6 +70,7 @@ func New() *Expander {
 		RecursionLimit: DefaultRecursionLimit,
 		macros:         map[string]map[string]*macroDef{},
 		aliases:        map[string]map[string]string{},
+		macroImports:   map[string]map[string]macroRef{},
 	}
 }
 
@@ -82,6 +97,7 @@ func (e *Expander) ExpandCrate(c *ast.Crate, crateName string) error {
 	}
 	// Pre-pass: collect all macro_rules! definitions so that definition order
 	// does not matter.
+	e.collectMod = nil
 	e.collectItems(c.Items)
 	items, err := e.expandItems(c.Items, 0)
 	if err != nil {
@@ -145,8 +161,11 @@ func (e *Expander) collectItems(items []*ast.Item) {
 			}
 		case *ast.UseItem:
 			e.collectUseAliases(k.Tree)
+			e.collectMacroImports(k.Tree, nil)
 		case *ast.ModItem:
+			e.collectMod = append(e.collectMod, it.Name.Name)
 			e.collectItems(k.Items)
+			e.collectMod = e.collectMod[:len(e.collectMod)-1]
 		case *ast.FnItem:
 			if k.Body != nil {
 				e.collectBlock(k.Body)
@@ -183,6 +202,68 @@ func (e *Expander) collectUseAliases(t *ast.UseTree) {
 			e.collectUseAliases(n)
 		}
 	}
+}
+
+// collectMacroImports records imports of other crates' exported macros
+// (`use dep::m;`, `use dep::{m as n, ..}`) for the module being collected.
+func (e *Expander) collectMacroImports(t *ast.UseTree, prefix []string) {
+	if t == nil {
+		return
+	}
+	path := append([]string(nil), prefix...)
+	if t.Prefix != nil {
+		for _, sg := range t.Prefix.Segments {
+			path = append(path, sg.Ident.Name)
+		}
+	}
+	switch t.Kind {
+	case ast.UseSimple:
+		if len(path) < 2 {
+			return
+		}
+		krate, ok := e.Externs[path[0]]
+		if !ok {
+			krate = path[0]
+		}
+		switch krate {
+		case "crate", "self", "super", "std", "core", "alloc", e.crate:
+			return
+		}
+		name := path[len(path)-1]
+		proc := false
+		if d, ok := e.macros[krate][name]; !ok || !d.exported {
+			pm := e.ProcMacros[name]
+			if pm == nil || pm.Kind != PMBang || !e.isExternCrate(path[0]) {
+				return
+			}
+			proc = true
+		}
+		local := name
+		if t.Rename != nil {
+			local = t.Rename.Name
+		}
+		if local == "_" {
+			return
+		}
+		if e.macroImports[e.crate] == nil {
+			e.macroImports[e.crate] = map[string]macroRef{}
+		}
+		e.macroImports[e.crate][strings.Join(e.collectMod, "::")+"::"+local] = macroRef{krate, name, proc}
+	case ast.UseNested:
+		for _, n := range t.Nested {
+			e.collectMacroImports(n, path)
+		}
+	}
+}
+
+// isExternCrate reports whether name is an extern crate of the crate being
+// expanded (not one of its modules).
+func (e *Expander) isExternCrate(name string) bool {
+	if _, ok := e.Externs[name]; ok {
+		return true
+	}
+	_, ok := e.macros[name]
+	return ok
 }
 
 func (e *Expander) collectBlock(b *ast.Block) {
@@ -431,7 +512,10 @@ func (e *Expander) expandItem(it *ast.Item, depth int) error {
 				if !keep {
 					k.Items = nil
 				}
+				saved := e.collectMod
+				e.collectMod = append(append([]string(nil), e.modPath[1:]...), it.Name.Name)
 				e.collectItems(k.Items)
+				e.collectMod = saved
 			}
 		}
 		e.modPath = append(e.modPath, it.Name.Name)

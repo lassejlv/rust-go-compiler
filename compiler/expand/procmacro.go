@@ -12,6 +12,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -43,6 +44,7 @@ type PMServer struct {
 	cmd  *exec.Cmd
 	in   io.WriteCloser
 	out  *bufio.Reader
+	env  string // the environment last sent (see Call)
 }
 
 func (s *PMServer) start() error {
@@ -96,10 +98,28 @@ func readPayload(r *bufio.Reader) (string, error) {
 	return string(buf), nil
 }
 
-// Call invokes macro fn on the server.
-func (s *PMServer) Call(kind ProcMacroKind, fn string, attr, input []ast.TokenTree, site lexer.Span) ([]ast.TokenTree, error) {
+// Call invokes macro fn on the server. env is the invoking crate's
+// compile-time environment (cargo's CARGO_PKG_NAME etc.), which macros
+// read with std::env (rustc runs them in-process with cargo's environment).
+func (s *PMServer) Call(kind ProcMacroKind, fn string, attr, input []ast.TokenTree, site lexer.Span, env map[string]string) ([]ast.TokenTree, error) {
 	if err := s.start(); err != nil {
 		return nil, fmt.Errorf("starting proc-macro server: %v", err)
+	}
+	if len(env) > 0 {
+		keys := make([]string, 0, len(env))
+		for k := range env {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		var b strings.Builder
+		for _, k := range keys {
+			fmt.Fprintf(&b, "%s=%s\x00", k, env[k])
+		}
+		if es := b.String(); es != s.env {
+			s.env = es
+			fmt.Fprintf(s.in, "ENV\n")
+			writePayload(s.in, es)
+		}
 	}
 	k := [...]string{"derive", "attr", "bang"}[kind]
 	fmt.Fprintf(s.in, "REQ %s %s\n", k, fn)
@@ -142,8 +162,10 @@ func (s *PMServer) Call(kind ProcMacroKind, fn string, attr, input []ast.TokenTr
 
 // ---------------------------------------------------------------------------
 // Serialization: one record per token: <tag><len>:<bytes>\n
-//   ( [ { N  group open (len 0)      )  group close
+//   ( [ { N  group open      )  group close   (body "H": the delimiter is
+//            immediately followed by the next token in the source)
 //   I ident   R raw ident   P punct (char + 'J' or 'A')   L literal source
+//   i r l    the same, immediately followed by the next token
 
 func serializeTTs(tts []ast.TokenTree) string {
 	var b strings.Builder
@@ -155,25 +177,55 @@ func serializeTTs(tts []ast.TokenTree) string {
 		b.WriteString(s)
 		b.WriteByte('\n')
 	}
+	// adjacency in the source (rustc prints a token stream with the
+	// spacing it had in the source)
+	start := func(tt ast.TokenTree) lexer.Pos {
+		if tt.Delim != 0 {
+			return tt.Open.Lo
+		}
+		return tt.Tok.Span.Lo
+	}
+	end := func(tt ast.TokenTree) lexer.Pos {
+		if tt.Delim != 0 {
+			return tt.Close.Hi
+		}
+		return tt.Tok.Span.Hi
+	}
+	adjacent := func(a, b lexer.Pos) bool { return a.File == b.File && a.Off == b.Off && a.Line > 0 }
 	rec = func(tts []ast.TokenTree) {
-		for _, tt := range tts {
+		for i, tt := range tts {
+			hidden := i+1 < len(tts) && adjacent(end(tt), start(tts[i+1]))
+			tag := func(c byte) byte {
+				if hidden {
+					return c - 'A' + 'a'
+				}
+				return c
+			}
 			if tt.Delim != 0 {
-				put(tt.Delim, "")
+				open := ""
+				if len(tt.Inner) > 0 && adjacent(tt.Open.Hi, start(tt.Inner[0])) {
+					open = "H"
+				}
+				put(tt.Delim, open)
 				rec(tt.Inner)
-				put(')', "")
+				cl := ""
+				if hidden {
+					cl = "H"
+				}
+				put(')', cl)
 				continue
 			}
 			t := tt.Tok
 			switch t.Kind {
 			case lexer.Ident:
 				if t.Raw {
-					put('R', t.Text)
+					put(tag('R'), t.Text)
 				} else {
-					put('I', t.Text)
+					put(tag('I'), t.Text)
 				}
 			case lexer.Lifetime:
 				put('P', "'J")
-				put('I', strings.TrimPrefix(t.Text, "'"))
+				put(tag('I'), strings.TrimPrefix(t.Text, "'"))
 			case lexer.Punct:
 				// multi-char operators become joint single-char puncts
 				for i, c := range t.Text {
@@ -185,7 +237,7 @@ func serializeTTs(tts []ast.TokenTree) string {
 				}
 			case lexer.EOF:
 			default:
-				put('L', literalSource(t))
+				put(tag('L'), literalSource(t))
 			}
 		}
 	}
@@ -413,7 +465,7 @@ func (e *Expander) procDerive(pm *ProcMacro, it *ast.Item, attrs []*ast.Attr, de
 	if err != nil {
 		return nil, err
 	}
-	out, err := pm.Server.Call(PMDerive, pm.Fn, nil, input, it.Span)
+	out, err := pm.Server.Call(PMDerive, pm.Fn, nil, input, it.Span, e.compileEnv())
 	if err != nil {
 		return nil, fmt.Errorf("%s: error: in #[derive(%s)]: %v", it.Span.Lo, pm.Name, err)
 	}
@@ -444,7 +496,7 @@ func (e *Expander) procAttr(it *ast.Item, depth int) ([]*ast.Item, bool, error) 
 		if len(a.Tokens) == 1 && a.Tokens[0].Delim == '(' {
 			args = a.Tokens[0].Inner
 		}
-		out, err := pm.Server.Call(PMAttr, pm.Fn, args, input, a.Span)
+		out, err := pm.Server.Call(PMAttr, pm.Fn, args, input, a.Span, e.compileEnv())
 		if err != nil {
 			return nil, true, fmt.Errorf("%s: error: in #[%s]: %v", a.Span.Lo, a.Path, err)
 		}
@@ -456,4 +508,12 @@ func (e *Expander) procAttr(it *ast.Item, depth int) ([]*ast.Item, bool, error) 
 		return res, true, err
 	}
 	return nil, false, nil
+}
+
+// compileEnv is the compile-time environment of the crate being expanded.
+func (e *Expander) compileEnv() map[string]string {
+	if e.Config == nil {
+		return nil
+	}
+	return e.Config.Env
 }

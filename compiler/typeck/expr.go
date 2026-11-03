@@ -1246,6 +1246,7 @@ func (fcx *FnCtxt) checkTry(x *ast.TryExpr) Ty {
 	fcx.r.Tries[x.ID] = info
 	if t.Kind == TAdt && t.Def == optD {
 		info.IsOption = true
+		info.Src, info.Out = TryOption, TryOption
 		info.OkTy = t.Args[0]
 		rv := Adt(optD, []Ty{fcx.ic.newVar()})
 		if !fcx.ic.unify(ret, rv) {
@@ -1253,18 +1254,57 @@ func (fcx *FnCtxt) checkTry(x *ast.TryExpr) Ty {
 		}
 		return t.Args[0]
 	}
-	if t.Kind == TAdt && t.Def == resD {
-		info.OkTy = t.Args[0]
-		info.ErrTy = t.Args[1]
+	// Poll<Result<T, E>> and Poll<Option<Result<T, E>>> (std's Try impls
+	// for Poll): `?` propagates the error and yields Poll<T> / Poll<Option<T>>
+	pollD := fcx.t.LangOpt("Poll")
+	resT := t
+	okTy := Ty(nil)
+	if pollD != nil && t.Kind == TAdt && t.Def == pollD {
+		in := fcx.structurally(t.Args[0])
+		switch {
+		case in.Kind == TAdt && in.Def == resD:
+			info.Src = TryPoll
+			resT = in
+			okTy = Adt(pollD, []Ty{in.Args[0]})
+		case in.Kind == TAdt && in.Def == optD:
+			if r := fcx.structurally(in.Args[0]); r.Kind == TAdt && r.Def == resD {
+				info.Src = TryPollOpt
+				resT = r
+				okTy = Adt(pollD, []Ty{Adt(optD, []Ty{r.Args[0]})})
+			}
+		}
+	}
+	if resT.Kind == TAdt && resT.Def == resD {
+		if okTy == nil {
+			info.Src = TryResult
+			okTy = resT.Args[0]
+		}
+		info.OkTy = okTy
+		info.ErrTy = resT.Args[1]
 		rs := fcx.structurally(ret)
 		if rs.Kind == TInfer {
-			fcx.ic.unify(rs, Adt(resD, []Ty{fcx.ic.newVar(), t.Args[1]}))
+			fcx.ic.unify(rs, Adt(resD, []Ty{fcx.ic.newVar(), resT.Args[1]}))
 			rs = fcx.shallow(ret)
+		}
+		info.Out = TryResult
+		if pollD != nil && rs.Kind == TAdt && rs.Def == pollD {
+			// FromResidual<Result<!, E>> for Poll<Result<T, F>> and
+			// Poll<Option<Result<T, F>>>
+			in := fcx.structurally(rs.Args[0])
+			switch {
+			case in.Kind == TAdt && in.Def == resD:
+				info.Out, rs = TryPoll, in
+			case in.Kind == TAdt && in.Def == optD:
+				if r := fcx.structurally(in.Args[0]); r.Kind == TAdt && r.Def == resD {
+					info.Out, rs = TryPollOpt, r
+				}
+			}
 		}
 		if rs.Kind != TAdt || rs.Def != resD {
 			fcx.errorf(x.Span, "the `?` operator can only be used on `Result`s in a function that returns `Result` (found `%s`)", fcx.resolve(ret))
-			return t.Args[0]
+			return okTy
 		}
+		t = Adt(resD, []Ty{okTy, resT.Args[1]})
 		outErr := rs.Args[1]
 		info.OutErrTy = outErr
 		// identity conversion if the types unify trivially

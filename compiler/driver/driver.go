@@ -369,7 +369,7 @@ func compileC(opts *Options, prog *codegen.Program) error {
 	if prog.UsesAsm {
 		cflags = append(cflags, "-masm=intel") // Rust asm! templates are Intel syntax
 	}
-	libs := append([]string{"-lm", "-lpthread"}, opts.LinkArgs...)
+	libs := append(append([]string{"-lm", "-lpthread"}, opts.LinkArgs...), prog.LinkArgs...)
 	units := prog.Units(unitCount(prog.FnBytes()))
 	if len(units) == 1 {
 		tmp, err := os.CreateTemp("", "rustgo-*.c")

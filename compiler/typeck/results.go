@@ -93,31 +93,60 @@ type FieldRes struct {
 	Union bool
 }
 
-// Capture describes a variable captured by a closure.
+// Capture describes a place captured by a closure: a variable, or (Rust
+// 2021 disjoint captures) a place inside it reached through fields and
+// dereferences (`t.1`, `(*r).a.b`). A by-value capture's path has no
+// dereferences, and no path ends in a dereference.
 type Capture struct {
 	Local *Local
+	Path  []CapProj // projections from Local (empty: the whole variable)
 	ByRef bool
 	Mut   bool
-	Ty    Ty // the captured local's type
+	Ty    Ty // the type of the captured place
+}
+
+// CapProj is a projection of a captured place.
+type CapProj struct {
+	Deref bool // a dereference of a reference or Box (else a field)
+	Field int
+	Name  string // field name
+	Ty    Ty     // the type of the place after the projection
 }
 
 // ClosureInfo describes a closure expression in a particular instance.
 type ClosureInfo struct {
-	Ty     Ty
-	Expr   *ast.ClosureExpr
-	Inputs []Ty
-	Output Ty
-	Kind   int // 0 Fn, 1 FnMut, 2 FnOnce
+	Ty       Ty
+	Expr     *ast.ClosureExpr
+	Inputs   []Ty
+	Output   Ty
+	Kind     int // 0 Fn, 1 FnMut, 2 FnOnce
+	Captures []*Capture
+	Results  *Results // owning body's results
+	Params   []*Local
 	// MovesValue: the closure moves a captured non-reference value (it is
 	// FnOnce for certain, not because of a `&mut` passed on).
 	MovesValue bool
-	Captures   []*Capture
-	Results    *Results // owning body's results
-	Params     []*Local
 	// Sealed: the owning body is fully checked (signature resolved, kind
 	// and captures final), so trait answers about the closure can be
 	// cached globally.
 	Sealed bool
+	// CapExprs maps the expressions of the body (and of nested closures)
+	// that denote a captured place with a path (field captures) to the
+	// index of that capture: a FieldExpr (unadjusted) or a PathExpr.
+	CapExprs map[ast.NodeID]int
+}
+
+// PathPrefix reports whether projections a are a prefix of b.
+func PathPrefix(a, b []CapProj) bool {
+	if len(a) > len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i].Deref != b[i].Deref || (!a[i].Deref && a[i].Field != b[i].Field) {
+			return false
+		}
+	}
+	return true
 }
 
 // ForInfo records how a for loop iterates.
@@ -131,6 +160,14 @@ type ForInfo struct {
 // TryInfo records how `?` is desugared.
 type TryInfo struct {
 	IsOption bool
+	// Src is the shape of the operand: TryOption, TryResult, TryPoll
+	// (Poll<Result<T, E>>, `?` yields Poll<T>) or TryPollOpt
+	// (Poll<Option<Result<T, E>>>, `?` yields Poll<Option<T>>).
+	Src int
+	// Out is the shape of the enclosing return type receiving the
+	// residual: TryOption, TryResult, TryPoll (Poll<Result<T, F>>) or
+	// TryPollOpt (Poll<Option<Result<T, F>>>).
+	Out int
 	// From converts the error (Result only), nil if the error types match.
 	From     *Callee
 	ErrTy    Ty // source error type
@@ -138,6 +175,14 @@ type TryInfo struct {
 	OkTy     Ty
 	OutTy    Ty // the enclosing fn/closure return type
 }
+
+// TryInfo shapes.
+const (
+	TryOption = iota
+	TryResult
+	TryPoll
+	TryPollOpt
+)
 
 // Results holds the type-checking results of one body instance.
 type Results struct {
