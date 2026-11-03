@@ -16,6 +16,12 @@ type Obligation struct {
 	Span  lexer.Span
 	Depth int
 	Done  bool
+	// Op: the operator (`+`, `<`, ..) whose overloading this obligation is
+	// for, OpKind: opBinary, opAssign (`+=`) or opUnary.
+	Op     string
+	OpKind int
+	// From: the item whose where-clause this is (registerPredicates).
+	From *Def
 }
 
 type SelKind int
@@ -282,6 +288,14 @@ func (ic *InferCtxt) selectTraitUncached(tr *TraitRef, depth int) (res Selection
 	// Generic bodies (types still containing parameters): where-clauses
 	// are candidates (rustc's param-env candidates).
 	if self.HasParam() {
+		if t.poly != nil {
+			// polymorphic body check: like rustc, several where-clauses
+			// that match with different trait args (`X: Mul<A> + Mul<V>`
+			// for `X: Mul<?R>`) leave the choice ambiguous
+			if m := ic.envMatches(tr); len(m) > 1 {
+				return Selection{Kind: SelAmbig}
+			}
+		}
 		for _, e := range ic.env {
 			if e.Trait != trait {
 				for _, st := range t.AllSupertraits(e) {

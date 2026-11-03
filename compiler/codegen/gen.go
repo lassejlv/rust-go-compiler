@@ -180,6 +180,15 @@ type cgError struct{ msg string }
 // checkUnreached type- and borrow-checks the non-generic functions of local
 // crates that code generation did not reach (rustc checks every function).
 func (g *Gen) checkUnreached() {
+	g.checkUnreachedFns()
+	if len(g.tcx.Errors) == 0 && len(g.Errors) == 0 {
+		// generic bodies, polymorphically (after every instance, whose
+		// errors are more precise)
+		g.tcx.CheckGenericBodies()
+	}
+}
+
+func (g *Gen) checkUnreachedFns() {
 	if os.Getenv("RUSTGO_BORROWCK") == "0" {
 		return
 	}

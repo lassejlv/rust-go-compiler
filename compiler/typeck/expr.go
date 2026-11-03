@@ -33,6 +33,7 @@ func (fcx *FnCtxt) checkExprCoerce(e ast.Expr, target Ty) Ty {
 	}
 	ty := fcx.checkExpr(e, target)
 	if !fcx.coerce(e, ty, target) {
+		fcx.polyMismatch(target, ty)
 		fcx.errorf(e.GetSpan(), "mismatched types: expected `%s`, found `%s`", fcx.resolve(target), fcx.resolve(ty))
 	}
 	return target
@@ -533,7 +534,7 @@ func (fcx *FnCtxt) registerOpObligation(op ast.BinOp, lhs, rhs Ty, sp lexer.Span
 	if tr == nil {
 		return
 	}
-	fcx.ic.obligations = append(fcx.ic.obligations, &Obligation{Pred: &Predicate{Trait: &TraitRef{Trait: tr, Args: []Ty{lhs, rhs}}}, Span: sp})
+	fcx.ic.obligations = append(fcx.ic.obligations, &Obligation{Pred: &Predicate{Trait: &TraitRef{Trait: tr, Args: []Ty{lhs, rhs}}}, Span: sp, Op: op.String(), OpKind: opKindOf(table)})
 }
 
 // overloadedBinary records a trait-method callee for a binary operator.
@@ -550,7 +551,7 @@ func (fcx *FnCtxt) overloadedBinary(x *ast.BinaryExpr, lt, rt Ty, cmp bool) Ty {
 		return TyErr
 	}
 	args := []Ty{lt, rt}
-	fcx.ic.obligations = append(fcx.ic.obligations, &Obligation{Pred: &Predicate{Trait: &TraitRef{Trait: tr, Args: args}}, Span: x.Span})
+	fcx.ic.obligations = append(fcx.ic.obligations, &Obligation{Pred: &Predicate{Trait: &TraitRef{Trait: tr, Args: args}}, Span: x.Span, Op: x.Op.String()})
 	callee := &Callee{Kind: CallFn, Def: m, Args: args}
 	fcx.r.Callees[x.ID] = callee
 	fcx.deferred = append(fcx.deferred, callee)
@@ -606,7 +607,7 @@ func (fcx *FnCtxt) overloadedAssignOp(x *ast.AssignOpExpr, lt, rt Ty) {
 	}
 	m := tr.Trait.Items[names[1]]
 	args := []Ty{lt, rt}
-	fcx.ic.obligations = append(fcx.ic.obligations, &Obligation{Pred: &Predicate{Trait: &TraitRef{Trait: tr, Args: args}}, Span: x.Span})
+	fcx.ic.obligations = append(fcx.ic.obligations, &Obligation{Pred: &Predicate{Trait: &TraitRef{Trait: tr, Args: args}}, Span: x.Span, Op: x.Op.String(), OpKind: opAssign})
 	callee := &Callee{Kind: CallFn, Def: m, Args: args}
 	fcx.r.Callees[x.ID] = callee
 	fcx.deferred = append(fcx.deferred, callee)
@@ -629,6 +630,7 @@ func (fcx *FnCtxt) checkUnary(x *ast.UnaryExpr, expected Ty) Ty {
 		}
 		target := fcx.overloadedDeref(t, x.Span)
 		if target == nil {
+			fcx.polyDeref(t)
 			fcx.errorf(x.Span, "type `%s` cannot be dereferenced", fcx.resolve(t))
 			return TyErr
 		}
@@ -656,7 +658,7 @@ func (fcx *FnCtxt) checkUnary(x *ast.UnaryExpr, expected Ty) Ty {
 			return TyErr
 		}
 		callee := &Callee{Kind: CallFn, Def: tr.Trait.Items[name], Args: []Ty{t}}
-		fcx.ic.obligations = append(fcx.ic.obligations, &Obligation{Pred: &Predicate{Trait: &TraitRef{Trait: tr, Args: []Ty{t}}}, Span: x.Span})
+		fcx.ic.obligations = append(fcx.ic.obligations, &Obligation{Pred: &Predicate{Trait: &TraitRef{Trait: tr, Args: []Ty{t}}}, Span: x.Span, Op: map[ast.UnOp]string{ast.UnNeg: "-", ast.UnNot: "!"}[x.Op], OpKind: opUnary})
 		fcx.r.Callees[x.ID] = callee
 		fcx.deferred = append(fcx.deferred, callee)
 		return fcx.normalizeInBody(Projection(tr, []Ty{t}, "Output"), x.Span)

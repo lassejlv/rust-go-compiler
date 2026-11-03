@@ -77,6 +77,7 @@ func (fcx *FnCtxt) checkMethodCall(x *ast.MethodCallExpr, expected Ty) Ty {
 		if fcx.privMethod != nil {
 			fcx.t.ErrorCode(x.Method.Span, "E0624", "method `%s` is private", x.Method.Name)
 		} else {
+			fcx.polyNoItem(rt, x.Method.Name, false)
 			fcx.errorf(x.Method.Span, "no method named `%s` found for `%s`", x.Method.Name, fcx.resolve(rt))
 		}
 		for _, a := range x.Args {
@@ -384,6 +385,21 @@ func (fcx *FnCtxt) envMethod(steps []autoderefStep, name string, sp lexer.Span) 
 				// not a move out of `*it`)
 				if si > 0 && fcx.earlierStepImplements(steps[:si], e) {
 					return nil
+				}
+				if fcx.t.poly != nil && len(e.Args) > 1 {
+					// polymorphic body check: several where-clauses of the
+					// trait with different args (`T: Into<A> + Into<B>`)
+					// leave its args to inference, like in rustc
+					for _, e2 := range envs {
+						if e2.Trait == e.Trait && e2.Args[0] == e.Args[0] && !sameArgs(e2.Args, e.Args) {
+							args := append([]Ty{e.Args[0]}, make([]Ty, len(e.Args)-1)...)
+							for i := 1; i < len(args); i++ {
+								args[i] = fcx.ic.newVar()
+							}
+							e = &TraitRef{Trait: e.Trait, Args: args}
+							break
+						}
+					}
 				}
 				selfTy := fcx.methodSelfTy(item, e.Args)
 				s := fcx.ic.snapshot()
