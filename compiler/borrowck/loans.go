@@ -408,7 +408,10 @@ func (b *builder) sigFlow(c *typeck.Callee, nargs int, ret Ty, argTys []Ty) *Flo
 		for i, os := range ins {
 			for _, io := range os {
 				if io.name == name {
-					addEdge(FlowEdge{Arg: i, From: io.depth, To: o.depth, Deep: true})
+					// a lifetime covers the references at its level; what
+					// lies below flows through type parameters (and
+					// lifetimes) that the signature relates explicitly
+					addEdge(FlowEdge{Arg: i, From: io.depth, To: o.depth, Deep: name[0] != '\''})
 				}
 			}
 		}

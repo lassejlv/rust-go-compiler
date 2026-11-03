@@ -156,7 +156,9 @@ func (t *Tcx) patBinds(r *Results, p ast.Pat) []patBinding {
 	switch x := p.(type) {
 	case *ast.IdentPat:
 		if r.Paths[x.ID] == nil {
-			out = append(out, patBinding{hygKey(x.Name.Name, x.Name.Hyg), x.Name.Span})
+			// plain names: macro repetitions may give one binding
+			// different hygiene marks in different alternatives
+			out = append(out, patBinding{x.Name.Name, x.Name.Span})
 		}
 		if x.Sub != nil {
 			merge(t.patBinds(r, x.Sub))
