@@ -615,13 +615,21 @@ impl<'a, P: Pattern> Iterator for Matches<'a, P> {
     }
 }
 
-impl<'a, P: super::pattern::DoubleEndedPattern> DoubleEndedIterator for Matches<'a, P> {
+impl<'a, P: Pattern> Matches<'a, P> {
+    // (rmatches searches backwards with any pattern)
     #[inline]
-    fn next_back(&mut self) -> Option<&'a str> {
+    fn match_back(&mut self) -> Option<&'a str> {
         match self.window.next_match_back(&mut self.pat, self.haystack) {
             Some((a, b)) => Some(unsafe { self.haystack.get_unchecked(a..b) }),
             None => None,
         }
+    }
+}
+
+impl<'a, P: super::pattern::DoubleEndedPattern> DoubleEndedIterator for Matches<'a, P> {
+    #[inline]
+    fn next_back(&mut self) -> Option<&'a str> {
+        self.match_back()
     }
 }
 
@@ -642,7 +650,7 @@ impl<'a, P: Pattern> Iterator for RMatches<'a, P> {
     type Item = &'a str;
     #[inline]
     fn next(&mut self) -> Option<&'a str> {
-        self.0.next_back()
+        self.0.match_back()
     }
 }
 
@@ -685,13 +693,20 @@ impl<'a, P: Pattern> Iterator for MatchIndices<'a, P> {
     }
 }
 
-impl<'a, P: super::pattern::DoubleEndedPattern> DoubleEndedIterator for MatchIndices<'a, P> {
+impl<'a, P: Pattern> MatchIndices<'a, P> {
     #[inline]
-    fn next_back(&mut self) -> Option<(usize, &'a str)> {
+    fn match_back(&mut self) -> Option<(usize, &'a str)> {
         match self.window.next_match_back(&mut self.pat, self.haystack) {
             Some((a, b)) => Some((a, unsafe { self.haystack.get_unchecked(a..b) })),
             None => None,
         }
+    }
+}
+
+impl<'a, P: super::pattern::DoubleEndedPattern> DoubleEndedIterator for MatchIndices<'a, P> {
+    #[inline]
+    fn next_back(&mut self) -> Option<(usize, &'a str)> {
+        self.match_back()
     }
 }
 
@@ -712,7 +727,7 @@ impl<'a, P: Pattern> Iterator for RMatchIndices<'a, P> {
     type Item = (usize, &'a str);
     #[inline]
     fn next(&mut self) -> Option<(usize, &'a str)> {
-        self.0.next_back()
+        self.0.match_back()
     }
 }
 
