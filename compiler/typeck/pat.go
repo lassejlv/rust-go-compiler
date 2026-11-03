@@ -1,6 +1,7 @@
 package typeck
 
 import (
+	"strings"
 	"rustgo/compiler/ast"
 	"rustgo/compiler/lexer"
 	. "rustgo/compiler/middle"
@@ -185,12 +186,31 @@ func (fcx *FnCtxt) checkPatInner(p ast.Pat, expected Ty, bm bindingMode, oc *orC
 		}
 		fcx.r.Variants[x.ID] = v
 		fcx.demandEq(x.Span, expected, adt)
+		mentioned := map[string]bool{}
+		defer func() {
+			if x.Rest || isUnion(fcx.shallow(adt)) {
+				return
+			}
+			var miss []string
+			for _, f := range v.Fields {
+				if !mentioned[f.Name] {
+					miss = append(miss, "`"+f.Name+"`")
+				}
+			}
+			if len(miss) == 1 {
+				fcx.t.ErrorCode(x.Span, "E0027", "pattern does not mention field %s", miss[0])
+			} else if len(miss) > 1 {
+				fcx.t.ErrorCode(x.Span, "E0027", "pattern does not mention fields %s", strings.Join(miss, ", "))
+			}
+		}()
 		for _, f := range x.Fields {
 			fi := v.FieldIndex(f.Name.Name)
 			if fi < 0 {
 				fcx.errorf(f.Span, "variant `%s` does not have a field named `%s`", v.Name, f.Name.Name)
 				continue
 			}
+			fcx.checkFieldPrivacy(f.Name, adt, v.Fields[fi], v)
+			mentioned[f.Name.Name] = true
 			ft := fcx.normalizeInBody(Subst(v.Fields[fi].Ty, adt.Args), f.Span)
 			fcx.checkPatInner(f.Pat, ft, bm, oc)
 		}

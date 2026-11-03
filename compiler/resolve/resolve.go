@@ -120,10 +120,26 @@ func langItemName(attrs []*ast.Attr) string {
 }
 
 func (r *Resolver) define(m *Module, name string, ns Namespace, res Res, sp lexer.Span) {
+	r.defineVis(m, name, ns, res, sp, ast.VisPub)
+}
+
+func (r *Resolver) defineVis(m *Module, name string, ns Namespace, res Res, sp lexer.Span, vis ast.Visibility) {
 	if name == "" || name == "_" {
 		return
 	}
-	m.Define(name, ns, &NameBinding{Res: res, Span: sp})
+	if r.Std == nil || m.Crate != r.Std {
+		tbl := m.Types
+		if ns == ValueNS {
+			tbl = m.Values
+		}
+		if old, ok := tbl[name]; ok && !old.Import && old.Res != res {
+			msg := fmt.Sprintf("%s: error[E0428]: the name `%s` is defined multiple times", sp.Lo, name)
+			if n := len(r.Errors); n == 0 || r.Errors[n-1] != msg {
+				r.Errors = append(r.Errors, msg)
+			}
+		}
+	}
+	m.Define(name, ns, &NameBinding{Res: res, Span: sp, Vis: vis})
 }
 
 func defRes(d *Def) Res { return Res{Kind: ResDef, Def: d} }
@@ -136,27 +152,27 @@ func (r *Resolver) collectItem(it *ast.Item, m *Module, parent *Def) *Def {
 	case *ast.FnItem:
 		d = r.newDef(DefFn, name, parent)
 		d.Fn = &FnInfo{Ast: k, HasSelf: k.Decl.SelfParam != nil}
-		r.define(m, name, ValueNS, defRes(d), it.Name.Span)
+		r.defineVis(m, name, ValueNS, defRes(d), it.Name.Span, it.Vis)
 		if k.Body != nil {
 			r.collectBody(k.Body, m, d)
 		}
 	case *ast.StructItem:
 		d = r.newDef(DefStruct, name, parent)
 		d.Adt = &AdtDef{Kind: AdtStruct}
-		r.define(m, name, TypeNS, defRes(d), it.Name.Span)
+		r.defineVis(m, name, TypeNS, defRes(d), it.Name.Span, it.Vis)
 		if k.Shape != ast.ShapeNamed {
-			r.define(m, name, ValueNS, Res{Kind: ResCtor, Def: d}, it.Name.Span)
+			r.defineVis(m, name, ValueNS, Res{Kind: ResCtor, Def: d}, it.Name.Span, it.Vis)
 		}
 	case *ast.UnionItem:
 		d = r.newDef(DefUnion, name, parent)
 		d.Adt = &AdtDef{Kind: AdtUnion}
-		r.define(m, name, TypeNS, defRes(d), it.Name.Span)
+		r.defineVis(m, name, TypeNS, defRes(d), it.Name.Span, it.Vis)
 	case *ast.EnumItem:
 		d = r.newDef(DefEnum, name, parent)
 		d.Adt = &AdtDef{Kind: AdtEnum}
 		d.Mod = NewModule(d, m, m.Crate, false)
 		d.Mod.Normal = d.Mod
-		r.define(m, name, TypeNS, defRes(d), it.Name.Span)
+		r.defineVis(m, name, TypeNS, defRes(d), it.Name.Span, it.Vis)
 		for i, v := range k.Variants {
 			vd := r.newDef(DefVariant, v.Name.Name, d)
 			vd.Item = it
@@ -179,7 +195,7 @@ func (r *Resolver) collectItem(it *ast.Item, m *Module, parent *Def) *Def {
 		d.Trait = &TraitInfo{Items: map[string]*Def{}, Auto: k.Auto}
 		d.Mod = NewModule(d, m, m.Crate, false)
 		d.Mod.Normal = d.Mod
-		r.define(m, name, TypeNS, defRes(d), it.Name.Span)
+		r.defineVis(m, name, TypeNS, defRes(d), it.Name.Span, it.Vis)
 		r.Traits = append(r.Traits, d)
 		for _, sub := range k.Items {
 			sd := r.collectAssoc(sub, m, d)
@@ -210,30 +226,30 @@ func (r *Resolver) collectItem(it *ast.Item, m *Module, parent *Def) *Def {
 	case *ast.TypeAliasItem:
 		d = r.newDef(DefTyAlias, name, parent)
 		d.Alias = &AliasInfo{TyAst: k.Ty}
-		r.define(m, name, TypeNS, defRes(d), it.Name.Span)
+		r.defineVis(m, name, TypeNS, defRes(d), it.Name.Span, it.Vis)
 	case *ast.ConstItem:
 		d = r.newDef(DefConst, name, parent)
 		d.Const = &ConstInfo{Expr: k.Expr, TyAst: k.Ty}
-		r.define(m, name, ValueNS, defRes(d), it.Name.Span)
+		r.defineVis(m, name, ValueNS, defRes(d), it.Name.Span, it.Vis)
 		if k.Expr != nil {
 			r.collectBody(k.Expr, m, d)
 		}
 	case *ast.StaticItem:
 		d = r.newDef(DefStatic, name, parent)
 		d.Const = &ConstInfo{Expr: k.Expr, TyAst: k.Ty, Mut: k.Mut, Static: true}
-		r.define(m, name, ValueNS, defRes(d), it.Name.Span)
+		r.defineVis(m, name, ValueNS, defRes(d), it.Name.Span, it.Vis)
 		if k.Expr != nil {
 			r.collectBody(k.Expr, m, d)
 		}
 	case *ast.ModItem:
 		d = r.newDef(DefMod, name, parent)
 		d.Mod = NewModule(d, m, m.Crate, false)
-		r.define(m, name, TypeNS, defRes(d), it.Name.Span)
+		r.defineVis(m, name, TypeNS, defRes(d), it.Name.Span, it.Vis)
 		for _, sub := range k.Items {
 			r.collectItem(sub, d.Mod, d)
 		}
 	case *ast.UseItem:
-		r.collectUse(k.Tree, nil, false, m)
+		r.collectUse(k.Tree, nil, false, m, it.Vis)
 		return nil
 	case *ast.ExternCrateItem:
 		bind := name
@@ -241,7 +257,7 @@ func (r *Resolver) collectItem(it *ast.Item, m *Module, parent *Def) *Def {
 			bind = k.Rename.Name
 		}
 		if cr := r.ExternCrate(m.Crate, name); cr != nil {
-			r.define(m, bind, TypeNS, defRes(cr.Def), it.Name.Span)
+			r.defineVis(m, bind, TypeNS, defRes(cr.Def), it.Name.Span, it.Vis)
 			// 2018+: `extern crate x as y;` at the crate root adds `y` to
 			// the extern prelude (usable from every module)
 			if bind != name && m == m.Crate.Root {
@@ -371,7 +387,7 @@ func (r *Resolver) collectBody(body any, m *Module, owner *Def) {
 }
 
 // collectUse flattens a use tree into imports.
-func (r *Resolver) collectUse(t *ast.UseTree, prefix []string, global bool, m *Module) {
+func (r *Resolver) collectUse(t *ast.UseTree, prefix []string, global bool, m *Module, vis ast.Visibility) {
 	segs := append([]string{}, prefix...)
 	if t.Prefix != nil {
 		if t.Prefix.Global && len(prefix) == 0 {
@@ -399,12 +415,12 @@ func (r *Resolver) collectUse(t *ast.UseTree, prefix []string, global bool, m *M
 		if t.Rename != nil {
 			name = t.Rename.Name
 		}
-		m.Imports = append(m.Imports, &Import{Module: m, Path: path, Global: global, Name: name, Span: t.Span})
+		m.Imports = append(m.Imports, &Import{Module: m, Path: path, Global: global, Name: name, Span: t.Span, Vis: vis})
 	case ast.UseGlob:
-		m.Imports = append(m.Imports, &Import{Module: m, Path: segs, Global: global, Glob: true, Span: t.Span})
+		m.Imports = append(m.Imports, &Import{Module: m, Path: segs, Global: global, Glob: true, Span: t.Span, Vis: vis})
 	case ast.UseNested:
 		for _, n := range t.Nested {
-			r.collectUse(n, segs, global, m)
+			r.collectUse(n, segs, global, m, vis)
 		}
 	}
 }
@@ -750,7 +766,7 @@ func (r *Resolver) bindImport(m *Module, imp *Import, ns Namespace, res Res) {
 	if ok && old.Res == res {
 		return
 	}
-	b := &NameBinding{Res: res, Import: true, Span: imp.Span}
+	b := &NameBinding{Res: res, Import: true, Span: imp.Span, Vis: imp.Vis}
 	tbl[name] = b
 	r.bindingImport[b] = imp
 	r.changed = true
@@ -900,6 +916,12 @@ func (r *Resolver) LookupLexical(m *Module, name string, ns Namespace) (Res, boo
 type PathResult struct {
 	Res      Res
 	Consumed int
+	// Private is set when a segment named an item that is not visible from
+	// the module the path appears in (rustc E0603): PrivSeg is the index of
+	// the first such segment, PrivRes what it resolved to.
+	Private bool
+	PrivSeg int
+	PrivRes Res
 }
 
 // FirstLookup lets the caller override lookup of the first segment (for
@@ -930,6 +952,7 @@ func (r *Resolver) resolvePath(m *Module, segs []string, global bool, ns Namespa
 		return PathResult{}, fmt.Errorf("empty path")
 	}
 	var cur Res
+	var priv PathResult // privacy violation found so far
 	i := 0
 	nsFor := func(idx int) Namespace {
 		if idx == len(segs)-1 {
@@ -982,7 +1005,7 @@ func (r *Resolver) resolvePath(m *Module, segs []string, global bool, ns Namespa
 	}
 	for i < len(segs) {
 		if cur.Kind != ResDef || cur.Def == nil {
-			return PathResult{Res: cur, Consumed: i}, nil
+			return priv.with(cur, i), nil
 		}
 		d := cur.Def
 		if segs[i] == "super" && d.Mod != nil && (d.Kind == DefMod || d.Kind == DefCrate) {
@@ -999,12 +1022,21 @@ func (r *Resolver) resolvePath(m *Module, segs []string, global bool, ns Namespa
 				if b != nil && i == len(segs)-1 {
 					// a type used in value position: only ok for ctors; report
 					// the type so the caller can complain or handle `Type::`
-					return PathResult{Res: b.Res, Consumed: i + 1}, nil
+					pr := PathResult{Res: b.Res, Consumed: i + 1}
+					if priv.Private {
+						pr.Private, pr.PrivSeg, pr.PrivRes = true, priv.PrivSeg, priv.PrivRes
+					} else if !r.BindingAccessible(d.Mod, segs[i], TypeNS, b, m) {
+						pr.Private, pr.PrivSeg, pr.PrivRes = true, i, b.Res
+					}
+					return pr, nil
 				}
 			}
 			if b == nil {
 				// Try the type namespace when looking for a non-final value
 				return PathResult{}, fmt.Errorf("cannot find `%s` in `%s`", segs[i], d.Name)
+			}
+			if !priv.Private && !r.BindingAccessible(d.Mod, segs[i], nsFor(i), b, m) {
+				priv.Private, priv.PrivSeg, priv.PrivRes = true, i, b.Res
 			}
 			cur = b.Res
 			i++
@@ -1015,17 +1047,138 @@ func (r *Resolver) resolvePath(m *Module, segs []string, global bool, ns Namespa
 			}
 			if b == nil {
 				// type-relative (inherent assoc item on the enum)
-				return PathResult{Res: cur, Consumed: i}, nil
+				return priv.with(cur, i), nil
 			}
 			cur = b.Res
 			i++
 		default:
 			// structs, traits, aliases, variants, params: the rest is
 			// type-relative.
-			return PathResult{Res: cur, Consumed: i}, nil
+			return priv.with(cur, i), nil
 		}
 	}
-	return PathResult{Res: cur, Consumed: i}, nil
+	return priv.with(cur, i), nil
+}
+
+func (p PathResult) with(res Res, consumed int) PathResult {
+	p.Res, p.Consumed = res, consumed
+	return p
+}
+
+// BindingAccessible reports whether binding b, found under name in module
+// owner, may be named from module from (privacy). Bindings that come from
+// glob imports, and everything involving the std crate (whose
+// visibilities do not mirror the real std's), count as accessible.
+func (r *Resolver) BindingAccessible(owner *Module, name string, ns Namespace, b *NameBinding, from *Module) bool {
+	if from == nil || owner == nil || b == nil {
+		return true
+	}
+	if r.Std != nil && (owner.Crate == r.Std || from.Crate == r.Std) {
+		return true
+	}
+	tbl := owner.Types
+	if ns == ValueNS {
+		tbl = owner.Values
+	}
+	if tbl[name] != b {
+		return true // via a glob import
+	}
+	if owner.Def != nil && (owner.Def.Kind == DefEnum || owner.Def.Kind == DefTrait) {
+		return true // variants and trait items are public
+	}
+	if !VisibleFrom(b.Vis, owner, from) {
+		return false
+	}
+	// a tuple struct's constructor is as visible as its least visible field
+	if b.Res.Kind == ResCtor && b.Res.Def != nil && b.Res.Def.Kind == DefStruct && b.Res.Def.Item != nil {
+		if st, ok := b.Res.Def.Item.Kind.(*ast.StructItem); ok {
+			for _, f := range st.Fields {
+				if !VisibleFrom(f.Vis, owner, from) {
+					return false
+				}
+			}
+		}
+	}
+	return true
+}
+
+// GlobAmbiguous reports whether name, looked up lexically from m, is only
+// found through two glob imports that bring different items (rustc
+// E0659). Only items defined directly in the glob-imported modules (and
+// visible from the importing one) are considered; std items are ignored.
+func (r *Resolver) GlobAmbiguous(m *Module, name string, ns Namespace) bool {
+	for x := m; x != nil; x = x.Parent {
+		tbl := x.Types
+		if ns == ValueNS {
+			tbl = x.Values
+		}
+		if _, ok := tbl[name]; ok {
+			return false
+		}
+		var found []Res
+		for _, g := range x.Globs {
+			gt := g.Types
+			if ns == ValueNS {
+				gt = g.Values
+			}
+			b, ok := gt[name]
+			if !ok || b.Res.Def == nil || (r.Std != nil && b.Res.Def.Crate == r.Std) {
+				continue
+			}
+			pub := g.Def != nil && (g.Def.Kind == DefEnum || g.Def.Kind == DefTrait)
+			if !pub && !VisibleFrom(b.Vis, g, x) {
+				continue
+			}
+			dup := false
+			for _, f := range found {
+				if f == b.Res {
+					dup = true
+				}
+			}
+			if !dup {
+				found = append(found, b.Res)
+			}
+		}
+		if len(found) > 1 {
+			return true
+		}
+		if len(found) == 1 || x.Lookup(name, ns) != nil || !x.Block {
+			return false
+		}
+	}
+	return false
+}
+
+// VisibleFrom reports whether something with visibility vis declared in
+// module owner is visible from module from: private items in owner and its
+// descendants, pub(super) ones in owner's parent and its descendants,
+// pub(crate)/pub(in path) ones in the whole crate.
+func VisibleFrom(vis ast.Visibility, owner, from *Module) bool {
+	if owner == nil || from == nil {
+		return true
+	}
+	switch vis {
+	case ast.VisPub:
+		return true
+	case ast.VisCrate, ast.VisRestricted:
+		return owner.Crate == from.Crate
+	}
+	if owner.Crate != from.Crate {
+		return false
+	}
+	anc := owner.Normal
+	if anc == nil {
+		anc = owner
+	}
+	if vis == ast.VisSuper {
+		anc = anc.ParentModule()
+	}
+	for x := from; x != nil; x = x.Parent {
+		if x == anc || x.Normal == anc {
+			return true
+		}
+	}
+	return false
 }
 
 // injectedStd reports whether a 2015 crate-root path `::name` refers to the

@@ -253,7 +253,8 @@ const (
 	VisPrivate Visibility = iota
 	VisPub
 	VisCrate      // pub(crate)
-	VisRestricted // pub(super), pub(in path)
+	VisRestricted // pub(in path)
+	VisSuper      // pub(super), pub(in super)
 )
 
 type Item struct {
@@ -308,6 +309,7 @@ type FnItem struct {
 	Body     *Block // nil for required trait methods / extern fns
 	Const    bool
 	Unsafe   bool
+	Safe     bool // `safe fn` in an `unsafe extern` block
 	Async    bool
 	Abi      string // extern "C" fn
 }

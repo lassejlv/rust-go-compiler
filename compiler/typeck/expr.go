@@ -4,6 +4,7 @@ import (
 	"rustgo/compiler/ast"
 	"rustgo/compiler/lexer"
 	. "rustgo/compiler/middle"
+	"rustgo/compiler/resolve"
 )
 
 // checkExprCoerce checks e and coerces it to target (a coercion site).
@@ -904,11 +905,14 @@ func (fcx *FnCtxt) checkField(x *ast.FieldExpr) Ty {
 			fcx.t.AdtFields(t.Def)
 			v := t.Def.Adt.Variants[0]
 			if fi := v.FieldIndex(name); fi >= 0 {
-				if i+1 < len(steps) && !fcx.fieldAccessible(t.Def, v.Fields[fi]) {
+				if !fcx.fieldAccessible(t.Def, v.Fields[fi]) {
 					if privStep < 0 {
 						privStep, privFi = i, fi
 					}
-					continue
+					if i+1 < len(steps) {
+						continue
+					}
+					fcx.reportPrivateField(x, steps[privStep].ty, privFi)
 				}
 				return use(i, fi)
 			}
@@ -922,6 +926,7 @@ func (fcx *FnCtxt) checkField(x *ast.FieldExpr) Ty {
 			}
 		case TInfer:
 			if privStep >= 0 {
+				fcx.reportPrivateField(x, steps[privStep].ty, privFi)
 				return use(privStep, privFi)
 			}
 			fcx.errorf(x.Span, "type annotations needed: cannot access field `%s` of unknown type", name)
@@ -929,6 +934,7 @@ func (fcx *FnCtxt) checkField(x *ast.FieldExpr) Ty {
 		}
 	}
 	if privStep >= 0 {
+		fcx.reportPrivateField(x, steps[privStep].ty, privFi)
 		return use(privStep, privFi)
 	}
 	fcx.errorf(x.Name.Span, "no field `%s` on type `%s`", name, fcx.resolve(bt))
@@ -944,6 +950,8 @@ func (fcx *FnCtxt) fieldAccessible(adt *Def, f *FieldDef) bool {
 		return true
 	case ast.VisCrate, ast.VisRestricted:
 		return fcx.def == nil || adt.Crate == fcx.def.Crate
+	case ast.VisSuper:
+		return fcx.def == nil || adt.Scope == nil || resolve.VisibleFrom(f.Vis, adt.Scope, fcx.curMod())
 	}
 	if fcx.def == nil || adt.Scope == nil || fcx.def.Scope == nil {
 		return true
@@ -958,6 +966,22 @@ func (fcx *FnCtxt) fieldAccessible(adt *Def, f *FieldDef) bool {
 		}
 	}
 	return false
+}
+
+// reportPrivateField reports E0616 for a field access that only found an
+// inaccessible field.
+func (fcx *FnCtxt) reportPrivateField(x *ast.FieldExpr, t Ty, fi int) {
+	if x.Name.Hyg != 0 || fcx.t.isStd(t.Def) || fcx.t.isStd(fcx.def) {
+		return
+	}
+	fcx.t.ErrorCode(x.Name.Span, "E0616", "field `%s` of %s `%s` is private", x.Name.Name, adtKindName(t.Def), t.Def.Name)
+}
+
+func adtKindName(d *Def) string {
+	if d.Adt != nil && d.Adt.Kind == AdtUnion {
+		return "union"
+	}
+	return "struct"
 }
 
 func itoa(i int) string {
@@ -976,6 +1000,9 @@ func (fcx *FnCtxt) checkIndex(x *ast.IndexExpr) Ty {
 	for i, st := range steps {
 		t := st.ty
 		if (t.Kind == TArray || t.Kind == TSlice) && its.IsInteger() {
+			if its.Kind == TInt && its != TyUsize {
+				fcx.t.ErrorCode(x.Index.GetSpan(), "E0277", "the type `%s` cannot be indexed by `%s`", Slice(t.Elem), its)
+			}
 			fcx.ic.unify(its, TyUsize)
 			fcx.addAdjust(x.X, adjustmentsFor(steps, i)...)
 			fcx.r.IndexBuiltin[x.ID] = true

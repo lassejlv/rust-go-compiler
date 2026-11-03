@@ -16,6 +16,10 @@ type FnCtxt struct {
 	relBaseIsParam bool
 	// methodNode is the method call being probed (for methodHint).
 	methodNode ast.NodeID
+	// checkPriv: the method probe skips inherent methods not visible here
+	// (recording the last one skipped in privMethod).
+	checkPriv  bool
+	privMethod *Def
 	t          *Tcx
 	ic         *InferCtxt
 	r          *Results
@@ -83,6 +87,9 @@ func (t *Tcx) CheckInstance(def *Def, args []Ty) *Results {
 	}
 	fcx.writeback()
 	t.results[key] = fcx.r
+	if t.quiet == 0 {
+		t.postCheck(fcx.r, def)
+	}
 	return fcx.r
 }
 

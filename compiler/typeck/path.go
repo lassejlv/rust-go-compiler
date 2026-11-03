@@ -9,7 +9,14 @@ import (
 
 func (fcx *FnCtxt) resolvePath(p *ast.Path, ns Namespace) (resolve.PathResult, error) {
 	fcx.ac.scope = fcx.curMod()
-	return fcx.t.R.ResolvePath(fcx.curMod(), pathSegs(p), p.Global, ns, fcx.ac.firstLookup)
+	pr, err := fcx.t.R.ResolvePath(fcx.curMod(), pathSegs(p), p.Global, ns, fcx.ac.firstLookup)
+	if err == nil {
+		fcx.t.checkGlobAmbiguity(p, fcx.curMod(), ns, fcx.ac.firstLookup)
+	}
+	if err == nil && pr.Private {
+		fcx.t.reportPrivatePath(p, pr)
+	}
+	return pr, err
 }
 
 // ownArgs lowers explicit generic args for d's own params (fresh vars for
@@ -245,7 +252,11 @@ func (fcx *FnCtxt) typeRelativeValue(base Ty, seg *ast.PathSegment, sp lexer.Spa
 		}
 	}
 	// inherent impls
-	if item, implArgs := fcx.findInherentItem(b, name, false); item != nil {
+	fcx.checkPriv, fcx.privMethod = seg.Ident.Hyg == 0, nil
+	item, implArgs := fcx.findInherentItem(b, name, false)
+	privItem := fcx.privMethod
+	fcx.checkPriv, fcx.privMethod = false, nil
+	if item != nil {
 		switch item.Kind {
 		case DefFn:
 			args := fcx.ownArgs(item, seg, implArgs, sp)
@@ -296,6 +307,16 @@ func (fcx *FnCtxt) typeRelativeValue(base Ty, seg *ast.PathSegment, sp lexer.Spa
 	if best != nil {
 		return fcx.traitItemValue(best, seg, sp)
 	}
+	if privItem != nil {
+		what := "associated function"
+		if privItem.Kind == DefConst {
+			what = "associated constant"
+		} else if privItem.Fn != nil && privItem.Fn.HasSelf {
+			what = "method"
+		}
+		fcx.t.ErrorCode(seg.Ident.Span, "E0624", "%s `%s` is private", what, name)
+		return nil, TyErr
+	}
 	fcx.errorf(sp, "no function or associated item named `%s` found for `%s`", name, fcx.resolve(base))
 	return nil, TyErr
 }
@@ -313,6 +334,10 @@ func (fcx *FnCtxt) findInherentItem(b Ty, name string, needSelf bool) (*Def, []T
 			continue
 		}
 		if needSelf && (item.Kind != DefFn || !item.Fn.HasSelf) {
+			continue
+		}
+		if fcx.checkPriv && !fcx.t.assocItemAccessible(item, fcx.curMod()) {
+			fcx.privMethod = item
 			continue
 		}
 		g := fcx.t.Generics(impl)
@@ -636,6 +661,7 @@ func (fcx *FnCtxt) checkStructExpr(x *ast.StructExpr, expected Ty) Ty {
 			continue
 		}
 		seen[f.Name.Name] = true
+		fcx.checkFieldPrivacy(f.Name, adt, v.Fields[fi], v)
 		ft := fcx.normalizeInBody(Subst(v.Fields[fi].Ty, adt.Args), f.Span)
 		fcx.checkExprCoerce(f.Expr, ft)
 	}

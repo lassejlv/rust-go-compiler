@@ -80,6 +80,9 @@ func (fcx *FnCtxt) finCallee(c *Callee) {
 
 func (fcx *FnCtxt) writeback() {
 	r := fcx.r
+	if fcx.t.quiet == 0 && !fcx.t.isStd(fcx.def) {
+		fcx.checkUninferredLocals()
+	}
 	for id, t := range r.NodeTypes {
 		r.NodeTypes[id] = fcx.fin(t)
 	}
@@ -577,5 +580,34 @@ func (w *capWalker) assignLhs(l ast.Expr) {
 	case *ast.UnderscoreExpr:
 	default:
 		w.expr(l, usePlaceMut)
+	}
+}
+
+// checkUninferredLocals reports locals whose type inference left
+// unconstrained (rustc E0282).
+func (fcx *FnCtxt) checkUninferredLocals() {
+	var ls []*Local
+	for id, l := range fcx.r.Locals {
+		if l != nil && l.Node == id && l.Ty != nil {
+			ls = append(ls, l)
+		}
+	}
+	sort.Slice(ls, func(i, j int) bool { return ls[i].ID < ls[j].ID })
+	for _, l := range ls {
+		t := fcx.ic.resolve(l.Ty)
+		if t.HasProj() {
+			t = fcx.ic.resolve(fcx.ic.tryNormalize(t))
+		}
+		unresolved := false
+		Walk(t, func(x Ty) bool {
+			if x.Kind == TInfer && x.Sub == 0 {
+				unresolved = true
+			}
+			return !unresolved
+		})
+		if unresolved {
+			fcx.t.ErrorCode(l.Span, "E0282", "type annotations needed")
+			return
+		}
 	}
 }

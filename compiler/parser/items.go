@@ -15,7 +15,7 @@ func (p *Parser) parseItem() *ast.Item {
 }
 
 type fnQuals struct {
-	Const, Async, Unsafe bool
+	Const, Async, Unsafe, Safe bool
 	Abi                  string
 	hasAbi               bool
 }
@@ -35,6 +35,7 @@ func (p *Parser) parseFnQuals() (q fnQuals, ok bool) {
 			q.Unsafe = true
 		case p.is("safe") && !p.cur().Raw:
 			// `safe fn` in extern blocks
+			q.Safe = true
 		case p.is("default") && (p.isN(1, "fn") || p.isN(1, "unsafe") || p.isN(1, "const") || p.isN(1, "async")):
 		case p.is("extern"):
 			p.next()
@@ -196,7 +197,7 @@ func (p *Parser) parseAnyIdent() ast.Ident {
 func (p *Parser) parseFn(it *ast.Item, q fnQuals) *ast.FnItem {
 	p.expect("fn")
 	it.Name = p.parseIdentTok()
-	fn := &ast.FnItem{Const: q.Const, Async: q.Async, Unsafe: q.Unsafe}
+	fn := &ast.FnItem{Const: q.Const, Async: q.Async, Unsafe: q.Unsafe, Safe: q.Safe}
 	if q.hasAbi {
 		fn.Abi = q.Abi
 	}

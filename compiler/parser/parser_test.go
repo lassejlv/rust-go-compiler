@@ -773,7 +773,7 @@ fn trailing<T,>(a: i32,) -> i32 { a }
 	if it := names["f"]; it == nil || it.Vis != ast.VisCrate {
 		t.Errorf("f vis")
 	}
-	if it := names["g"]; it == nil || it.Vis != ast.VisRestricted {
+	if it := names["g"]; it == nil || it.Vis != ast.VisSuper {
 		t.Errorf("g vis")
 	}
 	if it := names["i"]; it == nil || it.Vis != ast.VisPrivate {

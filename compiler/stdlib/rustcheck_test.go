@@ -40,7 +40,7 @@ func visString(v ast.Visibility) string {
 	switch v {
 	case ast.VisPub:
 		return "pub "
-	case ast.VisCrate, ast.VisRestricted:
+	case ast.VisCrate, ast.VisRestricted, ast.VisSuper:
 		return "pub(crate) "
 	}
 	return ""

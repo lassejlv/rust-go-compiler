@@ -97,7 +97,14 @@ func (t *Tcx) Errorf(sp lexer.Span, format string, args ...any) {
 		}
 		return
 	}
-	msg := fmt.Sprintf("%s: error: %s", sp.Lo, fmt.Sprintf(format, args...))
+	text := fmt.Sprintf(format, args...)
+	msg := fmt.Sprintf("%s: error: %s", sp.Lo, text)
+	if strings.HasPrefix(text, "\x00") {
+		// ErrorCode: "\x00E0XXX\x00message"
+		if i := strings.IndexByte(text[1:], 0); i >= 0 {
+			msg = fmt.Sprintf("%s: error[%s]: %s", sp.Lo, text[1:1+i], text[2+i:])
+		}
+	}
 	if t.errSeen[msg] {
 		return
 	}
@@ -109,6 +116,11 @@ func (t *Tcx) Errorf(sp lexer.Span, format string, args ...any) {
 	if len(t.Errors) >= t.MaxErrors {
 		panic(fatalError{})
 	}
+}
+
+// ErrorCode records a diagnostic with a rustc error code (E0XXX).
+func (t *Tcx) ErrorCode(sp lexer.Span, code string, format string, args ...any) {
+	t.Errorf(sp, "\x00"+code+"\x00"+format, args...)
 }
 
 // Err returns the accumulated errors (nil if none).
@@ -233,12 +245,34 @@ func (t *Tcx) checkCoherence() {
 			}
 
 			if prev := seen[key]; prev != nil {
-				t.Errorf(impl.Span, "conflicting implementations of trait `%s` for type `%s` (first at %s)", tr.Name, impl.Impl.TraitRef.Args[0], prev.Span.Lo)
+				t.ErrorCode(impl.Span, "E0119", "conflicting implementations of trait `%s` for type `%s`", tr.Name, impl.Impl.TraitRef.Args[0])
 				continue
 			}
 			seen[key] = impl
 		}
+		// a generic impl without bounds overlaps every impl it covers
+		if t.isStd(tr) {
+			continue
+		}
+		for _, a := range t.traitImpls[tr] {
+			if a.Impl.Negative || len(t.Generics(a).Params) == 0 || t.isStd(a) {
+				continue
+			}
+			for _, b := range t.traitImpls[tr] {
+				if b == a || b.Impl.Negative || t.isStd(b) || (len(t.Generics(b).Params) > 0 && b.ID < a.ID) {
+					continue
+				}
+				if t.blanketCovers(a, b) {
+					later := b
+					if a.ID > b.ID {
+						later = a
+					}
+					t.ErrorCode(later.Span, "E0119", "conflicting implementations of trait `%s` for type `%s`", tr.Name, b.Impl.TraitRef.Args[0])
+				}
+			}
+		}
 	}
+	t.checkImpls()
 }
 
 // TraitImpls returns all impls of a trait.
