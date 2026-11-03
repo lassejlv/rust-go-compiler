@@ -1053,14 +1053,16 @@ func (lc *loanChecker) runBlock(bi int, in *lstate, report bool) *lstate {
 	if report {
 		after = lc.liveAfter(bi)
 	}
-	liveLoans := func(i int, uses []LocalID) bitset {
+	liveLoans := func(i int, ud useDef) bitset {
 		ll := newBitset(lc.nLoans)
 		live := after[i]
 		for i, h := range st.holds {
-			if h != nil && live.has(i/maxDepth) {
+			// a local overwritten here no longer holds its old loans
+			if h != nil && live.has(i/maxDepth) && LocalID(i/maxDepth) != ud.def {
 				ll.union(h)
 			}
 		}
+		uses := ud.uses
 		// loans held by values used by this statement are live here too
 		for _, u := range uses {
 			for d := 0; d < maxDepth; d++ {
@@ -1075,19 +1077,17 @@ func (lc *loanChecker) runBlock(bi int, in *lstate, report bool) *lstate {
 	for si, s := range bl.Stmts {
 		if report {
 			ud := lc.stmtUseDef(s)
-			ll := liveLoans(si, ud.uses)
-			own := -1
-			if li, ok := lc.loanAt[[2]int{bi, si}]; ok {
-				own = li
-			}
-			lc.checkStmt(st, s, ll, own)
+			// the loan this statement creates may still be live from a
+			// previous iteration: it is checked like any other
+			ll := liveLoans(si, ud)
+			lc.checkStmt(st, s, ll, -1)
 		}
 		lc.transferStmt(st, bi, si, s)
 	}
 	t := bl.Term
 	if report {
 		ud := lc.termUseDef(t)
-		ll := liveLoans(len(bl.Stmts), ud.uses)
+		ll := liveLoans(len(bl.Stmts), ud)
 		lc.checkTerm(st, t, ll)
 	}
 	lc.transferTerm(st, t)

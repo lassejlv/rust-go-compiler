@@ -1018,13 +1018,18 @@ func (b *builder) callExpr(x *ast.CallExpr, dest tplace) {
 		switch c.Kind {
 		case typeck.CallClosure:
 			kind = 0
-			if len(fp.p.Proj) == 0 && b.body.Locals[fp.p.Local].FnBound >= 0 {
+			if ld := b.body.Locals[fp.p.Local]; len(fp.p.Proj) == 0 && ld.Kind == LArg && ld.FnBound >= 0 {
 				// called through a generic parameter: its declared bound
 				kind = b.body.Locals[fp.p.Local].FnBound
-			} else if ci := b.tcx.Closures[c.Ty]; ci != nil && ci.Results == b.r {
+			} else {
 				// a closure of this body: its own kind (a closure from
 				// elsewhere is called through a generic bound we don't see)
-				kind = ci.Kind
+				for _, ci := range b.r.Closures {
+					if ci.Ty == c.Ty {
+						kind = ci.Kind
+						break
+					}
+				}
 			}
 		case typeck.CallDynFn:
 			kind = dynFnKind(c.Ty)
