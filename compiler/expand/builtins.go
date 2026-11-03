@@ -698,13 +698,9 @@ func (e *Expander) includeBytesMac(mac *ast.MacCall) ([]ast.TokenTree, error) {
 	if err != nil {
 		return nil, errAt(mac.Span, "couldn't read `%s`: %v", p, err)
 	}
-	// `&[u8; N]` as a byte string literal (one token instead of one per
-	// byte: included files can be large)
-	sp := synthSpan(mac.Span)
-	return []ast.TokenTree{
-		{Tok: lexer.Token{Kind: lexer.Punct, Text: "&", Span: sp}},
-		{Tok: lexer.Token{Kind: lexer.ByteStr, Text: string(b), Span: sp}},
-	}, nil
+	// a `&'static [u8; N]` byte string literal (one token instead of one
+	// per byte: included files can be large)
+	return []ast.TokenTree{{Tok: lexer.Token{Kind: lexer.ByteStr, Text: string(b), Span: synthSpan(mac.Span)}}}, nil
 }
 
 // includeMac includes a file's tokens (as an expression or items).
