@@ -153,10 +153,15 @@ func crateNameOf(input string) string {
 // the type context and the user's main function.
 func Frontend(opts *Options) (*typeck.Tcx, *Def, error) {
 	t0 := time.Now()
-	stdCrate, err := loadStd(opts)
+	// std first (parsed and expanded, or from the cache), then the
+	// user's crate: node IDs and file indices do not depend on whether
+	// std came from the cache
+	exp := expand.New()
+	stdCrate, err := loadExpandedStd(opts, exp)
 	if err != nil {
-		return nil, nil, fmt.Errorf("while loading std: %v", err)
+		return nil, nil, err
 	}
+	t1 := time.Now()
 	abs, _ := filepath.Abs(opts.Input)
 	dir := filepath.Dir(abs)
 	userCrate, err := LoadCrateFS(os.DirFS(dir), filepath.Base(abs), relPrefix(opts.Input))
@@ -164,11 +169,6 @@ func Frontend(opts *Options) (*typeck.Tcx, *Def, error) {
 		return nil, nil, err
 	}
 	entry := addMainWrapper(userCrate)
-	t1 := time.Now()
-	exp := expand.New()
-	if err := exp.ExpandCrate(stdCrate, "std"); err != nil {
-		return nil, nil, fmt.Errorf("while expanding std: %v", err)
-	}
 	exp.DisplayName = crateNameOf(opts.Input)
 	if err := exp.ExpandCrate(userCrate, "main"); err != nil {
 		return nil, nil, err
@@ -198,7 +198,7 @@ func Frontend(opts *Options) (*typeck.Tcx, *Def, error) {
 		return nil, nil, tcx.Err()
 	}
 	if opts.Verbose {
-		fmt.Fprintf(os.Stderr, "parse %v, expand %v, resolve %v\n", t1.Sub(t0), t2.Sub(t1), time.Since(t2))
+		fmt.Fprintf(os.Stderr, "std %v, parse+expand %v, resolve %v\n", t1.Sub(t0), t2.Sub(t1), time.Since(t2))
 	}
 	return tcx, mainDef, nil
 }

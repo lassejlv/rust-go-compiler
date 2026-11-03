@@ -57,6 +57,9 @@ type Expander struct {
 	// collectMod is the module path (below the crate root) of the items
 	// being collected by the definition pre-pass.
 	collectMod []string
+	// external is set when an expansion read the environment or a file
+	// (see UsedExternalInput).
+	external bool
 }
 
 type macroRef struct {

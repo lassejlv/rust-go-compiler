@@ -629,6 +629,7 @@ func (e *Expander) envName(mac *ast.MacCall) (string, error) {
 // lookupEnv consults the crate's compile-time environment (Cargo-provided
 // variables and build-script `rustc-env`), then the process environment.
 func (e *Expander) lookupEnv(name string) (string, bool) {
+	e.external = true
 	if e.Config != nil {
 		if v, ok := e.Config.Env[name]; ok {
 			return v, true
@@ -662,6 +663,7 @@ func (e *Expander) optionEnvMac(mac *ast.MacCall) ([]ast.TokenTree, error) {
 // includePath resolves an include!-family path relative to the file
 // containing the invocation.
 func (e *Expander) includePath(mac *ast.MacCall) (string, error) {
+	e.external = true
 	p, isStr, err := e.litString(mac.Args, mac)
 	if err != nil {
 		return "", err

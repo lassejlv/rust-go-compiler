@@ -379,12 +379,9 @@ func (bs *buildState) compileProgram(units []*crateUnit, binIdx int) (*codegen.P
 	}
 	mark(units[binIdx])
 	exp := expand.New()
-	stdCrate, err := loadStd(bs.opts)
+	stdCrate, err := loadExpandedStd(bs.opts, exp)
 	if err != nil {
 		return nil, err
-	}
-	if err := exp.ExpandCrate(stdCrate, "std"); err != nil {
-		return nil, fmt.Errorf("while expanding std: %v", err)
 	}
 	r := resolve.New()
 	r.IsBuiltinMacro = expand.IsBuiltinMacro

@@ -19,6 +19,7 @@ type macroDef struct {
 	exported bool
 	rules    []*macroRule
 	span     lexer.Span
+	body     []ast.TokenTree // the definition's body (see EncodeCrateState)
 }
 
 type macroRule struct {
@@ -56,7 +57,7 @@ var fragKinds = map[string]bool{
 
 // parseMacroRules parses the body of `macro_rules! name { ... }`.
 func parseMacroRules(name string, body []ast.TokenTree, crate string, sp lexer.Span) (*macroDef, error) {
-	def := &macroDef{name: name, crate: crate, span: sp}
+	def := &macroDef{name: name, crate: crate, span: sp, body: body}
 	i := 0
 	for i < len(body) {
 		if body[i].Delim == 0 {
