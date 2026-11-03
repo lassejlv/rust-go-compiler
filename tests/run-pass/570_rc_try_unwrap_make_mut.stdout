@@ -1,0 +1,28 @@
+still shared: count=2
+now unique [1]
+drop Data[1]
+x=[10, 20, 30] y=[10, 20] ptr_eq=false
+x=[10, 20, 30, 40] count=1
+get_mut on shared y: true
+6
+drop Data[10, 20]
+drop Data[10, 20, 30, 40]
+into_inner Some(4)
+gadget 1 owned by Gizmo
+gadget 2 owned by Gizmo
+alive [1] owner strong=2 weak=0
+weak strong_count=1 weak_count=2
+after drop: upgrade=true strong_count=0
+None 0
+shared 11 2
+[1, 2, 3] [4, 5] 15
+99 1
+[2, 2, 2]
+list dropped
+[2, 1, 0]
+[] uoc
+true false true
+end
+drop Data[2]
+drop Data[1]
+drop Data[0]

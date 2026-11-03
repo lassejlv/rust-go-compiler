@@ -1,0 +1,22 @@
+len 6 rev [40, 30, 20, 10, 5, 1]
+Some(1) Some(40)
+[31, 21, 11, 6]
+31 21 11 6 | len 0
+[99]
+DList dropped 1 nodes
+popped Some(Loud(0))
+Loud(0) dropped
+Loud(1) dropped
+Loud(2) dropped
+DList dropped 2 nodes
+raw string
+60
+true
+0
+true
+count 2
+value 7 count 2
+count 1
+[1, 2, 3]
+end
+Loud(7) dropped

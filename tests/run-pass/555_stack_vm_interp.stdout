@@ -1,0 +1,12 @@
+  0: push 1
+  1: store $0
+  2: load $0
+  3: push 11
+  4: lt
+  5: jz @14
+  6: load $0
+  7: call @18 argc=1
+output: 1 24 5040 3628800
+result: Err(DivZero(17)) after 279 steps
+Err(StackUnderflow(2))
+Err(TooManySteps)

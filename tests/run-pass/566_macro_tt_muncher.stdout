@@ -1,0 +1,15 @@
+5
+0
+[14]
+[4]
+[3, 2, 1]
+{"one": 1, "three": 3, "two": 2} 4
+[[1, 2, 3], [4, 5, 6]]
+<div><p>hello</p><span>ab</span></div>
+Red=1 Green=2 Blue=4 Alpha=8 count=4
+9
+zoo
+plus minus other:* other:foo
+[("x", "1"), ("y", "-2"), ("label", "\"origin-ish\"")]
+[("a", 6), ("b", 0), ("c", 10)]
+[1, 1, 1]

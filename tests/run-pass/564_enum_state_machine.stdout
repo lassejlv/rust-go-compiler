@@ -1,0 +1,14 @@
+Red { secs: 1 } -> Red { secs: 0 } -> Green { secs: 3 } -> Green { secs: 2 } -> Green { secs: 1 } -> Green { secs: 0 } -> Yellow { secs: 1 } -> Yellow { secs: 0 } -> Red { secs: 2 } -> Red { secs: 1 }
+Flashing
+Select("cola", 150)  => idle
+Coin(100)            => credit 100
+Select("cola", 150)  => credit 100
+Coin(25)             => credit 125
+Coin(50)             => credit 175
+Select("cola", 150)  => dispensing cola (change 25)
+Coin(5)              => dispensing cola (change 25)
+Take                 => idle
+Coin(10)             => credit 10
+Kick                 => out of order: kicked
+Coin(100)            => out of order: kicked
+"0"=true "-12"=true "+3.5"=true ".5"=true "5."=true "1e10"=true "1.5E-3"=true "e9"=false "."=false "-.e1"=false "1e"=false "--1"=false "12a"=false "3.e2"=true ""=false 

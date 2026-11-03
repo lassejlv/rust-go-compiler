@@ -1,0 +1,13 @@
+true false true false
+true
+<-1 r=-1>
+<Pt { x: 0, y: 1 } r=1>
+<"ab" r=2>
+<4 r=4>
+<"hello" r=5>
+<Pt { x: 3, y: 3 } r=6>
+clone eq true
+found at Some(2)
+contains false
+dedup [5, "5", Pt { x: 1, y: -2 }]
+<"5" r=1>

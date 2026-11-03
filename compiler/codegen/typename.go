@@ -82,6 +82,9 @@ func defTypeNamePath(d *Def) string {
 	} else if d.Crate != nil {
 		crateName = d.Crate.Name
 	}
+	if d.Crate != nil && d.Crate.DisplayName != "" {
+		crateName = d.Crate.DisplayName
+	}
 	if crateName == "std" && len(parts) > 0 {
 		key := strings.Join(parts, "::")
 		if p, ok := stdTypePaths[key]; ok {

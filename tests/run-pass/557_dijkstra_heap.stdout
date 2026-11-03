@@ -1,0 +1,17 @@
+A  0 via ["A"]
+B  7 via ["A", "B"]
+C  9 via ["A", "C"]
+D 20 via ["A", "C", "D"]
+E 20 via ["A", "C", "F", "E"]
+F 11 via ["A", "C", "F"]
+reachable G? false
+A* cost 16 len 17
+S**#****
+.#*#*##*
+.#***#.*
+.####.#*
+...~~..*
+#.#..#.G
+None
+Ok([Some(0), Some(4), Some(1), Some(5), None])
+Err("negative cycle via 1->2")

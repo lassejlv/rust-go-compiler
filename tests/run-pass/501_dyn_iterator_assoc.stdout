@@ -1,0 +1,13 @@
+[0, 2, 4, 6, 8, 10]
+10,12,14
+letters -> ["a", "b", "c", "d", "e"]
+nums -> ["#1", "#2", "#3"]
+empty -> []
+other -> ["OTHER"]
+[33, 27, 21, 15]
+sum_dyn=55
+sum_dyn2=21
+[("the", 3), ("cat", 2), ("a", 1), ("dog", 1), ("end", 1)]
+abcYXzz
+hint 3 Some(3)
+0<2 2<4 4<6 last 6

@@ -1,0 +1,28 @@
+it        10 ##########
+of        10 ##########
+the       10 ##########
+was       10 ##########
+age        2 ##
+epoch      2 ##
+season     2 ##
+times      2 ##
+distinct=20 total=60
+["belief", "best", "darkness", "despair", "foolishness", "hope", "incredulity", "light", "spring", "winter", "wisdom", "worst"]
+[(("it", "was"), 10), (("was", "the"), 10)]
+{2: 20, 3: 22, 4: 2, 5: 6, 6: 6, 7: 1, 8: 1, 11: 2}
+b: belief,best
+d: darkness,despair
+i: incredulity,it
+s: season,spring
+t: the,times
+w: was,winter,wisdom,worst
+|It  was  the  best  of times, it was the|
+|worst  of  times,  it  was  the  age  of|
+|wisdom,  it  was the age of foolishness,|
+|it  was  the epoch of belief, it was the|
+|epoch  of incredulity, it was the season|
+longest foolishness
+["It", "Light,", "Darkness,"]
+sentences=1 commas=9 chars=286
+vowel ratio 0.387
+[["cat", "act", "tac"], ["google", "gooegl"], ["listen", "silent", "enlist"]]

@@ -1,0 +1,6 @@
+//~ ERROR E0604
+fn main() {
+    let n: u32 = 65;
+    let c = n as char;
+    println!("{}", c);
+}

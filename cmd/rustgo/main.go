@@ -29,6 +29,7 @@ options:
   -o <path>         output executable (default: input name without .rs)
   --emit-c <path>   also write the generated C source
   --keep-c          keep the temporary C file
+  --check           only check the program (type and borrow checking), no output
   --release         optimize (gcc -O2), no integer overflow checks (like cargo --release)
   --std <dir>       use a std library from a directory instead of the built-in one
   --cc <compiler>   C compiler to use (default: gcc, or $RUSTGO_CC)
@@ -98,6 +99,8 @@ func main() {
 			opts.Edition = strings.TrimPrefix(a, "--edition=")
 		case a == "--check-all":
 			opts.CheckAll = true
+		case a == "--check":
+			opts.Check = true
 		case a == "--release":
 			opts.Release = true
 		case a == "-v":

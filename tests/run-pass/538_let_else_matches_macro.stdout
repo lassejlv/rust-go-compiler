@@ -1,0 +1,20 @@
+Ok(("a", 5))
+Ok(("b", -12))
+Err("no '=' in \"novalue\"")
+Err("bad value for c")
+Err("empty key")
+-1 3000 8
+[Ident("x1"), Op('+'), LParen, Num(3.5), Op('*'), Num(0.25), RParen, Op('-'), Ident("foo"), Op('/'), Num(2.0)]
+1 "+*-/"
+balanced true
+true
+true
+["lower", "upper", "digit", "other", "space"]
+3 2 20 10 1 
+positive 3
+none
+non-positive -1
+ok 1
+rest [Ok(5)]
+true true
+1 two 3

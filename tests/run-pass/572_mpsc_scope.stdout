@@ -1,0 +1,13 @@
+12 msgs, done=[0, 1, 2, 3]
+[(0, 0, 100), (0, 1, 101), (0, 2, 102), (1, 0, 200)]
+total 3012
+[0, 1, 2, 3, 4, 5] producer done
+send to closed: true
+try_recv empty: Err(Empty)
+try_recv: Ok(7)
+after hangup: Err(Disconnected) Err(RecvError)
+timeout: Err(Timeout)
+["3^2=9", "1^2=1", "4^2=16", "1^2=1", "5^2=25"]
+126 [10, 20, 30, 40, 8, 7, 6, 5]
+[5, 4, 5]
+[(0, "ALPHA"), (1, "BETA"), (2, "GAMMA")]

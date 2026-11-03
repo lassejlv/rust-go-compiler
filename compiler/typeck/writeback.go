@@ -201,6 +201,28 @@ func (fcx *FnCtxt) analyzeCaptures() {
 	if len(fcx.r.Closures) == 0 {
 		return
 	}
+	// a closure calling another closure uses it according to the callee's
+	// kind, which is only known after the analysis: iterate until the kinds
+	// are stable
+	for i := 0; i < 3; i++ {
+		before := map[*ClosureInfo]int{}
+		for _, ci := range fcx.r.Closures {
+			before[ci] = ci.Kind
+		}
+		fcx.analyzeCapturesOnce()
+		changed := false
+		for _, ci := range fcx.r.Closures {
+			if ci.Kind != before[ci] {
+				changed = true
+			}
+		}
+		if !changed {
+			return
+		}
+	}
+}
+
+func (fcx *FnCtxt) analyzeCapturesOnce() {
 	w := &capWalker{fcx: fcx, uses: map[ast.NodeID]map[*Local]*capUse{}}
 	if fcx.r.Body != nil {
 		w.block(fcx.r.Body, useValue)

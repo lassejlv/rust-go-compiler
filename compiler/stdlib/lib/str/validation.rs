@@ -164,3 +164,73 @@ pub unsafe fn from_utf8_unchecked_mut(v: &mut [u8]) -> &mut str {
     let len = v.len();
     &mut *(crate::intrinsics::str_from_raw_parts(v.as_mut_ptr() as *const u8, len) as *mut str)
 }
+
+// ---------------------------------------------------------------------------
+// Utf8Chunks (`<[u8]>::utf8_chunks`)
+
+/// An item returned by [`Utf8Chunks`]: a valid UTF-8 prefix and the invalid
+/// bytes after it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Utf8Chunk<'a> {
+    valid: &'a str,
+    invalid: &'a [u8],
+}
+
+impl<'a> Utf8Chunk<'a> {
+    /// Returns the next validated UTF-8 substring.
+    pub fn valid(&self) -> &'a str {
+        self.valid
+    }
+
+    /// Returns the invalid sequence that caused a failure (empty at the end).
+    pub fn invalid(&self) -> &'a [u8] {
+        self.invalid
+    }
+}
+
+/// An iterator over a byte slice as chunks of valid UTF-8 and invalid bytes.
+#[derive(Clone)]
+pub struct Utf8Chunks<'a> {
+    source: &'a [u8],
+}
+
+impl<'a> Utf8Chunks<'a> {
+    pub(crate) fn new(bytes: &'a [u8]) -> Utf8Chunks<'a> {
+        Utf8Chunks { source: bytes }
+    }
+}
+
+impl<'a> crate::iter::Iterator for Utf8Chunks<'a> {
+    type Item = Utf8Chunk<'a>;
+
+    fn next(&mut self) -> Option<Utf8Chunk<'a>> {
+        if self.source.is_empty() {
+            return None;
+        }
+        match from_utf8(self.source) {
+            Ok(s) => {
+                self.source = &[];
+                Some(Utf8Chunk { valid: s, invalid: &[] })
+            }
+            Err(e) => {
+                let v = e.valid_up_to();
+                let n = match e.error_len() {
+                    Some(n) => n,
+                    None => self.source.len() - v,
+                };
+                let src = self.source;
+                let valid = unsafe { from_utf8_unchecked(&src[..v]) };
+                self.source = &src[v + n..];
+                Some(Utf8Chunk { valid, invalid: &src[v..v + n] })
+            }
+        }
+    }
+}
+
+impl<'a> crate::iter::FusedIterator for Utf8Chunks<'a> {}
+
+impl<'a> crate::fmt::Debug for Utf8Chunks<'a> {
+    fn fmt(&self, f: &mut crate::fmt::Formatter<'_>) -> crate::fmt::Result {
+        f.debug_struct("Utf8Chunks").field("source", &self.source).finish()
+    }
+}

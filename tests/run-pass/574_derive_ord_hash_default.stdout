@@ -1,0 +1,44 @@
+[Clubs, Diamonds, Hearts, Spades]
+true Less
+Some(Spades) Hearts
+Point
+Circle(3)
+Circle(5)
+Rect { w: 1, h: 9 }
+Rect { w: 2, h: 1 }
+Poly([(-1, 5)])
+Poly([(0, 0)])
+Poly([(0, 0), (1, 1)])
+1.10.0 None
+1.2.3 Some("beta")
+1.2.3 None
+0.99.99 Some("alpha")
+0.0.0 None
+None
+Some(Greater)
+true
+true
+true
+true
+true
+Less
+8
+Some(0)
+true
+true
+true
+true
+true
+bd60acb658c79e45
+d58c7ca4a2fbd834
+e037876b880b8ed9
+fd8c671699409cfa
+70b5bb6988cbd1e3
+24de1cc795c400b0
+1074f70bdb39c2c3
+ac5b26a93da7490b
+Settings { mode: Balanced, level: 0, name: "", tags: [], ratio: 0.0, flag: None, pair: (0, '\0') }
+Balanced 3
+0 "" [0, 0, 0]
+None
+true

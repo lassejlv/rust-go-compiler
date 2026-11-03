@@ -1,0 +1,29 @@
+["cid", "eve", "ann", "fay", "dee", "bob"]
+[("ops", "eve"), ("ops", "bob"), ("hr", "dee"), ("eng", "cid"), ("eng", "ann"), ("eng", "fay")]
+["fay", "ann", "cid", "bob", "eve", "dee"]
+["eng/25/cid", "eng/31/ann", "eng/31/fay", "hr/38/dee", "ops/29/eve", "ops/45/bob"]
+["bob", "cid", "dee", "eve", "ann", "fay"] calls=6
+["eng", "hr", "ops"]
+top earners [("eng", "fay"), ("hr", "dee"), ("ops", "bob")]
+[1, 3, 5, 8, 13, 21, 23, 40]
+Ok(3) Err(4)
+Err(0)
+Err(7)
+Ok(2) Err(2)
+pp=3
+[5, 10, 20, 20, 25, 30, 35]
+[0, -1, 2, -3, 5, 7, -8]
+[-1, -3, -8, 0, 7, 5, 2]
+["apple", "Apple", "Banana", "banana", "cherry"]
+["Apple", "Banana", "apple", "banana", "cherry"]
+["Apple", "Banana", "apple", "banana", "cherry"]
+[10.0, 3.25, 2.5, -0.5]
+true
+true
+false
+10
+[0, 1, 2, 3, 4]
+["bravo", "charlie", "alpha", "delta"] Some("delta")
+[[1, 1], [1, 2], [3, 0], [3, 1]]
+Some(0)
+true

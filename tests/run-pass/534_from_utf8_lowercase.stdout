@@ -1,0 +1,54 @@
+hi✓ 5
+err: invalid utf-8 sequence of 1 bytes from index 2
+valid_up_to=2 error_len=Some(1)
+recovered [97, 98, 195, 40, 99]
+incomplete utf-8 byte sequence from index 0 None
+[226, 156]
+valid="ok" invalid=[ff]
+valid="bad✓end" invalid=[c0]
+ok�bad✓end�
+"plain"
+HELLO -> lower hello upper HELLO (len 5->5)
+Straße -> lower straße upper STRASSE (len 7->7)
+ΣΊΣΥΦΟΣ -> lower σίσυφος upper ΣΊΣΥΦΟΣ (len 14->14)
+İstanbul -> lower i̇stanbul upper İSTANBUL (len 9->9)
+ÀÉÎÕÜ -> lower àéîõü upper ÀÉÎÕÜ (len 10->10)
+ǅungla -> lower ǆungla upper ǄUNGLA (len 7->7)
+ﬁne -> lower ﬁne upper FINE (len 5->4)
+ΌΣΟΣ ΚΑΙ -> lower όσος και upper ΌΣΟΣ ΚΑΙ (len 15->15)
+Σ -> lower σ upper Σ (len 2->2)
+SS
+ʼN
+'A': lower="a" upper="A" alpha=true lower?=false upper?=true
+'ß': lower="ß" upper="SS" alpha=true lower?=true upper?=false
+'İ': lower="i\u{307}" upper="İ" alpha=true lower?=false upper?=true
+'ﬃ': lower="ﬃ" upper="FFI" alpha=true lower?=true upper?=false
+'Σ': lower="σ" upper="Σ" alpha=true lower?=false upper?=true
+'ς': lower="ς" upper="Σ" alpha=true lower?=true upper?=false
+'ǈ': lower="ǉ" upper="Ǉ" alpha=true lower?=false upper?=false
+'1': lower="1" upper="1" alpha=false lower?=false upper?=false
+'é': lower="é" upper="É" alpha=true lower?=true upper?=false
+mixed Äscii
+MIXED ÄSCII
+GRüßE
+false
+true
+[104, 195, 169, 108, 108, 111]
+héllo
+a len=1 chars=1
+aé len=3 chars=2
+aé中 len=6 chars=3
+aé中😀 len=10 chars=4
+Some('😀')
+>>aXé中
+'a'
+>>Xé中
+">>"
+abc
+a bc
+ZZc
+ok
+ΑΒΓ
+["Apple", "apple", "zebra", "éclair", "Éte"]
+[0, 2, 4]
+8

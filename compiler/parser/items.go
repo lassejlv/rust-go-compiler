@@ -483,6 +483,12 @@ func (p *Parser) parseImpl(unsafe bool) *ast.ImplItem {
 		}
 		im.SelfTy = p.parseType()
 	} else {
+		// `impl dyn Trait + Send { .. }`
+		if dt, ok := ty.(*ast.DynTraitType); ok {
+			for p.eat("+") {
+				dt.Bounds = append(dt.Bounds, p.parseBound())
+			}
+		}
 		im.SelfTy = ty
 	}
 	p.parseWhere(im.Generics)

@@ -1406,13 +1406,31 @@ func (fc *fnGen) promotableDyn(e ast.Expr) bool {
 			}
 			hasConst = true
 			return true
+		case *ast.BinaryExpr:
+			// arithmetic on constants (`&(1 << 40)`)
+			if fc.r.Callees[x.ID] != nil || x.Op == ast.BinAnd || x.Op == ast.BinOr {
+				return false
+			}
+			hasConst = true
+			return ok(x.L) && ok(x.R)
+		case *ast.UnaryExpr:
+			if x.Op == ast.UnDeref || fc.r.Callees[x.ID] != nil {
+				return false
+			}
+			hasConst = true
+			return ok(x.X)
+		case *ast.CastExpr:
+			hasConst = true
+			return ok(x.X)
 		case *ast.CallExpr:
 			pe, isPath := unparen(x.Fn).(*ast.PathExpr)
 			if !isPath {
 				return false
 			}
 			vr := fc.r.Paths[pe.ID]
-			if vr == nil || vr.Kind != typeck.VFn || (vr.Def.Kind != DefStruct && vr.Def.Kind != DefVariant) {
+			// constructors and #[rustc_promotable] const fns
+			// (RawWakerVTable::new)
+			if vr == nil || vr.Kind != typeck.VFn || (vr.Def.Kind != DefStruct && vr.Def.Kind != DefVariant && !vr.Def.HasAttr("rustc_promotable")) {
 				return false
 			}
 			for _, a := range x.Args {

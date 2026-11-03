@@ -20,6 +20,9 @@ const DefaultRecursionLimit = 128
 type Expander struct {
 	// RecursionLimit bounds nested macro expansion.
 	RecursionLimit int
+	// DisplayName, if set, is the crate name shown by module_path!() for
+	// the next ExpandCrate call (the internal crate key may differ).
+	DisplayName string
 	// Config is the cfg configuration of the crate being expanded (set
 	// before each ExpandCrate call).
 	Config *CrateConfig
@@ -66,6 +69,10 @@ func (e *Expander) ExpandCrate(c *ast.Crate, crateName string) error {
 		e.crateOrder = append(e.crateOrder, crateName)
 	}
 	e.modPath = []string{crateName}
+	if e.DisplayName != "" {
+		e.modPath = []string{e.DisplayName}
+		e.DisplayName = ""
+	}
 	e.site = nil
 	e.loadMod, e.modDir = c.LoadMod, c.Dir
 	if e.loadMod != nil {

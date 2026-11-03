@@ -1,0 +1,32 @@
+10
+empty
+one(5)
+two(1,2)
+bookends(7)
+1..5 with 3 inside (sum 9)
+true false true
+true
+"get k" -> GET k
+"set a 1" -> SET a=1
+"del x y z" -> DEL x,y,z
+"del" -> unknown del
+"mv a b c /tmp" -> MOVE 3 files to /tmp
+"ls -la" -> unknown ls
+"" -> nothing
+[1, 2, 3, 4, 6, 7, 9]
+0xabcd
+4
+10 20 [30, 40, 50]
+40 50
+mid [20, 30, 40]
+[4, 2, 3, 1]
+[40, 102, 103, 101]
+a ["x"] last_tags=["y", "z"]
+a tag x
+b untagged
+c tag y + 1
+pattern 4
+GET path bytes=20
+ends with x
+1 6
+p still 2

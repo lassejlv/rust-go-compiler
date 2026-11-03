@@ -1,0 +1,39 @@
+i [3, 6, 9]
+d [1, 2, 4, 5, 7, 8, 10]
+d2 [0, 12, 15, 18]
+s [0, 1, 2, 4, 5, 7, 8, 10, 12, 15, 18]
+u [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 18]
+[3, 6, 9]
+14
+[0, 1, 2, 4, 5, 7, 8, 10, 12, 15, 18]
+[1, 2, 4, 5, 7, 8, 10]
+true true true
+true false
+true
+true
+false
+true
+true
+false
+[Red, Green, Custom("x"), Pair(1, 2), Pair(2, 1)]
+true
+Some(Custom("x"))
+Some(Green) None
+true
+Some(Pair(1, 2))
+3
+Alice -> true
+bob -> true
+ALICE -> false
+Bob -> false
+carol -> true
+aLiCe -> false
+true
+["alice", "bob", "carol"]
+{"lazy", "over", "the"}
+{"brown", "dog", "fox", "jumps", "quick"}
+0.2500
+['p', 'r', 'o', 'g', 'a', 'm', 'i', 'n']
+Some(5)
+visited 10 [(-2, 0), (-2, 1), (-1, 0), (-1, 1)]
+[13, 17] [1, 5, 9]

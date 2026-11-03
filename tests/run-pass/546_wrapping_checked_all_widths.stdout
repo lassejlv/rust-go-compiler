@@ -1,0 +1,173 @@
+== u8 ==
+wrap add 0 sub 255 mul 254
+wrap neg 0 shl 2 shr 1
+checked add None sub None mul None div None rem Some(0)
+checked neg Some(0) shl None pow Some(64)
+sat add 255 sub 0 mul 255 pow 255
+ovf add (0, true) sub (255, true) mul (254, true) neg (0, false)
+ovf pow (0, true) shl (8, true)
+bits: lz 0 tz 8 ones 8 zeros 8
+rotl 8 rotr 128 swap 85 rev 128
+pow 32 div_euclid 35 rem_euclid 3
+== i8 ==
+wrap add -128 sub 127 mul -2
+wrap neg -128 shl 2 shr 0
+checked add None sub None mul None div None rem Some(0)
+checked neg None shl None pow Some(64)
+sat add 127 sub -128 mul 127 pow 127
+ovf add (-128, true) sub (127, true) mul (-2, true) neg (-128, true)
+ovf pow (0, true) shl (8, true)
+bits: lz 1 tz 7 ones 7 zeros 7
+rotl 8 rotr -128 swap 42 rev -128
+pow 32 div_euclid 17 rem_euclid 0
+== u16 ==
+wrap add 0 sub 65535 mul 65534
+wrap neg 0 shl 2 shr 1
+checked add None sub None mul None div None rem Some(0)
+checked neg Some(0) shl None pow Some(16384)
+sat add 65535 sub 0 mul 65535 pow 65535
+ovf add (0, true) sub (65535, true) mul (65534, true) neg (0, false)
+ovf pow (0, true) shl (8, true)
+bits: lz 0 tz 16 ones 16 zeros 16
+rotl 8 rotr 32768 swap 21845 rev 32768
+pow 32 div_euclid 9361 rem_euclid 3
+== i16 ==
+wrap add -32768 sub 32767 mul -2
+wrap neg -32768 shl 2 shr 0
+checked add None sub None mul None div None rem Some(0)
+checked neg None shl None pow Some(16384)
+sat add 32767 sub -32768 mul 32767 pow 32767
+ovf add (-32768, true) sub (32767, true) mul (-2, true) neg (-32768, true)
+ovf pow (0, true) shl (8, true)
+bits: lz 1 tz 15 ones 15 zeros 15
+rotl 8 rotr -32768 swap -21974 rev -32768
+pow 32 div_euclid 4680 rem_euclid 0
+== u32 ==
+wrap add 0 sub 4294967295 mul 4294967294
+wrap neg 0 shl 2 shr 1
+checked add None sub None mul None div None rem Some(0)
+checked neg Some(0) shl None pow Some(1073741824)
+sat add 4294967295 sub 0 mul 4294967295 pow 4294967295
+ovf add (0, true) sub (4294967295, true) mul (4294967294, true) neg (0, false)
+ovf pow (0, true) shl (8, true)
+bits: lz 0 tz 32 ones 32 zeros 32
+rotl 8 rotr 2147483648 swap 1431655765 rev 2147483648
+pow 32 div_euclid 613566755 rem_euclid 3
+== i32 ==
+wrap add -2147483648 sub 2147483647 mul -2
+wrap neg -2147483648 shl 2 shr 0
+checked add None sub None mul None div None rem Some(0)
+checked neg None shl None pow Some(1073741824)
+sat add 2147483647 sub -2147483648 mul 2147483647 pow 2147483647
+ovf add (-2147483648, true) sub (2147483647, true) mul (-2, true) neg (-2147483648, true)
+ovf pow (0, true) shl (8, true)
+bits: lz 1 tz 31 ones 31 zeros 31
+rotl 8 rotr -2147483648 swap -1431655894 rev -2147483648
+pow 32 div_euclid 306783377 rem_euclid 0
+== u64 ==
+wrap add 0 sub 18446744073709551615 mul 18446744073709551614
+wrap neg 0 shl 2 shr 1
+checked add None sub None mul None div None rem Some(0)
+checked neg Some(0) shl None pow Some(4611686018427387904)
+sat add 18446744073709551615 sub 0 mul 18446744073709551615 pow 18446744073709551615
+ovf add (0, true) sub (18446744073709551615, true) mul (18446744073709551614, true) neg (0, false)
+ovf pow (0, true) shl (8, true)
+bits: lz 0 tz 64 ones 64 zeros 64
+rotl 8 rotr 9223372036854775808 swap 6148914691236517205 rev 9223372036854775808
+pow 32 div_euclid 2635249153387078801 rem_euclid 3
+== i64 ==
+wrap add -9223372036854775808 sub 9223372036854775807 mul -2
+wrap neg -9223372036854775808 shl 2 shr 0
+checked add None sub None mul None div None rem Some(0)
+checked neg None shl None pow Some(4611686018427387904)
+sat add 9223372036854775807 sub -9223372036854775808 mul 9223372036854775807 pow 9223372036854775807
+ovf add (-9223372036854775808, true) sub (9223372036854775807, true) mul (-2, true) neg (-9223372036854775808, true)
+ovf pow (0, true) shl (8, true)
+bits: lz 1 tz 63 ones 63 zeros 63
+rotl 8 rotr -9223372036854775808 swap -6148914691236517334 rev -9223372036854775808
+pow 32 div_euclid 1317624576693539400 rem_euclid 0
+== u128 ==
+wrap add 0 sub 340282366920938463463374607431768211455 mul 340282366920938463463374607431768211454
+wrap neg 0 shl 2 shr 1
+checked add None sub None mul None div None rem Some(0)
+checked neg Some(0) shl None pow Some(85070591730234615865843651857942052864)
+sat add 340282366920938463463374607431768211455 sub 0 mul 340282366920938463463374607431768211455 pow 340282366920938463463374607431768211455
+ovf add (0, true) sub (340282366920938463463374607431768211455, true) mul (340282366920938463463374607431768211454, true) neg (0, false)
+ovf pow (0, true) shl (8, true)
+bits: lz 0 tz 128 ones 128 zeros 128
+rotl 8 rotr 170141183460469231731687303715884105728 swap 113427455640312821154458202477256070485 rev 170141183460469231731687303715884105728
+pow 32 div_euclid 48611766702991209066196372490252601635 rem_euclid 3
+== i128 ==
+wrap add -170141183460469231731687303715884105728 sub 170141183460469231731687303715884105727 mul -2
+wrap neg -170141183460469231731687303715884105728 shl 2 shr 0
+checked add None sub None mul None div None rem Some(0)
+checked neg None shl None pow Some(85070591730234615865843651857942052864)
+sat add 170141183460469231731687303715884105727 sub -170141183460469231731687303715884105728 mul 170141183460469231731687303715884105727 pow 170141183460469231731687303715884105727
+ovf add (-170141183460469231731687303715884105728, true) sub (170141183460469231731687303715884105727, true) mul (-2, true) neg (-170141183460469231731687303715884105728, true)
+ovf pow (0, true) shl (8, true)
+bits: lz 1 tz 127 ones 127 zeros 127
+rotl 8 rotr -170141183460469231731687303715884105728 swap -113427455640312821154458202477256070614 rev -170141183460469231731687303715884105728
+pow 32 div_euclid 24305883351495604533098186245126300817 rem_euclid 0
+== usize ==
+wrap add 0 sub 18446744073709551615 mul 18446744073709551614
+wrap neg 0 shl 2 shr 1
+checked add None sub None mul None div None rem Some(0)
+checked neg Some(0) shl None pow Some(4611686018427387904)
+sat add 18446744073709551615 sub 0 mul 18446744073709551615 pow 18446744073709551615
+ovf add (0, true) sub (18446744073709551615, true) mul (18446744073709551614, true) neg (0, false)
+ovf pow (0, true) shl (8, true)
+bits: lz 0 tz 64 ones 64 zeros 64
+rotl 8 rotr 9223372036854775808 swap 6148914691236517205 rev 9223372036854775808
+pow 32 div_euclid 2635249153387078801 rem_euclid 3
+== isize ==
+wrap add -9223372036854775808 sub 9223372036854775807 mul -2
+wrap neg -9223372036854775808 shl 2 shr 0
+checked add None sub None mul None div None rem Some(0)
+checked neg None shl None pow Some(4611686018427387904)
+sat add 9223372036854775807 sub -9223372036854775808 mul 9223372036854775807 pow 9223372036854775807
+ovf add (-9223372036854775808, true) sub (9223372036854775807, true) mul (-2, true) neg (-9223372036854775808, true)
+ovf pow (0, true) shl (8, true)
+bits: lz 1 tz 63 ones 63 zeros 63
+rotl 8 rotr -9223372036854775808 swap -6148914691236517334 rev -9223372036854775808
+pow 32 div_euclid 1317624576693539400 rem_euclid 0
+i8: abs None wabs -128 uabs 128 sig -1 0 1
+  div_euclid -4 rem_euclid 1 / -3 % -1
+  sat neg 127 sat abs 127 ovf abs (-128, true) is_neg true
+  abs_diff 255 14
+i16: abs None wabs -32768 uabs 32768 sig -1 0 1
+  div_euclid -4 rem_euclid 1 / -3 % -1
+  sat neg 32767 sat abs 32767 ovf abs (-32768, true) is_neg true
+  abs_diff 65535 14
+i32: abs None wabs -2147483648 uabs 2147483648 sig -1 0 1
+  div_euclid -4 rem_euclid 1 / -3 % -1
+  sat neg 2147483647 sat abs 2147483647 ovf abs (-2147483648, true) is_neg true
+  abs_diff 4294967295 14
+i64: abs None wabs -9223372036854775808 uabs 9223372036854775808 sig -1 0 1
+  div_euclid -4 rem_euclid 1 / -3 % -1
+  sat neg 9223372036854775807 sat abs 9223372036854775807 ovf abs (-9223372036854775808, true) is_neg true
+  abs_diff 18446744073709551615 14
+i128: abs None wabs -170141183460469231731687303715884105728 uabs 170141183460469231731687303715884105728 sig -1 0 1
+  div_euclid -4 rem_euclid 1 / -3 % -1
+  sat neg 170141183460469231731687303715884105727 sat abs 170141183460469231731687303715884105727 ovf abs (-170141183460469231731687303715884105728, true) is_neg true
+  abs_diff 340282366920938463463374607431768211455 14
+132
+fnv1a 0x4f9f2cab
+xorshift [512, 515, 312, 853]
+4 true
+Some(16)
+32 true
+4 25
+Some(0) None
+true
+None
+0
+-5
+Some(2)
+acc 89 carries 2
+128-bit sum hi=2 lo=0
+true
+None
+(-128, true)
+-128
+(0, true)
+32767

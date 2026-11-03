@@ -427,6 +427,7 @@ func (bs *buildState) compileProgram(units []*crateUnit, binIdx int) (*codegen.P
 				exp.ProcMacros[n] = m
 			}
 		}
+		exp.DisplayName = u.name
 		if err := exp.ExpandCrate(c, u.key); err != nil {
 			return nil, fmt.Errorf("crate %s: %v", u.name, err)
 		}
@@ -435,6 +436,8 @@ func (bs *buildState) compileProgram(units []*crateUnit, binIdx int) (*codegen.P
 		exp.ProcMacros = nil
 		cr := r.AddCrate(u.key, c)
 		cr.Edition = u.edition
+		cr.DisplayName = u.name
+		cr.Local = !strings.Contains(u.src, "/.cargo/registry/") && !strings.Contains(u.src, "/.cargo/git/")
 		if cr.Externs == nil {
 			// (may already hold `extern crate x as y;` aliases)
 			cr.Externs = map[string]*Crate{}

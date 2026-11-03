@@ -1,0 +1,22 @@
+i32 42
+String "hi"
+&str "static"
+pos Position(1, 2)
+f64 2.5
+bytes len 3
+unknown
+None
+None
+None
+Some(Position(0, 0))
+Some(Position(15, 5)) Some(Velocity { dx: 1, dy: -1 })
+None
+Some("ent")
+true
+count 2
+pos Position(3, 400) vel=false
+vel Velocity { dx: 2, dy: 0 } vel=true
+was vel Velocity { dx: 9, dy: 9 }
+true
+false
+true

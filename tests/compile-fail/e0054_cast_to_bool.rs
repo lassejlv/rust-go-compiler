@@ -1,0 +1,6 @@
+//~ ERROR E0054
+fn main() {
+    let n = 1;
+    let b = n as bool;
+    println!("{}", b);
+}

@@ -1,0 +1,10 @@
+[1, 2, 6] [2, 6, 12] [6, 12, 23] [12, 23, 41] 
+[1, 2, 6, 12, 23, 41]
+@0 "first line" len=10
+@11 "second" len=6
+@18 "" len=0
+@19 "fourth" len=6
+option Some(3) Some("x")
+vec [4] ["yy"]
+Some("a") Some("b") None 
+0 1 4 9 16 

@@ -1,0 +1,18 @@
+[100, 50, 10]
+catch ok: true
+total balance 160
+unwinding drops withdraw-9
+caught inner panic: true
+["acct-001", "acct-002", "acct-003"]
+{1: Account { id: 1, balance: 101 }, 2: Account { id: 2, balance: 52 }, 3: Account { id: 3, balance: 13 }}
+["1:101:ok", "2:52:ok", "3:13:low"]
+unwinding drops withdraw-1
+account 1 withdrew 30 -> 71
+unwinding drops withdraw-2
+account 2 withdrew 50 -> 2
+unwinding drops withdraw-1
+account 1 withdrew 60 -> 11
+unwinding drops withdraw-3
+unwinding drops process
+unwinding drops before-process
+unwinding drops main

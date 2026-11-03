@@ -200,6 +200,12 @@ func (g *Gen) defineType(t Ty) {
 					}
 					continue
 				}
+				if pk := d.ReprPacked(); pk > 1 {
+					// packed(N): fields aligned to min(align, N)
+					_, fa, _ := g.tcx.CLayout(ft)
+					fmt.Fprintf(&b, " %s f%d __attribute__((aligned(%d)));", g.ctype(ft), i, min(fa, pk))
+					continue
+				}
 				fmt.Fprintf(&b, " %s f%d;", g.ctype(ft), i)
 			}
 			switch {

@@ -1,0 +1,13 @@
+24
+6.75
+15
+circle with area 12.00
+rect 3x4.5
+tri with area 5.00
+total=30.5 names=["circle", "rect", "tri"]
+total2=42.5 n=4
+["a"; "bb"; "ccc"]
+[0, 10, 20]
+[Some(1); None]
+len via dyn = 2
+biggest: rect

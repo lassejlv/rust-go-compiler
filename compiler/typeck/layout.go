@@ -214,7 +214,7 @@ func (t *Tcx) cLayoutUncached(ty Ty, depth int) (size, align uint64, ok bool) {
 					return 0, 0, false
 				}
 			}
-			sz, al, ok := t.structLayout(fts, t.FieldOrder(ty, 0), layoutPacked(d), depth)
+			sz, al, ok := t.structLayoutPacked(fts, t.FieldOrder(ty, 0), d.ReprPacked(), depth)
 			if n := d.ReprAlign(); ok && n > al {
 				al = n
 				sz = alignUp(sz, al)
@@ -286,14 +286,23 @@ func (t *Tcx) enumSize(ty Ty, el *EnumLayout, depth int) (uint64, uint64, bool) 
 
 // structLayout lays out fields in the given memory order.
 func (t *Tcx) structLayout(fts []Ty, order []int, packed bool, depth int) (uint64, uint64, bool) {
+	var p uint64
+	if packed {
+		p = 1
+	}
+	return t.structLayoutPacked(fts, order, p, depth)
+}
+
+// structLayoutPacked: pack > 0 caps field alignments (repr(packed(N))).
+func (t *Tcx) structLayoutPacked(fts []Ty, order []int, pack uint64, depth int) (uint64, uint64, bool) {
 	var off, al uint64 = 0, 1
 	for _, i := range order {
 		s, a, ok := t.cLayout(fts[i], depth+1)
 		if !ok {
 			return 0, 0, false
 		}
-		if packed {
-			a = 1
+		if pack > 0 && a > pack {
+			a = pack
 		}
 		off = alignUp(off, a) + s
 		al = max(al, a)

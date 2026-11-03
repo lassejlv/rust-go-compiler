@@ -1,0 +1,14 @@
+["hello", "", "single"]
+["hello world", "trim me", "single"]
+[" world", "m me ", "gle"]
+max: 9 | neg: -2 | last: 7
+neg: none
+v0 ["Alpha", "beta", "Gamma", "delta"]
+v1 ["Alpha", "Gamma"]
+v2 ["A", "a"]
+8
+42
+much longer
+<42> 6
+23
+"banana"

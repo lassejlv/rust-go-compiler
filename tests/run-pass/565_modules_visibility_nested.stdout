@@ -1,0 +1,12 @@
+6 area=6.0 10
+ids 100 101
+rect
+rect
+14
+20 600
+607
+geometry::deep
+3 3
+crate::f | inner::f | inner::f inner::f shadow::f | shadow::f
+geometry block::f
+3

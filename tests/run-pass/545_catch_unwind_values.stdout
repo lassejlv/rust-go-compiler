@@ -1,0 +1,28 @@
+drop risky-local
+0 -> panic &str: static message
+drop risky-local
+1 -> panic String: formatted 10
+drop risky-local
+2 -> panic i32: 42
+drop risky-local
+3 -> panic String: index out of bounds: the len is 0 but the index is 5
+drop risky-local
+4 -> panic &str: called `Option::unwrap()` on a `None` value
+drop risky-local
+5 -> panic String: expect failed: "bad"
+drop risky-local
+6 -> panic String: called `Result::unwrap()` on an `Err` value: "e"
+drop risky-local
+7 -> ok 14
+drop inner
+inner caught: true
+drop outer
+outer: Err("&str: outer boom") counter=11
+rethrowing &str: first
+after resume: &str: first
+true [1, 2, 3, 4]
+HOOK: with hook at line? true
+[Ok(0), Err("String: odd 1"), Ok(2), Err("String: odd 3")]
+drop thread-local guard
+thread joined err=true &str: thread panic
+done

@@ -1405,6 +1405,11 @@ impl<T, const N: usize> [[T; N]] {
 }
 
 impl [u8] {
+    /// Returns an iterator over chunks of valid UTF-8 and invalid bytes.
+    pub fn utf8_chunks(&self) -> crate::str::Utf8Chunks<'_> {
+        crate::str::Utf8Chunks::new(self)
+    }
+
     /// Returns an iterator that produces an escaped version of this slice.
     pub fn escape_ascii(&self) -> crate::ascii::EscapeAscii<'_> {
         crate::ascii::escape_ascii(self)

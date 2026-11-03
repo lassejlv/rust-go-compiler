@@ -1,0 +1,28 @@
+10 1 1
+[1, 2, 3]
+4 3
+fib(50)=12586269025 calls=99
+ann 1 try_mut_err=true
+try_borrow_err=true
+mapped ann
+ann ["b", "z"]
+Person { name: "ann", tags: ["b", "z"] } -> Person { name: "bob", tags: [] }
+Person { name: "BOB", tags: ["x"] }
+None
+first
+first
+Err("third")
+before deref
+computing lazy
+42 43
+[("retries", 2), ("threads", 4)]
+true
+before squares
+init SQUARES
+9 285
+depth 4
+["enter 3", "enter 2", "enter 1", "enter 0"]
+thread depth 2 main depth 4
+2
+[0, 1, 3, 6]
+3

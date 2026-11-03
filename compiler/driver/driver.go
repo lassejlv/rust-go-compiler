@@ -40,6 +40,7 @@ type Options struct {
 	CheckAll bool   // type-check every non-generic function in all crates
 	Release  bool   // optimize (gcc -O2) and disable integer overflow checks
 	Edition  string // "2015", "2018", "2021" (default) or "2024"
+	Check    bool   // analysis only (like cargo check): no C compilation
 	LinkArgs []string
 }
 
@@ -142,6 +143,12 @@ func loadMod(fsys fs.FS, it *ast.Item, dir, prefix string) (string, error) {
 	return child, loadMods(fsys, m.Items, child, prefix)
 }
 
+// crateNameOf derives the crate name rustc uses for a source file.
+func crateNameOf(input string) string {
+	n := strings.TrimSuffix(filepath.Base(input), ".rs")
+	return strings.ReplaceAll(n, "-", "_")
+}
+
 // Frontend runs everything up to (and including) typeck setup and returns
 // the type context and the user's main function.
 func Frontend(opts *Options) (*typeck.Tcx, *Def, error) {
@@ -162,6 +169,7 @@ func Frontend(opts *Options) (*typeck.Tcx, *Def, error) {
 	if err := exp.ExpandCrate(stdCrate, "std"); err != nil {
 		return nil, nil, fmt.Errorf("while expanding std: %v", err)
 	}
+	exp.DisplayName = crateNameOf(opts.Input)
 	if err := exp.ExpandCrate(userCrate, "main"); err != nil {
 		return nil, nil, err
 	}
@@ -172,6 +180,8 @@ func Frontend(opts *Options) (*typeck.Tcx, *Def, error) {
 	r.AddCrate("std", stdCrate)
 	user := r.AddCrate("main", userCrate)
 	user.Edition = opts.Edition
+	user.Local = true
+	user.DisplayName = crateNameOf(opts.Input)
 	r.ResolveImports()
 	if err := r.Err(); err != nil {
 		return nil, nil, err
@@ -335,7 +345,7 @@ func compileC(opts *Options, prog *codegen.Program) error {
 			return err
 		}
 	}
-	if opts.Output == "" {
+	if opts.Output == "" || opts.Check {
 		return nil
 	}
 	cc := opts.CC

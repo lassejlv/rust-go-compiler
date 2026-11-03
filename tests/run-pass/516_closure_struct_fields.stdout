@@ -1,0 +1,13 @@
+>> clicked OK
+cancel
+[7, 22, 11, 34, 17, 52, 26, 13, 40, 20, 10, 5, 16, 8, 4, 2, 1]
+[3, 10]
+[1, 2, 3] [1, 2, 3]
+init ran 1 time(s)
+"abc" -> ["too short", "no digit", "no upper"]
+"Password1" -> []
+"pass word" -> ["no digit", "no upper", "has space"]
+"longenough" -> ["no digit", "no upper"]
+(5000, 6, 4)
+42 4
+[200, 144, 55]

@@ -1,0 +1,23 @@
+7.5m 10ft 0.5mi
+7.500 3.048 804.672
+m ft mi
+true
+2 1
+1 2 outer tmp
+1010
+15 9
+svc 3 0.5
+i32(7)
+&str("s")
+Vec<u8>([1, 2])
+(bool, char)((true, 'x'))
+42 hihi
+[("adds", true), ("strings", true), ("fails", false)]
+v.len() = 3
+v.iter().sum::<i32>() = 6
+x + 1 = 6
+"lit" = "lit"
+true
+a12.5truec
+a + b * (c - d)
+"567_macro_gen_impls_hygiene"

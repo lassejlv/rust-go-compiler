@@ -1,0 +1,61 @@
+"42" -> Ok(42)
+"-17" -> Ok(-17)
+"" -> Err(cannot parse integer from empty string) kind=Empty dbg=ParseIntError { kind: Empty }
+"-" -> Err(invalid digit found in string) kind=InvalidDigit dbg=ParseIntError { kind: InvalidDigit }
+"+" -> Err(invalid digit found in string) kind=InvalidDigit dbg=ParseIntError { kind: InvalidDigit }
+"+5" -> Ok(5)
+"12a" -> Err(invalid digit found in string) kind=InvalidDigit dbg=ParseIntError { kind: InvalidDigit }
+"256" -> Err(number too large to fit in target type) kind=PosOverflow dbg=ParseIntError { kind: PosOverflow }
+"-129" -> Err(number too small to fit in target type) kind=NegOverflow dbg=ParseIntError { kind: NegOverflow }
+" 1" -> Err(invalid digit found in string) kind=InvalidDigit dbg=ParseIntError { kind: InvalidDigit }
+"0x10" -> Err(invalid digit found in string) kind=InvalidDigit dbg=ParseIntError { kind: InvalidDigit }
+"１" -> Err(invalid digit found in string) kind=InvalidDigit dbg=ParseIntError { kind: InvalidDigit }
+"255" u8 -> Ok(255)
+"256" u8 -> Err("number too large to fit in target type")
+"-0" u8 -> Err("invalid digit found in string")
+"-1" u8 -> Err("invalid digit found in string")
+"00000000000000000000123" u8 -> Ok(123)
+Err("number too large to fit in target type")
+Ok(18446744073709551615)
+Ok(-170141183460469231731687303715884105728)
+Err("Zero")
+"3.14" -> 3.14
+"-0.0" -> -0
+"1e10" -> 10000000000
+"1E-3" -> 0.001
+"inf" -> inf
+"-infinity" -> -inf
+"NaN" -> NaN
+"nan" -> NaN
+".5" -> 0.5
+"5." -> 5
+"1_000.0" -> Err(invalid float literal) ParseFloatError { kind: Invalid }
+"abc" -> Err(invalid float literal) ParseFloatError { kind: Invalid }
+"" -> Err(cannot parse float from empty string) ParseFloatError { kind: Empty }
+"1.2.3" -> Err(invalid float literal) ParseFloatError { kind: Invalid }
+"+.e1" -> Err(invalid float literal) ParseFloatError { kind: Invalid }
+"true" -> Ok(true)
+"false" -> Ok(false)
+"True" -> Err("provided string was not `true` or `false`")
+"1" -> Err("provided string was not `true` or `false`")
+"" -> Err("provided string was not `true` or `false`")
+"a" -> Ok('a')
+"ab" -> Err("too many characters in string")
+"" -> Err("cannot parse char from empty string")
+"é" -> Ok('é')
+#ff8000 -> Rgb(255, 128, 0)
+ff8000 -> error: expected 7 chars, got 6 / BadLen(6)
+#ff80 -> error: expected 7 chars, got 5 / BadLen(5)
+#gg0000 -> error: bad hex: invalid digit found in string / Hex(ParseIntError { kind: InvalidDigit })
+#00ff7f -> Rgb(0, 255, 127)
+Ok(-1295)
+Err("invalid digit found in string")
+Ok(9223372036854775807)
+Err("number too large to fit in target type")
+Err("invalid digit found in string")
+Err("invalid IPv4 address syntax")
+10.0.0.1 [10, 0, 0, 1]
+invalid digit found in string | ParseIntError { kind: InvalidDigit }
+true
+invalid float literal
+Err("wrapped: invalid digit found in string")

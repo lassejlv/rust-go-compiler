@@ -1,0 +1,36 @@
+[9] [1, 2]
+[4, 2, 3, 1]
+old new
+"buf" [1, 2, 3] Buffer { data: [], name: "" }
+Loaded([1, 2, 3])
+Done { total: 6 }
+Done { total: 6 }
+Done { total: 6 }
+true
+false
+replacing
+replaced
+drop first
+taking
+took second
+drop second
+after swap x=y y=x
+got v1
+drop v1
+1 8 10 8
+8 8 16
+4 4 1
+0 0
+8 2
+12 8
+6 16
+2
+[1, 2] []
+Some(3) None
+[1, 4, 5] []
+true
+end of main
+drop v0
+drop v1b
+drop x
+drop y

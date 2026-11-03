@@ -10,7 +10,7 @@ pub use self::iter::{
     RSplitTerminator, Split, SplitAsciiWhitespace, SplitInclusive, SplitN, SplitTerminator, SplitWhitespace,
 };
 pub use self::traits::{FromStr, ParseBoolError};
-pub use self::validation::{from_utf8, from_utf8_mut, from_utf8_unchecked, from_utf8_unchecked_mut, Utf8Error};
+pub use self::validation::{from_utf8, from_utf8_mut, from_utf8_unchecked, from_utf8_unchecked_mut, Utf8Chunk, Utf8Chunks, Utf8Error};
 pub use crate::slice::SliceIndex;
 
 use self::pattern::{Pattern, SearchWindow};

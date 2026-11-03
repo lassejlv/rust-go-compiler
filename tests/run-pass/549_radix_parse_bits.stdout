@@ -1,0 +1,58 @@
+"ff" r16 -> i32 Ok(255) u8 Ok(255)
+"FF" r16 -> i32 Ok(255) u8 Ok(255)
+"777" r8 -> i32 Ok(511) u8 Err("number too large to fit in target type")
+"101010" r2 -> i32 Ok(42) u8 Ok(42)
+"zz" r36 -> i32 Ok(1295) u8 Err("number too large to fit in target type")
+"Zz" r36 -> i32 Ok(1295) u8 Err("number too large to fit in target type")
+"-80" r16 -> i32 Ok(-128) u8 Err("invalid digit found in string")
+"+7f" r16 -> i32 Ok(127) u8 Ok(127)
+"12" r3 -> i32 Ok(5) u8 Ok(5)
+"2" r2 -> i32 Err("invalid digit found in string") u8 Err("invalid digit found in string")
+"" r10 -> i32 Err("cannot parse integer from empty string") u8 Err("cannot parse integer from empty string")
+0 -> b1 o0 x0 r36 0
+7 -> b3 o7 x7 r36 7
+255 -> b8 o377 xff r36 73
+1000 -> b10 o1750 x3e8 r36 rs
+65535 -> b16 o177777 xffff r36 1ekf
+18446744073709551615 -> b64 o1777777777777777777777 xffffffffffffffff r36 3w5e11264sgsf
+10110000111100000000000000010100
+lz=0 tz=2 ones=9 zeros=23 lo=1 to=0
+11110000000000000001010010110000
+01001011000011110000000000000001
+00101000000000000000111100001101
+b0f00014 1400f0b0
+[176, 240, 0, 20] [20, 0, 240, 176]
+true
+0x78563412
+0xabcd
+[255, 254]
+-1
+u8   1: lz 7 tz 0 ilog2 Some(0)
+u8 128: lz 0 tz 7 ilog2 Some(7)
+u8 255: lz 0 tz 0 ilog2 Some(7)
+u8   0: lz 8 tz 8 ilog2 None
+0 32
+31 40
+16
+["000", "001", "011", "010", "110", "111", "101", "100"]
+[0, 1, 2, 3, 4, 5, 6, 7]
+[13, 12, 9, 8, 5, 4, 1, 0]
+4 1 -2147483648
+6
+[0, 1, 1, 2, 1, 2, 2, 3, 1, 2]
+64
+21
+-16
+16
+-5
+15
+true
+true
+Ok(-128)
+Err("number too small to fit in target type")
+Ok(18446744073709551615)
+true
+128
+100101101011010000111 1234567
+Some('z')
+Some(35)

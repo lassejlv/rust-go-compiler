@@ -1,0 +1,21 @@
+ok -> 4
+missing -> app failed during startup <- config missing <- cannot open /etc/missing.conf
+  root is IoLike for /etc/missing.conf
+  direct source is ConfigError: true
+  debug: Missing(IoLike { path: "/etc/missing.conf" })
+bad -> app failed during startup <- parse error on line 3 <- invalid digit found in string
+  root is ParseIntError: InvalidDigit
+  direct source is ConfigError: true
+  debug: Parse { line: 3, source: ParseIntError { kind: InvalidDigit } }
+neg -> app failed during startup <- invalid config: negative
+  root is ConfigError
+  direct source is ConfigError: true
+  debug: Invalid("negative")
+app failed during startup
+depth 3
+ctx startup
+cannot open x | source? false
+invalid config: y | source? false
+plain string error | source? false
+an error occurred when formatting an argument | source? false
+"owned msg" owned msg

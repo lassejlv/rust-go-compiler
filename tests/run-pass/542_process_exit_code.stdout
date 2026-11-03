@@ -1,0 +1,13 @@
+in scope
+drop inner
+batch 0 -> Ok (code 0)
+batch 1 -> Warn(2) (code 2)
+batch 2 -> Fail("value too large in [10, 2000]") (code 3)
+summary 3:6,3:-3,2:2010
+drop helper
+drop helper
+drop helper
+helper 3
+codes [0, 1, 3]
+partial line without newline; worst = 3
+exiting with 3

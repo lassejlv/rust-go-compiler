@@ -1,0 +1,26 @@
+10 15
+15 12
+12 0b1000
+8 0b1101
+13 0b10
+2 100
+7
+7
+Ok(42)
+Err(43)
+Ok(43)
+Err(86)
+86
+wrapped 1
+9223372036854775804
+false true
+false true
+true
+false
+[1, 2, 3]
+count 30000 max 54999
+spin total 4000
+budget consumed 10 left 0
+7
+[9, 12, 15]
+7

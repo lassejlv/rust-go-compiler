@@ -3,10 +3,12 @@ package codegen
 import (
 	_ "embed"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 
 	"rustgo/compiler/ast"
+	"rustgo/compiler/borrowck"
 	"rustgo/compiler/lexer"
 	. "rustgo/compiler/middle"
 	"rustgo/compiler/typeck"
@@ -56,6 +58,9 @@ type Gen struct {
 	strN       int
 
 	Errors []string
+	// bcSeen dedupes borrow checker diagnostics across instances.
+	bcSeen    map[string]bool
+	bcChecked map[*Def]bool
 }
 
 // New creates a generator.
@@ -139,6 +144,7 @@ func (g *Gen) GenerateProgram(mainDef *Def) (prog *Program, err error) {
 	}
 	ctors := g.initArrayCtors()
 	g.drain()
+	g.checkUnreached()
 	g.staticInit = append(g.staticInit, ctors...) // after every static's init
 	if len(g.tcx.Errors) > 0 {
 		return nil, g.tcx.Err()
@@ -165,6 +171,50 @@ func (g *Gen) GenerateProgram(mainDef *Def) (prog *Program, err error) {
 }
 
 type cgError struct{ msg string }
+
+// checkUnreached type- and borrow-checks the non-generic functions of local
+// crates that code generation did not reach (rustc checks every function).
+func (g *Gen) checkUnreached() {
+	if os.Getenv("RUSTGO_BORROWCK") == "0" {
+		return
+	}
+	for _, d := range g.tcx.R.Defs {
+		if d.Kind != DefFn || d.Fn == nil || d.Fn.Ast == nil || d.Fn.Ast.Body == nil || d.Crate == nil || !d.Crate.Local {
+			continue
+		}
+		if g.bcChecked[d] || g.tcx.Generics(d).Count() != 0 {
+			continue
+		}
+		r := g.tcx.CheckInstance(d, nil)
+		if len(g.tcx.Errors) > 0 {
+			return
+		}
+		g.borrowck(d, r)
+	}
+}
+
+// borrowck runs the borrow checker on a function instance of a local crate
+// (RUSTGO_BORROWCK=all: every crate; =0: off).
+func (g *Gen) borrowck(d *Def, r *typeck.Results) {
+	mode := os.Getenv("RUSTGO_BORROWCK")
+	if mode == "0" {
+		return
+	}
+	if mode != "all" && (d.Crate == nil || !d.Crate.Local) {
+		return
+	}
+	if g.bcSeen == nil {
+		g.bcSeen = map[string]bool{}
+		g.bcChecked = map[*Def]bool{}
+	}
+	g.bcChecked[d] = true
+	for _, m := range borrowck.CheckFn(g.tcx, d, r) {
+		if !g.bcSeen[m] {
+			g.bcSeen[m] = true
+			g.Errors = append(g.Errors, m)
+		}
+	}
+}
 
 func (g *Gen) fatalf(format string, args ...any) {
 	panic(cgError{fmt.Sprintf(format, args...)})
@@ -231,6 +281,7 @@ func (g *Gen) genFunction(inst instance) {
 	if len(g.tcx.Errors) > 0 {
 		g.fatalf("%s", g.tcx.Err())
 	}
+	g.borrowck(d, r)
 	fg := newFnGen(g, r)
 	fg.computeSplit(d.Fn.Ast.Body)
 	if hasTrackCaller(d) {

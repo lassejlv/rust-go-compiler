@@ -1,0 +1,52 @@
+["line one\n", "line two\n", "\n", "line four\n"]
+["line one", "line two", "", "line four", ""]
+["line one", "line two", "", "line four"]
+["line one", "line two", "", "line four"]
+["a", "b", "c"]
+["lib", "/usr/local/lib/rustlib/x86_64"]
+["", "usr", "local/lib/rustlib/x86_64/lib"]
+["lib", "x86_64", "rustlib"]
+Some(("/usr/local/", "/rustlib/x86_64/lib"))
+Some(("/usr/local/lib/rustlib/x86_64/", ""))
+None
+["a", "b", "", "c", ""]
+["", "c", "", "b", "a"]
+["a", "b", "", "c"]
+["c", "", "b", "a"]
+["", "", "a", "", "b", "", "", "c", ""]
+["c", "b", "a"]
+["a\u{3000}b", "c"]
+["abc", "def", ""]
+["a", "b", "", "c", "", "", "d"]
+["a", "b", "c", "d"]
+["one", "two", "three", "four"]
+3
+[(0, "ab"), (3, "ab"), (6, "ab"), (8, "ab")]
+[8, 3, 0]
+"abc"
+2
+Some(2) Some(5)
+None Some(0)
+"hi"
+"hixx"
+"123abc"
+"abc456"
+Some("body") None
+"trim \n"
+"\t trim"
+"XXab"
+[(0, 'H'), (6, 'W')]
+["mi", "", "i", "", "ippi"]
+[("name", "alice"), ("age", "30"), ("city", "paris"), ("x", "")]
+Tqbf
+parse_http_request_header
+Hello Wide World
+["", "a", "b", "c", ""]
+[""]
+["a,b,c"]
+[]
+true true
+true
+["c", "b", "a"]
+Greater
+["1", "2"]

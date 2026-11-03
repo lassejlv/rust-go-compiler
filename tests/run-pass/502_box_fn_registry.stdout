@@ -1,0 +1,25 @@
+Some(5)
+None
+None
+Some(103)
+None
+Some(81)
+ops: ["%", "*", "+", "-", "/", "off", "pow"]
+abs(-7) = 7
+neg(-7) = 7
+sq(-7) = 49
+log: 2 + 3 = Some(5)
+log: 7 / 0 = None
+log: 9223372036854775807 * 2 = None
+log: 1 off 2 = Some(103)
+log: 1 ^ 2 = None
+log: 3 pow 4 = Some(81)
+["click#1 click:a", "any:click:a"]
+["keys so far [7]", "any:keydown"]
+["click#2 click:b", "any:click:b"]
+["any:scroll"]
+["keys so far [7, 5]", "any:keyup"]
+7 57
+sqrt 3.24037034920393
+floor 10
+neg -10.5

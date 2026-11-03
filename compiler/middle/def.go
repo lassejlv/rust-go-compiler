@@ -343,6 +343,12 @@ type Crate struct {
 	// Externs is the extern prelude: dependency crates by name. nil means
 	// "every loaded crate" (single-file compilation).
 	Externs map[string]*Crate
+	// DisplayName is the crate's real name when Name is an internal key
+	// (type_name, module_path!).
+	DisplayName string
+	// Local: the crate is being developed (the input file or a cargo path
+	// dependency), not std or a registry dependency; it is borrow-checked.
+	Local bool
 }
 
 // Is2015 reports whether the crate uses Rust 2015 path semantics.
@@ -509,6 +515,29 @@ func (m *Module) ParentModule() *Module {
 }
 
 // ReprAlign returns N for #[repr(align(N))] (0 if absent).
+// ReprPacked returns N for #[repr(packed(N))], 1 for #[repr(packed)], 0
+// if not packed.
+func (d *Def) ReprPacked() uint64 {
+	for _, a := range d.Attrs {
+		if a.Path != "repr" || len(a.Tokens) == 0 || a.Tokens[0].Delim != '(' {
+			continue
+		}
+		in := a.Tokens[0].Inner
+		for i := 0; i < len(in); i++ {
+			if in[i].Delim != 0 || in[i].Tok.Text != "packed" {
+				continue
+			}
+			if i+1 < len(in) && in[i+1].Delim == '(' && len(in[i+1].Inner) == 1 {
+				if n, err := strconv.ParseUint(strings.ReplaceAll(in[i+1].Inner[0].Tok.Text, "_", ""), 0, 64); err == nil && n > 0 {
+					return n
+				}
+			}
+			return 1
+		}
+	}
+	return 0
+}
+
 func (d *Def) ReprAlign() uint64 {
 	for _, a := range d.Attrs {
 		if a.Path != "repr" || len(a.Tokens) == 0 || a.Tokens[0].Delim != '(' {

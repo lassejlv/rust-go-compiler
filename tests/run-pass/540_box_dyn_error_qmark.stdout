@@ -1,0 +1,18 @@
+Ok(3)
+err division by zero / DivZero
+err int: invalid digit found in string / Int(ParseIntError { kind: InvalidDigit })
+err int: cannot parse integer from empty string / Int(ParseIntError { kind: Empty })
+Ok(10.0)
+Err("float: invalid float literal")
+Err("custom: negative factor")
+Err("int: invalid digit found in string")
+boxed ok 75 30
+boxed err [calc] division by zero
+boxed err [other] too big: 1500
+boxed err [calc] int: invalid digit found in string
+Some(42) None None None
+Ok(42)
+division by zero
+downcast ok: DivZero
+static x
+Err("boom")

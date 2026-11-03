@@ -14,6 +14,19 @@ type dropEntry struct {
 	flag  string
 	ty    Ty
 	local *typeck.Local
+	cs    int // cleanup stack entries pushed for it (0 = 1)
+}
+
+func csCount(ds []dropEntry) int {
+	n := 0
+	for _, d := range ds {
+		if d.cs > 0 {
+			n += d.cs
+		} else {
+			n++
+		}
+	}
+	return n
 }
 
 type scope struct {
@@ -131,7 +144,7 @@ func (fc *fnGen) emitScopeDrops(s *scope) {
 		fc.line("%s", fc.dropCode(d))
 	}
 	if len(s.drops) > 0 {
-		fc.line("RG_CS_POP(%d);", len(s.drops))
+		fc.line("RG_CS_POP(%d);", csCount(s.drops))
 	}
 }
 
@@ -392,6 +405,25 @@ func (fc *fnGen) declLocal(l *typeck.Local) {
 			fc.line("uint8_t %s_%d = 0;", fc.flagName(l), i)
 		}
 		s := fc.scopes[len(fc.scopes)-1]
+		if len(fc.split[l]) > 0 {
+			// per-field flags: unwinding drops the fields still owned
+			// (pushed last-first so that field 0 is dropped first)
+			fts := fc.fieldTys(l.Ty)
+			n := 0
+			for i := len(fts) - 1; i >= 0; i-- {
+				if !fc.g.needsDrop(fts[i]) {
+					continue
+				}
+				flag := fc.flagName(l)
+				if fc.split[l][i] {
+					flag = fmt.Sprintf("%s_%d", fc.flagName(l), i)
+				}
+				fc.line("RG_CS_PUSH(&%s.f%d, %s, &%s);", fc.localName(l), i, fc.g.dropFn(fts[i]), flag)
+				n++
+			}
+			s.drops = append(s.drops, dropEntry{place: fc.localName(l), flag: fc.flagName(l), ty: l.Ty, local: l, cs: n})
+			return
+		}
 		s.drops = append(s.drops, dropEntry{place: fc.localName(l), flag: fc.flagName(l), ty: l.Ty, local: l})
 		fc.line("RG_CS_PUSH(&%s, %s, &%s);", fc.localName(l), fc.g.dropFn(l.Ty), fc.flagName(l))
 	}
@@ -931,7 +963,7 @@ func (fc *fnGen) dropsString(depth int) string {
 			parts = append(parts, fc.dropCode(d))
 		}
 		if len(s.drops) > 0 {
-			parts = append(parts, fmt.Sprintf("RG_CS_POP(%d);", len(s.drops)))
+			parts = append(parts, fmt.Sprintf("RG_CS_POP(%d);", csCount(s.drops)))
 		}
 	}
 	return strings.Join(parts, " ")

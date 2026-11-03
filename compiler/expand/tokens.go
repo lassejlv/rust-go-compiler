@@ -137,8 +137,8 @@ func group(d byte, sp lexer.Span, inner []ast.TokenTree) ast.TokenTree {
 
 // parenWrap wraps trees in parentheses unless they already form one tree.
 func parenWrap(tts []ast.TokenTree) []ast.TokenTree {
-	if len(tts) == 1 {
-		return tts
+	if len(tts) == 1 && (tts[0].Delim != 0 || tts[0].Tok.Kind != lexer.Punct) {
+		return tts // a lone punctuation token (`..`) still needs parentheses
 	}
 	sp := ttsSpan(tts, lexer.Span{})
 	open := lexer.Span{Lo: sp.Lo, Hi: sp.Lo}

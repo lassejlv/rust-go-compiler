@@ -1,0 +1,75 @@
+29 bytes, 18 chars
+ 1 'é' len_utf8=2 len_utf16=1 U+00E9
+ 8 'ö' len_utf8=2 len_utf16=1 U+00F6
+14 '✓' len_utf8=3 len_utf16=1 U+2713
+18 '日' len_utf8=3 len_utf16=1 U+65E5
+21 '本' len_utf8=3 len_utf16=1 U+672C
+25 '🎉' len_utf8=4 len_utf16=2 U+1F389
+19
+None
+Some("hé")
+Some("éllo wörld ✓ 日本 🎉") None
+a -> 1 [61]
+é -> 2 [c3, a9]
+✓ -> 3 [e2, 9c, 93]
+🎉 -> 4 [f0, 9f, 8e, 89]
+[d83c, df89]
+[61, d83c, df89, 62] Ok("a🎉b")
+true
+a�b
+'\n' default=\n debug=\n unicode=\u{a}
+'\t' default=\t debug=\t unicode=\u{9}
+'\'' default=\' debug=\' unicode=\u{27}
+'"' default=\" debug=\" unicode=\u{22}
+'\\' default=\\ debug=\\ unicode=\u{5c}
+'\0' default=\u{0} debug=\0 unicode=\u{0}
+'\u{7f}' default=\u{7f} debug=\u{7f} unicode=\u{7f}
+'é' default=\u{e9} debug=é unicode=\u{e9}
+'\u{200b}' default=\u{200b} debug=\u{200b} unicode=\u{200b}
+'\u{301}' default=\u{301} debug=\u{301} unicode=\u{301}
+tab\there\n\"q\"
+é́\r
+"mixed\u{1b}[0m\u{feff}"
+"é\u{301}"
+Some('😀')
+None None
+Some('b')
+Some(35) None
+edcba
+['α', 'β', 'γ', 'δ']
+SS
+2
+false false
+Err(Utf8Error { valid_up_to: 1, error_len: None })
+Ok(3)
+incomplete utf-8 byte sequence from index 1 valid_up_to=1 None
+invalid utf-8 sequence of 1 bytes from index 2 Some(1)
+fo�o
+日�
+🎉 本日 ✓ dlröw olléh
+héllo w
+héllo wörld  | ✓ 日本 🎉
+None
+17
+true false
+[true, false, true]
+67
+z
+A
+3
+"a\0b" a\0b a\u{0}b
+"tab\t" tab\t tab\t
+"quote\"" quote\" quote\"
+"uni😀" uni😀 uni\u{1f600}
+"ctrl\u{1}" ctrl\u{1} ctrl\u{1}
+"del\u{7f}" del\u{7f} del\u{7f}
+"nbsp\u{a0}" nbsp\u{a0} nbsp\u{a0}
+"zwj\u{200d}x" zwj\u{200d}x zwj\u{200d}x
+éä chars=4 bytes=6
+"\u{308}a\u{301}e"
+[0, 1, 1, 1, 1]
+[1d11e, 78]
+[Ok('𝄞'), Err(55296), Ok('a')]
+4
+"afkpuz"
+1114111

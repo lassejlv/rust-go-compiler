@@ -1,0 +1,15 @@
+delivered 3
+delivered 3
+Filtered#3(temp) hits=[("temp", 20)]
+strong=1 weak=1
+delivered 2
+observers alive: 2
+1 -> Counter#1 count=7
+2 -> Accum#2 total=94 last=[-2, 3, -4]
+Accum#2 total=194 last=[3, -4, 100]
+rc counts: 3 2
+root/usr/bin
+children of root: 1
+usr strong=2 weak=1
+after drop: parent of usr alive = false
+usr/bin

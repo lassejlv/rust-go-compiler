@@ -1,0 +1,26 @@
+["item0", "item1", "item4", "item9"]
+0xfeed
+abcdefgh
+(7, 2.5)
+[0, 0, 0, 0]
+pushed 1
+pushed 2
+pushed 3
+full, rejected 4
+drop Tracked(4)
+len 3 first 1
+popped Some(3)
+drop Tracked(3)
+leaving scope
+drop Tracked(1)
+drop Tracked(2)
+manually drop holds 100
+drop Tracked(200)
+into_inner 300
+LEAK ME
+leaked box 500
+[0, 3, 6, 9, 12]
+8 2
+true
+end of main
+drop Tracked(300)

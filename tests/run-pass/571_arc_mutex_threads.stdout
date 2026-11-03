@@ -1,0 +1,15 @@
+50005000
+[0, 10, 20, 30, 40, 50, 60, 70]
+counter 8000
+hist {0: 12, 1: 12, 2: 8}
+arc strong 1
+[0, 6, 12, 18]
+[1, 2, 3, 4]
+leaders=1 all befores first=true
+[1, 4, 9, 16, 25]
+try_lock while held: true
+6
+poisoned=true
+101
+["aa", "bbbb", "cccccc"]
+Some("worker-7")

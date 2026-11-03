@@ -1,0 +1,21 @@
+east   n=1 qty=3 revenue=1.65
+north  n=3 qty=18 revenue=11.20
+south  n=2 qty=16 revenue=8.40
+{"apple": (26, 0.6), "pear": (11, 0.8)}
+big=[10, 7, 12]
+small=[("south", "pear"), ("east", "apple"), ("north", "apple")]
+["north", "south", "north", "east", "south", "north"] [10, 4, 7, 3, 12, 1]
+[1, 2, 3, 4] [1, 4, 9, 16] [1, 8, 27, 64]
+[('a', 3), ('b', 1), ('c', 2), ('d', 5), ('e', 1)]
+4w3b1w
+[[1, 1], [2], [3, 3, 3], [1]]
+[["a", "a"], ["b"]]
+5 ** ["times", "worst"]
+4 * ["best"]
+3 ** ["was", "the"]
+2 ** ["it", "of"]
+([2, 4, 6, 8, 10], [1, 3, 5, 7, 9])
+[1, 3, 5] ["invalid digit found in string", "cannot parse integer from empty string"]
+["apple/pear/pear/apple", "apple/apple"]
+["east:3", "north:10", "north:7", "north:1", "south:12", "south:4"]
+3

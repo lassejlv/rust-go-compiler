@@ -45,6 +45,7 @@ pub struct RawWakerVTable {
 }
 
 impl RawWakerVTable {
+    #[rustc_promotable]
     pub const fn new(
         clone: unsafe fn(*const ()) -> RawWaker,
         wake: unsafe fn(*const ()),

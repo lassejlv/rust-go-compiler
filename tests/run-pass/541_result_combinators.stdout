@@ -1,0 +1,44 @@
+Err("5 is odd")
+Err("3 is odd")
+Ok(-1)
+Ok(300)
+Err(8)
+5
+8
+Some(2) Some("5 is odd")
+Ok("next")
+Ok(0)
+0 3
+true
+true
+Some(5)
+Ok(Some(2)) Ok(None) Err("3 is odd")
+Some(Ok(5))
+Some(3) None
+Err("inner")
+Err("negative")
+Ok(5)
+Some((3, 4))
+None
+Some(1) None
+Some(10) None
+Some(5) None
+Some(1) Some(2)
+Some([1, 2])
+Some(6)
+Some(21) Some(22)
+true
+true
+Some(18) [9]
+3 Ok(3)
+21 Some("invalid digit found in string")
+84
+"default"
+Some(5) Some(2.5)
+"fallback" Some(1)
+3
+4
+2
+Ok(Some(1))
+Some(1)
+Ok(4)
