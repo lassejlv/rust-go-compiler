@@ -55,7 +55,9 @@ func Tokenize(file int, src string) ([]Token, error) {
 	return l.toks, nil
 }
 
-func (l *lx) pos() Pos { return Pos{File: l.file, Off: l.off, Line: l.line, Col: l.col} }
+func (l *lx) pos() Pos {
+	return Pos{File: int32(l.file), Off: int32(l.off), Line: int32(l.line), Col: int32(l.col)}
+}
 
 func (l *lx) errf(p Pos, format string, args ...any) error {
 	return &Error{Pos: p, Msg: fmt.Sprintf(format, args...)}

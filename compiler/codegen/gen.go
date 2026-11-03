@@ -414,7 +414,18 @@ func (g *Gen) genConstFn(name string, d *Def, args []Ty) {
 		fg.line("if (__atomic_load_n(&%s_done, __ATOMIC_ACQUIRE)) return %s_cache;", name, name)
 	}
 	fg.pushScope()
-	v := fg.coerceValue(r.ConstExpr, r.RetTy)
+	var v string
+	if e := r.ConstExpr; constAggregate(e) && fg.promotable(e) && len(fg.r.Adjust[e.GetID()]) == 0 && fg.ty(e) == r.RetTy {
+		// a constant table (`static T: [(u32, u32); 900] = [...]`):
+		// static data instead of a compound literal built at run time,
+		// which costs the C compiler a lot for large tables
+		inner := fg.constC(e)
+		k := fg.newName("cinit")
+		fmt.Fprintf(&g.statics, "static %s %s = %s;\n", g.ctype(r.RetTy), k, inner)
+		v = k
+	} else {
+		v = fg.coerceValue(r.ConstExpr, r.RetTy)
+	}
 	if cache {
 		fg.line("%s_cache = %s;", name, v)
 		fg.line("__atomic_store_n(&%s_done, 1, __ATOMIC_RELEASE);", name)
@@ -669,4 +680,14 @@ func attrStringValue(a *ast.Attr) string {
 		return ""
 	}
 	return find(a.Tokens)
+}
+
+// constAggregate reports whether e is an array or tuple expression (the
+// initializers worth emitting as static data).
+func constAggregate(e ast.Expr) bool {
+	switch unparen(e).(type) {
+	case *ast.ArrayExpr, *ast.TupleExpr:
+		return true
+	}
+	return false
 }

@@ -263,7 +263,7 @@ func (e *Expander) formatArgsMacDirect(mac *ast.MacCall, tts []ast.TokenTree, pr
 // location returns "file", line, col of the (outermost) call site.
 func (e *Expander) location(mac *ast.MacCall) (string, int, int) {
 	sp := e.callSite(mac.Span)
-	return lexer.FileName(sp.Lo.File), sp.Lo.Line, sp.Lo.Col
+	return lexer.FileName(sp.Lo.File), int(sp.Lo.Line), int(sp.Lo.Col)
 }
 
 func (e *Expander) locArgs(mac *ast.MacCall) string {
@@ -696,17 +696,13 @@ func (e *Expander) includeBytesMac(mac *ast.MacCall) ([]ast.TokenTree, error) {
 	if err != nil {
 		return nil, errAt(mac.Span, "couldn't read `%s`: %v", p, err)
 	}
-	var sb strings.Builder
-	sb.WriteString("&[")
-	for i, c := range b {
-		if i > 0 {
-			sb.WriteString(", ")
-		}
-		sb.WriteString(strconv.Itoa(int(c)))
-		sb.WriteString("u8")
-	}
-	sb.WriteString("]")
-	return tmpl(mac.Span, sb.String())
+	// `&[u8; N]` as a byte string literal (one token instead of one per
+	// byte: included files can be large)
+	sp := synthSpan(mac.Span)
+	return []ast.TokenTree{
+		{Tok: lexer.Token{Kind: lexer.Punct, Text: "&", Span: sp}},
+		{Tok: lexer.Token{Kind: lexer.ByteStr, Text: string(b), Span: sp}},
+	}, nil
 }
 
 // includeMac includes a file's tokens (as an expression or items).

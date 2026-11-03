@@ -6,10 +6,10 @@ import "fmt"
 
 // Pos identifies a location in a source file.
 type Pos struct {
-	File int // index into the global SourceMap
-	Off  int // byte offset
-	Line int // 1-based
-	Col  int // 1-based (in characters)
+	File int32 // index into the global SourceMap
+	Off  int32 // byte offset
+	Line int32 // 1-based
+	Col  int32 // 1-based (in characters)
 }
 
 func (p Pos) String() string {
@@ -39,15 +39,15 @@ func AddFile(name, src string) int {
 }
 
 // FileName returns the display name of file idx.
-func FileName(idx int) string {
-	if idx < 0 || idx >= len(Files) {
+func FileName[I int | int32](idx I) string {
+	if idx < 0 || int(idx) >= len(Files) {
 		return "<unknown>"
 	}
 	return Files[idx].Name
 }
 
 // Kind is a token kind.
-type Kind int
+type Kind uint8
 
 const (
 	EOF        Kind = iota
@@ -70,18 +70,18 @@ func (k Kind) String() string { return kindNames[k] }
 
 // Token is a single lexical token.
 type Token struct {
-	Kind   Kind
 	Text   string // see Kind docs; for Punct the operator, for Ident the name
 	Suffix string // literal suffix, e.g. "u8", "f64"
-	Raw    bool   // raw identifier r#foo / raw string
-	Inner  bool   // for DocComment: //! (inner) vs /// (outer)
 	Span   Span
+	// Hyg is the macro_rules hygiene mark of an identifier introduced by a
+	// macro body (0 for source text and macro arguments).
+	Hyg   uint32
+	Kind  Kind
+	Raw   bool // raw identifier r#foo / raw string
+	Inner bool // for DocComment: //! (inner) vs /// (outer)
 	// JointNext is true when the next token immediately follows this one with
 	// no whitespace (used for splitting/merging punctuation in macros).
 	JointNext bool
-	// Hyg is the macro_rules hygiene mark of an identifier introduced by a
-	// macro body (0 for source text and macro arguments).
-	Hyg uint32
 }
 
 func (t Token) String() string {

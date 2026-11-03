@@ -405,6 +405,12 @@ func (fc *fnGen) literal(x *ast.LitExpr, t Ty) string {
 		name := fc.newName("bs")
 		at := t.Elem
 		fc.g.defineByValue(at)
+		if len(x.Value) >= 64 {
+			// a string literal (of exactly N chars, no NUL) parses much
+			// faster than N integer initializers (include_bytes! data)
+			fmt.Fprintf(&fc.g.statics, "static %s %s = { { %s } };\n", fc.g.ctype(at), name, cString(x.Value))
+			return "(&" + name + ")"
+		}
 		var vs []string
 		for i := 0; i < len(x.Value); i++ {
 			vs = append(vs, strconv.Itoa(int(x.Value[i])))
@@ -1654,12 +1660,12 @@ func bracketSpan(x *ast.IndexExpr) ast.Span {
 	sp := x.Span
 	hi := x.X.GetSpan().Hi
 	f := hi.File
-	if f < 0 || f >= len(lexer.Files) {
+	if f < 0 || int(f) >= len(lexer.Files) {
 		return sp
 	}
 	src := lexer.Files[f].Src
 	off, col, line := hi.Off, hi.Col, hi.Line
-	for off < len(src) && src[off] != '[' {
+	for int(off) < len(src) && src[off] != '[' {
 		if src[off] == '\n' {
 			line++
 			col = 1
@@ -1668,7 +1674,7 @@ func bracketSpan(x *ast.IndexExpr) ast.Span {
 		}
 		off++
 	}
-	if off >= len(src) {
+	if int(off) >= len(src) {
 		return sp
 	}
 	sp.Lo = lexer.Pos{File: f, Off: off, Line: line, Col: col}

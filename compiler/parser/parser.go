@@ -242,8 +242,8 @@ func (p *Parser) cur() lexer.Token {
 	t := p.toks[p.idx]
 	if p.split > 0 {
 		t.Text = t.Text[p.split:]
-		t.Span.Lo.Off += p.split
-		t.Span.Lo.Col += p.split
+		t.Span.Lo.Off += int32(p.split)
+		t.Span.Lo.Col += int32(p.split)
 	}
 	return t
 }
@@ -300,8 +300,8 @@ func (p *Parser) eatPrefix(s string) bool {
 	if strings.HasPrefix(t.Text, s) {
 		p.split += len(s)
 		hi := t.Span.Lo
-		hi.Off += len(s)
-		hi.Col += len(s)
+		hi.Off += int32(len(s))
+		hi.Col += int32(len(s))
 		p.lastHi = hi
 		return true
 	}
@@ -432,8 +432,8 @@ func (p *Parser) Reset(pos int) {
 	if p.split > 0 {
 		t := p.toks[p.idx]
 		p.lastHi = t.Span.Lo
-		p.lastHi.Off += p.split
-		p.lastHi.Col += p.split
+		p.lastHi.Off += int32(p.split)
+		p.lastHi.Col += int32(p.split)
 	} else if p.idx > 0 {
 		p.lastHi = p.toks[p.idx-1].Span.Hi
 	} else {
