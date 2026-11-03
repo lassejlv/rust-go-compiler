@@ -142,6 +142,18 @@ func (cx *unsafeCx) walk(n any, inUnsafe bool) {
 			if !inUnsafe && cx.isUnionField(e) {
 				cx.report(e.Span, "access to union field")
 			}
+		case *ast.StructPat:
+			// destructuring a union reads a field
+			if !inUnsafe && len(e.Fields) > 0 {
+				if ty := cx.r.NodeTypes[e.ID]; ty != nil {
+					for ty.Kind == TRef {
+						ty = ty.Elem
+					}
+					if ty.Kind == TAdt && ty.Def != nil && ty.Def.Kind == DefUnion {
+						cx.report(e.Span, "access to union field")
+					}
+				}
+			}
 		}
 		return true
 	})

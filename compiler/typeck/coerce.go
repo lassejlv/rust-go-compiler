@@ -115,6 +115,10 @@ func (fcx *FnCtxt) coerceRef(e ast.Expr, a, b Ty) bool {
 	// direct
 	s := fcx.ic.snapshot()
 	if !fcx.opaqueToDyn(a.Elem, b.Elem) && fcx.ic.unify(a.Elem, b.Elem) {
+		if a.Mut && !b.Mut {
+			// `&mut T` -> `&T`: a shared reborrow (`&*e`)
+			fcx.addAdjust(e, Adjustment{Kind: AdjDeref, Target: a.Elem}, Adjustment{Kind: AdjBorrow, Mut: false, Target: b})
+		}
 		return true
 	}
 	fcx.ic.rollback(s)
