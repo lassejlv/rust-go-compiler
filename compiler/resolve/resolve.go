@@ -627,6 +627,9 @@ func (r *Resolver) tryImport(imp *Import, report bool) bool {
 	// lookup finds the imported name in one namespace.
 	var lookup func(ns Namespace) (res Res, found, determined bool)
 	var macroCrate *Crate
+	// privacy of the imported item (same crate; E0603)
+	var privRes Res
+	pubSeen := false
 	if len(imp.Path) == 1 {
 		// `use foo;` / `use foo as bar;`
 		macroCrate = m.Crate
@@ -692,6 +695,13 @@ func (r *Resolver) tryImport(imp *Import, report bool) bool {
 				target.Def.Kind != DefEnum && target.Def.Kind != DefTrait {
 				return Res{}, false, true
 			}
+			if target.Crate == m.Crate {
+				if r.BindingAccessible(target, last, ns, b, m) {
+					pubSeen = true
+				} else if privRes.Def == nil {
+					privRes = b.Res
+				}
+			}
 			return b.Res, true, true
 		}
 	}
@@ -709,6 +719,13 @@ func (r *Resolver) tryImport(imp *Import, report bool) bool {
 	}
 	if !determined {
 		return false
+	}
+	if found && privRes.Def != nil && !pubSeen {
+		kind := privRes.Def.Kind.String()
+		if privRes.Kind == ResCtor && privRes.Def.Kind == DefStruct {
+			kind = "tuple struct constructor"
+		}
+		r.Errors = append(r.Errors, fmt.Sprintf("%s: error[E0603]: %s `%s` is private", imp.Span.Lo, kind, last))
 	}
 	if !found && r.isMacro(macroCrate, last) {
 		// macros live in a namespace we don't model; remember re-exports
