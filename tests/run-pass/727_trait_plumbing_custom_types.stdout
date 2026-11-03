@@ -1,0 +1,15 @@
+sum ref=Money { cents: 400 } val=Money { cents: 400 } generic=Money { cents: 400 }
+product Factor(120)
+empty sum Money { cents: 0 }
+bag ["APPLE", "KIWI", "FIG", "PLUM"] lens [5, 4, 3, 4] total 16
+joined apple+kiwi+fig+plum
+lookup by &str: Some(1) None contains io: true
+hashset borrow lookup: true
+as_ref lens: 5 3 3
+collect result: Ok([1, 2, 3]) Err("invalid digit found in string")
+collect option: None Some("ab")
+sum option=Some(6) sum result=Err("boom")
+unzip [1, 2, 3, 4, 5, 6] [100, 200, 300, 400, 500, 600]
+rc slice [1, 2, 3, 4] boxed ["xx", "yy"]
+a\b\c -> a/b/c (owned)
+a/b -> a/b (borrowed)

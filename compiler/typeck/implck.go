@@ -35,13 +35,18 @@ func (t *Tcx) checkImpls() {
 			}
 			t.checkOrphan(impl)
 		}
+		t.checkImplRules(impl)
 	}
 	t.checkInherentDups()
 	t.checkLifetimes()
+	t.checkGenericParams()
 	// constants and statics are checked even when unused (their
 	// evaluation errors and non-const calls are errors)
 	for _, d := range t.R.Defs {
-		if (d.Kind != DefConst && d.Kind != DefStatic) || t.isStd(d) || d.Const == nil || d.Const.Expr == nil || d.IsAssoc() || d.Name == "_" {
+		if (d.Kind == DefConst || d.Kind == DefStatic) && !t.isStd(d) && d.Const != nil && d.Const.Expr != nil {
+			t.checkConstReturn(d.Const.Expr)
+		}
+		if (d.Kind != DefConst && d.Kind != DefStatic) || t.isStd(d) || d.Const == nil || d.Const.Expr == nil || d.IsAssoc() {
 			continue
 		}
 		if t.Generics(d).Count() != 0 {
@@ -53,16 +58,21 @@ func (t *Tcx) checkImpls() {
 
 // checkUnusedConst type checks a constant that may never be used (rustgo
 // otherwise only evaluates constants) and runs the body checks on it. The
-// type check itself is quiet: if it fails, the results are dropped so that
-// a later use reports the problem as before.
+// type check is first done quietly; if it fails, it is repeated to report
+// the errors.
 func (t *Tcx) checkUnusedConst(d *Def) {
 	key := InstKey(d, nil)
 	if t.results[key] != nil || t.inProgress[key] {
 		return
 	}
+	t.ConstTy(d) // (lowered loudly: lowering is cached)
 	if r := t.quietCheck(d); r != nil {
 		t.postCheck(r, d)
+		return
 	}
+	// it does not type check: report why (like rustc, which checks every
+	// body whether used or not)
+	t.CheckInstance(d, nil)
 }
 
 // quietCheck type checks a non-generic body without reporting errors; it
@@ -125,7 +135,22 @@ func itemKindWord(d *Def) string {
 
 func (t *Tcx) checkTraitImplItems(impl *Def) {
 	tr := impl.Impl.TraitRef.Trait
-	if tr == nil || tr.Trait == nil || t.isStd(tr) {
+	if tr == nil || tr.Trait == nil {
+		return
+	}
+	seen := map[string]bool{}
+	for _, it := range impl.Impl.Order {
+		key := fmt.Sprintf("%d/%s", it.Kind, it.Name)
+		if it.Kind == DefConst || it.Kind == DefFn {
+			key = "v/" + it.Name
+		}
+		if seen[key] {
+			t.ErrorCode(it.Item.Name.Span, "E0201", "duplicate definitions with name `%s`", it.Name)
+		}
+		seen[key] = true
+	}
+	if t.isStd(tr) {
+		t.checkStdTraitItems(impl, tr)
 		return
 	}
 	for _, it := range impl.Impl.Order {
@@ -323,7 +348,7 @@ func (t *Tcx) checkInherentDups() {
 				if it.Kind == DefAssocTy {
 					continue
 				}
-				if prev := seen[key]; prev != nil && prev.Parent != impl {
+				if prev := seen[key]; prev != nil {
 					t.ErrorCode(it.Item.Name.Span, "E0592", "duplicate definitions with name `%s`", it.Name)
 					continue
 				}
@@ -403,4 +428,229 @@ func (t *Tcx) blanketCovers(a, b *Def) bool {
 		}
 	}
 	return true
+}
+
+// stdRequired lists required items of std traits (rustgo's std does not
+// mirror every trait item by item, so only these are checked). An entry
+// applies only when the trait has all the listed items.
+var stdRequired = map[string][]string{
+	"Iterator":            {"Item", "next"},
+	"DoubleEndedIterator": {"next_back"},
+	"ExactSizeIterator":   {},
+	"Display":             {"fmt"},
+	"Debug":               {"fmt"},
+	"Clone":               {"clone"},
+	"Drop":                {"drop"},
+	"Default":             {"default"},
+	"Hash":                {"hash"},
+	"PartialEq":           {"eq"},
+	"PartialOrd":          {"partial_cmp"},
+	"Ord":                 {"cmp"},
+	"Deref":               {"Target", "deref"},
+	"DerefMut":            {"deref_mut"},
+	"Index":               {"Output", "index"},
+	"IndexMut":            {"index_mut"},
+	"From":                {"from"},
+	"Into":                {"into"},
+	"TryFrom":             {"Error", "try_from"},
+	"AsRef":               {"as_ref"},
+	"AsMut":               {"as_mut"},
+	"FromStr":             {"Err", "from_str"},
+	"IntoIterator":        {"Item", "IntoIter", "into_iter"},
+	"FromIterator":        {"from_iter"},
+	"Extend":              {"extend"},
+	"Add":                 {"Output", "add"},
+	"Sub":                 {"Output", "sub"},
+	"Mul":                 {"Output", "mul"},
+	"Div":                 {"Output", "div"},
+	"Rem":                 {"Output", "rem"},
+	"Neg":                 {"Output", "neg"},
+	"Not":                 {"Output", "not"},
+	"AddAssign":           {"add_assign"},
+	"SubAssign":           {"sub_assign"},
+	"MulAssign":           {"mul_assign"},
+	"DivAssign":           {"div_assign"},
+	"Future":              {"Output", "poll"},
+}
+
+// checkStdTraitItems reports required items of well-known std traits
+// missing from an impl (E0046).
+func (t *Tcx) checkStdTraitItems(impl *Def, tr *Def) {
+	req, ok := stdRequired[tr.Name]
+	if !ok {
+		return
+	}
+	if tr.Name == "Write" {
+		return
+	}
+	for _, n := range req {
+		if tr.Trait.Items[n] == nil {
+			return // a different trait of that name
+		}
+	}
+	var missing []string
+	for _, n := range req {
+		if _, ok := impl.Impl.Items[n]; !ok {
+			missing = append(missing, "`"+n+"`")
+		}
+	}
+	if len(missing) > 0 {
+		t.ErrorCode(impl.Span, "E0046", "not all trait items implemented, missing: %s", strings.Join(missing, ", "))
+	}
+}
+
+// checkImplRules checks rules of particular impls: Drop only for ADTs
+// (E0120) and not together with Copy (E0184), Copy only when every field is
+// Copy (E0204), no visibility on trait impl items (E0449), and every impl
+// type or const parameter constrained by the impl header (E0207).
+func (t *Tcx) checkImplRules(impl *Def) {
+	ii := impl.Impl
+	ia := ii.Ast
+	if ia == nil {
+		return
+	}
+	t.checkUnconstrained(impl)
+	if ii.TraitRef == nil || ii.Negative {
+		return
+	}
+	for _, it := range ii.Order {
+		if it.Item != nil && it.Item.Vis != ast.VisPrivate {
+			t.ErrorCode(it.Item.Span, "E0449", "visibility qualifiers are not permitted here")
+		}
+	}
+	tr := ii.TraitRef.Trait
+	self := ii.SelfTy
+	if self == nil {
+		return
+	}
+	switch tr {
+	case t.LangOpt("drop"):
+		if self.Kind != TAdt && self.Kind != TError && self.Kind != TParam {
+			t.ErrorCode(impl.Span, "E0120", "the `Drop` trait may only be implemented for local structs, enums, and unions")
+			return
+		}
+		if self.Kind == TAdt {
+			if copyImpl := t.adtCopyImpl(self.Def); copyImpl != nil {
+				t.ErrorCode(copyImpl.Span, "E0184", "the trait `Copy` cannot be implemented for this type; the type has a destructor")
+			}
+		}
+	case t.LangOpt("copy"):
+		if self.Kind != TAdt || t.Generics(impl).Count() != 0 || self.HasParam() {
+			return
+		}
+		t.AdtFields(self.Def)
+		for _, v := range self.Def.Adt.Variants {
+			for _, f := range v.Fields {
+				ft := Subst(f.Ty, self.Args)
+				if ft.HasError() || ft.HasParam() || ft.HasProj() {
+					continue
+				}
+				if !t.IsCopy(ft) {
+					sp := impl.Span
+					if f.Ast != nil {
+						sp = f.Ast.Span
+					}
+					t.ErrorCode(sp, "E0204", "the trait `Copy` cannot be implemented for this type: field `%s` does not implement `Copy`", f.Name)
+					return
+				}
+			}
+		}
+	}
+}
+
+// adtCopyImpl returns a Copy impl of ADT d (or nil).
+func (t *Tcx) adtCopyImpl(d *Def) *Def {
+	cp := t.LangOpt("copy")
+	if cp == nil {
+		return nil
+	}
+	for _, impl := range t.R.Impls {
+		if impl.Impl != nil && impl.Impl.TraitRef != nil && impl.Impl.TraitRef.Trait == cp && !impl.Impl.Negative &&
+			impl.Impl.SelfTy != nil && impl.Impl.SelfTy.Kind == TAdt && impl.Impl.SelfTy.Def == d {
+			return impl
+		}
+	}
+	return nil
+}
+
+// checkUnconstrained reports impl type and const parameters that appear
+// neither in the impl's self type or trait nor in an associated type
+// binding of its bounds (E0207).
+func (t *Tcx) checkUnconstrained(impl *Def) {
+	ia := impl.Impl.Ast
+	if ia.Generics == nil {
+		return
+	}
+	named := map[string]bool{}
+	collect := func(n any) {
+		ast.Walk(n, func(x any) bool {
+			switch y := x.(type) {
+			case *ast.Path:
+				for _, sg := range y.Segments {
+					named[sg.Ident.Name] = true
+				}
+			case *ast.MacroType:
+				named["*"] = true
+			}
+			return true
+		})
+	}
+	collect(ia.SelfTy)
+	if ia.Trait != nil {
+		collect(ia.Trait)
+	}
+	var bindings func(n any)
+	bindings = func(n any) {
+		ast.Walk(n, func(x any) bool {
+			if p, ok := x.(*ast.Path); ok {
+				for _, sg := range p.Segments {
+					if sg.Args != nil {
+						if sg.Args.Parenthesized && sg.Args.Output != nil {
+							collect(sg.Args.Output) // Fn(..) -> R binds Output = R
+						}
+						for _, b := range sg.Args.Bindings {
+							if b.Ty != nil {
+								collect(b.Ty)
+							}
+						}
+					}
+				}
+			}
+			return true
+		})
+	}
+	for _, p := range ia.Generics.Params {
+		for _, b := range p.Bounds {
+			bindings(b)
+		}
+	}
+	for _, w := range ia.Generics.Where {
+		bindings(w)
+	}
+	if named["*"] {
+		return
+	}
+	for _, p := range ia.Generics.Params {
+		if p.Kind != ast.GPLifetime && !named[p.Name.Name] {
+			kind := "type"
+			if p.Kind == ast.GPConst {
+				kind = "const"
+			}
+			t.ErrorCode(p.Name.Span, "E0207", "the %s parameter `%s` is not constrained by the impl trait, self type, or predicates", kind, p.Name.Name)
+		}
+	}
+}
+
+// checkConstReturn reports `return` in a constant's initializer (outside
+// closures) (E0572).
+func (t *Tcx) checkConstReturn(e ast.Expr) {
+	ast.Walk(e, func(n any) bool {
+		switch x := n.(type) {
+		case *ast.ClosureExpr, *ast.ItemStmt:
+			return false
+		case *ast.ReturnExpr:
+			t.ErrorCode(x.Span, "E0572", "return statement outside of function body")
+		}
+		return true
+	})
 }

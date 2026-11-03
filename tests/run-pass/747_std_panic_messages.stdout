@@ -1,0 +1,144 @@
+index:
+    at 28:42
+    msg: index out of bounds: the len is 3 but the index is 5
+range end:
+    at 29:47
+    msg: range end index 10 out of range for slice of length 3
+range start>end:
+    at 30:53
+    msg: slice index starts at 2 but ends at 1
+range start:
+    at 31:49
+    msg: range start index 4 out of range for slice of length 3
+str boundary:
+    at 32:50
+    msg: end byte index 2 is not a char boundary; it is inside 'é' (bytes 1..3 of string)
+str range:
+    at 33:47
+    msg: end byte index 20 is out of bounds for string of length 6
+unwrap none:
+    at 34:55
+    msg: called `Option::unwrap()` on a `None` value
+unwrap err:
+    at 35:57
+    msg: called `Result::unwrap()` on an `Err` value: ParseIntError { kind: InvalidDigit }
+expect err:
+    at 36:56
+    msg: wanted a number: ParseIntError { kind: InvalidDigit }
+unwrap_err ok:
+    at 37:62
+    msg: called `Result::unwrap_err()` on an `Ok` value: 3
+expect none:
+    at 38:54
+    msg: value required
+sub overflow:
+    at 39:48
+    msg: attempt to subtract with overflow
+mul overflow:
+    at 40:48
+    msg: attempt to multiply with overflow
+div zero:
+    at 41:44
+    msg: attempt to divide by zero
+rem zero:
+    at 42:44
+    msg: attempt to calculate the remainder with a divisor of zero
+div overflow:
+    at 43:48
+    msg: attempt to divide with overflow
+pow overflow:
+    at <std>
+    msg: attempt to exponentiate with overflow
+abs overflow:
+    at <std>
+    msg: attempt to negate with overflow
+borrow_mut twice:
+    at 46:82
+    msg: RefCell already borrowed
+borrow while mut:
+    at 47:86
+    msg: RefCell already mutably borrowed
+hashmap index:
+    at 48:51
+    msg: no entry found for key
+btreemap index:
+    at 49:52
+    msg: no entry found for key
+vecdeque index:
+    at 50:52
+    msg: out of bounds access
+vec remove:
+    at 51:63
+    msg: removal index (is 5) should be < len (is 3)
+vec insert:
+    at 52:63
+    msg: insertion index (is 7) should be <= len (is 3)
+swap_remove:
+    at <std>
+    msg: swap_remove index (is 3) should be < len (is 3)
+split_at:
+    at 54:46
+    msg: mid > len
+copy_from_slice:
+    at 55:65
+    msg: copy_from_slice: source slice length (2) does not match destination slice length (3)
+drain range:
+    at <std>
+    msg: range end index 5 out of range for slice of length 3
+chunks zero:
+    at 57:49
+    msg: chunk size must be non-zero
+step_by zero:
+    at <std>
+    msg: assertion failed: step != 0
+from_digit radix:
+    at <std>
+    msg: from_digit: radix is too high (maximum 36)
+string remove:
+    at 60:66
+    msg: start byte index 2 is not a char boundary; it is inside 'é' (bytes 1..3 of string)
+string insert:
+    at 61:66
+    msg: assertion failed: self.is_char_boundary(idx)
+truncate boundary:
+    at 62:70
+    msg: assertion failed: self.is_char_boundary(new_len)
+unreachable:
+    at 63:53
+    msg: internal error: entered unreachable code: state 3
+todo:
+    at 64:46
+    msg: not yet implemented
+unimplemented:
+    at 65:55
+    msg: not implemented: feature x
+assert:
+    at 66:34
+    msg: assertion failed: bb(1) > 2
+assert msg:
+    at 67:38
+    msg: custom 42 msg
+assert_ne:
+    at 68:37
+    msg: assertion `left != right` failed
+  left: 4
+ right: 4
+assert_eq strs:
+    at 69:42
+    msg: assertion `left == right` failed: texts differ
+  left: "a"
+ right: "b"
+debug_assert:
+    at 70:40
+    msg: assertion failed: bb(false)
+array index:
+    at 71:65
+    msg: index out of bounds: the len is 4 but the index is 4
+slice to_vec idx:
+    at 72:72
+    msg: index out of bounds: the len is 0 but the index is 0
+shr overflow:
+    at 73:48
+    msg: attempt to shift right with overflow
+cast ok:
+    no panic

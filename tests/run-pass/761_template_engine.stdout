@@ -1,0 +1,11 @@
+# TEAM ROSTER (3 users, title len 11)
+1. ada [admin]: math/eng
+2. bob: no tags
+3. cy: ops
+first tag: eng | missing: <missing nope> | dflt: n/a | 3
+"{{ open"                    => error at 0: unclosed {{
+"{% if x %}never closed"     => error at 0: unterminated if
+"{% endfor %}"               => error at 0: unknown tag "endfor"
+"{% bogus tag %}"            => error at 0: unknown tag "bogus tag"
+"{{ title | reverse }}"      => error at 0: unknown filter reverse
+"{% for a in b %}x"          => error at 0: unterminated for

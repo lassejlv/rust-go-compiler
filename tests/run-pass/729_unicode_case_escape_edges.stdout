@@ -1,0 +1,70 @@
+straße       upper=STRASSE        lower=straße         chars=6 bytes=7
+İstanbul     upper=İSTANBUL       lower=i̇stanbul      chars=8 bytes=9
+ΟΔΟΣ ΣΟΦΟΣ   upper=ΟΔΟΣ ΣΟΦΟΣ     lower=οδος σοφος     chars=10 bytes=19
+ǅungla       upper=ǄUNGLA         lower=ǆungla         chars=6 bytes=7
+ﬁne          upper=FINE           lower=ﬁne            chars=3 bytes=5
+Ωmega        upper=ΩMEGA          lower=ωmega          chars=5 bytes=6
+ὈΔΥΣΣΕΎΣ     upper=ὈΔΥΣΣΕΎΣ       lower=ὀδυσσεύς       chars=8 bytes=17
+groß         upper=GROSS          lower=groß           chars=4 bytes=5
+ΣΑΣ.         upper=ΣΑΣ.           lower=σας.           chars=4 bytes=7
+aΣb          upper=AΣB            lower=aσb            chars=3 bytes=4
+'ß': upper "SS" (2) lower "ß" (1) len_utf8=2 len_utf16=1
+'ǅ': upper "Ǆ" (1) lower "ǆ" (1) len_utf8=2 len_utf16=1
+'ﬃ': upper "FFI" (3) lower "ﬃ" (1) len_utf8=3 len_utf16=1
+'İ': upper "İ" (1) lower "i\u{307}" (2) len_utf8=2 len_utf16=1
+'ŉ': upper "ʼN" (2) lower "ŉ" (1) len_utf8=2 len_utf16=1
+'a': upper "A" (1) lower "a" (1) len_utf8=1 len_utf16=1
+'Σ': upper "Σ" (1) lower "σ" (1) len_utf8=2 len_utf16=1
+'ς': upper "Σ" (1) lower "ς" (1) len_utf8=2 len_utf16=1
+"e\u{301}" esc_default=e\u{301} esc_debug=é
+"\u{200b}zero" esc_default=\u{200b}zero esc_debug=\u{200b}zero
+"tab\there" esc_default=tab\there esc_debug=tab\there
+"bell\u{7}" esc_default=bell\u{7} esc_debug=bell\u{7}
+"\u{feff}bom" esc_default=\u{feff}bom esc_debug=\u{feff}bom
+"nbsp\u{a0}x" esc_default=nbsp\u{a0}x esc_debug=nbsp\u{a0}x
+"emoji 🦀" esc_default=emoji \u{1f980} esc_debug=emoji 🦀
+"\u{10ffff}" esc_default=\u{10ffff} esc_debug=\u{10ffff}
+"a\u{300}\u{301}" esc_default=a\u{300}\u{301} esc_debug=à́
+"\r\n" esc_default=\r\n esc_debug=\r\n
+"'\"" esc_default=\'\" esc_debug=\'\"
+"\u{1f}" esc_default=\u{1f} esc_debug=\u{1f}
+"del\u{7f}" esc_default=del\u{7f} esc_debug=del\u{7f}
+"soft\u{ad}hy" esc_default=soft\u{ad}hy esc_debug=soft\u{ad}hy
+"\u{e000}pua" esc_default=\u{e000}pua esc_debug=\u{e000}pua
+char '\u{301}' esc_unicode=\u{301} esc_default=\u{301}
+char '\u{200d}' esc_unicode=\u{200d} esc_default=\u{200d}
+char '\'' esc_unicode=\u{27} esc_default=\'
+char '"' esc_unicode=\u{22} esc_default=\"
+char '\0' esc_unicode=\u{0} esc_default=\u{0}
+char 'é' esc_unicode=\u{e9} esc_default=\u{e9}
+char '\u{85}' esc_unicode=\u{85} esc_default=\u{85}
+'a': [alpha,alnum,lower] to_digit10=None to_digit16=Some(10)
+'Z': [alpha,alnum,upper] to_digit10=None to_digit16=None
+'5': [num,alnum] to_digit10=Some(5) to_digit16=Some(5)
+'½': [num,alnum] to_digit10=None to_digit16=None
+'٣': [num,alnum] to_digit10=None to_digit16=None
+'漢': [alpha,alnum] to_digit10=None to_digit16=None
+' ': [ws] to_digit10=None to_digit16=None
+'\u{a0}': [ws] to_digit10=None to_digit16=None
+'\u{2003}': [ws] to_digit10=None to_digit16=None
+'\u{85}': [ws,ctrl] to_digit10=None to_digit16=None
+'\n': [ws,ctrl] to_digit10=None to_digit16=None
+'_': [punct] to_digit10=None to_digit16=None
+'!': [punct] to_digit10=None to_digit16=None
+'Ⅻ': [alpha,num,alnum,upper] to_digit10=None to_digit16=None
+'ǅ': [alpha,alnum] to_digit10=None to_digit16=None
+'ª': [alpha,alnum,lower] to_digit10=None to_digit16=None
+split_whitespace: ["a", "b", "c", "d", "e", "f"]
+split_ascii_whitespace: ["a\u{a0}b\u{2003}c\u{3000}d", "e\u{85}f"]
+boundaries: [0, 1, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 17]
+char_indices: [(1, 'é'), (8, 'ö'), (14, '✓')]
+rev chars: ✓ dlröw olléh
+utf16 len: 13 encode: [55348, 56606, 97]
+from_u32: Some('🦀') None None
+from_digit: Some('7') Some('b') None
+eq_ignore_ascii_case: true false
+ascii upper only: HéLLO STRAßE
+make_ascii_lowercase: ﬁx Σ
+trim unicode: "padded"
+max char: '\u{10ffff}' 1114111
+byte order: ["B", "Z", "a", "b", "á", "ä"]

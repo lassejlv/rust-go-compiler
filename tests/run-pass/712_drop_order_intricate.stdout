@@ -1,0 +1,16 @@
+struct fields:         +c0 +c1 +b +a ~a ~b ~c0 ~c1
+outer with Drop:       ~Outer(self first) ~ia ~ib ~x ~y ~last
+arr/vec/tuple:         ~t0 ~t1 ~v0 ~v1 ~a0 ~a1 ~a2
+shadowing:             using second ~second ~first
+match temp:            +scrut arm scrut ~scrut after-match
+if let temp:           +iflet body iflet ~iflet after-iflet
+stmt temps:            +stmt +stmt2 ~stmt2 ~stmt n=9
+moves:                 before vec drop ~moved after vec drop after let _ ~kept
+option take:           taken is_some=true reassigned ~opt ~opt2
+early return:          +e1 +e2 ~e2 ~e1 ret=2
+normal return:         +e1 +e2 +e3 ~e3 ~e2 ~e1 ret=0
+break value:           ~loopguard got result ~result
+closure:               call 8 ~captured closure dropped
+vec ops:               ~p1 removed ~p2 ~p3 truncated popped Some("p0") ~p0 ~p9
+assignment:            ~s1 now s2 ~s2 ~assign-old
+box slice/destructure: ~x len 2 ~y ~b0 ~b1

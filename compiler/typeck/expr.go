@@ -253,7 +253,8 @@ func (fcx *FnCtxt) checkExprKind(e ast.Expr, expected Ty) Ty {
 		fcx.errorf(x.Span, "macro `%s!` was not expanded", ast.PathString(x.Mac.Path))
 		return TyErr
 	case *ast.AwaitExpr:
-		fcx.errorf(x.Span, "async/await is not supported")
+		// (awaits inside async fns and blocks are lowered by the expander)
+		fcx.t.ErrorCode(x.Span, "E0728", "`await` is only allowed inside `async` functions and blocks")
 		return TyErr
 	case *ast.UnderscoreExpr:
 		fcx.errorf(x.Span, "`_` can only be used on the left-hand side of an assignment")

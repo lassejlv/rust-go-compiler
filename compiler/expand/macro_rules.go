@@ -494,7 +494,9 @@ func matchFragment(frag string, in []ast.TokenTree, pos int) (int, bool) {
 			return 0, false
 		}
 		if n < len(rest) {
-			if rest[n].Delim != 0 {
+			if rest[n].Delim != 0 && rest[n].Delim != '{' {
+				// (a `{..}` group after the path is not part of the meta
+				// item: `$cfg:meta $body:block`)
 				n++
 			} else if isPunct(rest[n], "=") {
 				m, err2 := parsePrefix(rest[n+1:], func(p *parser.Parser) error { _, err := p.ParseExpr(); return err })

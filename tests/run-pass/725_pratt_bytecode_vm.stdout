@@ -1,0 +1,9 @@
+307 tokens; first five: [Kw("fn"), Id("fib"), Op("("), Id("n"), Op(")")]
+fn fib/1 locals=1 ops=18
+fn gcd/2 locals=3 ops=17
+fn is_prime/1 locals=2 ops=31
+fn collatz/1 locals=2 ops=32
+fn <main>/0 locals=3 ops=99
+gcd code: [Load(1), Const(0), Bin("!="), Jz(13), Load(1), Store(2), Load(0), Load(1), Bin("%"), Store(1), Load(2), Store(0), Jmp(0), Load(0), Ret, Const(0), Ret]
+output: 0 1 1 2 3 5 8 13 21 34 55 89 21 25 111 4 1 0 2
+returned 42 after 15753 steps

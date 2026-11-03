@@ -40,6 +40,8 @@ type cargoPkg struct {
 		Kind    []string `json:"kind"`
 		SrcPath string   `json:"src_path"`
 		Edition string   `json:"edition"`
+		Test    *bool    `json:"test"`
+		Doctest *bool    `json:"doctest"`
 	} `json:"targets"`
 }
 
@@ -80,6 +82,7 @@ type crateUnit struct {
 	deps     map[string]string // extern name -> unit key
 	procMac  bool
 	test     bool // built as a test harness (cfg(test), #[test] runner)
+	pmTest   bool // a proc-macro crate's test harness (links proc_macro)
 	// doc-tests: collect the crate's docs while expanding it; genAST, if
 	// set, makes the crate's AST instead of loading it
 	collectDocs bool
@@ -367,10 +370,11 @@ func BuildCargoTests(opts *Options, co *CargoOptions, outDir string, sel []strin
 	}
 	var tus []tu
 	var bins, tests []tu
+	noDoc := false
 	for _, t := range rp.Targets {
 		kind := ""
 		switch {
-		case hasKind(t.Kind, "lib") || hasKind(t.Kind, "rlib"):
+		case hasKind(t.Kind, "lib") || hasKind(t.Kind, "rlib") || hasKind(t.Kind, "proc-macro"):
 			kind = "lib"
 		case hasKind(t.Kind, "bin"):
 			kind = "bin"
@@ -379,11 +383,15 @@ func BuildCargoTests(opts *Options, co *CargoOptions, outDir string, sel []strin
 		default:
 			continue
 		}
-		if !want(kind, t.Name) {
+		if kind == "lib" && t.Doctest != nil && !*t.Doctest {
+			noDoc = true
+		}
+		if !want(kind, t.Name) || (t.Test != nil && !*t.Test && len(sel) == 0) {
 			continue
 		}
 		u := g.targetUnit(t.Name, t.SrcPath, t.Edition)
 		u.test = true
+		u.pmTest = hasKind(t.Kind, "proc-macro")
 		u.key += "__test_" + kind
 		g.addRootDeps(u, true)
 		if lib != nil {
@@ -411,7 +419,7 @@ func BuildCargoTests(opts *Options, co *CargoOptions, outDir string, sel []strin
 	sort.SliceStable(tests, func(i, j int) bool { return tests[i].t.Name < tests[j].t.Name })
 	tus = append(append(tus, bins...), tests...)
 	var dtUnit *crateUnit
-	if lib != nil && !lib.procMac && (len(sel) == 0 || want("doc", "")) {
+	if lib != nil && !noDoc && (len(sel) == 0 || want("doc", "")) {
 		dtUnit = &crateUnit{key: lib.key + "__doctest", name: "rust_out", edition: lib.edition, features: g.feats, deps: map[string]string{}, pkg: rp}
 		g.addRootDeps(dtUnit, true)
 		dtUnit.deps[lib.name] = lib.key
@@ -521,6 +529,9 @@ func (bs *buildState) buildDocTests(units []*crateUnit, lib, u *crateUnit, outDi
 	} else if tests == nil {
 		return nil, err // the library itself does not build
 	} else {
+		if os.Getenv("RUSTGO_DOCTEST_DEBUG") != "" {
+			fmt.Fprintf(os.Stderr, "merged doc-test program: %v\n", err)
+		}
 		// find the tests that do not compile
 		merged := sel
 		for _, dt := range merged {
@@ -684,6 +695,18 @@ func (bs *buildState) compileProgram(units []*crateUnit, binIdx int) (*codegen.P
 	r.AddCrate("std", stdCrate)
 	crates := map[string]*Crate{}
 	var binCrate *Crate
+	var pmCrate *Crate // the proc_macro crate, for proc-macro crates' tests
+	if units[binIdx].pmTest {
+		pmc, err := loadProcMacroCrate()
+		if err != nil {
+			return nil, err
+		}
+		if err := exp.ExpandCrate(pmc, "proc_macro"); err != nil {
+			return nil, fmt.Errorf("proc_macro crate: %v", err)
+		}
+		pmCrate = r.AddCrate("proc_macro", pmc)
+		pmCrate.Externs = map[string]*Crate{}
+	}
 	for i, u := range units {
 		if !need[u.key] {
 			continue
@@ -766,6 +789,9 @@ func (bs *buildState) compileProgram(units []*crateUnit, binIdx int) (*codegen.P
 			if dc := crates[u.deps[n]]; dc != nil {
 				cr.Externs[n] = dc
 			}
+		}
+		if u.pmTest && pmCrate != nil {
+			cr.Externs["proc_macro"] = pmCrate
 		}
 		crates[u.key] = cr
 		if i == binIdx {

@@ -1,0 +1,29 @@
+""
+  sha256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  md5    d41d8cd98f00b204e9800998ecf8427e
+  crc32 00000000 adler32 00000001 fnv1a cbf29ce484222325
+  b64  roundtrip=true
+"abc"
+  sha256 ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad
+  md5    900150983cd24fb0d6963f7d28e17f72
+  crc32 352441c2 adler32 024d0127 fnv1a e71fa2190541574b
+  b64 YWJj roundtrip=true
+The quick br...(43 bytes)
+  sha256 d7a8fbb307d7809469ca9abcb0082e4f8d5651e46d3cdb762d02d0bf37c9e592
+  md5    9e107d9d372bb6826bd81d3542a419d6
+  crc32 414fa339 adler32 5bdc0fda fnv1a f3f9b7f5e7e47110
+  b64 VGhlIHF1aWNrIGJyb3duIGZveCBqdW1wcyBvdmVy.. roundtrip=true
+abcdbcdecdef...(56 bytes)
+  sha256 248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1
+  md5    8215ef0796a20bcaaae116d3876c664a
+  crc32 171a3f5f adler32 807416f9 fnv1a dd305304cdb45735
+  b64 YWJjZGJjZGVjZGVmZGVmZ2VmZ2hmZ2hpZ2hpamhp.. roundtrip=true
+\0\0\0\0\0\0\0\0\0\0\0\0...(200 bytes)
+  sha256 6d9c54dee5660c46886f32d80e57e9dd0ffa57ee0cd2a762b036d9c8e0c3a33a
+  md5    fbaf48ec981a5eecdb57b929fdd426e8
+  crc32 c971a876 adler32 00c80001 fnv1a 37027190f725c8c5
+  b64 AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA.. roundtrip=true
+crc table [1]=77073096 [255]=2d02ef8d
+b64 decode error: Err("invalid char '$'")
+b64 of 1..5 bytes: ["eA==", "eHk=", "eHl6", "eHl6eg==", "eHl6enk="]
+sha256(100k 'a') 6d1cf22d7cc09b085dfc25ee1a1f3ae0265804c607bc2074ad253bcc82fd81ee

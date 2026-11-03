@@ -110,6 +110,18 @@ impl Debug for char {
     }
 }
 
+impl Debug for ! {
+    fn fmt(&self, _: &mut Formatter<'_>) -> Result {
+        *self
+    }
+}
+
+impl Display for ! {
+    fn fmt(&self, _: &mut Formatter<'_>) -> Result {
+        *self
+    }
+}
+
 impl Debug for () {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {

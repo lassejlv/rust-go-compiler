@@ -1,0 +1,15 @@
+block tail:       +blk-local +blk-tail n(blk-tail) ~blk-local ~blk-tail x=8
+fn tail:          +local +tail n(tail) ~local ~tail y=4
+if-let else:      +iflet else-branch ~iflet after
+if cond:          +cond n(cond) ~cond in-if-body
+let extension:    +extended after let r n(extended) len=8
+method chain:     +chain n(chain) ~chain r2=5
+while let:        +wl loop-body ~wl +wl loop-body ~wl +wl ~wl
+fn args:          +arg1 n(arg1) +arg2 take2 ~arg2 ~arg1 z=8
+match:            +m small ~m
+tuple temps:      +t0 n(t0) +t1 +t2 n(t2) ~t2 ~t0 tuple built ~t1
+format args:      +f1 n(f1) +f2 n(f2) ~f2 ~f1 2-2
+vec! temps:       +v1 n(v1) +v2 n(v2) ~v2 ~v1 [2, 2]
+short circuit:    +and1 n(and1) ~and1 b=false
+let _ vs _keep:   +underscore ~underscore after underscore +keep after keep ~keep
+array temp iter:  +arr0 +arr1 n(arr0) n(arr1) ~arr0 ~arr1 lens=11

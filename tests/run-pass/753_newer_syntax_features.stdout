@@ -1,0 +1,22 @@
+raw ptrs: len=0 tag=9
+Packet { tag: 9, len: 0, payload: [0, 0, 171, 0] }
+cstr "hello, c-string" len=15 bytes_with_nul=16 to_str=Ok("hello, c-string")
+strlen via extern = 15 abs(-42) = 42
+escape cstr bytes [116, 97, 98, 9, 104, 101, 114, 101, 65]
+CStr from bytes: Ok("ok") true
+CStr until nul: "ab"
+const fn &mut: [1, 12, 23, 34] "oellh"
+assoc const defaults: 8 4 0
+expect attr fn: 1
+sixteen huge other
+Wrapping: 4 168 -1 shl 2
+Saturating: 255 0 127 -33
+wrapping sum 40748
+unbounded shifts: 0 0 -1
+char consts: '\0' '\u{10ffff}' �
+next_up/down: 0.0000000000000002220446049250313 -0.000000000000000000000000000000000000000000001 inf
+  inspecting 3
+as_slice [3] [] inspect: Some(4)
+  inspect_err e
+leaked [100, 2, 3] leaked string
+extend_from_within [1, 2, 3, 2, 3, 1, 2]

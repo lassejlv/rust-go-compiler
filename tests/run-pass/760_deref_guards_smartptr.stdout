@@ -1,0 +1,14 @@
+len 6 upper HÉLLO takes_str 5 starts true
+deref count 4
+vec [0, 1, 2, 3] total 6 first Some(0) count 203
+nested 6 abs 5
+readers state 2 sum 9 write? false
+after readers state 0
+writer state -1 read? false
+after writer [2, 4] state 1
+write in closure Some(0) state 0
+cow len 3 owned false
+cow [1, 2, 3, 4] owned true base [1, 2, 3]
+[>a!|>b] len 2 contains true
+coerced 2 >b
+fn via box 9 rc deref 9

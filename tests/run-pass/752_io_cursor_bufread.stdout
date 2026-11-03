@@ -1,0 +1,22 @@
+lines ["first line", "second line", "", "fourth,with,commas", "last-no-newline"]
+read_line n=11 "first line\n" pos=11
+read_until n=13 "second line\r\n"
+read_exact "\nfou"
+seek end-4 -> "line"
+seek current -10 -> pos 49
+split on ',' ["first line\\nsecond line\r\\n\\nfourth", "with", "commas\\nlast-no-newline"]
+read_exact eof: kind=UnexpectedEof msg=failed to fill whole buffer
+chain+take "abcdef"
+bytes "yz{"
+vec writer "num-007 end\nraw bytes\n"
+upper writer "HELLO WORLD, THIS IS LONG FMT 42" written=32
+bufwriter buffered=7 
+bufwriter flushed "[0][1][2][3][4]"
+io::copy 14 bytes -> "copy me please"
+bufreader words ["alpha", "beta", "gamma"]
+fill_buf "0123" after consume "23456789"
+failing reader got 7 bytes, error kind=ConnectionReset msg=peer went away
+other: Other custom failure
+["entity not found", "permission denied", "invalid data", "unexpected end of file", "operation would block"]
+inner Some("bad value 5") source? true
+sink/empty/repeat ok "" [113, 113, 113, 113]

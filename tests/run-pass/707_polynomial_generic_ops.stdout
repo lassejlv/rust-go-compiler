@@ -1,0 +1,17 @@
+p = 2x^3 + -3x + 1
+q = x + -1
+p+q = 2x^3 + -2x
+p-q = 2x^3 + -4x + 2
+p*q = 2x^4 + -2x^3 + -3x^2 + 4x + -1
+p-p = 0 degree None
+p' = 6x^2 + -3  p'' = 12x
+p(q(x)) = 2x^3 + -6x^2 + 3x + 2
+p(-2)=-9 p(-1)=2 p(0)=1 p(1)=0 p(2)=11 
+over F7: a=x^2 + 5x + 3  b=2x + 6  a*b=2x^3 + 2x^2 + x + 4  a+b=x^2 + 2
+a(x) for x in F7: [3, 2, 3, 6, 4, 4, 6]
+inverses mod 7: [1, 4, 5, 2, 3, 6]
+interp mod 97: 2x^2 + 3 degree Some(2)
+check: [5, 11, 21, 35]
+debug: Poly { c: [Mod(3)] }
+(1+x)^5 = x^5 + 5x^4 + 10x^3 + 10x^2 + 5x + 1
+2^100 mod 97 = 16

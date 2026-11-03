@@ -1,0 +1,31 @@
+Pt { x: 0, y: 0 } -> origin
+Pt { x: 1, y: 0 } -> unit-x
+Pt { x: 0, y: 7 } -> on-axis 7
+Pt { x: -3, y: 0 } -> on-axis -3
+Pt { x: 4, y: 4 } -> diagonal 4
+Pt { x: 2, y: -5 } -> near (2,-5)
+Pt { x: 9, y: 1 } -> far
+"fn"=function keyword | "let"=binding keyword | ""=empty | "_x"=private-ish | "foo"=ident | 
+tree sum 345
+first tagged kids: [true, false, false]
+[] -> empty
+[5] -> one 5
+[3, 9, 3] -> bookends 3
+[1, 2, 3, 4, 5, 6] -> 1 2 then 4 more (sum 18)
+[1, 5, 0] -> penultimate 5
+[7, 8] -> head [7] tail 8
+[1, 2, 3, 4] -> head [1, 2, 3] tail 4
+["digit", "hex-letter", "letter", "low-control", "high", "other"]
+["frigid", "freezing", "freezing", "freezing", "cold", "mild", "hot"]
+nothing
+a (no bytes)
+b starts with FF
+c ends with 42
+1a 3c 
+grid corners 0 2 5
+let-else with @ or-pattern: hello
+special 42
+nested bind px=3
+double ref pattern sum 6
+ref mut tuple ("left!", 6)
+2

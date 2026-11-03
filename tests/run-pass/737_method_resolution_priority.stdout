@@ -1,0 +1,27 @@
+1 inherent Thing(7)
+2 trait Thing(7)
+3 trait for &Thing
+4 inherent Thing(7)
+5 trait for &Thing
+6 trait for Box<Thing>
+7 trait for Box<Thing>
+8 Name::name default
+9 Name2 for Thing
+10 Consume for &Thing
+11 inherent consume(self)
+12 &self
+13 &self
+14 self on &&R
+15 &self
+16 len via deref: 1003
+17 vec len: 3
+18 deref twice: 3 first=Some(1)
+19 iter sum: 6
+20 Display(4) custom
+21 sides 3 300 33
+22 hi 5 hi "x" hi Some(1)
+23 rc strong=2 len=2 ["a", "bb"]
+24 Cl(1) Cl(2) Cl(2)
+25 Some(Some(3)) Some(3)
+26 5 5 5
+27 [1, 2, 3] 3

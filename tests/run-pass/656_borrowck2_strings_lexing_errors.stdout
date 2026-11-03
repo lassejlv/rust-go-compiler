@@ -1,0 +1,7 @@
+[Num(3), Sym('*'), Num(14), Word("hello"), Sym(';')] 42 ["hello"]
+[("a", "1"), ("longer_key", "value")] longer_key = value ["A", "=", "1", "Longer_key", "=", "Value", "Bad", "Line"] a:1;longer_key:value a
+ok 12
+ok 7
+err neg -3
+err parse: invalid digit found in string
+A None 3 true

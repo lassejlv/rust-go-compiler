@@ -1,0 +1,10 @@
+parsed 17
+stage 1
+acc 10
+stage 2
+acc 30
+stage 3
+cleanup pipeline
+pipeline failed: fatal in three (code 42) / is Fatal: true
+cleanup later
+cleanup main

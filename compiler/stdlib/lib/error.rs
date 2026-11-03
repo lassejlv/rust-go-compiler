@@ -16,7 +16,7 @@ pub trait Error: Debug + Display {
 
     /// Deprecated: replaced by `Error::source`.
     fn cause(&self) -> Option<&dyn Error> {
-        None
+        self.source()
     }
 
     /// Gets the `TypeId` of `self` (used for downcasting).

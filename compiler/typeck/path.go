@@ -702,6 +702,9 @@ func (fcx *FnCtxt) checkStructExpr(x *ast.StructExpr, expected Ty) Ty {
 		fcx.checkExprCoerce(f.Expr, ft)
 	}
 	if x.Base != nil {
+		if adt.Kind == TAdt && adt.Def != nil && adt.Def.Kind == DefEnum {
+			fcx.t.ErrorCode(x.Base.GetSpan(), "E0436", "functional record update syntax requires a struct")
+		}
 		fcx.checkExprCoerce(x.Base, adt)
 	} else if len(seen) < len(v.Fields) && !isUnion(adt) {
 		for _, f := range v.Fields {

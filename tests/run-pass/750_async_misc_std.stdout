@@ -1,0 +1,11 @@
+ready: 42
+args:       start a b ~b end ~a r=6
+unused args:created body ~y ~x v=1
+sum_all: 20
+sum_all ready: 11
+round robin: [(3, "instant after 0", 1), (1, "fast after 1", 2), (2, "mid after 3", 4), (0, "slow after 5", 6)] counter=9
+borrowing block: total=10 data=[1, 2, 3, 4]
+dyn polls: Pending Ready(7)
+pending: Pending
+nested: 30
+captured by ref: 8 still usable: captured

@@ -1,0 +1,24 @@
+init: 1024:["0x0"]
+alloc 100 -> off 0x000 order 7 | 128:["0x80"] 256:["0x100"] 512:["0x200"]
+alloc  16 -> off 0x080 order 4 | 16:["0x90"] 32:["0xa0"] 64:["0xc0"] 256:["0x100"] 512:["0x200"]
+alloc   1 -> off 0x090 order 4 | 32:["0xa0"] 64:["0xc0"] 256:["0x100"] 512:["0x200"]
+alloc 200 -> off 0x100 order 8 | 32:["0xa0"] 64:["0xc0"] 512:["0x200"]
+alloc  64 -> off 0x0c0 order 6 | 32:["0xa0"] 512:["0x200"]
+alloc  33 -> off 0x200 order 6 | 32:["0xa0"] 64:["0x240"] 128:["0x280"] 256:["0x300"]
+alloc 500 failed: no block for 500 bytes
+free bytes 480 largest 256
+read back [deadbeef, 1, 2, 3] [7, 8, 9, 10]
+free #1 (0x80) merges Ok(0) | 16:["0x80"] 32:["0xa0"] 64:["0x240"] 128:["0x280"] 256:["0x300"]
+free #2 (0x90) merges Ok(2) | 64:["0x80", "0x240"] 128:["0x280"] 256:["0x300"]
+free #4 (0xc0) merges Ok(1) | 64:["0x240"] 128:["0x80", "0x280"] 256:["0x300"]
+double free: double free at 0x80
+realloc same slot? false gen 1
+stale: double free at 0x80
+too large: Err(TooLarge(2000))
+free 0x0 -> Ok(1)
+free 0x100 -> Ok(1)
+free 0x200 -> Ok(0)
+free 0x240 -> Ok(6)
+end: 1024:["0x0"] free bytes 1024
+filled with 64 16-byte blocks; next: Err("no block for 1 bytes")
+freed all, merges 63 -> 1024:["0x0"]

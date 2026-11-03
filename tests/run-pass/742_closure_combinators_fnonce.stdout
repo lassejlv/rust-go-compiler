@@ -1,0 +1,15 @@
+25 <25> hey!!!!
+curry 123
+adders [11, 12, 13]
+pipeline 6
+apply_n [3, 6, 9, 12]
+counter after 12
+seen one;two;ONETWO
+fix fact(10)=3628800 fact(20)=2432902008176640000
+memo fib(80)=23416728348467685 calls=159
+Some("sum 6") Some("moved-in 8") None None
+"12 -7 300  4x" -> [12, -7, 300, 4] rest "x"
+"-0 5" -> [0, 5] rest ""
+"abc" -> [] rest "abc"
+"99999999999 1" -> [99999999999, 1] rest ""
+Some((-42, "!")) false

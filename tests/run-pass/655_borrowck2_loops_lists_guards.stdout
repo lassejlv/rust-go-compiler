@@ -1,0 +1,5 @@
+Some(8) [[7, 0, 0], [0, 0, 0]] 1
+Some(Node { v: 0, next: Some(Node { v: 0, next: None }) })
+first 5
+[1, 2, 3] 10 a-b ["a", "b"]
+[1, 1, 5, 5] Some("xyz") 1

@@ -1,0 +1,9 @@
+vec of FnMut:     ~c0 ~c1 ~c2 c0#1 c0#2 removed replacement vec end
+disjoint move:    call 11 closure dropped p.right still here right ~left ~right
+Drop struct cap:  call 2 after drop c ~WithDrop ~wa ~wb
+FnOnce consume:   before ~once consumed once after
+ref capture:      len 6 ref closure gone ~by-ref
+returned closure: 1 2 3 ~ctr2 c2 dropped ~ctr
+box in option:    len 2 moved into option ~v0 ~v1 option dropped
+tuple field cap:  7 ~tuple-a ~tuple-b
+FnMut by ref:     ["x:mut-capture", "y:mut-capture"] ~mut-capture

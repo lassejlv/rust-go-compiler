@@ -1,0 +1,22 @@
+9 good rows, 4 errors
+  Region(7, "unknown region 'nowhere'")
+  Num(9, "day", "invalid digit found in string")
+  Fields(11, 3)
+  Num(12, "price", "2.5.0")
+region  |   qty|       revenue
+------------------------------
+North   |    11|        $44.99
+South   |    43|       $149.97
+East    |    13|     $5,348.05
+West    |    19|        $60.30
+TOTAL   |    86|     $5,603.31
+"Gadget"           n=3 days=[1, 3, 7] avg_price=19.327
+"Gizmo"            n=1 days=[2] avg_price=4.500
+"Thing \"Q\""      n=1 days=[5] avg_price=1000.010
+"Widget"           n=3 days=[1, 4, 6] avg_price=2.383
+"Widget, Deluxe"   n=1 days=[2] avg_price=120.000
+best day: 5 with $5,000.05
+running: $25.00 $84.97 $324.97 $356.47 $376.46 $466.46 $5,466.51 $5,495.31 $5,603.31
+split: ["a", "b,c", "d\"e", "", ""]
+prices: [Some(100), Some(150), Some(7), None, None, None]
+money: $0.00 $1,234,567.89 $1,000.00

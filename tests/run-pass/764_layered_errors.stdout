@@ -1,0 +1,30 @@
+[0] ok: started svc on :8080 with 4 workers
+[1] error: failed to load configuration
+    caused by: invalid value for "port"
+      caused by: invalid digit found in string
+     root kind: ParseIntError / debug: "invalid digit found in string"
+[2] error: failed to load configuration
+    caused by: syntax error on line 1
+      caused by: unterminated string starting at 7
+     root kind: LexError / debug: "unterminated string starting at 7"
+[3] error: failed to load configuration
+    caused by: syntax error on line 3
+      caused by: unexpected '@' at 8
+     root kind: LexError / debug: "unexpected '@' at 8"
+[4] error: failed to load configuration
+    caused by: missing required key "name"
+     root kind: ConfigError / debug: "missing required key \"name\""
+[5] error: validation: workers must be > 0
+     root kind: AppError / debug: "validation: workers must be > 0"
+[6] error: other: port 22 is privileged
+    caused by: port 22 is privileged
+     root kind: opaque / debug: "port 22 is privileged"
+[7] error: other: invalid utf-8 sequence of 1 bytes from index 5
+    caused by: invalid utf-8 sequence of 1 bytes from index 5
+     root kind: Utf8Error / debug: "invalid utf-8 sequence of 1 bytes from index 5"
+[8] error: failed to load configuration
+    caused by: invalid value for "port"
+      caused by: number too large to fit in target type
+     root kind: ParseIntError / debug: "number too large to fit in target type"
+boxed downcast: Ok(Unterminated(3))
+plain message | owned message | true

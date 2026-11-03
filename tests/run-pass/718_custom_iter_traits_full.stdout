@@ -1,0 +1,21 @@
+span: len=5 fwd=[3, 7, 11, 15, 19] rev=[19, 15, 11, 7, 3]
+front Some(3) back Some(19) len 3 then [7, 11, 15]
+nth(2)=Some(11) nth(5)=None next=None next_back=None
+nth_back(1)=Some(15) rest=[3, 7, 11]
+rfold: 19,15,11,7,3,
+rposition of 11: Some(2)
+zip rev: [(3, 19), (7, 15), (11, 11), (15, 7), (19, 3)]
+chain len hint: (7, Some(7))
+skip/take exact: 4 2
+enumerate rev: [(4, 19), (3, 15), (2, 11), (1, 7), (0, 3)]
+last=Some(19) count=5 min=Some(3) max=Some(19)
+empty: None None (0, Some(0))
+flaky raw: [Some(1), Some(2), None, Some(4), Some(5), None, Some(7)]
+flaky fused: [Some(1), Some(2), None, None, None]
+take_while stops at first None: [1, 2]
+cells: len=6 fwd=[(0, 0), (0, 1), (0, 2), (1, 0), (1, 1), (1, 2)] rev=[(1, 2), (1, 1), (1, 0), (0, 2), (0, 1), (0, 0)]
+cells after both ends: len=4 [(0, 1), (0, 2), (1, 0), (1, 1)]
+diag rev: [(1, 1), (0, 0)]
+evens=[8, 6, 4, 2, 0] odds=[9, 7, 5, 3, 1]
+step_by: [0, 6, 12, 18, 24]
+rev step_by: [27, 18, 9, 0]

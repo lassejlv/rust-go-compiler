@@ -1,0 +1,22 @@
+10 blocks
+H1 P(2) H2 UL(3) OL(3) QUOTE CODE[rust](1) HR P(1) H3 
+<h1>Rust <em>and</em> Go</h1>
+<p>This is a <strong>bold</strong> claim with <code>code &lt;tags&gt;</code> and a <a href="http://x.y/?a=1&amp;b=2">link</a>. It continues on the <em>second</em> line.</p>
+<h2>Lists</h2>
+<ul>
+  <li>first item</li>
+  <li>second <strong>item</strong></li>
+  <li>third with <code>x*y</code></li>
+</ul>
+<ol>
+  <li>one</li>
+  <li>two</li>
+  <li>ten</li>
+</ol>
+<blockquote>quoted text more <em>quote</em></blockquote>
+<pre><code class="language-rust">fn main() { println!(&quot;&lt;hi&gt;&quot;); }</code></pre>
+<hr/>
+<p>Trailing para with a lone * star and [broken link.</p>
+<h3>Done</h3>
+[Code(None, ["raw"])]
+<strong><em>nested</em> strong</strong> and <em>a</em>b*

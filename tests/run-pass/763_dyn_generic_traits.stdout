@@ -1,0 +1,8 @@
+["sum=19", "count=4", "3;-1;10;7"]
+["longest=\"brownish\"", "count=4", "\"a\";\"quick\";\"brownish\";\"fox\""]
+[3, 2, 1, 0] ["x", "yy", "zzz"]
+boxed producers [1, 0, 2, 1, 0]
+total 12 tags ["1:circle", "2:square"] first Some(Circle(1.0))
+["6!", "-6", "110"]
+Some(42) Some("hello world") Some([1.5, 2.5]) None
+keys ["alloc::string::String", "alloc::vec::Vec<f64>", "u32"]

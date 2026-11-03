@@ -1,0 +1,31 @@
+{"deps":{"core":{"n":-3,"ok":true},"empty":{},"list":[]},"name":"rustgo","nil":null,"note":"line1\nline2 \"q\"","tags":["compiler","go","été"],"version":1.5}
+{
+  "deps": {
+    "core": {
+      "n": -3,
+      "ok": true
+    },
+    "empty": {},
+    "list": []
+  },
+  "name": "rustgo",
+  "nil": null,
+  "note": "line1\nline2 \"q\"",
+  "tags": [
+    "compiler",
+    "go",
+    "été"
+  ],
+  "version": 1.5
+}
+Stats { nodes: 15, max_depth: 3, cur: 0, strings: 5, sum: -1.5 }
+roundtrip equal: true
+[1,2       => Err("expected , or ] at byte 4")
+{"a" 1}    => Err("expected : at byte 5")
+tru        => Err("bad literal at byte 0")
+[1,]x      => Err("unexpected character at byte 3")
+"abc       => Err("unterminated string at byte 4")
+1.2.3      => Err("bad number \"1.2.3\": invalid float literal")
+{} x       => Err("trailing data at byte 3")
+keys ["deps", "name", "nil", "note", "tags", "version"]
+tags[2] = Str("été")

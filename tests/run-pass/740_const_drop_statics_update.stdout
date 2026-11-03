@@ -1,0 +1,11 @@
+const drops:    ~proto after let _ = PROTO a==b true ~proto n=5 k=1 p=pair ~pair ~proto ~proto
+struct update:  s2 newtitle bfooter 100 base.title still usable: btitle ~newtitle ~bfooter ~btitle
+update default: default() s3 dtitle 5 ~dtitle ~dfooter
+unused default: default() ~dtitle ~dfooter s4 width 80 tags ["d"] ~t4 ~f4
+clone+assign:   default() ~dtitle c replaced ~replaced ~dfooter ~dtitle ~dfooter
+config ["alpha", "beta"] 2
+oncelock:       init config
+derived default Derived { a: 0, b: None, c: [], d: (false, '\0'), e: [0, 0, 0] }
+derived eq true
+total drops 19
+static counter prev [10, 15, 20] now 25 cas Ok(25) Err(1)

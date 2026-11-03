@@ -1,0 +1,10 @@
+ann woof dog 4
+names: ["dog", "bird"]
+boxed upcast: Dog { owner: "cy" } legs=4 Bird
+rc upcast: bird strong=2
+rpitit: 20 6 [8, 7]
+assoc bound: Some('x') ""
+use<>: [4, 8, 12]
+async closure: [11, 12, 13]
+async fnmut captured: [3, 3]
+nested async blocks: 420

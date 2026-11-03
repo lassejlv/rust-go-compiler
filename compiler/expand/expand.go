@@ -5,6 +5,8 @@
 package expand
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 
@@ -1315,7 +1317,25 @@ type DocBlock struct {
 func (e *Expander) docLines(attrs []*ast.Attr, inner bool) []DocLine {
 	var out []DocLine
 	for _, a := range attrs {
-		if a.Path != "doc" || a.Inner != inner || len(a.Tokens) != 2 || a.Tokens[1].Delim != 0 || a.Tokens[1].Tok.Kind != lexer.Str {
+		if a.Path != "doc" || a.Inner != inner {
+			continue
+		}
+		// #[doc = include_str!("file")]: the file's lines
+		if tk := a.Tokens; len(tk) == 4 && isPunct(tk[0], "=") && tk[1].Delim == 0 && tk[1].Tok.Text == "include_str" && isPunct(tk[2], "!") && tk[3].Delim != 0 && len(tk[3].Inner) == 1 {
+			if rel, ok, _ := e.litString(tk[3].Inner, nil); ok {
+				p := rel
+				if !filepath.IsAbs(p) {
+					p = filepath.Join(filepath.Dir(lexer.FilePath(a.Span.Lo.File)), p)
+				}
+				if b, err := os.ReadFile(p); err == nil {
+					for i, l := range strings.Split(string(b), "\n") {
+						out = append(out, DocLine{Text: strings.TrimSuffix(l, "\r"), File: a.Span.Lo.File, Line: i + 1})
+					}
+				}
+			}
+			continue
+		}
+		if len(a.Tokens) != 2 || a.Tokens[1].Delim != 0 || a.Tokens[1].Tok.Kind != lexer.Str {
 			continue
 		}
 		s, ok, _ := e.litString(a.Tokens[1:], nil)

@@ -1,0 +1,12 @@
+kmerge [0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12]
+kmerge strings ["apple", "avocado", "banana", "blueberry", "cherry", "apricot"]
+group_by [('a', ["apple", "avocado"]), ('b', ["banana", "blueberry"]), ('c', ["cherry"]), ('a', ["apricot"])]
+parity runs [(false, 3), (true, 2), (false, 3), (true, 1)]
+interleave [1, 10, 2, 11, 3, 12, 13, 14, 15, 16]
+interleave strs "aXbYc"
+pairs [1, 2, 4]
+pairs short 0 0
+batches [[1, 2, 3, 4], [5, 6, 7, 8], [9, 10]]
+dedup_by_key ["a", "b", "c"]
+merge+group [(3, [1]), (3, [2]), (1, [3])]
+composite 1774

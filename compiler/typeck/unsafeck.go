@@ -104,6 +104,11 @@ func (cx *unsafeCx) walk(n any, inUnsafe bool) {
 				if b := placeBase(e.X); b != nil {
 					cx.rawStatic[b.ID] = true
 				}
+				// the address of a union field is safe to take
+				if f, ok := unparenExpr(e.X).(*ast.FieldExpr); ok && cx.isUnionField(f) {
+					cx.walk(f.X, inUnsafe)
+					return false
+				}
 			}
 		case *ast.PathExpr:
 			if !inUnsafe && !cx.rawStatic[e.ID] {
@@ -119,7 +124,27 @@ func (cx *unsafeCx) walk(n any, inUnsafe bool) {
 			if !inUnsafe {
 				cx.report(e.Span, "use of inline assembly")
 			}
+		case *ast.AssignExpr:
+			// writing a union field is safe
+			if f, ok := unparenExpr(e.L).(*ast.FieldExpr); ok && cx.isUnionField(f) {
+				cx.walk(f.X, inUnsafe)
+				cx.walk(e.R, inUnsafe)
+				return false
+			}
+		case *ast.FieldExpr:
+			if !inUnsafe && cx.isUnionField(e) {
+				cx.report(e.Span, "access to union field")
+			}
 		}
 		return true
 	})
+}
+
+// isUnionField reports whether f reads a field of a union.
+func (cx *unsafeCx) isUnionField(f *ast.FieldExpr) bool {
+	ty := cx.r.AdjustedType(f.X)
+	for ty != nil && ty.Kind == TRef {
+		ty = ty.Elem
+	}
+	return ty != nil && ty.Kind == TAdt && ty.Def != nil && ty.Def.Kind == DefUnion
 }

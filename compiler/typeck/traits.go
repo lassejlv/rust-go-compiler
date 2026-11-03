@@ -211,8 +211,12 @@ func (ic *InferCtxt) selectTraitUncached(tr *TraitRef, depth int) (res Selection
 	if self.Kind == TError {
 		return Selection{Kind: SelBuiltin}
 	}
-	// Auto / marker traits that we treat as always satisfied.
+	// Auto traits: Send and Sync are structural (autotrait.go); the
+	// others are taken as always satisfied.
 	if trait.Trait.Auto {
+		if kind := t.autoKind(trait); kind != "" && !ic.autoHolds(kind, self, depth, map[autoKey]bool{}) {
+			return Selection{Kind: SelNone}
+		}
 		return Selection{Kind: SelBuiltin}
 	}
 	switch trait.LangItem {

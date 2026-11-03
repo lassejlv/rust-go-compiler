@@ -1,0 +1,35 @@
+ 1 ok   added W1 (flat)
+ 2 ok   added G7 (bulk(5+ -10%))
+ 3 ok   added S3 (buy2get1)
+ 4 ok   order 1 for alice total $37.00
+ 5 ok   order 2 for bob total $92.46
+ 6 ERR  insufficient G7: want 6 have 5 [false]
+ 7 ok   G7 stock 14
+ 8 ok   order 3 for carol total $107.95
+ 9 ok   order 1 -> Paid
+10 ok   order 1 -> Shipped
+11 ok   order 2 -> Paid
+12 ok   order 2 -> Cancelled
+13 ERR  order 2 is Cancelled, cannot ship [false]
+14 ERR  unknown sku X9 [false]
+15 ERR  parse error: invalid digit found in string [false]
+16 ERR  no order 99 [true]
+17 ERR  bad command: frobnicate [false]
+18 ERR  bad command: add Z9 thing 1.00 5 weird [false]
+19 ok   order 4 for frank total $270.50
+20 ok   order 3 -> Paid
+21 ok   order 3 -> Shipped
+22 ERR  order 3 is Shipped, cannot cancel [false]
+23 ERR  no order 5 [true]
+------------------------------------------------------------
+sku |name            |     unit| stock|reserved
+G7  |deluxe gadget   |   $19.99|     8|       0
+S3  |sock            |    $3.00|    24|      24
+W1  |widget          |    $2.50|    90|      89
+------------------------------------------------------------
+#1 alice  Shipped       $37.00  W1x10=$25.00, S3x6=$12.00
+#2 bob    Cancelled     $92.46  G7x5=$89.96, W1x1=$2.50
+#3 carol  Shipped      $107.95  G7x6=$107.95
+#4 frank  Open         $270.50  S3x24=$48.00, W1x89=$222.50
+revenue $144.95 | orders by state {"Cancelled": 1, "Open": 1, "Shipped": 2}
+[     -$12.34] [$0.05       ] [  $1000.00  ]

@@ -1,0 +1,19 @@
+(fact 20) => 2432902008176640000  [evals 235]
+(list (c1) (c1) (c1) (c2)) => (1 2 3 1)  [evals 30]
+(map (lambda (x) (* x x)) '(1 2 3 4 5)) => (1 4 9 16 25)  [evals 97]
+(loop 100000 0) => 5000050000  [evals 1300008]
+(let ((x 2) (y 3)) (define z 10) (+ x y z)) => 15  [evals 9]
+((compose car cdr) '(a b c)) => b  [evals 10]
+'(nested (list (with) 3) #t #f nil) => (nested (list (with) 3) #t #f nil)  [evals 1]
+(/ 10 0) => ERROR: division by zero
+(undefined-fn 1) => ERROR: unbound symbol undefined-fn
+(car 5) => ERROR: car of non-list
+((lambda (a b) a) 1) => ERROR: arity: expected 2 got 1
+(set! nope 1) => ERROR: set! of undefined nope
+(1 2 3) => ERROR: not callable: 1
+(+ 1 (quote x)) => ERROR: not a number: x
+(begin (define a 5) (set! a (* a a)) a) => 25  [evals 8]
+read "(+ 1 2": Err("missing )")
+read ")": Err("unexpected )")
+read "": Err("unexpected EOF")
+globals: -,a,car,cdr,compose,cons,fact,list,loop,make-counter,map

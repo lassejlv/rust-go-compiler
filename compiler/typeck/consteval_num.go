@@ -241,6 +241,9 @@ func binop(op ast.BinOp, a, b *cval) (*cval, bool) {
 	default:
 		return nil, false
 	}
+	if typed && op != ast.BinShl && op != ast.BinShr && !inRange(r, it) {
+		return nil, false // arithmetic overflow
+	}
 	return cvI(r, it, typed), true
 }
 

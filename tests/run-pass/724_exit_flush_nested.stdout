@@ -1,0 +1,5 @@
+3 9 
+drop run-frame
+after first run: {"add": 1, "dup": 1, "mul": 2, "print": 2, "push": 3}
+drop scoped
+locked write without newline; 12 17 | stats {"add": 2, "dup": 1, "exit": 1, "mul": 3, "print": 4, "push": 7} | exiting with 7

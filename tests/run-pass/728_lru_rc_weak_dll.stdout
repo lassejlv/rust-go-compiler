@@ -1,0 +1,17 @@
+order ["c", "b", "a"] rev ["a", "b", "c"]
+get b = Some(1)
+order ["b", "c", "a"]
+put d evicts Some(("a", 0))
+put b (update) evicts None
+order ["b", "d", "c"] rev ["c", "d", "b"]
+get a = None get c = Some(2)
+put x evicts Some(("d", 10)) -> ["x", "c", "b"]
+put y evicts Some(("b", 99)) -> ["y", "x", "c"]
+put b evicts Some(("c", 2)) -> ["b", "y", "x"]
+put z evicts Some(("x", 7)) -> ["z", "b", "y"]
+counts head Some((2, 1)) mid Some((2, 1)) tail Some((3, 0))
+hits=2 misses=1 drops so far=5
+drops after cache dropped=8
+big: len=50 evictions=1145 hits=805 misses=1195 head5=[119, 76, 13, 83, 107]
+consistent: true
+total drops=1203

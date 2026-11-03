@@ -1,0 +1,3 @@
+7 ["xx2"] 5 Some("rr") m
+n [1, 2] x y m [] [1, 2] 5 boxed
+Buf { pending: [], done: ["a", "b", "c", "qxx"], cur: "new" }

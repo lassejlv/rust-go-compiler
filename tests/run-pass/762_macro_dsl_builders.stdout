@@ -1,0 +1,35 @@
+<div class="card" id="7">
+  <h1>
+    Title
+  </h1>
+  <p style="x">
+    some text
+    2
+  </p>
+  <ul>
+    <li>
+      alpha
+    </li>
+    <li>
+      beta
+    </li>
+  </ul>
+  trailing
+</div>
+Config { host: "localhost", port: 9000, workers: 4, verbose: true }
+Config { host: "example.org", port: 8080, workers: 16, verbose: false }
+  host: String -- host name
+  port: u16
+  workers: usize -- worker threads
+  verbose: bool
+Closed --open--> Open
+Open --close--> Closed
+Closed --lock--> Locked
+error: Locked cannot handle open
+Locked --unlock--> Closed
+Closed --open--> Open
+transitions 4
+count 5 0
+int 5 | float 2.35 | str "q" | bool true | char 'z'
+max 9 c
+{"one": 1, "three": 3, "two": 2}

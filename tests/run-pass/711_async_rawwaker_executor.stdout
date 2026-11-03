@@ -1,0 +1,12 @@
+[t=  0] waiting for number
+[t= 10] alpha step 0
+[t= 20] alpha step 1
+[t= 25] beta step 0
+[t= 30] alpha step 2
+[t= 50] beta step 1
+[t= 50] joined alpha=30 beta=25
+[t= 50] got message sum=55
+[t= 57] number 114
+[t= 66] timestamps [62, 63, 66]
+polls=14 wakes=11 final time=66
+ready queue: [99]

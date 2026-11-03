@@ -1,0 +1,9 @@
+chunks: [(0, 4501500, 430), (1, 13501500, 353), (2, 22501500, 334), (3, 31501500, 321), (4, 40501500, 316), (5, 49501500, 310), (6, 38001000, 198)]
+total 200010000 primes 2262
+freq: {"a": 3, "cat": 2, "end": 1, "hat": 1, "mat": 2, "on": 2, "sat": 1, "the": 3}
+messages 12 first Some((0, "w0-0")) last Some((32, "w3-4")) rets [0, 100, 200, 300]
+atomic count 8000 max 7999
+barrier rounds result [27, 27, 27, 27]
+thread panic joined: is_err=true msg="index out of bounds: the len is 0 but the index is 3"
+scoped: (Some(1), true)
+named thread Some("worker-x")

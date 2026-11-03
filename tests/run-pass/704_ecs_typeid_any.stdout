@@ -1,0 +1,21 @@
+summary: Name:5 Pos:5 Vel:4 Health:4 Poisoned:2
+[1:movement] moved 4
+[1:poison] t1 elf hp 12->8
+[1:poison] t1 slime hp 18->11
+[2:movement] moved 4
+[2:poison] t2 elf hp 8->4
+[2:poison] t2 slime hp 11->4
+[3:movement] moved 4
+[3:poison] t3 elf hp 4->0
+[3:poison] t3 slime hp 4->-3
+[3:reaper] elf died (5 comps)
+[3:reaper] slime died (5 comps)
+[4:movement] moved 2
+summary: Name:3 Pos:3 Vel:2 Health:2 Poisoned:0
+alive: [Entity(0), Entity(2), Entity(3)]
+Entity(2) rock   at ( 6, 0) hp=None
+Entity(0) orc    at (-4, 4) hp=Some(10)
+Entity(3) bat    at ( 5, 8) hp=Some(16)
+no Vel for rock: true
+unknown type storage: None
+true

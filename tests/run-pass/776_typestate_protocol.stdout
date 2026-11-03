@@ -1,0 +1,21 @@
+Conn(10.0.0.7:443 @ Closed, sent=0) state=closed
+retrying from handshaking
+retrying from handshaking
+sent hello total 1
+sent data total 2
+sent bye total 3
+Conn(10.0.0.7:443 @ Open { session: 1021 }, sent=3)
+Conn(10.0.0.7:443 @ Closed, sent=3) state=closed sent=["1021#hello", "1021#data", "1021#bye"]
+  [handshaking] entered from closed
+  [handshaking] attempt 1 failed
+  [handshaking] attempt 2 failed
+  [handshaking] succeeded on attempt 3
+  [open] entered from handshaking
+  [draining] entered from open
+  [draining] 2 pending
+  [draining] 1 pending
+  [closed] entered from draining
+gave up: Conn(bad @ Closed, sent=0) log ["[handshaking] entered from closed", "[handshaking] attempt 1 failed", "[closed] entered from handshaking"]
+sizes: Closed=0 Open=8 Conn<Closed>=true
+POST /api [("a", "1"), ("b", "2")]
+GET /x []

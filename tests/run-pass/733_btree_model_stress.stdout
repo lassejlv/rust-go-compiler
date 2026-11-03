@@ -1,0 +1,18 @@
+step  5000: len 1433 model 1433 same=true first=Some(2) last=Some(2999)
+step 10000: len 1817 model 1817 same=true first=Some(0) last=Some(2999)
+step 15000: len 1973 model 1973 same=true first=Some(2) last=Some(2999)
+step 20000: len 2013 model 2013 same=true first=Some(0) last=Some(2999)
+ops [2534, 2585, 2415, 2480, 2471, 2493, 2465, 2557] mismatches 0
+checksum fwd 11965412681811528263 rev 3390106354293094207
+range_mut set 71 sevens
+split_off: lower 997 upper 1016 lower.last=Some(1499) upper.first=Some(1500)
+retain upper -> 346
+append: map 1343 upper 0 (moved 346)
+popped [0, 2997, 2, 2991, 4, 2988]
+below 40: [7, 9, 12, 13, 14, 15, 16, 18, 21, 23, 24, 26, 29, 30, 33, 34, 35, 37, 39]
+double ended: Some(7) Some(2982) remaining 1335
+extract_if multiples of 500: [500, 1000, 1500]
+set 958 other 957 inter 461 union 1454 diff 497 sym 993 consistent=true
+set range 495..505: [495, 496, 497, 498, 499, 500, 501, 502, 503, 504]
+subset true disjoint false
+set ends [0, 1, 2, 3, 4, 999, 998, 997, 996, 995]

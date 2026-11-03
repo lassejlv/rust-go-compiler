@@ -1,0 +1,32 @@
+chunk_by eq: [[1, 1], [2], [3, 3, 3], [2, 2], [5]]
+ascending runs: [[1, 2, 3], [2, 3, 4], [1]]
+chunk_by_mut: [10, 10, 3, 3, 3, 9]
+is_sorted: true false true
+iter is_sorted_by: true
+extract_if evens=[2, 4, 6, 8, 10, 12] rest=[1, 3, 5, 7, 9, 11]
+pop_if Some(11) None -> [1, 3, 5, 7, 9]
+retain_mut: [10, 30, 70, 90]
+disjoint swap: [40, 20, 30, 10] overlap err: true
+hashmap disjoint: [("a", 101), ("b", 2), ("c", 203)]
+as_chunks: [[1, 2, 3], [4, 5, 6]] rem [7]
+as_rchunks: rem [1] [[2, 3], [4, 5], [6, 7]]
+as_flattened: [1, 2, 3, 4, 5, 6]
+split_first_chunk: [1, 2] [3, 4, 5, 6, 7]
+first_chunk: Some([1, 2, 3, 4]) last_chunk: None
+repeat_n: ["ab", "ab", "ab"]
+map_while: [1, 2]
+iter::zip: [('a', 1), ('b', 2), ('c', 3)]
+is_none_or: true false true
+take_if: Some(42) left None
+take_if no: None left Some(3)
+isqrt: 9 10 46340
+midpoint: 126 2147483647 2.75
+div_ceil: 4 2 ilog: 3 10 3
+checked_ilog10(0)=None unsigned_abs=128 abs_diff=247
+next_multiple_of: 15 15
+cast_signed/unsigned: -56 65535
+Cell::update -> 30
+lazy before: calls=0
+lazy value 120 121 calls=1
+0:zero 5:single 10:double 99:double 100:big 1000:big [8, 32, 128]
+offset_of b=0 c=4

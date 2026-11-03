@@ -1,0 +1,7 @@
+windows result: [5, 6, 7, 8, 1, 2]
+window count: 7
+lines: ["0:ALPHA", "8:BETA", "15:", "16:GAMMA DELTA", "28:Z"]
+([0, 1, 4, 9], ["v0", "v1", "v2", "v3"])
+([9, 4, 1, 0], ["d3", "d2", "d1", "d0"])
+rc tree sum=23 shared strong=3
+arc tree sum=18

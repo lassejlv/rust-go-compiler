@@ -1,0 +1,25 @@
+n=0     stable_ok=true unstable_sorted=true rev_stable=true cached_stable=true fp=14650fb0739d0383
+n=1     stable_ok=true unstable_sorted=true rev_stable=true cached_stable=true fp=46bd2bd47732f799
+n=2     stable_ok=true unstable_sorted=true rev_stable=true cached_stable=true fp=6b65ad069416d5d2
+n=7     stable_ok=true unstable_sorted=true rev_stable=true cached_stable=true fp=ae5c8c4ba8c1c12e
+n=20    stable_ok=true unstable_sorted=true rev_stable=true cached_stable=true fp=fde5ea26b0a2a6bd
+n=21    stable_ok=true unstable_sorted=true rev_stable=true cached_stable=true fp=48fdbbc976afc0ab
+n=63    stable_ok=true unstable_sorted=true rev_stable=true cached_stable=true fp=6a9b619c366abfa8
+n=100   stable_ok=true unstable_sorted=true rev_stable=true cached_stable=true fp=a4bee10c5b48d8bd
+n=1000  stable_ok=true unstable_sorted=true rev_stable=true cached_stable=true fp=243393ec6014f15f
+n=5000  stable_ok=true unstable_sorted=true rev_stable=true cached_stable=true fp=7fcc16e3f220ca91
+select_nth 3926 == sorted[k] 3926: true
+partition_point < 50000 at 9924 (checks true true)
+dedup removed 1882
+binary_search [Ok(0), Ok(100), Ok(18117), Err(18118)]
+desc head [99986, 99986, 99978] tail [27, 7, 0]
+["Jumps", "Quick", "THE", "all", "and", "brown", "dog", "end", "fox", "it", "lazy", "of", "over", "the", "the"]
+["all", "and", "brown", "dog", "end", "fox", "it", "Jumps", "lazy", "of", "over", "Quick", "THE", "the", "the"]
+["of", "it", "the", "the", "fox", "end", "dog", "and", "all", "THE", "over", "lazy", "brown", "Quick", "Jumps"]
+dedup_by_key ["of", "it", "the", "fox", "end", "dog", "and", "all", "THE", "over", "lazy", "brown", "Quick", "Jumps"]
+dedup_by len ["of", "the", "over", "brown"]
+[4, 5, 6, 7, 8, 9, 10, 1, 2, 3] [9, 10, 1, 2, 3, 4, 5, 6, 7, 8] [9, 10, 6, 5, 4, 3, 2, 1, 7, 8]
+floats [-1.0, -0.0, 0.0, 2.25, 3.5, inf]
+tuples [(1, "z", -3.0), (1, "z", 0.5), (2, "a", 9.0), (2, "b", 1.5)]
+chars  !,dehlorwö
+is_sorted false contains true starts false ends false

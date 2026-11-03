@@ -1,0 +1,20 @@
+  flush run #0 with 4 entries
+  flush run #1 with 4 entries
+  flush run #2 with 4 entries
+get    apple -> Some("v0")
+get   banana -> Some("yellow")
+get   cherry -> None
+get     kiwi -> None
+get    lemon -> Some("v81")
+get      zzz -> None
+scan b..h: [("banana", "yellow"), ("date", "v9"), ("elder", "v16"), ("fig", "v25"), ("grape", "v36")]
+runs before compact: [4, 4, 4]
+  compacted into one run of 9
+scan all: apple=v0,banana=yellow,date=v9,elder=v16,fig=v25,grape=v36,honeydew=v49,lemon=v81
+wal bytes = 44
+  rec "x" Put([49])
+  rec "yy" Tombstone
+  rec "zzz" Put([255, 0])
+corrupt: truncated record at 0
+truncated: truncated record at 26
+badtag: bad tag 0x09 at 0 / BadTag(9, 0)

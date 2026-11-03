@@ -1,0 +1,11 @@
+totals 28 11 hits [28, 11]
+dyn THE QUICK BROWN FOX! log ["len=19", "vowels=5", "words=4", "len=5", "vowels=5", "words=1", "THE QUICK BROWN FOX!"]
+best ["watermelon", "pear"]
+cache [3, 5, 3] 2 [3, 5, 3]
+names ["len", "vowels", "words"]
+hits after [28, 11, 3]
+v [1, 2, 2, 3, 8, 8, 9, 9]
+["a:apple+avocado", "b:banana+blueberry", "c:cherry"]
+b now ["blueberry"]
+[1, 2, 3] (3, "xyz")
+[[10, 20], [30, 40, 30]]

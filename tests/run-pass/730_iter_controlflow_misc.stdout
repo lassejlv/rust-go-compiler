@@ -1,0 +1,33 @@
+try_for_each: Break(9)
+try_fold controlflow: Break(21) is_break=true
+checked try_fold: None
+result try_fold: Err("x3: invalid digit found in string")
+next_if_eq groups: [(1, 2), (2, 1), (3, 3), (4, 1)]
+next_if digits: 123 rest: abc45
+by_ref: [1, 2, 3] [4, 6] [7, 8, 9, 10]
+cmp: Greater Less Equal
+partial_cmp: None Some(Greater)
+eq/lt/ge: true true true true
+max_by_key (last of ties): Some(3)
+min_by_key (first of ties): Some(4)
+max_by rev: Some(2)
+min (tuple): Some((1, Reverse(5)))
+once_with: ["lazy", "eager"]
+cycle: cabcabc
+inspect saw [1, 2, 3, 4, 5] sum 35
+flatten twice: [1, 2, 3]
+array into_iter rev: ["zzz", "yy", "x"]
+strip trailing zeros: [1, 0, 3]
+find_map: Some(12)
+reduce: Some(120) None
+float sum f32=1 f64=1.0000000223517418 product=0.0024000003
+position/rposition: Some(1) Some(5)
+last/nth: Some(2) Some(9) None
+skip+step: [3, 7, 11, 15, 19]
+count chars: 2 any true all true
+for_each split: [3, 1, 4, 2] [8, 9, 10]
+window sums: [12, 18, 14, 23, 16], chunks_exact rem: [2]
+rchunks: [[4, 10, 2], [8, 1, 9], [3]]
+split on >8: [[3, 8, 1], [4], [2]]
+splitn: [[3, 8], [9, 4, 10, 2]]
+rsplit_inclusive? [[3, 8], [1, 9, 4], [10], [2]]

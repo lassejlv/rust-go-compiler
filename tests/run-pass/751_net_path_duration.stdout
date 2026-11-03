@@ -1,0 +1,50 @@
+127.0.0.1    ok  127.0.0.1 loopback=true private=false unspecified=false octets=[127, 0, 0, 1] u32=2130706433
+10.0.0.255   ok  10.0.0.255 loopback=false private=true unspecified=false octets=[10, 0, 0, 255] u32=167772415
+192.168.1.1  ok  192.168.1.1 loopback=false private=true unspecified=false octets=[192, 168, 1, 1] u32=3232235777
+256.1.1.1    err invalid IPv4 address syntax
+1.2.3        err invalid IPv4 address syntax
+01.2.3.4     err invalid IPv4 address syntax
+0.0.0.0      ok  0.0.0.0 loopback=false private=false unspecified=true octets=[0, 0, 0, 0] u32=0
+8.8.8.8      ok  8.8.8.8 loopback=false private=false unspecified=false octets=[8, 8, 8, 8] u32=134744072
+::1                                      ::1 ::1 loopback=true segs=[0, 0, 0, 0, 0, 0, 0, 1] v4=None
+2001:db8::8a2e:370:7334                  2001:db8::8a2e:370:7334 2001:db8::8a2e:370:7334 loopback=false segs=[2001, db8, 0, 0, 0, 8a2e, 370, 7334] v4=None
+fe80::1                                  fe80::1 fe80::1 loopback=false segs=[fe80, 0, 0, 0, 0, 0, 0, 1] v4=None
+::                                       :: :: loopback=false segs=[0, 0, 0, 0, 0, 0, 0, 0] v4=None
+::ffff:192.168.0.1                       ::ffff:192.168.0.1 ::ffff:192.168.0.1 loopback=false segs=[0, 0, 0, 0, 0, ffff, c0a8, 1] v4=Some(192.168.0.1)
+1:2:3:4:5:6:7:8                          1:2:3:4:5:6:7:8 1:2:3:4:5:6:7:8 loopback=false segs=[1, 2, 3, 4, 5, 6, 7, 8] v4=None
+1::2::3                                  err invalid IPv6 address syntax
+2001:0db8:0000:0000:0000:0000:0000:0001  2001:db8::1 2001:db8::1 loopback=false segs=[2001, db8, 0, 0, 0, 0, 0, 1] v4=None
+[1.1.1.1, ::1, 10.1.2.3] v4count=2
+127.0.0.1:8080   127.0.0.1:8080 port=8080 ip=127.0.0.1 v6=false
+[::1]:443        [::1]:443 port=443 ip=::1 v6=true
+localhost:80     err invalid socket address syntax
+1.2.3.4:99999    err invalid socket address syntax
+[fe80::1]:0      [fe80::1]:0 port=0 ip=fe80::1 v6=true
+10.0.0.1:2222 10.0.0.1:2222            127.0.0.1| ::                  |
+path /usr/local/lib/libfoo.so.1.2 parent=Some("/usr/local/lib") file_name=Some("libfoo.so.1.2") stem=Some("libfoo.so.1") ext=Some("2")
+absolute=true has_root=true starts_with /usr=true ends_with lib/libfoo.so.1.2=true
+components [".", "N(a)", "..", "N(b)", "N(c)", "N(d.txt)"]
+/home/user/projects/demo.tar.gz ext=Some("gz")
+set_extension -> /home/user/projects/demo.tar.zip
+set_file_name -> /home/user/projects/other
+pop=true -> /home/user/projects
+push absolute replaces: "/abs/override"
+join "rel/x/y" strip_prefix Ok("b/c") true
+ancestors ["/x/y/z", "/x/y", "/x", "/"]
+with_extension "f.md" with_file_name "/d/g.rs"
+hidden stem Some(".bashrc") ext None; no-ext None
+0ns | 0.00ns | secs=0 millis=0 nanos=0 f64=0
+1ns | 1.00ns | secs=0 millis=0 nanos=1 f64=0.000000001
+1.5µs | 1.50µs | secs=0 millis=0 nanos=1500 f64=0.0000015
+2.5ms | 2.50ms | secs=0 millis=2 nanos=2500000 f64=0.0025
+1.5s | 1.50s | secs=1 millis=1500 nanos=500000000 f64=1.5
+3661s | 3661.00s | secs=3661 millis=3661000 nanos=0 f64=3661
+5.123456789s | 5.12s | secs=5 millis=5123 nanos=123456789 f64=5.123456789
+250ms | 250.00ms | secs=0 millis=250 nanos=250000000 f64=0.25
+18446744073709551615.999999999s | 18446744073709551616.00s | secs=18446744073709551615 millis=18446744073709551615999 nanos=999999999 f64=18446744073709552000
+add 1.500001s sub 1.001s mul 4.5s div 375ms
+checked_sub None saturating_sub 0ns checked_add MAX None
+mul_f64 2.25s div_f64 500ms div_duration 3
+cmp Greater sum 3.000000007s abs_diff 500ms
+try_from_secs_f64 true Ok(2.5s)
+        12ms| 1.2ms     | +1s

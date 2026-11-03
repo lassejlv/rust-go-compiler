@@ -1,0 +1,19 @@
+path root/usr/local/share strong(share)=2 weak(local)=1
+root(241)
+  usr(230)
+    lib(220)
+      a.so(100)
+      b.so(100)
+    local(8)
+      share(5)
+  bin(10)
+bfs ["root@0", "usr@1", "bin@1", "lib@2", "local@2", "a.so@3", "b.so@3", "share@3"]
+after reparent: root/bin/share total(root)=241 total(usr)=225
+lib detached, still alive via local handle: true strong=2
+a.so parent still reachable: Some("lib")
+dropped after releasing lib: ["lib", "b.so"]
+a.so parent now: None weak alive: false
+dropped after a.so: ["a.so"]
+root(21) |   usr(5) |     local(3) |   bin(15) |     share(5)
+root counts strong=1 weak=2
+final drops (5): ["bin", "local", "root", "share", "usr"]

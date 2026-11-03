@@ -1,0 +1,52 @@
+u8 '256'                     err  number too large to fit in target type | ParseIntError { kind: PosOverflow }
+u8 '-1'                      err  invalid digit found in string | ParseIntError { kind: InvalidDigit }
+i8 '-129'                    err  number too small to fit in target type | ParseIntError { kind: NegOverflow }
+i32 ''                       err  cannot parse integer from empty string | ParseIntError { kind: Empty }
+i32 ' 5'                     err  invalid digit found in string | ParseIntError { kind: InvalidDigit }
+i32 '+5'                     ok   5
+i32 '-'                      err  invalid digit found in string | ParseIntError { kind: InvalidDigit }
+i32 '+'                      err  invalid digit found in string | ParseIntError { kind: InvalidDigit }
+u32 '-0'                     err  invalid digit found in string | ParseIntError { kind: InvalidDigit }
+i64 '0x10'                   err  invalid digit found in string | ParseIntError { kind: InvalidDigit }
+u128 max                     ok   340282366920938463463374607431768211455
+u128 max+1                   err  number too large to fit in target type | ParseIntError { kind: PosOverflow }
+radix 16 'ff'                ok   255
+radix 2 '102'                err  invalid digit found in string | ParseIntError { kind: InvalidDigit }
+radix 36 'zz'                ok   1295
+radix 16 '-80' i8            ok   -128
+NonZero '0'                  err  number would be zero for non-zero type | ParseIntError { kind: Zero }
+<empty>=Empty x=InvalidDigit 999=PosOverflow -999=NegOverflow 0=Zero 
+f64 'abc'                    err  invalid float literal | ParseFloatError { kind: Invalid }
+f64 ''                       err  cannot parse float from empty string | ParseFloatError { kind: Empty }
+f64 '1e400'                  ok   inf
+f64 '-inf'                   ok   -inf
+f64 'NaN'                    ok   true
+f64 '.5'                     ok   0.5
+f64 '5.'                     ok   5.0
+f64 '1_000'                  err  invalid float literal | ParseFloatError { kind: Invalid }
+f32 '3.4e39'                 ok   inf
+bool 'yes'                   err  provided string was not `true` or `false` | ParseBoolError
+bool 'true'                  ok   true
+char 'ab'                    err  too many characters in string | ParseCharError { kind: TooManyChars }
+char ''                      err  cannot parse char from empty string | ParseCharError { kind: EmptyString }
+char 'é'                     ok   'é'
+u8::try_from(300)            err  number too large to fit in target type | TryFromIntError(PosOverflow)
+i8::try_from(-129i64)        err  number too small to fit in target type | TryFromIntError(NegOverflow)
+u32::try_from(-1)            err  number too small to fit in target type | TryFromIntError(NegOverflow)
+usize::try_from(5u64)        ok   5
+char::try_from(0xD800)       err  converted integer out of range for `char` | CharTryFromError(())
+char::try_from(65)           ok   'A'
+u8 from char 'é'             ok   233
+<[u8;2]>::try_from           err  could not convert slice to array | TryFromSliceError(())
+from_utf8 bad                err  invalid utf-8 sequence of 1 bytes from index 2 | Utf8Error { valid_up_to: 2, error_len: Some(1) }
+valid_up_to=2 error_len=Some(1)
+truncated: incomplete utf-8 byte sequence from index 1 valid_up_to=1 error_len=None
+FromUtf8Error: invalid utf-8 sequence of 1 bytes from index 2 bytes=[104, 105, 255, 33, 226, 130]
+lossy: hi�!�
+from_utf16 bad               err  invalid utf-16: lone surrogate found | FromUtf16Error { kind: LoneSurrogate }
+sum ok                       ok   6
+sum parse                    err  invalid digit found in string | ParseIntError { kind: InvalidDigit }
+sum range                    err  number too small to fit in target type | TryFromIntError(NegOverflow)
+sum big                      err  total 400 too large | "total 400 too large"
+is ParseIntError: true
+is TryFromIntError: true source none: true

@@ -22,6 +22,7 @@ import (
 
 // Tcx is the global typing context.
 type Tcx struct {
+	autoTraits map[string]*Def // std's Send and Sync (see autotrait.go)
 	R *resolve.Resolver
 
 	layouts *layoutCaches // layout.go

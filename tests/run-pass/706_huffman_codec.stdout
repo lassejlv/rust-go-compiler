@@ -1,0 +1,37 @@
+text len 11 -> 23 bits (3 bytes), leaves=5 internal=4
+    a freq=5   code=0
+    b freq=2   code=100
+    c freq=1   code=101
+    d freq=1   code=110
+    r freq=2   code=111
+  head: 4e ac 9c
+  roundtrip ok: true, weighted=23 ratio=0.261
+text len 52 -> 231 bits (29 bytes), leaves=28 internal=27
+  ' ' freq=9   code=00
+    e freq=5   code=010
+    h freq=3   code=0110
+    o freq=4   code=0111
+    t freq=3   code=1000
+   \n freq=2   code=10010
+  head: 86 47 36 cf 0d 4b ea fe 50 c5 fd 34
+  roundtrip ok: true, weighted=231 ratio=0.555
+text len 15 -> 25 bits (4 bytes), leaves=4 internal=3
+    a freq=8   code=0
+    b freq=4   code=10
+    c freq=2   code=110
+    d freq=1   code=111
+  head: 00 aa db 80
+  roundtrip ok: true, weighted=25 ratio=0.208
+text len 17 -> 46 bits (6 bytes), leaves=8 internal=7
+    i freq=5   code=00
+    s freq=4   code=01
+    p freq=2   code=100
+    r freq=2   code=101
+  ' ' freq=1   code=1100
+    e freq=1   code=1101
+  head: e1 45 24 32 9f b4
+  roundtrip ok: true, weighted=46 ratio=0.338
+text len 4 -> 4 bits (1 bytes), leaves=1 internal=0
+    z freq=4   code=0
+  head: 00
+  roundtrip ok: true, weighted=4 ratio=0.125

@@ -1,0 +1,117 @@
+Doc {
+    title: "drawing",
+    layers: [
+        Layer {
+            name: "base \"layer\"",
+            visible: true,
+            shapes: [
+                Unit,
+                Circle {
+                    r: 1.5,
+                },
+                Poly(
+                    [
+                        (
+                            0,
+                            0,
+                        ),
+                        (
+                            1,
+                            -1,
+                        ),
+                    ],
+                ),
+                Group(
+                    Circle {
+                        r: 0.0,
+                    },
+                    Poly(
+                        [],
+                    ),
+                ),
+            ],
+            tags: {
+                "a",
+                "b",
+                "c\n",
+            },
+            meta: {
+                "alpha": None,
+                "z-order": Some(
+                    -3,
+                ),
+            },
+        },
+        Layer {
+            name: "",
+            visible: false,
+            shapes: [],
+            tags: {},
+            meta: {},
+        },
+    ],
+    empty_vec: [],
+    empty_map: {},
+    unit: Unit,
+    wrap: Wrapper(
+        7,
+        "w",
+    ),
+    res: Ok(
+        (
+            1,
+            '\'',
+        ),
+    ),
+    q: [
+        Some(
+            Unit,
+        ),
+        None,
+    ],
+    nested: Some(
+        Some(
+            Wrapper(
+                0,
+                "",
+            ),
+        ),
+    ),
+}
+[Unit, Circle { r: 1.5 }, Poly([(0, 0), (1, -1)]), Group(Circle { r: 0.0 }, Poly([]))]
+Err(
+    "bad\tthing",
+)
+(
+    1,
+    "two",
+    [
+        3.0,
+        4.5,
+    ],
+    (),
+)
+Some(
+    Unit,
+)
+[Some(         1)] [Unit] [(    1    ,     2    )]
+[    3.14] [+5] [[
+    0xff,
+    0x10,
+]] [(
+    0xA,
+    0xAB,
+)]
+[
+    [
+        1,
+        2,
+    ],
+    [],
+    [
+        3,
+    ],
+]
+'x' "q\"uote\\"
+NaN -0.0 1e21
+1.0 0.3 1e-7 123456789.0

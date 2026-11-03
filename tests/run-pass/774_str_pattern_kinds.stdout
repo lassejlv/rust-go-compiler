@@ -1,0 +1,46 @@
+["alpha", "beta", "gamma", "delta", "", "epsilon"]
+5
+["alpha", "beta;gamma", "delta;;", "epsilon"]
+["alpha,", "beta;gamma", ",delta;; epsilon"]
+[" epsilon", "alpha, beta;gamma ,delta;"]
+["a", "b", "c"]
+["c", "b", "a"]
+["line1\n", "line2\n", "\n", "line4"]
+["z", "y", "x"]
+[(1, "an"), (3, "an")] [(3, "ana")]
+"122333"
+[0, 2, 5]
+"abc" "abc456"
+"cab" "ababc"
+"padded \n" "  \t padded"
+Some("body") Some("body") None
+Some("tag") Some("user")
+a+b+c-d
+_ello _orld
+Some(2) Some(3) Some(2)
+Some(2) Some(3)
+true true true
+Some((3, "value=more"))
+("key=value", "more")
+[(4, 'E'), (2, 'C'), (0, 'A')]
+Some(1)
+123 ababab--
+["fig", "kiwi", "pear", "apple", "banana"]
+["one", "two", "", "three"]
+["three", "two", "one"]
+"Mhall"
+["comma", "separated", "more"]
+["lines", "with", "crlf"]
+[3, 1]
+[("a", "1"), ("b", "2"), ("c", "?")]
+dELLO worlH
+1 [2, 0, 0, 0, 0, 7, 8, 9, 10] Some(10)
+[0, 2, 1, 0, 0, 0, 9, 8, 7, 10]
+[0, 9, 8, 7, 10, 0, 2, 1, 0, 0]
+[0, 0, 0, 0] [1, 2, 3, 4]
+[1, 0, 2, 3] "a/b/c"
+[0, 2, 7, 0]
+[[], [0, 9, 8, 7, 10, 0, 2, 1, 0]] 10
+[1, 2, 3, 1, 2, 3]
+true true Some(10)
+ohe

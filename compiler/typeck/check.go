@@ -527,7 +527,14 @@ func (fcx *FnCtxt) selectWherePossible() {
 					}
 				}
 				if !hasInfer {
-					fcx.errorf(o.Span, "the trait bound `%s: %s` is not satisfied", rt.Args[0], traitRefDisplay(rt))
+					switch t := fcx.t; t.autoKind(rt.Trait) {
+					case "Send":
+						t.ErrorCode(o.Span, "E0277", "`%s` cannot be sent between threads safely", rt.Args[0])
+					case "Sync":
+						t.ErrorCode(o.Span, "E0277", "`%s` cannot be shared between threads safely", rt.Args[0])
+					default:
+						t.ErrorCode(o.Span, "E0277", "the trait bound `%s: %s` is not satisfied", rt.Args[0], traitRefDisplay(rt))
+					}
 				}
 				continue
 			}

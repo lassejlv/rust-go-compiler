@@ -626,7 +626,17 @@ func (ac *astConv) lowerTy(at ast.Type) Ty {
 		return Slice(ac.lowerTy(x.Elem))
 	case *ast.ArrayType:
 		elem := ac.lowerTy(x.Elem)
-		return Array(elem, ac.lowerConstArg(x.Len))
+		n := ac.lowerConstArg(x.Len)
+		if n.Kind == TConst && int64(n.Val) < 0 {
+			if v, ok := ac.t.evalConstValue(ac, x.Len); ok {
+				if b, ok := intOf(v); ok && b.Sign() < 0 {
+					// an array length is a usize
+					ac.t.ErrorCode(x.Len.GetSpan(), "E0080", "evaluation of constant value failed: attempt to compute a negative array length, which would overflow")
+					return Array(elem, TyErr)
+				}
+			}
+		}
+		return Array(elem, n)
 	case *ast.NeverType:
 		return TyNever
 	case *ast.InferType:
@@ -753,7 +763,7 @@ func (ac *astConv) lowerConstArg(e ast.Expr) Ty {
 	}
 	v, ok := ac.t.evalConstInt(ac, e)
 	if !ok {
-		ac.t.Errorf(e.GetSpan(), "could not evaluate constant expression")
+		ac.t.ErrorCode(e.GetSpan(), "E0080", "evaluation of constant value failed")
 		return TyErr
 	}
 	return ConstVal(uint64(v))
@@ -772,12 +782,30 @@ func (ac *astConv) genericArgsFor(d *Def, seg *ast.PathSegment, prefix []Ty, sp 
 	}
 	own := g.Own()
 	var given []ast.GenericArg
+	nlt := 0
 	if seg != nil && seg.Args != nil && !seg.Args.Parenthesized {
 		for _, a := range seg.Args.Args {
 			if a.Lifetime != "" {
+				nlt++
 				continue
 			}
 			given = append(given, a)
+		}
+		if len(seg.Args.Bindings) > 0 && d.Kind != DefTrait && !t.isStd(d) {
+			t.ErrorCode(sp, "E0229", "associated item constraints are not allowed here")
+		}
+	}
+	if nlt > 0 && !t.isStd(d) {
+		declared := 0
+		if ga := genericsAst(d); ga != nil {
+			for _, p := range ga.Params {
+				if p.Kind == ast.GPLifetime {
+					declared++
+				}
+			}
+		}
+		if nlt > declared && (d.Kind == DefStruct || d.Kind == DefEnum || d.Kind == DefUnion || d.Kind == DefTrait || d.Kind == DefTyAlias) {
+			t.ErrorCode(sp, "E0107", "%s takes %d lifetime argument%s but %d lifetime arguments were supplied", d.Kind, declared, plural(declared), nlt)
 		}
 	}
 	gi := 0
@@ -833,7 +861,7 @@ func (ac *astConv) genericArgsFor(d *Def, seg *ast.PathSegment, prefix []Ty, sp 
 		args = append(args, ac.newInferOrErr(sp))
 	}
 	if gi < len(given) {
-		t.Errorf(sp, "too many generic arguments for `%s`", d.Name)
+		t.ErrorCode(sp, "E0107", "too many generic arguments for `%s`", d.Name)
 	}
 	return args
 }
@@ -842,7 +870,7 @@ func (ac *astConv) newInferOrErr(sp lexer.Span) Ty {
 	if ac.infer != nil {
 		return ac.infer()
 	}
-	ac.t.Errorf(sp, "missing generics")
+	ac.t.ErrorCode(sp, "E0107", "missing generics")
 	return TyErr
 }
 
@@ -1206,3 +1234,4 @@ func paramAssocRefs(n any, g *Generics) []int {
 	})
 	return out
 }
+

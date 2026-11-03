@@ -1,0 +1,3 @@
+//~ ERROR E0133
+extern "C" { fn abs(x: i32) -> i32; }
+fn main() { println!("{}", abs(-1)); }

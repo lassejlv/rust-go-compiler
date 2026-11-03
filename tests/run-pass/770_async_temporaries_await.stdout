@@ -1,0 +1,7 @@
+temp across:  pending ~temp-across a=12 n=12
+match scrut:  pending arm 5 ~scrut after match
+shadowing:    pending pending using shadow2 ~shadow2 ~shadow1
+loop locals:  pending iter L0 ~L0 pending iter L1 ~L1 loop done
+nested:       pending ~inner-local inner returned 7 ~outer r=14
+vec borrow:   pending pending ~v0 ~v1 total 4
+if-let scrut: pending got 5 ~iflet after if-let

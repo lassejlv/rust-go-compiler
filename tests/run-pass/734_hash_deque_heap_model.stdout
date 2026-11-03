@@ -1,0 +1,15 @@
+hashmap len 3666 model 3666 keys equal true bad 0
+value sums equal: true
+after retain 1978 expected 1978
+drained small keys [0, 1, 3, 4, 7, 9, 10, 11, 12, 13, 14, 15, 20, 22, 24, 27, 29, 30, 31, 33, 34, 35, 39, 40, 46, 47, 49] now empty true
+extend then filter: [(7, 21), (8, 24), (9, 27)]
+hashset a 1436 b 1445 inter 688 union 2193 check true
+first inter [3, 4, 8, 10, 11]
+deque len 4402 model 4402 equal true bad 0
+slices total 4402 front Some(19995) back Some(19999)
+range 10..15 [19315, 7164, 3492, 11210, 18516] model [19315, 7164, 3492, 11210, 18516]
+sorted contiguous equal true first5 [219, 343, 408, 458, 474]
+retain/truncate [219, 408, 474, 528, 564] binary_search Ok(2)
+peek_mut results [(99, 840), (99, 603), (99, 489), (99, 21), (99, 0)] len 995
+into_sorted_vec sorted true matches pops true max Some((98, 983))
+heap retain/into_vec sorted: [-2, 8, 10]

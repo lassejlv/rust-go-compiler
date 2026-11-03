@@ -14,6 +14,7 @@ package expand
 // `__async_block` runs its closure on a coroutine (see std::future).
 
 import (
+	"fmt"
 	"rustgo/compiler/ast"
 	"rustgo/compiler/lexer"
 	"rustgo/compiler/parser"
@@ -132,6 +133,9 @@ func desugarAsync(c *ast.Crate) error {
 			switch k := it.Kind.(type) {
 			case *ast.FnItem:
 				if k.Body != nil {
+					if err := checkAwaits(k.Body, k.Async); err != nil {
+						fail(err)
+					}
 					ast.RewriteExprs(k.Body, rewrite)
 				}
 				if k.Async && k.Body == nil {
@@ -179,4 +183,36 @@ func desugarAsync(c *ast.Crate) error {
 	}
 	items(c.Items)
 	return firstErr
+}
+
+// checkAwaits reports an `.await` outside async fns, blocks and closures
+// (E0728).
+func checkAwaits(n any, inAsync bool) error {
+	var err error
+	ast.Walk(n, func(x any) bool {
+		if err != nil {
+			return false
+		}
+		switch e := x.(type) {
+		case *ast.ItemStmt:
+			return false // checked with its own item
+		case *ast.BlockExpr:
+			if e.Async && !inAsync {
+				err = checkAwaits(e.Block, true)
+				return false
+			}
+		case *ast.ClosureExpr:
+			if e.Async != inAsync {
+				err = checkAwaits(e.Body, e.Async)
+				return false
+			}
+		case *ast.AwaitExpr:
+			if !inAsync {
+				err = fmt.Errorf("%s: error[E0728]: `await` is only allowed inside `async` functions and blocks", e.Span.Lo)
+				return false
+			}
+		}
+		return true
+	})
+	return err
 }

@@ -1,0 +1,10 @@
+IntoIter:       got Some(0) Some(4) ~1 ~2 ~3 iter dropped ~4 ~0
+Drain early:    ~11 drained one Some(11) ~12 ~13 left [10, 14, 15] ~10 ~14 ~15
+vec ops:        ~21 ~23 ~25 after retain ~22 ~24 after truncate ~1 ~2 ~2 dedup -> [1, 2, 3] split_off tail len 2 ~2 ~3 ~1 cleared ~20
+VecDeque:       ~30 ~31 deque [32, 33, 34, 35] ~35 deque truncated ~32 ~33 ~34
+BTreeMap iter:  ~40 first key Some(40) ~41 ~42 ~43 ~44 map iter dropped
+adaptors:       ~50 ~52 ~54 ~55 kept [51, 53] ~51 ~53
+take/replace:   taken 2 left 0 ~60 ~61 replaced Some(63) ~63 end ~64
+array IntoIter: ~70 last Some(73) remaining 2 ~73 ~71 ~72
+swap/splice:    ~80 swap_removed spliced out [89, 81] ~89 ~81 now [83, 90, 91, 92, 82] ~83 ~90 ~91 ~92 ~82
+sort/resize:    max clone Some(103) ~101 ~100 ~109 ~109 ~999 resized ~103 ~103 ~102

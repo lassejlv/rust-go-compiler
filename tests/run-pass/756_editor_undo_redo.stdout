@@ -1,0 +1,55 @@
+typed:         "hello wörld|" | undo=3 redo=0
+backspaced:    "hello wör|" | undo=5 redo=0
+moved left:    "hello |wörld!" | undo=6 redo=0
+inserted:      "hello big |wörld!" | undo=8 redo=0
+replaced:      "heLLLLo bi|g wörLLd!" | undo=9 redo=0
+undo replace:  "helLl big |wörLLl" | undo=8 redo=1
+undo x2:       "helLl |wörLLl" | undo=6 redo=3
+redo:          "helLl big|wörLLl" | undo=7 redo=2
+macro:         "<<|elLl bigwörLLl" | undo=8 redo=0
+redo after new cmd: false
+undo all:      "|" | undo=0 redo=8
+redo all:      "<<|ello bigwörld!" | undo=8 redo=0
+redid 8 commands
+ 1. insert "h"@0
+ 2. merged into insert "he"@0
+ 3. merged into insert "hel"@0
+ 4. merged into insert "hell"@0
+ 5. merged into insert "hello"@0
+ 6. insert " "@5
+ 7. insert "w"@6
+ 8. merged into insert "wö"@6
+ 9. merged into insert "wör"@6
+10. merged into insert "wörl"@6
+11. merged into insert "wörld"@6
+12. delete 1@11
+13. delete 1@10
+14. insert "l"@10
+15. merged into insert "ld"@10
+16. merged into insert "ld!"@10
+17. insert "b"@6
+18. merged into insert "bi"@6
+19. merged into insert "big"@6
+20. insert " "@9
+21. replace "l"->"LL" (3x)
+22. undo replace "l"->"LL" (3x)
+23. undo insert " "@9
+24. undo insert "big"@6
+25. redo insert "big"@6
+26. macro wrap [insert "<"@0; insert "<"@1; delete 1@2]
+27. undo macro wrap [insert "<"@0; insert "<"@1; delete 1@2]
+28. undo insert "big"@6
+29. undo insert "ld!"@10
+30. undo delete 1@10
+31. undo delete 1@11
+32. undo insert "wörld"@6
+33. undo insert " "@5
+34. undo insert "hello"@0
+35. redo insert "hello"@0
+36. redo insert " "@5
+37. redo insert "wörld"@6
+38. redo delete 1@11
+39. redo delete 1@10
+40. redo insert "ld!"@10
+41. redo insert "big"@6
+42. redo macro wrap [insert "<"@0; insert "<"@1; delete 1@2]

@@ -35,7 +35,7 @@ type Error struct {
 	Msg string
 }
 
-func (e *Error) Error() string { return fmt.Sprintf("%s: %s", e.Pos, e.Msg) }
+func (e *Error) Error() string { return fmt.Sprintf("%s: error: %s", e.Pos, e.Msg) }
 
 // New tokenizes src and returns a parser positioned at its first token.
 func New(file int, src string) (*Parser, error) {

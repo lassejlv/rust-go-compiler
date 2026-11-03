@@ -236,6 +236,9 @@ func (r *Resolver) collectItem(it *ast.Item, m *Module, parent *Def) *Def {
 		d = r.newDef(DefConst, name, parent)
 		d.Const = &ConstInfo{Expr: k.Expr, TyAst: k.Ty}
 		r.defineVis(m, name, ValueNS, defRes(d), it.Name.Span, it.Vis)
+		if k.Ty != nil {
+			r.collectBody(k.Ty, m, d) // blocks in array lengths
+		}
 		if k.Expr != nil {
 			r.collectBody(k.Expr, m, d)
 		}
@@ -243,6 +246,9 @@ func (r *Resolver) collectItem(it *ast.Item, m *Module, parent *Def) *Def {
 		d = r.newDef(DefStatic, name, parent)
 		d.Const = &ConstInfo{Expr: k.Expr, TyAst: k.Ty, Mut: k.Mut, Static: true}
 		r.defineVis(m, name, ValueNS, defRes(d), it.Name.Span, it.Vis)
+		if k.Ty != nil {
+			r.collectBody(k.Ty, m, d) // blocks in array lengths
+		}
 		if k.Expr != nil {
 			r.collectBody(k.Expr, m, d)
 		}
@@ -331,6 +337,9 @@ func (r *Resolver) collectAssoc(it *ast.Item, m *Module, parent *Def) *Def {
 	case *ast.ConstItem:
 		d = r.newDef(DefConst, it.Name.Name, parent)
 		d.Const = &ConstInfo{Expr: k.Expr, TyAst: k.Ty}
+		if k.Ty != nil {
+			r.collectBody(k.Ty, m, d) // blocks in array lengths
+		}
 		if k.Expr != nil {
 			r.collectBody(k.Expr, m, d)
 		}

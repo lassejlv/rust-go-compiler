@@ -159,11 +159,15 @@ func docTestCode(code string) (body string, hoisted []string, hasMain bool) {
 			l = l[:len(l)-len(t)] + t[2:]
 		}
 		t = strings.TrimSpace(l)
-		if strings.HasPrefix(t, "#![") || strings.HasPrefix(t, "extern crate ") || strings.HasPrefix(t, "#[macro_use] extern crate ") {
-			if !strings.HasPrefix(t, "#![") {
-				hoisted = append(hoisted, t)
-			}
+		switch {
+		case strings.HasPrefix(t, "#![") && strings.HasSuffix(t, "]"):
 			l = ""
+		case strings.HasPrefix(t, "extern crate ") || strings.HasPrefix(t, "#[macro_use] extern crate ") || strings.HasPrefix(t, "#[macro_use]extern crate "):
+			// hoist the `extern crate ..;` (the rest of the line stays)
+			if k := strings.IndexByte(t, ';'); k >= 0 {
+				hoisted = append(hoisted, t[:k+1])
+				l = t[k+1:]
+			}
 		}
 		lines[i] = l
 	}

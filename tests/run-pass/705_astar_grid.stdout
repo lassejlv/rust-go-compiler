@@ -1,0 +1,21 @@
+grid 7x10 start=P { r: 0, c: 0 } goal=P { r: 4, c: 9 }
+A*: cost=17 len=18 expanded=31
+Dijkstra: cost=17 len=18 expanded=50
+same cost: true, A* expanded fewer or equal: true
+  S**#******
+  .#*#*~~~.*
+  .#***~#~.*
+  .####.#^^*
+  ...^..#..G
+  .#~~~.#.#.
+  ...#......
+  0  1  2  #  8  9 10 11 12 13
+  1  #  3  #  7 12 15 16 13 14
+  2  #  4  5  6 11  # 19 14 15
+  3  #  #  #  # 12  # 20 17 16
+  4  5  6  9 10 11  # 17 18 17
+  5  # 11 14 15 12  # 16  # 18
+  6  7  8  # 14 13 14 15 16 17
+reachable=55 farthest=20
+blocked: None
+heap order: [(3, 4), (3, 2), (5, 1), (9, 0)]

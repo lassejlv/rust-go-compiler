@@ -1,0 +1,8 @@
+incr results [1, 1, 2, 3, 1, 2] polls 25 data [("x", 3), ("y", 2), ("z", 1)]
+get zip Some((3, 0))
+fib(12)=144 polls=233
+complete:     done finishing | ~done-c | ~done-b | ~done-a | returned 6
+cancelled:    dropping future | ~cancel-b | ~cancel-a
+unpolled:     created but not polled
+borrow_across len 6 v ["abc", "n3"]
+select:       ~fast-guard | right 7 | counter 34 polls 4 rc=1

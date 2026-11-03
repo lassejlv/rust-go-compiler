@@ -264,9 +264,14 @@ func (t *Tcx) checkCallBounds(r *Results, c *Callee, sp ast.Span) {
 				kinds := []string{"Fn", "FnMut", "FnOnce"}
 				t.ErrorCode(ci.Expr.Span, "E0525", "expected a closure that implements the `%s` trait, but this closure only implements `%s`", kinds[need], kinds[ci.Kind])
 			}
-		case tr.Trait != nil && tr.Trait.Auto && t.isStd(tr) && tr.Name == "Send":
-			if bad := t.notSend(self, tr, map[Ty]bool{}, 0); bad != nil {
-				t.ErrorCode(sp, "E0277", "`%s` cannot be sent between threads safely", bad)
+		case t.autoKind(tr) != "":
+			// closures' captures are known now
+			if !newInferCtxt(t).autoHolds(tr.Name, self, 0, map[autoKey]bool{}) {
+				what := "sent"
+				if tr.Name == "Sync" {
+					what = "shared"
+				}
+				t.ErrorCode(sp, "E0277", "`%s` cannot be %s between threads safely", self, what)
 			}
 		}
 	}

@@ -1,0 +1,8 @@
+whole move:       moved whole ~whole
+destructure:      destructured ra rc ~rc ~ra ~rb
+partial field:    took pb ~pb ~pa ~pc
+box field mut:    replaced ma ~mc assigned c ~ma ~ma2 ~mb ~mc2
+self: Box<Self>:  mul uses g1 ~g1 mul3 -> 3 mul uses g2 ~g2 mul2 -> 6 ~g3 add5 -> 11
+Box<dyn FnOnce>:  before call ran with captured ~never-called ~captured
+list by value:    ~n1 ~n2 ~n3 walked ["n1", "n2", "n3"]
+map unbox:        unboxed Some("optbox") vec unboxed 2 ~vb1 ~vb0 ~optbox

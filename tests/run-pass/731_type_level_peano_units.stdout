@@ -1,0 +1,15 @@
+S(S(S(Z)))=3
+2+3 = S(S(S(S(S(Z)))))=5
+2*3 = 6
+3*3+1 = 10
+0*3 = 0  3*0 = 0
+6*6 = 36
+hlist len 5 items ["1", "\"two\"", "3.5", "Some('c')", "[5]"]
+len_of 2
+distance 100 m time 9.58 s speed 10.438413361169102 m s^-1
+area 12 m^2
+volume 24 m^3
+accel 1 m s^-2
+dimensionless 2.5
+sum 101.5 m
+exponents: 2 -2 -2

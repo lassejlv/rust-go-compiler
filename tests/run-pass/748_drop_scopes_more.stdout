@@ -1,0 +1,17 @@
+if cond:      v(if-cond) ~if-cond if-body
+else-if:      v(ifc2) ~ifc2 v(elif) ~elif elif-body
+while cond:   v(w) ~w body0 v(w) ~w
+match guards: v(guard1) ~guard1 v(guard2) ~guard2 arm2 5
+let-else:     ~letelse k=1
+? ok:         v(q-temp2) ~q-temp2 ~q-temp x=8 ~q-guard Ok(8)
+? err:        ~q-temp ~q-guard Err("err from q-temp")
+for expr:     iter1 iter2 ~for-iter after-for
+return mid:   v(lhs) v(ret) ~ret ~lhs ~early-local early=300
+no return:    v(lhs) ~lhs ~early-local early=2
+struct lit:   v(fa) v(fb) ~fb ~fa pair 2 2
+assignment:   v(assign) ~assign slot=6 v(compound) ~compound slot=14
+closure arg:  v(closure-arg) ~closure-arg out=22
+bool chain:   v(and-l) ~and-l v(and-r) ~and-r v(or-r) ~or-r b=true
+if-let some:  v(iflet-some) got 10 ~iflet-some
+index temp:   v(idx) ~idx el=40
+stmt temps:   ~blk1 v(blk2) ~blk2 len=4

@@ -1,0 +1,54 @@
+case overflow:
+[hook] &str "attempt to add with overflow" at line 27 col 30
+  drop guard case (panicking=true)
+  -> caught &str "attempt to add with overflow"
+case index:
+[hook] String "index out of bounds: the len is 3 but the index is 5" at line 34 col 17
+  drop guard deep0 (panicking=true)
+  drop guard deepN (panicking=true)
+  drop guard deepN (panicking=true)
+  drop guard case (panicking=true)
+  -> caught String "index out of bounds: the len is 3 but the index is 5"
+case unwrap none:
+[hook] &str "called `Option::unwrap()` on a `None` value" at line 48 col 68
+  drop guard case (panicking=true)
+  -> caught &str "called `Option::unwrap()` on a `None` value"
+case expect err:
+[hook] String "parse failed: ParseIntError { kind: InvalidDigit }" at line 49 col 55
+  drop guard case (panicking=true)
+  -> caught String "parse failed: ParseIntError { kind: InvalidDigit }"
+case div zero:
+[hook] &str "attempt to divide by zero" at line 50 col 69
+  drop guard case (panicking=true)
+  -> caught &str "attempt to divide by zero"
+case formatted:
+[hook] String "bad value 7" at line 51 col 48
+  drop guard case (panicking=true)
+  -> caught String "bad value 7"
+case literal:
+[hook] &str "static message" at line 52 col 33
+  drop guard case (panicking=true)
+  -> caught &str "static message"
+case ok:
+  drop guard case (panicking=false)
+  -> ok 99
+case assert_eq:
+[hook] String "assertion `left == right` failed: math is hard\n  left: 2\n right: 3" at line 54 col 37
+  drop guard case (panicking=true)
+  -> caught String "assertion `left == right` failed: math is hard\n  left: 2\n right: 3"
+case shift:
+[hook] &str "attempt to shift left with overflow" at line 55 col 70
+  drop guard case (panicking=true)
+  -> caught &str "attempt to shift left with overflow"
+case neg overflow:
+[hook] &str "attempt to negate with overflow" at line 56 col 80
+  drop guard case (panicking=true)
+  -> caught &str "attempt to negate with overflow"
+[hook] i32 42 at line 71 col 9
+panic_any payload: i32 42
+[hook] &str "inner" at line 76 col 44
+  re-raising &str "inner"
+resume_unwind outer caught: &str "inner"
+hook removed; final panic next
+  drop guard main-2 (panicking=true)
+  drop guard main-1 (panicking=true)

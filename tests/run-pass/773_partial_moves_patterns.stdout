@@ -1,0 +1,9 @@
+enum tuple:     took t1 ~t1 after if-let ~t2
+enum struct:    tail t n 3 ~t after match ~h
+nested option:  right nr ~nr dropped right end scope ~nl
+let-else mix:   left ol ref right or ~ol ~or
+nested tuple:   x a0 y c1 ~c1 ~a0 ~a1 ~b ~c0
+loop moves:     keep v2 ~v2 ~v1 other head vh ~vh ~vt loop end
+struct remains: moved pl still borrow pr ~pl ~pr
+guard + move:   guarded q0 q1 ~q0 after guard match ~q1
+closure move:   ~mr mapped Some("ml") ~ml

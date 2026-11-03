@@ -1,0 +1,15 @@
+abc              states=7   abc:Y ab:n abcd:n :n
+a*b              states=6   b:Y ab:Y aaab:Y aaa:n ba:n
+(ab|cd)+e?       states=14  ab:Y cdab:Y abe:Y e:n abcde:Y abcdee:n
+[a-c]x[^0-9]     states=7   axz:Y cx_:Y dxz:n bx5:n ax:n
+h.llo|wor(l|ld)  states=25  hello:Y hallo:Y world:Y worl:Y worldd:n
+(a|b)*abb        states=13  abb:Y aabb:Y babb:Y ababab:n bbbbabb:Y
+\*+\.            states=6   *.:Y ***.:Y .:n *x:n
+(x?)*y           states=7   y:Y xy:Y xxxy:Y xx:n
+"(ab": error: expected ')', got None
+"*a": error: nothing to repeat before *
+"a)": error: unexpected ')'
+"[ab": error: unterminated class
+"a\\": error: trailing backslash
+valid emails: ["bob@example.com", "x@y.org"]
+Split(1, 2) Jump(7) Match(<pred>)
