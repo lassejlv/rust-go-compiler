@@ -21,6 +21,13 @@ type pick struct {
 	adjust  []Adjustment
 	recvTy  Ty // adjusted receiver type
 	virtual bool
+	// how the receiver was adjusted (set by lookupMethod/envMethod, see
+	// genPick): autoderef step, 0 by value / 1 `&` / 2 `&mut` autoref,
+	// array-to-slice unsizing
+	step   int
+	mode   int
+	unsize bool
+	probed bool
 }
 
 func (fcx *FnCtxt) checkMethodCall(x *ast.MethodCallExpr, expected Ty) Ty {
@@ -70,6 +77,12 @@ func (fcx *FnCtxt) checkMethodCall(x *ast.MethodCallExpr, expected Ty) Ty {
 	}
 	p := early
 	if p == nil {
+		// in an instance of a generic body: the generic body's pick
+		if gp := fcx.instPick(x.ID); gp != nil {
+			p = fcx.replayPick(rt, gp, x.Span)
+		}
+	}
+	if p == nil {
 		fcx.methodNode = x.ID
 		fcx.privMethod = nil
 		fcx.checkPriv = x.Method.Hyg == 0
@@ -96,6 +109,9 @@ func (fcx *FnCtxt) checkMethodCall(x *ast.MethodCallExpr, expected Ty) Ty {
 			fcx.checkExpr(a, nil)
 		}
 		return TyErr
+	}
+	if early == nil {
+		fcx.recordPick(x.ID, p)
 	}
 	fcx.addAdjust(x.Receiver, p.adjust...)
 	// markMutPlace for &mut autoref
@@ -260,7 +276,7 @@ func (fcx *FnCtxt) lookupMethod(recv Ty, name string, sp lexer.Span) *pick {
 						fcx.ic.rollback(s)
 						continue
 					}
-					return &pick{item: c.item, parent: c.trait.Args, adjust: adj, recvTy: adjusted, virtual: true}
+					return &pick{item: c.item, parent: c.trait.Args, adjust: adj, recvTy: adjusted, virtual: true, step: si, mode: mode, unsize: si == unsizeStep, probed: true}
 				}
 				fcx.ic.rollback(s)
 			}
@@ -279,7 +295,7 @@ func (fcx *FnCtxt) lookupMethod(recv Ty, name string, sp lexer.Span) *pick {
 						fcx.ic.rollback(s)
 						continue
 					}
-					return &pick{item: c.item, parent: iargs, adjust: adj, recvTy: adjusted}
+					return &pick{item: c.item, parent: iargs, adjust: adj, recvTy: adjusted, step: si, mode: mode, unsize: si == unsizeStep, probed: true}
 				}
 				fcx.ic.rollback(s)
 			}
@@ -338,6 +354,7 @@ func (fcx *FnCtxt) lookupMethod(recv Ty, name string, sp lexer.Span) *pick {
 					continue
 				}
 				found.adjust = adj
+				found.step, found.mode, found.unsize, found.probed = si, mode, si == unsizeStep, true
 				tr := found.item.Parent
 				fcx.ic.obligations = append(fcx.ic.obligations, &Obligation{Pred: &Predicate{Trait: &TraitRef{Trait: tr, Args: found.parent}}, Span: sp})
 				if st := fcx.shallow(found.parent[0]); st.Kind == TDyn && fcx.t.IsObjectMethod(found.item, st) {
@@ -430,7 +447,7 @@ func (fcx *FnCtxt) envMethod(steps []autoderefStep, name string, sp lexer.Span) 
 					adj = append(adj, Adjustment{Kind: AdjBorrow, Mut: mode == 2, Target: adjusted})
 				}
 				fcx.ic.obligations = append(fcx.ic.obligations, &Obligation{Pred: &Predicate{Trait: e}, Span: sp})
-				return &pick{item: item, parent: e.Args, adjust: adj, recvTy: adjusted, virtual: e.Args[0].Kind == TDyn}
+				return &pick{item: item, parent: e.Args, adjust: adj, recvTy: adjusted, virtual: e.Args[0].Kind == TDyn, step: si, mode: mode, probed: true}
 			}
 		}
 	}

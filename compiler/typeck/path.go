@@ -235,8 +235,12 @@ func (fcx *FnCtxt) ctorWithArgs(d *Def, args []Ty) (*ValueRes, Ty) {
 func (fcx *FnCtxt) typeRelativeValue(base Ty, seg *ast.PathSegment, sp lexer.Span, expected Ty) (*ValueRes, Ty) {
 	name := seg.Ident.Name
 	b := fcx.structurally(base)
+	// `T::item` with T a type parameter: a parameter has no variants or
+	// inherent items, so in instances only traits apply (`T::to_string`
+	// with `T: Display` is ToString's even if T's type has its own)
+	isParam := fcx.relBaseIsParam
 	// enum variants
-	if b.Kind == TAdt && b.Def.Adt.Kind == AdtEnum {
+	if b.Kind == TAdt && b.Def.Adt.Kind == AdtEnum && !isParam {
 		if bm := b.Def.Mod.Lookup(name, ValueNS); bm != nil && bm.Res.Kind == ResCtor {
 			return fcx.ctorWithArgs(bm.Res.Def, b.Args)
 		}
@@ -252,10 +256,15 @@ func (fcx *FnCtxt) typeRelativeValue(base Ty, seg *ast.PathSegment, sp lexer.Spa
 		}
 	}
 	// inherent impls
-	fcx.checkPriv, fcx.privMethod = seg.Ident.Hyg == 0, nil
-	item, implArgs := fcx.findInherentItem(b, name, false)
-	privItem := fcx.privMethod
-	fcx.checkPriv, fcx.privMethod = false, nil
+	var item *Def
+	var implArgs []Ty
+	var privItem *Def
+	if !isParam {
+		fcx.checkPriv, fcx.privMethod = seg.Ident.Hyg == 0, nil
+		item, implArgs = fcx.findInherentItem(b, name, false)
+		privItem = fcx.privMethod
+		fcx.checkPriv, fcx.privMethod = false, nil
+	}
 	if item != nil {
 		switch item.Kind {
 		case DefFn:

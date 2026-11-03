@@ -54,6 +54,11 @@ type Tcx struct {
 	// methodHintArgs: the trait args (Self first) of those calls in the
 	// generic body
 	methodHintArgs map[*Def]map[ast.NodeID][]Ty
+	// genPicks caches, per generic fn, the method calls of its generic
+	// body as resolved against its bounds (see genericPicks)
+	genPicks map[*Def]map[ast.NodeID]*genPick
+	// genPickOuter: the error mode outside each running genericPicks check
+	genPickOuter []genPickOuter
 
 	paramOf   map[*Def]*GenericParamDef
 	synthetic map[ast.NodeID]int // impl-Trait-in-arg-position type node -> param index

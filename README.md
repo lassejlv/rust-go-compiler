@@ -134,6 +134,15 @@ compilation.
   user functions and std-trait bounds of std items such as `T: Display`
   of a format argument, `T: Ord` of `sort` or `T: Send` of a spawned
   closure's capture; see `typeck/genbody.go`).
+  Method calls are the exception to resolving against concrete types: rustc
+  resolves them once, against the bounds (`x.clone()` with `x: &T` and no
+  `T: Clone` is `<&T as Clone>::clone`; `t.to_string()` with `T: Display`
+  is ToString's even if the instance type has an inherent `to_string`), so
+  the first instance of a generic body also checks it polymorphically and
+  records each call's pick (item, autoderef steps, autoref); instances
+  replay those picks with their own types, falling back to their own lookup
+  when the generic check of the body had any error or a pick does not apply
+  (`typeck/genpick.go`). `T::item` paths likewise only see T's traits.
 * **Trait selection** supports user impls, blanket impls with where clauses,
   built-in impls (`Copy`/`Clone` for structural types, `Fn*` for closures, fn
   items and fn pointers, `Sized`, auto traits), trait objects and supertraits.
