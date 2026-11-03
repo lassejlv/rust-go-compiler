@@ -1,0 +1,26 @@
+-- nested
+drop nested local
+drop outer local
+drop nested tail
+-- in_let
+drop nested local
+drop outer local
+drop nested tail
+after let
+-- in_if
+drop then local
+drop then tail
+drop fn local
+-- in_match
+drop arm local
+drop arm tail
+drop fn local
+-- in_stmt
+drop stmt block local
+drop stmt block tail
+after stmt
+drop fn local
+-- closure
+drop closure nested local
+drop closure local
+drop closure nested tail

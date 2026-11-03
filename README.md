@@ -147,10 +147,13 @@ compilation.
 * **Drops** are elaborated with runtime drop flags, including partial moves
   out of struct fields (also through a `Box`) and enum payloads, temporaries
   with Rust's temporary-lifetime rules (terminating scopes of conditions,
-  guards and `&&`/`||` operands; lifetime extension of the temporaries a
-  `let` initializer borrows in extending positions), and unwinding on panic
-  (a cleanup stack runs pending destructors before the process exits with
-  code 101).
+  guards and `&&`/`||` operands; before Rust 2024, temporaries of block
+  tails outlive the block's locals, up to the enclosing statement or
+  terminating scope; lifetime extension of the temporaries a `let`
+  initializer borrows in extending positions), and unwinding on panic (a
+  cleanup stack runs pending destructors, in the same order, down to the
+  innermost `catch_unwind` or until the process exits with code 101; a panic
+  in an async block unwinds out of its coroutine into the poller's frames).
 * **Type layouts** follow rustc's repr(Rust) rules: fields are reordered by
   alignment, enum tags are as small as possible and niches (null pointers,
   invalid bools/chars, unused tag values) store other variants, so

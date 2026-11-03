@@ -1,0 +1,6 @@
+1
+drop arg temp
+[1, 2] D(arg temp)
+drop fmt temp
+drop h local
+D(fmt temp)

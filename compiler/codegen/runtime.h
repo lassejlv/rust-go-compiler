@@ -91,6 +91,8 @@ __attribute__((noinline)) static void rg_cs_grow(void) {
 }
 #define RG_CS_PUSH(P, F, FL) do { if (__builtin_expect(rg_csn >= rg_cscap, 0)) rg_cs_grow(); rg_cs[rg_csn] = (RgCleanup){ (void*)(P), (void (*)(void*))(F), (FL) }; rg_csn++; } while (0)
 #define RG_CS_POP(N) (rg_csn -= (N))
+/* pushes an entry below the top K ones (a temporary that outlives them) */
+#define RG_CS_INS(K, P, F, FL) do { if (__builtin_expect(rg_csn >= rg_cscap, 0)) rg_cs_grow(); memmove(&rg_cs[rg_csn - (K) + 1], &rg_cs[rg_csn - (K)], (K) * sizeof(RgCleanup)); rg_cs[rg_csn - (K)] = (RgCleanup){ (void*)(P), (void (*)(void*))(F), (FL) }; rg_csn++; } while (0)
 static RgCsState rg_cs_swap(RgCsState s) {
   RgCsState old = { rg_cs, rg_csn, rg_cscap, rg_try_top };
   rg_cs = s.cs; rg_csn = s.n; rg_cscap = s.cap; rg_try_top = s.try_top;
