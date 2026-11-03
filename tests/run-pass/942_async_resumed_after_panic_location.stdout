@@ -1,0 +1,27 @@
+fn-complete 0: Ready(7)
+  hook: panicked at line 34 col 23
+fn-complete 1: panic Some("`async fn` resumed after completion") None
+  hook: panicked at line 34 col 23
+fn-complete 2: panic Some("`async fn` resumed after completion") None
+block-complete 0: Ready(1)
+  hook: panicked at line 44 col 29
+block-complete 1: panic Some("`async fn` resumed after completion") None
+  hook: panicked at line 44 col 29
+block-complete 2: panic Some("`async fn` resumed after completion") None
+  hook: panicked at line 47 col 13
+closure-panic 0: panic None Some("closure 3")
+  hook: panicked at line 45 col 35
+closure-panic 1: panic Some("`async fn` resumed after panicking") None
+  hook: panicked at line 45 col 35
+closure-panic 2: panic Some("`async fn` resumed after panicking") None
+closure-complete 0: Ready(0)
+  hook: panicked at line 45 col 35
+closure-complete 1: panic Some("`async fn` resumed after completion") None
+  hook: panicked at line 45 col 35
+closure-complete 2: panic Some("`async fn` resumed after completion") None
+  hook: panicked at line 53 col 54
+block-move-panic 0: panic Some("m") None
+  hook: panicked at line 53 col 31
+block-move-panic 1: panic Some("`async fn` resumed after panicking") None
+  hook: panicked at line 53 col 31
+block-move-panic 2: panic Some("`async fn` resumed after panicking") None

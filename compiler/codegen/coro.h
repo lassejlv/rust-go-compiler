@@ -12,6 +12,7 @@ typedef struct RgCoro {
   void* stack;
   size_t size;
   int done;
+  int panicked;     /* finished by a panic that unwound out of the body */
   struct RgCoro* prev;
   RgCsState cs;     /* the coroutine's own cleanup stack */
   RgCsState saved;  /* the resumer's cleanup stack while running */
@@ -22,9 +23,23 @@ RG_GLOBAL __thread uint8_t* rg_coro_cx;
 
 #define RG_CORO_STACK (512 * 1024)
 
+/* The body runs under a catch frame of its own: a panic that no catch
+   frame inside the coroutine handles unwinds the coroutine's cleanup stack
+   (its pending destructors) down to it, the coroutine finishes as panicked
+   and rg_coro_resume continues the unwinding in the poller's frames. */
 static void rg_coro_start(unsigned lo, unsigned hi) {
   RgCoro* c = (RgCoro*)(((uintptr_t)hi << 32) | (uintptr_t)lo);
-  c->entry(c->data);
+  RgTry t;
+  t.csbase = 0;
+  t.prev = 0;
+  rg_try_top = &t;
+  if (setjmp(t.jb) == 0) {
+    c->entry(c->data);
+  } else {
+    c = rg_coro_current;
+    c->panicked = 1;
+  }
+  rg_try_top = 0;
   c->done = 1;
   /* returning resumes c->caller via uc_link */
 }
@@ -54,8 +69,16 @@ static uint8_t rg_coro_resume(uint8_t* p) {
   swapcontext(&c->caller, &c->ctx);
   c->cs = rg_cs_swap(c->saved);
   rg_coro_current = c->prev;
+  if (c->panicked) {
+    /* the payload message was saved by the coroutine's catch frame */
+    rg_unwind(rg_pmsg ? rg_pmsg : "", rg_pmsg ? rg_pmsg_len : 0, rg_pmsg_static);
+  }
   return (uint8_t)c->done;
 }
+
+/* Reports a coroutine that finished by panicking (polling it again panics
+   with "`async fn` resumed after panicking"). */
+static uint8_t rg_coro_panicked(uint8_t* p) { return p && ((RgCoro*)p)->panicked; }
 
 static void rg_coro_yield(void) {
   RgCoro* c = rg_coro_current;
