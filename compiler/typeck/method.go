@@ -29,8 +29,20 @@ func (fcx *FnCtxt) checkMethodCall(x *ast.MethodCallExpr, expected Ty) Ty {
 		// e.g. `P<?A, ?B>` from a call whose projections are pending
 		fcx.selectWherePossible()
 	}
+	fcx.keepOpaque++
 	rs := fcx.structurally(rt)
+	fcx.keepOpaque--
 	var early *pick
+	if rs.Kind == TInfer && rs.Sub == 0 && fcx.pendingOpaque(rs) != nil {
+		// a pending `impl Trait` value (its generic args are still being
+		// inferred): its methods come from its declared bounds, like in
+		// rustc, so later uses can still decide the args
+		if p := fcx.opaqueMethod(rs, x.Method.Name, x.Span); p != nil {
+			early = p
+		} else if fcx.revealNumericOpaque(rs) {
+			rs = fcx.structurally(rt)
+		}
+	}
 	ambiguousNum := rs.Kind == TInfer && rs.Sub != 0
 	if rs.Kind == TInfer && rs.Sub != 0 {
 		// `{integer}`/`{float}` receiver: a trait method (e.g. Ord::max)
@@ -401,6 +413,11 @@ func (fcx *FnCtxt) envMethod(steps []autoderefStep, name string, sp lexer.Span) 
 						}
 					}
 				}
+				if len(e.Args) > 1 && fcx.envContradictsHint(envs, e) {
+					// another where-clause of the trait for this type is
+					// the one the generic body used
+					continue
+				}
 				selfTy := fcx.methodSelfTy(item, e.Args)
 				s := fcx.ic.snapshot()
 				if !fcx.ic.unify(selfTy, adjusted) {
@@ -417,6 +434,34 @@ func (fcx *FnCtxt) envMethod(steps []autoderefStep, name string, sp lexer.Span) 
 		}
 	}
 	return nil
+}
+
+// envContradictsHint reports whether the where-clause e is one of several
+// of its trait for the same self type (`T: Into<u64>` and the bound
+// `type Unit: Into<f64>` when both are `u32: Into<..>` here) and the
+// generic body's call used other (parameter-free) trait args.
+func (fcx *FnCtxt) envContradictsHint(envs []*TraitRef, e *TraitRef) bool {
+	several := false
+	for _, e2 := range envs {
+		if e2.Trait == e.Trait && e2.Args[0] == e.Args[0] && !sameArgs(e2.Args, e.Args) {
+			several = true
+			break
+		}
+	}
+	if !several || fcx.methodNode == 0 || len(fcx.inst.Args) == 0 || fcx.t.quiet > 0 {
+		return false
+	}
+	fcx.t.methodTraitHints(fcx.def)
+	h := fcx.t.methodHintArgs[fcx.def][fcx.methodNode]
+	if h == nil || len(h) != len(e.Args) || fcx.t.methodHints[fcx.def][fcx.methodNode] != e.Trait {
+		return false
+	}
+	for i := 1; i < len(h); i++ {
+		if !h[i].HasParam() && !h[i].HasProj() && !h[i].HasInfer() && !h[i].HasError() && h[i] != e.Args[i] {
+			return true
+		}
+	}
+	return false
 }
 
 // earlierStepImplements reports whether one of the autoderef steps
@@ -441,4 +486,41 @@ func (fcx *FnCtxt) methodHint() *Def {
 		return nil
 	}
 	return fcx.t.methodTraitHints(fcx.def)[fcx.methodNode]
+}
+
+// opaqueMethod looks up a method of the pending `impl Trait` value v
+// through the declared bounds of its opaque type: the probe runs on the
+// opaque type, and the pick is then rebuilt with v as the receiver.
+func (fcx *FnCtxt) opaqueMethod(v Ty, name string, sp lexer.Span) *pick {
+	o := fcx.pendingOpaque(v)
+	if o == nil {
+		return nil
+	}
+	op := Opaque(o.Proj.Def, fcx.ic.resolveList(o.Proj.Args), o.Proj.Index)
+	s := fcx.ic.snapshot()
+	p := fcx.lookupMethod(op, name, sp)
+	fcx.ic.rollback(s)
+	if p == nil || !p.item.InTrait() || p.virtual {
+		return nil
+	}
+	recv := v
+	var adj []Adjustment
+	for _, a := range p.adjust {
+		if a.Kind != AdjBorrow {
+			return nil
+		}
+		recv = Ref(v, a.Mut)
+		adj = append(adj, Adjustment{Kind: AdjBorrow, Mut: a.Mut, Target: recv})
+	}
+	tr := p.item.Parent
+	g := fcx.t.Generics(tr)
+	targs := make([]Ty, len(g.Params))
+	for i := range targs {
+		targs[i] = fcx.ic.newVar()
+	}
+	if !fcx.ic.unify(fcx.methodSelfTy(p.item, targs), recv) {
+		return nil
+	}
+	fcx.ic.obligations = append(fcx.ic.obligations, &Obligation{Pred: &Predicate{Trait: &TraitRef{Trait: tr, Args: targs}}, Span: sp})
+	return &pick{item: p.item, parent: targs, adjust: adj, recvTy: recv}
 }

@@ -51,6 +51,9 @@ type Tcx struct {
 	// methodHints caches, per generic fn, the trait of each trait-method
 	// call resolved in the generic body (see methodTraitHints).
 	methodHints map[*Def]map[ast.NodeID]*Def
+	// methodHintArgs: the trait args (Self first) of those calls in the
+	// generic body
+	methodHintArgs map[*Def]map[ast.NodeID][]Ty
 
 	paramOf   map[*Def]*GenericParamDef
 	synthetic map[ast.NodeID]int // impl-Trait-in-arg-position type node -> param index
@@ -350,6 +353,11 @@ func (t *Tcx) methodTraitHints(def *Def) map[ast.NodeID]*Def {
 		return nil
 	}
 	hints := map[ast.NodeID]*Def{}
+	hintArgs := map[ast.NodeID][]Ty{}
+	if t.methodHintArgs == nil {
+		t.methodHintArgs = map[*Def]map[ast.NodeID][]Ty{}
+	}
+	t.methodHintArgs[def] = hintArgs
 	t.quiet++
 	func() {
 		defer func() { recover() }()
@@ -358,6 +366,9 @@ func (t *Tcx) methodTraitHints(def *Def) map[ast.NodeID]*Def {
 		for id, c := range fcx.r.Callees {
 			if c != nil && c.Def != nil && c.Def.InTrait() && c.Def.Parent != nil {
 				hints[id] = c.Def.Parent
+				if n := len(t.Generics(c.Def.Parent).Params); len(c.Args) >= n {
+					hintArgs[id] = fcx.ic.resolveList(c.Args[:n])
+				}
 			}
 		}
 	}()

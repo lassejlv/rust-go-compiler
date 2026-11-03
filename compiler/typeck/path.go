@@ -413,7 +413,16 @@ func (fcx *FnCtxt) traitItemValue(tr *TraitRef, seg *ast.PathSegment, sp lexer.S
 
 func (fcx *FnCtxt) checkCall(x *ast.CallExpr, expected Ty) Ty {
 	ct := fcx.checkExpr(x.Fn, nil)
+	fcx.keepOpaque++
 	steps := fcx.autoderef(ct, x.Span)
+	fcx.keepOpaque--
+	if t0 := steps[len(steps)-1].ty; t0.Kind == TInfer && t0.Sub == 0 {
+		// a pending `impl Fn*` value is called through its bound; other
+		// pending opaque values need their hidden type
+		if _, _, ok := fcx.opaqueFnSig(t0); !ok && fcx.revealNumericOpaque(t0) {
+			steps = fcx.autoderef(ct, x.Span)
+		}
+	}
 	for i, st := range steps {
 		t := st.ty
 		switch t.Kind {
@@ -497,7 +506,8 @@ func (fcx *FnCtxt) checkCall(x *ast.CallExpr, expected Ty) Ty {
 			// an `impl Fn*` value whose hidden type is not revealed yet
 			// (its generic args are still being inferred): call through
 			// its declared bound; the callee kind is fixed in writeback
-			if ins, out, ok := fcx.opaqueFnSig(t); ok && i == 0 {
+			if ins, out, ok := fcx.opaqueFnSig(t); ok {
+				fcx.addAdjust(x.Fn, adjustmentsFor(steps, i)...)
 				fcx.checkArgs(x.Args, ins, false, x.Span)
 				fcx.r.Callees[x.ID] = &Callee{Kind: CallClosure, Ty: t}
 				return out
@@ -534,8 +544,10 @@ func (fcx *FnCtxt) checkArgs(args []ast.Expr, ins []Ty, variadic bool, sp lexer.
 			}
 			if i < len(ins) {
 				if ce, ok := unparen(a).(*ast.ClosureExpr); ok && i < len(fcx.argHints) && fcx.argHints[i] != nil {
-					if eins, _ := fcx.expectedClosureSig(ins[i]); eins == nil {
-						if hins, _ := fcx.expectedClosureSig(fcx.argHints[i]); hins != nil {
+					// (a closure without parameters has an empty input list:
+					// the signature is known when either part is)
+					if eins, eout := fcx.expectedClosureSig(ins[i]); eins == nil && eout == nil {
+						if hins, hout := fcx.expectedClosureSig(fcx.argHints[i]); hins != nil || hout != nil {
 							ct := fcx.checkClosure(ce, fcx.argHints[i])
 							fcx.record(ce.ID, ct)
 							if a != ce {
@@ -552,8 +564,8 @@ func (fcx *FnCtxt) checkArgs(args []ast.Expr, ins []Ty, variadic bool, sp lexer.
 					continue
 				}
 				if ce := blockTailClosure(a); ce != nil && i < len(fcx.argHints) && fcx.argHints[i] != nil {
-					if eins, _ := fcx.expectedClosureSig(ins[i]); eins == nil {
-						if hins, _ := fcx.expectedClosureSig(fcx.argHints[i]); hins != nil {
+					if eins, eout := fcx.expectedClosureSig(ins[i]); eins == nil && eout == nil {
+						if hins, hout := fcx.expectedClosureSig(fcx.argHints[i]); hins != nil || hout != nil {
 							if fcx.closureHints == nil {
 								fcx.closureHints = map[ast.NodeID]Ty{}
 							}

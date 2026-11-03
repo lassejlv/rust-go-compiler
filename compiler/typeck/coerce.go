@@ -87,7 +87,7 @@ func (fcx *FnCtxt) coerce(e ast.Expr, from, to Ty) bool {
 	case TAdt:
 		if a.Kind == TAdt && a.Def == b.Def && isUnsizableSmartPtr(a.Def) {
 			s := fcx.ic.snapshot()
-			if fcx.ic.unify(a, b) {
+			if !fcx.opaqueToDyn(a.Args[0], b.Args[0]) && fcx.ic.unify(a, b) {
 				return true
 			}
 			fcx.ic.rollback(s)
@@ -114,7 +114,7 @@ func (fcx *FnCtxt) coerceRef(e ast.Expr, a, b Ty) bool {
 	}
 	// direct
 	s := fcx.ic.snapshot()
-	if fcx.ic.unify(a.Elem, b.Elem) {
+	if !fcx.opaqueToDyn(a.Elem, b.Elem) && fcx.ic.unify(a.Elem, b.Elem) {
 		return true
 	}
 	fcx.ic.rollback(s)
@@ -198,7 +198,8 @@ func (fcx *FnCtxt) canUnsize(src, dst Ty) bool {
 		}
 		// {integer}/{float} are sized: the `T: Trait` obligation is resolved
 		// after literal fallback (`&1` as `&dyn Display`)
-		if src.Kind == TInfer && src.Sub != 1 && src.Sub != 2 || src.IsUnsized() {
+		// (nor are pending `impl Trait` values: their bounds decide)
+		if src.Kind == TInfer && src.Sub != 1 && src.Sub != 2 && fcx.pendingOpaque(src) == nil || src.IsUnsized() {
 			return false
 		}
 		if dst.Def == nil {
@@ -237,4 +238,12 @@ func (fcx *FnCtxt) canUnsizePtr(a, b Ty) bool {
 		return false
 	}
 	return fcx.canUnsize(a.Elem, b.Elem)
+}
+
+// opaqueToDyn reports whether src is a pending `impl Trait` value (an
+// inference variable until its generic args are inferred) and dst a trait
+// object: the pointer to it unsizes, it must not become the trait object
+// type itself.
+func (fcx *FnCtxt) opaqueToDyn(src, dst Ty) bool {
+	return fcx.shallow(dst).Kind == TDyn && fcx.pendingOpaque(src) != nil
 }

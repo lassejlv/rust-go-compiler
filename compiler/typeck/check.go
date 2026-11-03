@@ -52,6 +52,9 @@ type FnCtxt struct {
 	// diverging: inference variables that received a `!` value; they fall
 	// back to `()` (never-type fallback).
 	diverging []Ty
+	// keepOpaque > 0: structurally leaves pending `impl Trait` values
+	// unrevealed (the caller uses their declared bounds)
+	keepOpaque int
 }
 
 type loopCtx struct {
@@ -137,8 +140,53 @@ func (t *Tcx) newFnCtxt(def *Def, args []Ty) *FnCtxt {
 			fcx.ic.env = append(fcx.ic.env, tr)
 		}
 	}
+	fcx.envAssocBounds()
 	fcx.scopes = []map[string]*Local{{}}
 	return fcx
+}
+
+// envAssocBounds adds to a monomorphized body's where-clauses the bounds
+// declared on the associated types of its where-clause traits (`type
+// Unit: Into<f64>` for `S: Shape` gives `u32: Into<f64>` when S::Unit is
+// u32): in the generic source these were the only facts about the
+// projection, which rustc's selection uses (alias bounds), so they must
+// decide the same method calls (`s.area().into() * s.area().into()`).
+func (fcx *FnCtxt) envAssocBounds() {
+	t := fcx.t
+	var add []*TraitRef
+	for _, e := range fcx.ic.env {
+		if e.Args[0].HasParam() || e.Args[0].HasProj() || e.Args[0].HasInfer() {
+			continue // generic (polymorphic check): projection bounds apply directly
+		}
+		for _, st := range t.AllSupertraits(e) {
+			n := len(t.Generics(st.Trait).Params)
+			if len(st.Args) != n {
+				continue
+			}
+			for _, it := range st.Trait.Trait.Order {
+				if it.Kind != DefAssocTy || it.AssocTy == nil {
+					continue
+				}
+				if len(t.Generics(it).Params) > n {
+					continue // generic associated type
+				}
+				for _, b := range it.AssocTy.Bounds {
+					if b.Maybe || b.Trait.Trait.LangItem == "sized" || len(b.Trait.Args) < 2 {
+						continue // only bounds with trait args can guide inference
+					}
+					tr := b.Trait.Subst(st.Args)
+					for i, a := range tr.Args {
+						tr.Args[i] = t.Normalize(a)
+					}
+					if a0 := tr.Args[0]; a0.HasParam() || a0.HasProj() || a0.HasInfer() || a0.HasError() {
+						continue
+					}
+					add = append(add, tr)
+				}
+			}
+		}
+	}
+	fcx.ic.env = append(fcx.ic.env, add...)
 }
 
 func (fcx *FnCtxt) errorf(sp lexer.Span, format string, args ...any) {
@@ -219,8 +267,90 @@ func (fcx *FnCtxt) structurally(t Ty) Ty {
 	if t.Kind == TInfer && t.Sub == 0 {
 		fcx.selectWherePossible()
 		t = fcx.shallow(t)
+		if t.Kind == TInfer && t.Sub == 0 && fcx.keepOpaque == 0 && fcx.revealNumericOpaque(t) {
+			t = fcx.shallow(t)
+		}
 	}
 	return t
+}
+
+// unifyPendingOpaques equates the generic args of pending `impl Trait`
+// values that were unified with each other (`if c { rep(1, 1) } else {
+// rep(2, 2) }`): like rustc's opaque types, the same opaque type has the
+// same args.
+func (fcx *FnCtxt) unifyPendingOpaques() {
+	ic := fcx.ic
+	var seen map[Ty]*Obligation
+	for _, o := range ic.obligations {
+		if o.Done || o.Proj == nil || o.Proj.Kind != TOpaque {
+			continue
+		}
+		v := ic.shallow(o.Var)
+		if v.Kind != TInfer {
+			continue
+		}
+		if seen == nil {
+			seen = map[Ty]*Obligation{}
+		}
+		p := seen[v]
+		if p == nil {
+			seen[v] = o
+			continue
+		}
+		if p.Proj.Def == o.Proj.Def && p.Proj.Index == o.Proj.Index {
+			ic.unifyList(p.Proj.Args, o.Proj.Args)
+		}
+	}
+}
+
+// pendingOpaque returns the obligation of the not-yet-revealed `impl
+// Trait` value that inference variable v stands for (its generic args
+// still contain inference variables), or nil.
+func (fcx *FnCtxt) pendingOpaque(v Ty) *Obligation {
+	ic := fcx.ic
+	v = ic.shallow(v)
+	if v.Kind != TInfer || v.Sub != 0 {
+		return nil
+	}
+	for _, o := range ic.obligations {
+		if !o.Done && o.Proj != nil && o.Proj.Kind == TOpaque && ic.shallow(o.Var) == v {
+			return o
+		}
+	}
+	return nil
+}
+
+// revealNumericOpaque applies the integer/float fallback to the generic
+// args of the pending `impl Trait` value v when they are only undecided
+// because of numeric literals, and reveals its hidden type. Used where
+// the value's type is needed structurally and its declared bounds do not
+// suffice (rustc infers through the opaque type; this is the fallback).
+func (fcx *FnCtxt) revealNumericOpaque(v Ty) bool {
+	o := fcx.pendingOpaque(v)
+	if o == nil {
+		return false
+	}
+	args := fcx.ic.resolveList(o.Proj.Args)
+	onlyNumeric := true
+	for _, a := range args {
+		Walk(a, func(x Ty) bool {
+			if x.Kind == TInfer && x.Sub == 0 {
+				onlyNumeric = false
+			}
+			return onlyNumeric
+		})
+	}
+	if !onlyNumeric {
+		return false
+	}
+	changed := false
+	for _, a := range args {
+		changed = fcx.defaultVars(a) || changed
+	}
+	if changed {
+		fcx.selectWherePossible()
+	}
+	return changed
 }
 
 func (fcx *FnCtxt) demandEq(sp lexer.Span, expected, actual Ty) {
@@ -460,6 +590,7 @@ func (fcx *FnCtxt) selectWherePossible() {
 	ic := fcx.ic
 	for iter := 0; iter < 50; iter++ {
 		progress := false
+		fcx.unifyPendingOpaques()
 		obls := ic.obligations
 		for i := 0; i < len(obls); i++ {
 			o := obls[i]
@@ -470,26 +601,10 @@ func (fcx *FnCtxt) selectWherePossible() {
 				if o.Proj.Kind == TOpaque {
 					args := ic.resolveList(o.Proj.Args)
 					ok := true
-					onlyNumeric := true
 					for _, a := range args {
 						if a.HasInfer() {
 							ok = false
-							Walk(a, func(x Ty) bool {
-								if x.Kind == TInfer && x.Sub == 0 {
-									onlyNumeric = false
-								}
-								return true
-							})
 						}
-					}
-					if !ok && onlyNumeric {
-						// numeric literals: apply the integer/float fallback
-						// now so the hidden type can be revealed
-						for _, a := range args {
-							fcx.defaultVars(a)
-						}
-						args = ic.resolveList(o.Proj.Args)
-						ok = true
 					}
 					if ok {
 						h := fcx.revealOpaque(Opaque(o.Proj.Def, args, o.Proj.Index), o.Span)
