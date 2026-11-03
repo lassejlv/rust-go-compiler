@@ -2,12 +2,14 @@ package typeck
 
 // Item-level checks of impls (mirrors parts of rustc_hir_analysis):
 // trait impls must implement exactly the trait's items with matching
-// signatures (E0046, E0407, E0437, E0438, E0050, E0053, E0185, E0186),
-// inherent impls of one type must not define an item twice (E0592), trait
-// impls must respect the orphan rule (E0117) and must not overlap (E0119).
+// signatures (E0046, E0407, E0437, E0438, E0050, E0053, E0185, E0186,
+// E0049, E0195), inherent impls of one type must not define an item twice
+// (E0592), trait impls must respect the orphan rule (E0117) and must not
+// overlap (E0119).
 //
-// Impls in std and impls of std traits are not checked: rustgo's std does
-// not mirror the real std's traits item by item.
+// Impls in std are not checked. Impls of std traits are only checked for
+// the items rustgo's std mirrors (stdRequired, stdCompared): its traits do
+// not mirror the real std's item by item.
 
 import (
 	"fmt"
@@ -154,6 +156,15 @@ func (t *Tcx) checkTraitImplItems(impl *Def) {
 	}
 	if t.isStd(tr) {
 		t.checkStdTraitItems(impl, tr)
+		if names, ok := stdCompared[tr.Name]; ok && tr.Parent != nil && tr.Parent.Name == names[0] {
+			for _, it := range impl.Impl.Order {
+				for _, n := range names[1:] {
+					if ti := tr.Trait.Items[it.Name]; it.Name == n && it.Kind == DefFn && ti != nil && ti.Kind == DefFn && ti.Fn != nil && ti.Fn.Ast != nil {
+						t.compareImplMethod(impl, it, ti)
+					}
+				}
+			}
+		}
 		return
 	}
 	for _, it := range impl.Impl.Order {
@@ -233,6 +244,31 @@ func (t *Tcx) compareImplMethod(impl, im, tm *Def) {
 	// types: lowered quietly; anything not fully comparable is skipped
 	ig, tg := t.Generics(im), t.Generics(tm)
 	iown, town := ig.Own(), tg.Own()
+	count := func(ps []*GenericParamDef, konst bool) int {
+		n := 0
+		for _, p := range ps {
+			if p.Const == konst {
+				n++
+			}
+		}
+		return n
+	}
+	for _, konst := range []bool{false, true} {
+		if n, m := count(iown, konst), count(town, konst); n != m {
+			what := "type"
+			if konst {
+				what = "const"
+			}
+			t.ErrorCode(im.Item.Name.Span, "E0049", "method `%s` has %d %s parameter%s but its trait declaration has %d %s parameter%s", im.Name, n, what, plural(n), m, what, plural(m))
+			return
+		}
+	}
+	if n, ok := earlyBoundLifetimes(im.Fn.Ast); ok {
+		if m, ok := earlyBoundLifetimes(tm.Fn.Ast); ok && n != m {
+			t.ErrorCode(im.Item.Name.Span, "E0195", "lifetime parameters or bounds on method `%s` do not match the trait declaration", im.Name)
+			return
+		}
+	}
 	if len(iown) != len(town) {
 		return
 	}
@@ -283,6 +319,130 @@ func (t *Tcx) compareImplMethod(impl, im, tm *Def) {
 	if eq, cmp := same(tsig.Output, isig.Output); cmp && !eq {
 		t.ErrorCode(im.Item.Name.Span, "E0053", "method `%s` has an incompatible type for trait", im.Name)
 	}
+}
+
+// earlyBoundLifetimes counts the early-bound lifetime parameters of a
+// method (rustc compares their numbers between an impl and its trait,
+// E0195): those that appear in a bound or where-clause, or not in the
+// parameter types. ok is false when that is not clear syntactically
+// (projections, `impl Trait`, higher-ranked binders, fn pointers, macros
+// in the types).
+func earlyBoundLifetimes(fn *ast.FnItem) (n int, ok bool) {
+	g := fn.Generics
+	if g == nil {
+		return 0, true
+	}
+	var names []string
+	for _, p := range g.Params {
+		if p.Kind == ast.GPLifetime {
+			names = append(names, p.Name.Name)
+		}
+	}
+	if len(names) == 0 {
+		return 0, true
+	}
+	risky := false
+	collect := func(into map[string]bool, n any) {
+		if n == nil {
+			return
+		}
+		bound := func(b *ast.Bound) {
+			if b.Lifetime != "" {
+				into[b.Lifetime] = true
+			}
+			if len(b.ForLifetimes) > 0 {
+				risky = true
+			}
+		}
+		ast.Walk(n, func(x any) bool {
+			switch x := x.(type) {
+			case *ast.RefType:
+				if x.Lifetime != "" {
+					into[x.Lifetime] = true
+				}
+			case *ast.PathType:
+				if x.QSelf != nil {
+					risky = true
+				}
+			case *ast.Path:
+				for i, s := range x.Segments {
+					if s.Args == nil {
+						continue
+					}
+					for _, a := range s.Args.Args {
+						if a.Lifetime != "" {
+							into[a.Lifetime] = true
+							if i > 0 && len(x.Segments) > 1 {
+								risky = true // maybe `T::Assoc<'a>`
+							}
+						}
+					}
+				}
+			case *ast.DynTraitType:
+				for _, b := range x.Bounds {
+					bound(b)
+				}
+			case *ast.ImplTraitType, *ast.FnPtrType, *ast.MacroType:
+				risky = true
+			}
+			return true
+		})
+		if b, ok := n.(*ast.Bound); ok {
+			bound(b)
+		}
+	}
+	inWhere, inInputs := map[string]bool{}, map[string]bool{}
+	for _, p := range g.Params {
+		if p.Kind == ast.GPLifetime && len(p.Bounds) > 0 {
+			inWhere[p.Name.Name] = true
+		}
+		for _, b := range p.Bounds {
+			collect(inWhere, b)
+			if b.Path != nil {
+				collect(inWhere, b.Path)
+			}
+		}
+	}
+	for _, w := range g.Where {
+		if w.Lifetime != "" {
+			inWhere[w.Lifetime] = true
+		}
+		if len(w.ForLifetimes) > 0 {
+			risky = true
+		}
+		if w.Ty != nil {
+			collect(inWhere, w.Ty)
+		}
+		for _, b := range w.Bounds {
+			collect(inWhere, b)
+			if b.Path != nil {
+				collect(inWhere, b.Path)
+			}
+		}
+	}
+	if sp := fn.Decl.SelfParam; sp != nil {
+		if sp.Lifetime != "" {
+			inInputs[sp.Lifetime] = true
+		}
+		if sp.Ty != nil {
+			collect(inInputs, sp.Ty)
+		}
+	}
+	for _, p := range fn.Decl.Params {
+		collect(inInputs, p.Ty)
+	}
+	if fn.Decl.Output != nil {
+		collect(map[string]bool{}, fn.Decl.Output) // (risky parts)
+	}
+	if risky {
+		return 0, false
+	}
+	for _, nm := range names {
+		if inWhere[nm] || !inInputs[nm] {
+			n++
+		}
+	}
+	return n, true
 }
 
 // quietly runs f with error reporting suppressed; false if it reported
@@ -491,6 +651,26 @@ var stdRequired = map[string][]string{
 	"MulAssign":           {"mul_assign"},
 	"DivAssign":           {"div_assign"},
 	"Future":              {"Output", "poll"},
+}
+
+// stdCompared lists std traits (with the name of their module in rustgo's
+// std) whose listed methods have the real std's signatures, so impls of
+// them are compared like impls of local traits (E0053, E0049, ...).
+var stdCompared = map[string][]string{
+	"Display":    {"fmt", "fmt"},
+	"Debug":      {"fmt", "fmt"},
+	"Iterator":   {"traits", "next"},
+	"Clone":      {"clone", "clone"},
+	"PartialEq":  {"cmp", "eq"},
+	"PartialOrd": {"cmp", "partial_cmp"},
+	"Ord":        {"cmp", "cmp"},
+	"Hash":       {"hash", "hash"},
+	"From":       {"convert", "from"},
+	"Drop":       {"drop", "drop"},
+	"Default":    {"default", "default"},
+	"Deref":      {"deref", "deref"},
+	"DerefMut":   {"deref", "deref_mut"},
+	"FromStr":    {"traits", "from_str"},
 }
 
 // checkStdTraitItems reports required items of well-known std traits
