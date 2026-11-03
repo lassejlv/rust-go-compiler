@@ -255,7 +255,7 @@ func (t *Tcx) checkCoherence() {
 			}
 			key := ""
 			for _, a := range impl.Impl.TraitRef.Args {
-				key += fmt.Sprintf("%p,", a) // types are interned
+				key += fmt.Sprintf("%d,", a.ID()) // types are interned
 			}
 
 			if prev := seen[key]; prev != nil {

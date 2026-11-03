@@ -517,7 +517,7 @@ func (t *Tcx) checkInherentDups() {
 				continue
 			}
 			for _, it := range impl.Impl.Order {
-				key := fmt.Sprintf("%p/%d/%s", impl.Impl.SelfTy, it.Kind, it.Name)
+				key := fmt.Sprintf("%d/%d/%s", impl.Impl.SelfTy.ID(), it.Kind, it.Name)
 				if it.Kind == DefAssocTy {
 					continue
 				}

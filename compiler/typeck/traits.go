@@ -182,7 +182,7 @@ func (t *Tcx) concreteKey(trait *Def, args []Ty, name string) (string, bool) {
 		if volatile {
 			return "", false
 		}
-		fmt.Fprintf(&b, ",%p", a) // types are interned
+		fmt.Fprintf(&b, ",%d", a.ID()) // types are interned
 	}
 	if name != "" {
 		b.WriteString("::")
@@ -352,10 +352,6 @@ func (ic *InferCtxt) selectTraitUncached(tr *TraitRef, depth int) (res Selection
 	}
 	// Impl candidates.
 	impls := t.traitImpls[trait]
-	selfKey := ""
-	if self.Kind != TInfer {
-		selfKey = SimplifyKey(self)
-	}
 	var cands []*Def
 	var candArgs [][]Ty
 	ambig := false
@@ -363,11 +359,8 @@ func (ic *InferCtxt) selectTraitUncached(tr *TraitRef, depth int) (res Selection
 		if impl.Impl.Negative {
 			continue
 		}
-		ist := impl.Impl.TraitRef.Args[0]
-		if selfKey != "" && ist.Kind != TParam {
-			if k := SimplifyKey(ist); k != "" && k != selfKey {
-				continue
-			}
+		if ic.rejectImpl(impl.Impl.TraitRef.Args, tr.Args) {
+			continue
 		}
 		s := ic.snapshot()
 		iargs, ok, amb := ic.matchImpl(impl, tr, depth)
@@ -459,6 +452,95 @@ func (ic *InferCtxt) probeUnifyList(a, b []Ty) bool {
 	ok := ic.unifyList(a, b)
 	ic.rollback(s)
 	return ok
+}
+
+// rejectImpl reports whether an impl's trait args (impl parameters
+// unsubstituted) certainly fail to unify with a goal's args, comparing their
+// structure without creating inference variables (rustc's fast reject).
+// Impl parameters, projections and opaque types on either side, and the
+// goal's general inference variables, match anything.
+func (ic *InferCtxt) rejectImpl(pats, goals []Ty) bool {
+	if len(pats) != len(goals) {
+		return false // (matchImpl decides)
+	}
+	for i, p := range pats {
+		if ic.rejectTy(p, goals[i]) {
+			return true
+		}
+	}
+	return false
+}
+
+func (ic *InferCtxt) rejectList(pats, goals []Ty) bool {
+	if len(pats) != len(goals) {
+		return true
+	}
+	for i, p := range pats {
+		if ic.rejectTy(p, goals[i]) {
+			return true
+		}
+	}
+	return false
+}
+
+func (ic *InferCtxt) rejectTy(p, g Ty) bool {
+	if p == nil || g == nil {
+		return false
+	}
+	switch p.Kind {
+	case TParam, TProjection, TOpaque, TError, TInfer:
+		return false
+	}
+	g = ic.shallow(g)
+	switch g.Kind {
+	case TInfer:
+		// `{integer}` / `{float}` only unify with integer / float types
+		switch g.Sub {
+		case 1:
+			return p.Kind != TInt
+		case 2:
+			return p.Kind != TFloat
+		}
+		return false
+	case TProjection, TOpaque, TError:
+		return false
+	}
+	if p.Kind != g.Kind {
+		return true
+	}
+	switch p.Kind {
+	case TInt, TFloat:
+		return p.Sub != g.Sub
+	case TTuple:
+		return ic.rejectList(p.Elems, g.Elems)
+	case TArray:
+		return ic.rejectTy(p.Elem, g.Elem) || ic.rejectTy(p.Len, g.Len)
+	case TSlice:
+		return ic.rejectTy(p.Elem, g.Elem)
+	case TRef, TPtr:
+		return p.Mut != g.Mut || ic.rejectTy(p.Elem, g.Elem)
+	case TAdt, TFnDef:
+		return p.Def != g.Def || p.Index != g.Index || ic.rejectList(p.Args, g.Args)
+	case TFnPtr:
+		return p.Sub != g.Sub || ic.rejectList(p.Elems, g.Elems) || ic.rejectTy(p.Ret, g.Ret)
+	case TClosure:
+		return p.Index != g.Index
+	case TDyn:
+		if p.Def != g.Def || p.Sub != g.Sub || len(p.Bindings) != len(g.Bindings) {
+			return true
+		}
+		for i := range p.Bindings {
+			if p.Bindings[i].Name != g.Bindings[i].Name {
+				return true
+			}
+		}
+		return ic.rejectList(p.Args, g.Args)
+	case TParam:
+		return p.Index != g.Index
+	case TConst:
+		return p.Val != g.Val
+	}
+	return false
 }
 
 // matchImpl unifies an impl's trait ref with tr and checks its where clauses.
@@ -1068,7 +1150,7 @@ func (ic *InferCtxt) canonicalKey(tr *TraitRef) (string, bool) {
 			}
 			return nil
 		})
-		fmt.Fprintf(&b, ",%p", c)
+		fmt.Fprintf(&b, ",%d", c.ID())
 	}
 	return b.String(), !volatile
 }

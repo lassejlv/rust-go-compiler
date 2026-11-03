@@ -97,6 +97,8 @@ type TyS struct {
 	Kind     TyKind
 	Sub      uint8
 	Mut      bool
+	flags    uint8
+	id       uint32 // unique, never reused (stable cache keys; see ID)
 	Elem     Ty
 	Len      Ty
 	Elems    []Ty
@@ -108,7 +110,9 @@ type TyS struct {
 	Val      uint64
 	Bindings []Binding
 	key      string
-	flags    uint8
+	// owner is the intern table of the inference context whose variables
+	// this type mentions (nil: the global table).
+	owner *InferTable
 }
 
 const (
@@ -122,23 +126,49 @@ const (
 var (
 	internMu sync.Mutex
 	interned = map[string]Ty{}
+	lastID   uint32
 )
+
+// InferTable interns the types that mention the inference variables of
+// one inference context (see NewInferIn). Such types are only meaningful
+// while that context is alive: keeping them out of the global table lets
+// the garbage collector reclaim them (and the table) with the context.
+// A type mentioning variables of several tables goes to the global table.
+type InferTable struct {
+	m map[string]Ty
+}
+
+// NewInferTable creates an intern table for an inference context.
+func NewInferTable() *InferTable { return &InferTable{m: map[string]Ty{}} }
 
 func intern(t *TyS) Ty {
 	k := t.computeKey()
+	flags, owner := t.computeFlags()
 	internMu.Lock()
 	defer internMu.Unlock()
-	if e, ok := interned[k]; ok {
+	m := interned
+	if owner != nil {
+		m = owner.m
+	}
+	if e, ok := m[k]; ok {
 		return e
 	}
 	t.key = k
-	t.flags = t.computeFlags()
-	interned[k] = t
+	t.flags = flags
+	t.owner = owner
+	lastID++
+	t.id = lastID
+	m[k] = t
 	return t
 }
 
-func (t *TyS) computeFlags() uint8 {
+// computeFlags returns the type's flags and its intern table: the table
+// shared by all of its children that belong to one (nil when there is
+// none or there are several).
+func (t *TyS) computeFlags() (uint8, *InferTable) {
 	var f uint8
+	var owner *InferTable
+	mixed := false
 	switch t.Kind {
 	case TInfer:
 		f |= flagHasInfer
@@ -154,6 +184,12 @@ func (t *TyS) computeFlags() uint8 {
 	add := func(x Ty) {
 		if x != nil {
 			f |= x.flags
+			if x.owner != nil && x.owner != owner {
+				if owner != nil {
+					mixed = true
+				}
+				owner = x.owner
+			}
 		}
 	}
 	add(t.Elem)
@@ -168,8 +204,16 @@ func (t *TyS) computeFlags() uint8 {
 	for _, b := range t.Bindings {
 		add(b.Ty)
 	}
-	return f
+	if mixed {
+		owner = nil
+	}
+	return f, owner
 }
+
+// ID returns a number identifying the (interned) type. Unlike its
+// address, it is never reused for another type, so it can key caches that
+// do not keep the type alive.
+func (t *TyS) ID() uint32 { return t.id }
 
 // Key returns the canonical interning key (useful for maps / mangling).
 func (t *TyS) Key() string { return t.key }
@@ -411,13 +455,25 @@ func CanonicalVar(n int, kind uint8) Ty {
 	return intern(&TyS{Kind: TInfer, Index: -(n + 1), Sub: kind})
 }
 
-// NewInfer creates a fresh inference variable (kind 0 general, 1 int, 2 float).
-func NewInfer(kind uint8) Ty {
+// NewInfer creates a fresh inference variable (kind 0 general, 1 int, 2
+// float) whose types are interned globally.
+func NewInfer(kind uint8) Ty { return NewInferIn(nil, kind) }
+
+// NewInferIn creates a fresh inference variable whose types (the types
+// mentioning it) are interned in tab. The variable itself needs no
+// interning: it is unique.
+func NewInferIn(tab *InferTable, kind uint8) Ty {
+	t := &TyS{Kind: TInfer, Sub: kind, flags: flagHasInfer, owner: tab}
 	inferMu.Lock()
 	inferCounter++
-	id := inferCounter
+	t.Index = inferCounter
 	inferMu.Unlock()
-	return intern(&TyS{Kind: TInfer, Index: id, Sub: kind})
+	t.key = t.computeKey()
+	internMu.Lock()
+	lastID++
+	t.id = lastID
+	internMu.Unlock()
+	return t
 }
 
 // ---------------------------------------------------------------------------
@@ -545,6 +601,7 @@ func Fold(t Ty, f func(Ty) Ty) Ty {
 	}
 	n.key = ""
 	n.flags = 0
+	n.owner = nil
 	return intern(&n)
 }
 

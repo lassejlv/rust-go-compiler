@@ -89,7 +89,7 @@ func (c *canonicalizer) closure(x Ty) {
 		c.volatile = true
 		return
 	}
-	fmt.Fprintf(&c.b, "|%p:%d:%d(", x, ci.Kind, len(ci.Captures))
+	fmt.Fprintf(&c.b, "|%d:%d:%d(", x.ID(), ci.Kind, len(ci.Captures))
 	for _, in := range ci.Inputs {
 		c.arg(in)
 	}
@@ -108,7 +108,7 @@ func (c *canonicalizer) arg(a Ty) {
 		return
 	}
 	a = c.ic.resolve(a)
-	fmt.Fprintf(&c.b, ",%p", c.canon(a, true))
+	fmt.Fprintf(&c.b, ",%d", c.canon(a, true).ID())
 }
 
 // queryKey builds the canonical key of a trait query (name is the assoc
@@ -182,7 +182,7 @@ func (c *canonicalizer) replay(resp *canonResp) ([]Ty, bool) {
 			if x.Kind == TInfer && x.Index < 0 {
 				i := -(x.Index + 1)
 				if vars[i] == nil {
-					vars[i] = NewInfer(x.Sub)
+					vars[i] = NewInferIn(ic.tab, x.Sub)
 				}
 				return vars[i]
 			}

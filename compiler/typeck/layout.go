@@ -377,7 +377,7 @@ func (t *Tcx) FieldOrder(ty Ty, vi int) []int {
 // (ascending alignment); otherwise fields are sorted by descending
 // alignment.
 func (t *Tcx) fieldOrder(ty Ty, vi int, prefixed bool) []int {
-	key := fmt.Sprintf("%p/%d/%v", ty, vi, prefixed)
+	key := fmt.Sprintf("%d/%d/%v", ty.ID(), vi, prefixed)
 	c := t.lc()
 	if o, ok := c.orders[key]; ok {
 		return o

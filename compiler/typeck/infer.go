@@ -8,6 +8,8 @@ import (
 type InferCtxt struct {
 	t    *Tcx
 	bind map[int]Ty
+	// tab interns the types mentioning this context's variables.
+	tab  *InferTable
 	undo []int
 	// pending obligations (owned by FnCtxt but stored here so selection can
 	// add nested ones)
@@ -31,12 +33,12 @@ type InferCtxt struct {
 }
 
 func newInferCtxt(t *Tcx) *InferCtxt {
-	return &InferCtxt{t: t, bind: map[int]Ty{}}
+	return &InferCtxt{t: t, bind: map[int]Ty{}, tab: NewInferTable()}
 }
 
-func (ic *InferCtxt) newVar() Ty      { return NewInfer(0) }
-func (ic *InferCtxt) newIntVar() Ty   { return NewInfer(1) }
-func (ic *InferCtxt) newFloatVar() Ty { return NewInfer(2) }
+func (ic *InferCtxt) newVar() Ty      { return NewInferIn(ic.tab, 0) }
+func (ic *InferCtxt) newIntVar() Ty   { return NewInferIn(ic.tab, 1) }
+func (ic *InferCtxt) newFloatVar() Ty { return NewInferIn(ic.tab, 2) }
 
 type snapshot struct {
 	undo int
