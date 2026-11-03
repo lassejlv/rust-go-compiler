@@ -616,15 +616,31 @@ func (fcx *FnCtxt) checkUninferredLocals() {
 		if t.HasProj() {
 			t = fcx.ic.resolve(fcx.ic.tryNormalize(t))
 		}
-		unresolved := false
+		var unresolved Ty
 		Walk(t, func(x Ty) bool {
 			if x.Kind == TInfer && x.Sub == 0 && !closureVars[x] {
-				unresolved = true
+				unresolved = x
 			}
-			return !unresolved
+			return unresolved == nil
 		})
-		if unresolved {
-			fcx.t.ErrorCode(l.Span, "E0282", "type annotations needed")
+		if unresolved != nil {
+			// a pending trait obligation on the variable (`_: FromStr`)
+			// makes it rustc's E0284
+			code := "E0282"
+			for _, o := range fcx.ic.obligations {
+				if o.Done || o.Pred == nil || o.Pred.Trait == nil {
+					continue
+				}
+				for _, a := range o.Pred.Trait.Args {
+					Walk(fcx.ic.resolve(a), func(x Ty) bool {
+						if x == unresolved {
+							code = "E0284"
+						}
+						return code == "E0282"
+					})
+				}
+			}
+			fcx.t.ErrorCode(l.Span, code, "type annotations needed")
 			return
 		}
 	}
