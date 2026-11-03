@@ -233,7 +233,7 @@ func wrapExpErr(err error, mac *ast.MacCall) error {
 	default:
 		return err
 	}
-	if pos.File < 0 || pos.File >= len(lexer.Files) || pos.Line == 0 {
+	if pos.File < 0 || int(pos.File) >= len(lexer.Files) || pos.Line == 0 {
 		pos = mac.Span.Lo
 	}
 	return errAt(lexer.Span{Lo: pos, Hi: pos}, "%s (in expansion of `%s!`)", msg, macName(mac))

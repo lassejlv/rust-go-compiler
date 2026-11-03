@@ -90,11 +90,8 @@ func buildProcMacroServer(opts *Options, pm *crateUnit, all map[string]*crateUni
 	}
 	mark(pm)
 	exp := expand.New()
-	stdCrate, err := loadStd(opts)
+	stdCrate, err := loadExpandedStd(opts, exp)
 	if err != nil {
-		return nil, err
-	}
-	if err := exp.ExpandCrate(stdCrate, "std"); err != nil {
 		return nil, err
 	}
 	pmc, err := loadProcMacroCrate()

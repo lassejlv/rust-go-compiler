@@ -167,7 +167,7 @@ func synthSpan(sp lexer.Span) lexer.Span { return lexer.Span{Lo: sp.Lo, Hi: sp.L
 // tmpl tokenizes src, gives every template token a zero-width span at sp and
 // splices args[N] in place of each `$N`.
 func tmpl(sp lexer.Span, src string, args ...[]ast.TokenTree) ([]ast.TokenTree, error) {
-	tts, err := parser.TokenizeToTrees(sp.Lo.File, src)
+	tts, err := parser.TokenizeToTrees(int(sp.Lo.File), src)
 	if err != nil {
 		return nil, errAt(sp, "internal error: bad macro template %q: %v", src, err)
 	}
@@ -242,8 +242,8 @@ func escapeRune(r rune, quote rune) string {
 
 // realSpan reports whether a token carries a span pointing at its source text.
 func realSpan(sp lexer.Span) bool {
-	return sp.Hi.Off > sp.Lo.Off && sp.Lo.File >= 0 && sp.Lo.File < len(lexer.Files) &&
-		sp.Hi.File == sp.Lo.File && sp.Hi.Off <= len(lexer.Files[sp.Lo.File].Src)
+	return sp.Hi.Off > sp.Lo.Off && sp.Lo.File >= 0 && int(sp.Lo.File) < len(lexer.Files) &&
+		sp.Hi.File == sp.Lo.File && int(sp.Hi.Off) <= len(lexer.Files[sp.Lo.File].Src)
 }
 
 func sourceText(sp lexer.Span) string {

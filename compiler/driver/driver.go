@@ -196,10 +196,15 @@ func crateNameOf(input string) string {
 // the type context and the user's main function.
 func Frontend(opts *Options) (*typeck.Tcx, *Def, error) {
 	t0 := time.Now()
-	stdCrate, err := loadStd(opts)
+	// std first (parsed and expanded, or from the cache), then the
+	// user's crate: node IDs and file indices do not depend on whether
+	// std came from the cache
+	exp := expand.New()
+	stdCrate, err := loadExpandedStd(opts, exp)
 	if err != nil {
-		return nil, nil, fmt.Errorf("while loading std: %v", err)
+		return nil, nil, err
 	}
+	t1 := time.Now()
 	abs, _ := filepath.Abs(opts.Input)
 	dir := filepath.Dir(abs)
 	userCrate, err := LoadCrateFS(os.DirFS(dir), filepath.Base(abs), relPrefix(opts.Input))
@@ -207,11 +212,6 @@ func Frontend(opts *Options) (*typeck.Tcx, *Def, error) {
 		return nil, nil, err
 	}
 	entry := addMainWrapper(userCrate)
-	t1 := time.Now()
-	exp := expand.New()
-	if err := exp.ExpandCrate(stdCrate, "std"); err != nil {
-		return nil, nil, fmt.Errorf("while expanding std: %v", err)
-	}
 	exp.DisplayName = crateNameOf(opts.Input)
 	if opts.Test {
 		exp.TestHarness = true
@@ -254,7 +254,7 @@ func Frontend(opts *Options) (*typeck.Tcx, *Def, error) {
 		return nil, nil, tcx.Err()
 	}
 	if opts.Verbose {
-		fmt.Fprintf(os.Stderr, "parse %v, expand %v, resolve %v\n", t1.Sub(t0), t2.Sub(t1), time.Since(t2))
+		fmt.Fprintf(os.Stderr, "std %v, parse+expand %v, resolve %v\n", t1.Sub(t0), t2.Sub(t1), time.Since(t2))
 	}
 	return tcx, mainDef, nil
 }
@@ -360,15 +360,20 @@ func Compile(opts *Options) error {
 	return compileC(opts, prog)
 }
 
-// Splitting the C program into several translation units compiled in
-// parallel pays off only for large programs: every unit re-parses the
-// common header (runtime, types, prototypes), and functions called across
-// units can no longer be inlined. Up to two units per CPU are made (the
-// cost of C functions varies a lot, so smaller units balance better), each
-// with at least tuMinFnBytes of function definitions.
+// The C program is split into several translation units compiled in
+// parallel. Every unit has a fixed cost (it re-parses the common header:
+// runtime, types, prototypes; about 0.13s of CPU time), and functions
+// called across units can no longer be inlined. With a fixed cost h per
+// unit and w for all the function definitions, n units take about
+// h + w/n, so one more unit shortens the compilation while
+// w/(n(n+1)) > h: in gcc -O1 terms, while n(n+1) < fnBytes/tuFixedFnBytes,
+// tuFixedFnBytes being the size of the functions gcc compiles in time h.
+// (A hello world gets 2 units, a 400KB program 3, large ones up to two
+// units per CPU: the cost of C functions varies a lot, so smaller units
+// balance better.)
 const (
-	tuMinFnBytes = 1 << 20
-	tuMax        = 16
+	tuFixedFnBytes = 48 << 10
+	tuMax          = 16
 )
 
 // unitCount picks the number of translation units for a program with
@@ -379,15 +384,16 @@ func unitCount(fnBytes int) int {
 			return n
 		}
 	}
-	n := 2 * runtime.NumCPU()
-	if n > tuMax {
-		n = tuMax
+	max := 2 * runtime.NumCPU()
+	if runtime.NumCPU() == 1 {
+		max = 1
 	}
-	if m := fnBytes / tuMinFnBytes; m < n {
-		n = m
+	if max > tuMax {
+		max = tuMax
 	}
-	if n < 1 {
-		n = 1
+	n := 1
+	for n < max && n*(n+1)*tuFixedFnBytes < fnBytes {
+		n++
 	}
 	return n
 }

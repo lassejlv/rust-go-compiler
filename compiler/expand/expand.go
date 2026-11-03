@@ -68,6 +68,9 @@ type Expander struct {
 	// collectMod is the module path (below the crate root) of the items
 	// being collected by the definition pre-pass.
 	collectMod []string
+	// external is set when an expansion read the environment or a file
+	// (see UsedExternalInput).
+	external bool
 }
 
 type macroRef struct {
@@ -1325,11 +1328,11 @@ func (e *Expander) docLines(attrs []*ast.Attr, inner bool) []DocLine {
 			if rel, ok, _ := e.litString(tk[3].Inner, nil); ok {
 				p := rel
 				if !filepath.IsAbs(p) {
-					p = filepath.Join(filepath.Dir(lexer.FilePath(a.Span.Lo.File)), p)
+					p = filepath.Join(filepath.Dir(lexer.FilePath(int(a.Span.Lo.File))), p)
 				}
 				if b, err := os.ReadFile(p); err == nil {
 					for i, l := range strings.Split(string(b), "\n") {
-						out = append(out, DocLine{Text: strings.TrimSuffix(l, "\r"), File: a.Span.Lo.File, Line: i + 1})
+						out = append(out, DocLine{Text: strings.TrimSuffix(l, "\r"), File: int(a.Span.Lo.File), Line: i + 1})
 					}
 				}
 			}
@@ -1344,7 +1347,7 @@ func (e *Expander) docLines(attrs []*ast.Attr, inner bool) []DocLine {
 		}
 		lo := a.Span.Lo
 		for i, l := range strings.Split(s, "\n") {
-			out = append(out, DocLine{Text: l, File: lo.File, Line: lo.Line + i})
+			out = append(out, DocLine{Text: l, File: int(lo.File), Line: int(lo.Line) + i})
 		}
 	}
 	return out
@@ -1396,7 +1399,7 @@ type TestFn struct {
 func (e *Expander) recordTest(it *ast.Item, attrs []*ast.Attr) {
 	tf := TestFn{Path: append(append([]string(nil), e.modPath[1:]...), it.Name.Name)}
 	lo := it.Name.Span.Lo
-	tf.File, tf.Line, tf.Col = lexer.FileName(lo.File), lo.Line, lo.Col
+	tf.File, tf.Line, tf.Col = lexer.FileName(lo.File), int(lo.Line), int(lo.Col)
 	attrStr := func(tts []ast.TokenTree) (string, bool) {
 		if len(tts) == 1 && tts[0].Delim == 0 && tts[0].Tok.Kind == lexer.Str {
 			s, ok, _ := e.litString(tts, nil)

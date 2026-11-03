@@ -263,7 +263,7 @@ func (e *Expander) formatArgsMacDirect(mac *ast.MacCall, tts []ast.TokenTree, pr
 // location returns "file", line, col of the (outermost) call site.
 func (e *Expander) location(mac *ast.MacCall) (string, int, int) {
 	sp := e.callSite(mac.Span)
-	return lexer.FileName(sp.Lo.File), sp.Lo.Line, sp.Lo.Col
+	return lexer.FileName(sp.Lo.File), int(sp.Lo.Line), int(sp.Lo.Col)
 }
 
 func (e *Expander) locArgs(mac *ast.MacCall) string {
@@ -629,6 +629,7 @@ func (e *Expander) envName(mac *ast.MacCall) (string, error) {
 // lookupEnv consults the crate's compile-time environment (Cargo-provided
 // variables and build-script `rustc-env`), then the process environment.
 func (e *Expander) lookupEnv(name string) (string, bool) {
+	e.external = true
 	if e.Config != nil {
 		if v, ok := e.Config.Env[name]; ok {
 			return v, true
@@ -662,6 +663,7 @@ func (e *Expander) optionEnvMac(mac *ast.MacCall) ([]ast.TokenTree, error) {
 // includePath resolves an include!-family path relative to the file
 // containing the invocation.
 func (e *Expander) includePath(mac *ast.MacCall) (string, error) {
+	e.external = true
 	p, isStr, err := e.litString(mac.Args, mac)
 	if err != nil {
 		return "", err
@@ -670,7 +672,7 @@ func (e *Expander) includePath(mac *ast.MacCall) (string, error) {
 		return "", errAt(mac.Span, "argument must be a string literal")
 	}
 	if !filepath.IsAbs(p) {
-		p = filepath.Join(filepath.Dir(lexer.FilePath(mac.Span.Lo.File)), p)
+		p = filepath.Join(filepath.Dir(lexer.FilePath(int(mac.Span.Lo.File))), p)
 	}
 	return p, nil
 }
@@ -696,17 +698,9 @@ func (e *Expander) includeBytesMac(mac *ast.MacCall) ([]ast.TokenTree, error) {
 	if err != nil {
 		return nil, errAt(mac.Span, "couldn't read `%s`: %v", p, err)
 	}
-	var sb strings.Builder
-	sb.WriteString("&[")
-	for i, c := range b {
-		if i > 0 {
-			sb.WriteString(", ")
-		}
-		sb.WriteString(strconv.Itoa(int(c)))
-		sb.WriteString("u8")
-	}
-	sb.WriteString("]")
-	return tmpl(mac.Span, sb.String())
+	// a `&'static [u8; N]` byte string literal (one token instead of one
+	// per byte: included files can be large)
+	return []ast.TokenTree{{Tok: lexer.Token{Kind: lexer.ByteStr, Text: string(b), Span: synthSpan(mac.Span)}}}, nil
 }
 
 // includeMac includes a file's tokens (as an expression or items).

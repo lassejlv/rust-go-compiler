@@ -17,10 +17,19 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"rustgo/compiler/driver"
 )
+
+// reportMemory prints the peak memory use of the compiler (with -v).
+func reportMemory() {
+	var ru syscall.Rusage
+	if syscall.Getrusage(syscall.RUSAGE_SELF, &ru) == nil {
+		fmt.Fprintf(os.Stderr, "max RSS %d MB\n", ru.Maxrss>>10)
+	}
+}
 
 func usage() {
 	fmt.Fprintf(os.Stderr, `rustgo - a Rust compiler written in Go
@@ -58,6 +67,16 @@ func main() {
 			pprof.StartCPUProfile(f)
 			defer pprof.StopCPUProfile()
 		}
+	}
+	if p := os.Getenv("RUSTGO_MEMPROFILE"); p != "" {
+		// allocation profile (go tool pprof -sample_index=alloc_space)
+		defer func() {
+			if f, err := os.Create(p); err == nil {
+				runtime.GC() // (the profile is as of the last GC)
+				pprof.Lookup("allocs").WriteTo(f, 0)
+				f.Close()
+			}
+		}()
 	}
 	args := os.Args[1:]
 	if len(args) == 0 {
@@ -171,6 +190,9 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+	if opts.Verbose {
+		reportMemory()
+	}
 	if run {
 		cmd := exec.Command(opts.Output, runArgs...)
 		cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
@@ -223,6 +245,9 @@ func cargoBuild(args []string) {
 	if err := driver.BuildCargo(opts, co); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
+	}
+	if opts.Verbose {
+		reportMemory()
 	}
 	if runAfter {
 		cmd := exec.Command(opts.Output)

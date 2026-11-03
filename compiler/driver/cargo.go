@@ -682,12 +682,9 @@ func (bs *buildState) compileProgram(units []*crateUnit, binIdx int) (*codegen.P
 	}
 	mark(units[binIdx])
 	exp := expand.New()
-	stdCrate, err := loadStd(bs.opts)
+	stdCrate, err := loadExpandedStd(bs.opts, exp)
 	if err != nil {
 		return nil, err
-	}
-	if err := exp.ExpandCrate(stdCrate, "std"); err != nil {
-		return nil, fmt.Errorf("while expanding std: %v", err)
 	}
 	r := resolve.New()
 	r.IsBuiltinMacro = expand.IsBuiltinMacro
@@ -887,6 +884,9 @@ func (bs *buildState) runBuildScript(u *crateUnit) error {
 	popts.Output = exe
 	popts.EmitC = ""
 	popts.LinkArgs = nil
+	// like cargo, which builds build scripts without optimization: they
+	// run once, and compile much faster
+	popts.OptLevel = "0"
 	if err := compileC(&popts, src); err != nil {
 		return err
 	}
