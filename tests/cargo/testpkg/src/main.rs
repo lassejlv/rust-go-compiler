@@ -5,4 +5,5 @@ fn main() {
 #[test]
 fn bin_test() {
     assert_eq!(testpkg::doubled(21), 42);
+    assert_eq!(testpkg::get_fib10!(), 55);
 }

@@ -863,8 +863,7 @@ pub fn thing() -> i32 { helper!() }
 	if err := e.ExpandCrate(std, "std"); err != nil {
 		t.Fatal(err)
 	}
-	// $crate inside its own crate is `crate`
-	if got := fnBody(t, std, "thing"); got != "{ crate::thing() }" {
+	if got := fnBody(t, std, "thing"); got != "{ ::std::thing() }" {
 		t.Errorf("std $crate: %s", got)
 	}
 	user := parseCrate(t, "main.rs", `

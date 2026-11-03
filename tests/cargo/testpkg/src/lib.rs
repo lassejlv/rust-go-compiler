@@ -121,3 +121,20 @@ mod tests {
     #[ignore]
     fn expensive() {}
 }
+
+// a macro defining an exported macro that uses $crate (used from the bin)
+macro_rules! def_getter {
+    ($name:ident, $f:ident) => {
+        #[macro_export]
+        macro_rules! $name {
+            () => {
+                $crate::$f()
+            };
+        }
+    };
+}
+def_getter!(get_fib10, fib10);
+
+pub fn fib10() -> u64 {
+    fib(10)
+}

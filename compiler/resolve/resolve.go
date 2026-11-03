@@ -841,7 +841,7 @@ func (r *Resolver) resolveModulePath(m *Module, segs []string, global bool, repo
 	var cur Res
 	start := 0
 	switch {
-	case global && m.Crate.Is2015() && !r.injectedStd(m.Crate, segs[0]):
+	case global && m.Crate.Is2015() && !r.injectedStd(m.Crate, segs[0]) && !r.selfKeyPath(m.Crate, segs[0]):
 		// 2015: `::a::b` is relative to the crate root
 		cur = defRes(m.Crate.Def)
 	case global:
@@ -1020,7 +1020,7 @@ func (r *Resolver) resolvePath(m *Module, segs []string, global bool, ns Namespa
 		return TypeNS
 	}
 	switch {
-	case global && m.Crate.Is2015() && !r.injectedStd(m.Crate, segs[0]):
+	case global && m.Crate.Is2015() && !r.injectedStd(m.Crate, segs[0]) && !r.selfKeyPath(m.Crate, segs[0]):
 		cur = defRes(m.Crate.Def)
 	case global:
 		cr := r.ExternCrate(m.Crate, segs[0])
@@ -1377,4 +1377,14 @@ func (r *Resolver) addLinkAttr(a *ast.Attr) {
 	}
 	r.linkSeen = append(r.linkSeen, key)
 	r.LinkArgs = append(r.LinkArgs, args2...)
+}
+
+// selfKeyPath reports `::key` naming crate c itself by its internal key (the
+// expansion of `$crate` inside c), which a 2015 crate's root-relative `::`
+// paths would otherwise look up as an item of its root.
+func (r *Resolver) selfKeyPath(c *Crate, name string) bool {
+	if c == nil || c.Name != name || c.Root == nil {
+		return false
+	}
+	return c.Root.Lookup(name, TypeNS) == nil
 }
