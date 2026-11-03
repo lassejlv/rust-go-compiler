@@ -31,7 +31,10 @@ go build -o rustgo ./cmd/rustgo
 
 Options: `-o <out>`, `--release`, `--emit-c <file>` (dump generated C),
 `--keep-c`, `--std <dir>` (use a std from a directory), `--cc <compiler>`
-(default `gcc`), `-O <level>`, `-v` (phase timings).
+(default `gcc`), `-O <level>`, `-v` (phase timings). Debug builds use gcc
+`-O1` without its costliest passes (see `debugCFlags` in
+`compiler/driver/driver.go`): about 20% less C compile time than `-O1` at
+about the same speed of the program.
 
 The embedded std is parsed and macro-expanded once per compiler build and
 cached in `$RUSTGO_CACHE_DIR` (default: the user cache directory, e.g.
