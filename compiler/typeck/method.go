@@ -386,10 +386,11 @@ func (fcx *FnCtxt) envMethod(steps []autoderefStep, name string, sp lexer.Span) 
 				if si > 0 && fcx.earlierStepImplements(steps[:si], e) {
 					return nil
 				}
-				if fcx.t.poly != nil && len(e.Args) > 1 {
-					// polymorphic body check: several where-clauses of the
-					// trait with different args (`T: Into<A> + Into<B>`)
-					// leave its args to inference, like in rustc
+				if len(e.Args) > 1 {
+					// several where-clauses of the trait with different
+					// args (`T: Into<A> + Into<B>`) leave its args to
+					// inference (the expected type), like rustc's
+					// param-env candidates; in monomorphized bodies too
 					for _, e2 := range envs {
 						if e2.Trait == e.Trait && e2.Args[0] == e.Args[0] && !sameArgs(e2.Args, e.Args) {
 							args := append([]Ty{e.Args[0]}, make([]Ty, len(e.Args)-1)...)
