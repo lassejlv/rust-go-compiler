@@ -317,6 +317,7 @@ func (fcx *FnCtxt) typeRelativeValue(base Ty, seg *ast.PathSegment, sp lexer.Spa
 		fcx.t.ErrorCode(seg.Ident.Span, "E0624", "%s `%s` is private", what, name)
 		return nil, TyErr
 	}
+	fcx.polyNoItem(base, name, true)
 	fcx.errorf(sp, "no function or associated item named `%s` found for `%s`", name, fcx.resolve(base))
 	return nil, TyErr
 }
@@ -482,6 +483,14 @@ func (fcx *FnCtxt) checkCall(x *ast.CallExpr, expected Ty) Ty {
 				}
 				fcx.checkArgs(x.Args, ins, false, x.Span)
 				fcx.r.Callees[x.ID] = &Callee{Kind: CallDynFn, Ty: t}
+				return out
+			}
+		case TParam:
+			// polymorphic check of a generic body: call through an
+			// `F: Fn*(..) -> R` where-clause
+			if ins, out, ok := fcx.paramFnSig(t); ok {
+				fcx.addAdjust(x.Fn, adjustmentsFor(steps, i)...)
+				fcx.checkArgs(x.Args, ins, false, x.Span)
 				return out
 			}
 		case TInfer:
@@ -746,6 +755,7 @@ func (fcx *FnCtxt) coerceToHint(a ast.Expr, i int, formal Ty) bool {
 	fcx.ic.rollback(s)
 	fcx.r.Adjust[a.GetID()] = prev
 	if !fcx.coerce(a, ty, formal) {
+		fcx.polyMismatch(formal, ty)
 		fcx.errorf(a.GetSpan(), "mismatched types: expected `%s`, found `%s`", fcx.resolve(formal), fcx.resolve(ty))
 	}
 	return true

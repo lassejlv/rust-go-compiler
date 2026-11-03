@@ -46,6 +46,8 @@ type Tcx struct {
 	// quiet > 0 suppresses error reporting (speculative generic checks).
 	quiet     int
 	quietErrs int
+	// poly is the polymorphic check of a generic body in progress (genbody.go).
+	poly *polyState
 	// methodHints caches, per generic fn, the trait of each trait-method
 	// call resolved in the generic body (see methodTraitHints).
 	methodHints map[*Def]map[ast.NodeID]*Def
@@ -93,6 +95,9 @@ type fatalError struct{}
 func (t *Tcx) Errorf(sp lexer.Span, format string, args ...any) {
 	if t.quiet > 0 {
 		t.quietErrs++
+		if t.poly != nil {
+			t.polyRecord(sp, fmt.Sprintf(format, args...))
+		}
 		if os.Getenv("RUSTGO_TRACE_HINTS") != "" {
 			fmt.Fprintf(os.Stderr, "  (quiet) %s: %s\n", sp.Lo, fmt.Sprintf(format, args...))
 		}

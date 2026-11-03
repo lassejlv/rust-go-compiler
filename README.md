@@ -122,7 +122,16 @@ compilation.
   function body is checked with its type parameters substituted by concrete
   types. Trait method calls and associated types therefore always resolve
   against concrete types, which makes trait selection and normalization simple
-  and complete for the programs that rustc accepts.
+  and complete for the programs that rustc accepts. To reject invalid
+  generic code that no instance exposes (an unused function, `a < b` on a
+  `T` without `PartialOrd` that is only called with integers), every generic
+  body of the local crates is also checked once polymorphically, with its
+  type parameters as placeholders and its where-clauses as the only facts
+  about them. That check is quiet: a body's errors are only reported when
+  all of them are of kinds detected independently of the weaker parts of
+  rustgo's polymorphic reasoning (missing methods and operators on type
+  parameters, parameters against concrete types, unsatisfied bounds of
+  user functions; see `typeck/genbody.go`).
 * **Trait selection** supports user impls, blanket impls with where clauses,
   built-in impls (`Copy`/`Clone` for structural types, `Fn*` for closures, fn
   items and fn pointers, `Sized`, auto traits), trait objects and supertraits.

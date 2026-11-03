@@ -225,6 +225,7 @@ func (fcx *FnCtxt) structurally(t Ty) Ty {
 
 func (fcx *FnCtxt) demandEq(sp lexer.Span, expected, actual Ty) {
 	if !fcx.ic.unify(expected, actual) {
+		fcx.polyMismatch(expected, actual)
 		fcx.errorf(sp, "mismatched types: expected `%s`, found `%s`", fcx.resolve(expected), fcx.resolve(actual))
 	}
 }
@@ -450,7 +451,7 @@ func (fcx *FnCtxt) registerPredicates(d *Def, args []Ty, sp lexer.Span) {
 		for i, b := range sp2.Bindings {
 			sp2.Bindings[i].Ty = fcx.normalizeInBody(b.Ty, sp)
 		}
-		fcx.ic.obligations = append(fcx.ic.obligations, &Obligation{Pred: sp2, Span: sp})
+		fcx.ic.obligations = append(fcx.ic.obligations, &Obligation{Pred: sp2, Span: sp, From: d})
 	}
 }
 
@@ -535,6 +536,11 @@ func (fcx *FnCtxt) selectWherePossible() {
 					})
 				}
 				if !hasInfer {
+					if o.Op != "" {
+						fcx.polyBinOp(o, rt)
+					} else {
+						fcx.polyUnsatisfied(o, rt)
+					}
 					switch t := fcx.t; t.autoKind(rt.Trait) {
 					case "Send":
 						t.ErrorCode(o.Span, "E0277", "`%s` cannot be sent between threads safely", rt.Args[0])
@@ -829,6 +835,7 @@ func (fcx *FnCtxt) coerceBlockResult(b *ast.Block, bodyTy, out Ty) {
 		return
 	}
 	if !fcx.ic.unify(out, TyUnit) {
+		fcx.polyMismatch(out, TyUnit)
 		fcx.errorf(b.Span, "mismatched types: expected `%s`, found `()`", fcx.resolve(out))
 	}
 }
