@@ -28,10 +28,19 @@ func (t *Tcx) checkBodyMisc(r *Results, def *Def) {
 			t.checkCast(r, x)
 		case *ast.AssignExpr:
 			t.checkAssignLHS(r, x.L, "E0070")
+			if !std {
+				t.checkStaticAssign(r, x.L)
+			}
 		case *ast.AssignOpExpr:
 			t.checkAssignLHS(r, x.L, "E0067")
+			if !std {
+				t.checkStaticAssign(r, x.L)
+			}
 		case *ast.LetStmt:
 			t.checkPatBindings(r, x.Pat)
+			if !std && x.Init != nil {
+				t.checkStaticMove(r, x.Init)
+			}
 		case *ast.LetExpr:
 			t.checkPatBindings(r, x.Pat)
 		case *ast.Arm:
@@ -106,7 +115,16 @@ func (t *Tcx) checkCast(r *Results, x *ast.CastExpr) {
 		t.ErrorCode(x.Span, "E0605", "non-primitive cast: `%s` as `%s`", from, to)
 	case to.Kind == TAdt || to.Kind == TTuple || to.Kind == TArray || to.Kind == TStr || to.Kind == TSlice:
 		t.ErrorCode(x.Span, "E0605", "non-primitive cast: `%s` as `%s`", from, to)
+	case (from.Kind == TPtr || from.Kind == TRef) && to.Kind == TPtr && (to.Elem.Kind == TSlice || to.Elem.Kind == TStr) &&
+		!fatPointee(from.Elem) && from.Elem.Kind != TArray && !from.Elem.HasParam() && from.Elem.Kind != TAdt && from.Elem.Kind != TInfer:
+		// a thin pointer has no length/vtable to make a fat one of
+		t.ErrorCode(x.Span, "E0607", "cannot cast thin pointer `%s` to fat pointer `%s`", from, to)
 	}
+}
+
+// fatPointee reports pointee types whose pointers carry metadata.
+func fatPointee(t Ty) bool {
+	return t != nil && (t.Kind == TSlice || t.Kind == TStr || t.Kind == TDyn)
 }
 
 // checkAssignLHS reports assignments to expressions that are not places.
@@ -430,4 +448,62 @@ func (t *Tcx) asyncHeldNotSend(r *Results, ty Ty) Ty {
 		return true
 	})
 	return found
+}
+
+// staticPath returns the static named by path expression e (or nil).
+func staticPath(r *Results, e ast.Expr) (*ast.PathExpr, *Def) {
+	pe, ok := unparenExpr(e).(*ast.PathExpr)
+	if !ok {
+		return nil, nil
+	}
+	if vr := r.Paths[pe.ID]; vr != nil && vr.Kind == VStatic && vr.Def != nil && vr.Def.Const != nil {
+		return pe, vr.Def
+	}
+	return nil, nil
+}
+
+// checkStaticAssign reports assignments into an immutable static (E0594).
+func (t *Tcx) checkStaticAssign(r *Results, lhs ast.Expr) {
+	base := placeBase(lhs)
+	if base == nil {
+		return
+	}
+	// (through a deref the static is not the place assigned)
+	for e := unparenExpr(lhs); ; {
+		switch x := e.(type) {
+		case *ast.FieldExpr:
+			if ty := r.AdjustedType(x.X); ty == nil || ty.Kind != TAdt && ty.Kind != TTuple {
+				return
+			}
+			e = unparenExpr(x.X)
+			continue
+		case *ast.IndexExpr:
+			if !r.IndexBuiltin[x.ID] {
+				return
+			}
+			if ty := r.AdjustedType(x.X); ty == nil || ty.Kind != TArray {
+				return
+			}
+			e = unparenExpr(x.X)
+			continue
+		}
+		break
+	}
+	if pe, d := staticPath(r, base); pe != nil && !d.Const.Mut && len(r.Adjust[pe.ID]) == 0 {
+		t.ErrorCode(lhs.GetSpan(), "E0594", "cannot assign to immutable static item `%s`", d.Name)
+	}
+}
+
+// checkStaticMove reports moving a non-Copy static out by value
+// (`let v = STATIC;`, E0507).
+func (t *Tcx) checkStaticMove(r *Results, e ast.Expr) {
+	pe, d := staticPath(r, e)
+	if pe == nil || len(r.Adjust[pe.ID]) > 0 {
+		return
+	}
+	ty := r.TypeOf(pe.ID)
+	if ty == nil || ty.HasError() || ty.HasParam() || ty.HasInfer() || t.IsCopy(ty) {
+		return
+	}
+	t.ErrorCode(pe.Span, "E0507", "cannot move out of static item `%s`", d.Name)
 }

@@ -1,0 +1,1 @@
+fn main(){ let a = [1u8,2,3]; let p = &a as *const [u8; 3] as *const [u8]; let s: &[u8] = &a; let q = s as *const [u8] as *const u8; let r = &a[..] as *const [u8]; println!("{} {}", unsafe { (&*p).len() + (&*r).len() }, unsafe { *q }); }

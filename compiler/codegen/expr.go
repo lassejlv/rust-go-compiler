@@ -933,6 +933,10 @@ func (fc *fnGen) cast(x *ast.CastExpr, t Ty) string {
 	case from.Kind == TAdt && from.Def.Adt.Kind == AdtEnum:
 		return fmt.Sprintf("((%s)%s)", ct, fc.g.enumTag(from, fc.spillIfNeeded(v, from)))
 	case (from.Kind == TRef || from.Kind == TPtr) && (t.Kind == TPtr || t.Kind == TRef):
+		if from.Elem.Kind == TArray && t.Elem.Kind == TSlice {
+			// `*const [T; N] as *const [T]`: unsizing to a fat pointer
+			return fmt.Sprintf("((Fat){ (void*)(%s), %d })", v, fc.g.arrayLen(from.Elem))
+		}
 		if from.Elem.IsUnsized() && !t.Elem.IsUnsized() {
 			return fmt.Sprintf("((%s)(%s).ptr)", ct, v)
 		}
