@@ -592,7 +592,7 @@ func (p *Parser) ParseMeta() (a *ast.Attr, err error) {
 	for _, s := range path.Segments {
 		segs = append(segs, s.Ident.Name)
 	}
-	a = &ast.Attr{Path: strings.Join(segs, "::")}
+	a = &ast.Attr{Path: attrPath(segs)}
 	if p.is("(") || p.is("[") || p.is("{") {
 		a.Tokens = []ast.TokenTree{p.parseDelimGroup()}
 	} else if p.is("=") {
@@ -713,7 +713,7 @@ func (p *Parser) parseAttr(inner bool) *ast.Attr {
 	if len(segs) == 0 {
 		panic(parseError{&Error{Pos: g.Open.Hi, Msg: "expected attribute path"}})
 	}
-	a.Path = strings.Join(segs, "::")
+	a.Path = attrPath(segs)
 	a.Tokens = tts[i:]
 	return a
 }
@@ -758,4 +758,14 @@ func (p *Parser) parseVis() ast.Visibility {
 		}
 	}
 	return ast.VisPub
+}
+
+// attrPath names an attribute: std's built-in attributes written with
+// their prelude path (`#[::core::prelude::v1::derive(..)]`) are named like
+// the bare ones.
+func attrPath(segs []string) string {
+	if n := len(segs); n >= 3 && (segs[0] == "core" || segs[0] == "std") && segs[1] == "prelude" {
+		return segs[n-1]
+	}
+	return strings.Join(segs, "::")
 }

@@ -565,7 +565,7 @@ func (t *Tcx) checkImplRules(impl *Def) {
 				if ft.HasError() || ft.HasParam() || ft.HasProj() {
 					continue
 				}
-				if !t.IsCopy(ft) {
+				if !t.IsCopy(ft) && t.certainlyNotCopy(ft, impl.Crate) {
 					sp := impl.Span
 					if f.Ast != nil {
 						sp = f.Ast.Span
@@ -673,4 +673,37 @@ func (t *Tcx) checkConstReturn(e ast.Expr) {
 		}
 		return true
 	})
+}
+
+// certainlyNotCopy reports types that are surely not Copy: &mut T, str,
+// slices, std's owning containers, and ADTs of crate c without a Copy
+// impl (types of other crates may be Copy through impls rustgo does not
+// see the same way).
+func (t *Tcx) certainlyNotCopy(ty Ty, c *Crate) bool {
+	switch ty.Kind {
+	case TRef:
+		return ty.Mut
+	case TStr, TSlice, TDyn:
+		return true
+	case TArray:
+		return t.certainlyNotCopy(ty.Elem, c)
+	case TTuple:
+		for _, e := range ty.Elems {
+			if t.certainlyNotCopy(e, c) {
+				return true
+			}
+		}
+		return false
+	case TAdt:
+		d := ty.Def
+		if t.isStd(d) {
+			switch d.Name {
+			case "String", "Vec", "Box", "HashMap", "HashSet", "BTreeMap", "BTreeSet", "VecDeque", "Rc", "Arc", "RefCell", "Cell", "Mutex":
+				return true
+			}
+			return false
+		}
+		return d.Crate == c && t.adtCopyImpl(d) == nil
+	}
+	return false
 }

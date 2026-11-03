@@ -723,8 +723,10 @@ func (r *Resolver) tryImport(imp *Import, report bool) bool {
 					privRes = b.Res
 				}
 				// a re-export may not be more visible than the item
+				// (only items declared private, directly in the module)
 				if target.Def != nil && target.Def.Kind != DefEnum && target.Def.Kind != DefTrait && b.Res.Kind == ResDef && b.Res.Def != nil &&
-					((imp.Vis == ast.VisPub && b.Vis != ast.VisPub) || (imp.Vis == ast.VisCrate && b.Vis == ast.VisPrivate && target != m.Crate.Root)) {
+					!b.Import && b.Res.Def.Item != nil && b.Res.Def.Item.Vis == ast.VisPrivate && b.Res.Def.Item.Name.Hyg == 0 &&
+					(imp.Vis == ast.VisPub || (imp.Vis == ast.VisCrate && target != m.Crate.Root)) {
 					tooPrivate = b.Res.Def
 				}
 			}
