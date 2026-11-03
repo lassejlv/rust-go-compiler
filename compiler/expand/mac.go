@@ -1,6 +1,8 @@
 package expand
 
 import (
+	"strings"
+
 	"rustgo/compiler/ast"
 	"rustgo/compiler/lexer"
 	"rustgo/compiler/parser"
@@ -96,6 +98,12 @@ func (e *Expander) lookupMacroName(name string) (*macroDef, builtinFn) {
 	if d, ok := e.macros[e.crate][name]; ok {
 		return d, nil
 	}
+	// a macro imported from another crate shadows the prelude's
+	if imp, ok := e.macroImports[e.crate][strings.Join(e.modPath[1:], "::")+"::"+name]; ok {
+		if d, ok := e.macros[imp.crate][imp.name]; ok {
+			return d, nil
+		}
+	}
 	if b, ok := builtins[name]; ok {
 		return nil, b
 	}
@@ -148,6 +156,10 @@ func (e *Expander) IsCrateMacro(crate, name string) bool {
 func (e *Expander) macTokens(mac *ast.MacCall) (tts []ast.TokenTree, user bool, err error) {
 	name := macName(mac)
 	def, bi := e.lookupMacroCall(mac)
+	if pm := e.procMacroOverride(mac, name); pm != nil {
+		// a proc macro named like a builtin (`rustversion::cfg!`)
+		def, bi = nil, nil
+	}
 	switch {
 	case def != nil:
 		tts, err = e.invokeMacroRules(def, mac)
@@ -157,7 +169,7 @@ func (e *Expander) macTokens(mac *ast.MacCall) (tts []ast.TokenTree, user bool, 
 		return tts, false, err
 	}
 	if pm := e.ProcMacros[name]; pm != nil && pm.Kind == PMBang {
-		tts, err = pm.Server.Call(PMBang, pm.Fn, nil, mac.Args, mac.Span)
+		tts, err = pm.Server.Call(PMBang, pm.Fn, nil, mac.Args, mac.Span, e.compileEnv())
 		if err != nil {
 			return nil, false, errAt(mac.Span, "in `%s!`: %v", name, err)
 		}
@@ -340,4 +352,28 @@ func (e *Expander) expandTypeMac(mac *ast.MacCall) (ast.Type, bool, error) {
 		return checkEOF(p, mac, "type")
 	})
 	return t, user, wrapExpErr(err, mac)
+}
+
+// procMacroOverride returns the bang proc macro a call names explicitly,
+// by a path into another crate (`dep::name!`) or through an import
+// (`use dep::name;`), when that takes precedence over the builtin or std
+// macro of the same name.
+func (e *Expander) procMacroOverride(mac *ast.MacCall, name string) *ProcMacro {
+	pm := e.ProcMacros[name]
+	if pm == nil || pm.Kind != PMBang {
+		return nil
+	}
+	if c, ok := e.macroPathCrate(mac.Path); ok {
+		if c == "std" || c == e.crate {
+			return nil
+		}
+		if d, b := e.lookupMacroIn(c, name); d != nil || b != nil {
+			return nil
+		}
+		return pm
+	}
+	if imp, ok := e.macroImports[e.crate][strings.Join(e.modPath[1:], "::")+"::"+name]; ok && imp.proc {
+		return pm
+	}
+	return nil
 }
