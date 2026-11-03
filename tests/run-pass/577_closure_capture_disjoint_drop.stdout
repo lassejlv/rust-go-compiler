@@ -1,0 +1,40 @@
+part1: move closure captures only p.a
+  closure sees p.a
+  dropping closure
+  drop p.a
+  p.b still usable: p.b
+  end of part1
+  drop p.b
+part2: closure consumes one field
+  before call
+  took q.b
+  drop q.b
+  after call, q.a = q.a
+  drop q.a
+part3: nested field paths
+  tag t n 11
+  d.inner.b still here: d.inner.b
+  moved-in d.inner.a
+  after dropping mv
+  t!
+  drop d.inner.a
+  drop d.inner.b
+part4: closures in a loop with move
+  drop i0
+  drop i1
+  drop i2
+  built 3 closures
+  ["i0", "i1", "i2"]
+  removed one
+  end of part4
+part5: FnOnce moving captured whole struct vs field
+  got back r.a r.b
+  kept r.a
+  drop r.a
+  drop r.b
+part6: tuple field capture
+  t.2 = 5
+  drop t.1
+  t.0 still: t.0
+  drop t.0
+main end

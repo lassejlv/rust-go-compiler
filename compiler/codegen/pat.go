@@ -330,7 +330,7 @@ func (fc *fnGen) bindPatDeferred(p ast.Pat, place string, t Ty, op operand) []st
 	if info, ok := fc.patSplit[p]; ok && moved && op.movable && place == fc.localName(info.local) {
 		// whole fields moved out of a local: only their flags are cleared
 		for _, i := range info.fields {
-			out = append(out, fmt.Sprintf("%s_%d = 0;", fc.flagName(info.local), i))
+			out = append(out, fmt.Sprintf("%s = 0;", fc.pathFlags(info.local, []int{i})))
 		}
 		return out
 	}
@@ -345,17 +345,28 @@ func (fc *fnGen) bindPatDeferred(p ast.Pat, place string, t Ty, op operand) []st
 			base := flags[0]
 			fieldFlag := map[string]string{}
 			for _, f := range flags[1:] {
-				if i := strings.LastIndex(f, "_"); i >= 0 {
-					fieldFlag[place+".f"+f[i+1:]] = f
+				if !strings.HasPrefix(f, base+"_") {
+					continue
 				}
-			}
-			fc.resSrcFlag = func(pl string) string {
-				for k, f := range fieldFlag {
-					if pl == k || strings.HasPrefix(pl, k+".") {
-						return f
+				// df5_1_0: place.f1.f0 (place.a[1]... for arrays)
+				k := place
+				for j, n := range strings.Split(f[len(base)+1:], "_") {
+					if j == 0 && t.Kind == TArray {
+						k += ".a[" + n + "]"
+					} else {
+						k += ".f" + n
 					}
 				}
-				return base
+				fieldFlag[k] = f
+			}
+			fc.resSrcFlag = func(pl string) string {
+				best, bestLen := base, -1
+				for k, f := range fieldFlag {
+					if (pl == k || strings.HasPrefix(pl, k+".") || strings.HasPrefix(pl, k+"[")) && len(k) > bestLen {
+						best, bestLen = f, len(k)
+					}
+				}
+				return best
 			}
 			sc := fc.scopes[len(fc.scopes)-1]
 			mark := len(sc.drops)
@@ -493,6 +504,9 @@ func (fc *fnGen) pbind(p ast.Pat, pl pplace, t Ty, moves *[]string, inOr bool) {
 					fc.line("%s = (%s)&%s.a[%d];", name, fc.ctype(l.Ty), pl.s, start)
 				} else {
 					fc.line("memcpy(&%s, &%s.a[%d], sizeof(%s));", name, pl.s, start, name)
+					if !fc.g.tcx.IsCopy(l.Ty) {
+						*moves = append(*moves, name)
+					}
 				}
 			} else {
 				fc.line("%s = (Fat){ (void*)((%s*)%s.ptr + %d), %s.meta - %d };", name, ct, pl.s, start, pl.s, start+after)
@@ -576,6 +590,10 @@ func (fc *fnGen) bindOwnedPat(p ast.Pat, place string, t Ty, l *typeck.Local, no
 	// the remainder is dropped after the bindings (it was declared first)
 	defer func() {
 		if len(sc.drops) > mid {
+			// residual parts are scheduled in drop order
+			for i, j := mid, len(sc.drops)-1; i < j; i, j = i+1, j-1 {
+				sc.drops[i], sc.drops[j] = sc.drops[j], sc.drops[i]
+			}
 			res := append([]dropEntry(nil), sc.drops[mid:]...)
 			binds := append([]dropEntry(nil), sc.drops[mark:mid]...)
 			sc.drops = append(append(sc.drops[:mark], res...), binds...)
@@ -669,7 +687,76 @@ func (fc *fnGen) residualDrops(p ast.Pat, place string, t Ty, now bool) {
 			pats[i] = f.Pat
 		}
 		fields(pats, prefix, fc.g.fieldTypes(t, v.Index), func(pi int) int { return v.FieldIndex(x.Fields[pi].Name.Name) }, false)
+	case *ast.SlicePat:
+		if t.Kind != TArray {
+			return // elements cannot be moved out of a slice
+		}
+		fc.arrayResidualDrops(x, place, t, now)
 	default:
 		// by-value binding of the whole place (or unsupported shape): moved
+	}
+}
+
+// arrayResidualDrops drops the elements of an array that a slice pattern
+// does not move out, in rustc's order: the array is split into runs of
+// untouched elements and elements with moves out of them, and these parts
+// are dropped from the last to the first (each run front to back).
+func (fc *fnGen) arrayResidualDrops(x *ast.SlicePat, place string, t Ty, now bool) {
+	n := int(fc.g.arrayLen(t))
+	pats := make([]ast.Pat, n) // element subpatterns (nil: none)
+	moved := make([]bool, n)   // element (partly) moved out
+	restIdx := -1
+	for i, e := range x.Elems {
+		if isRestLike(e) {
+			restIdx = i
+		}
+	}
+	for pi, e := range x.Elems {
+		i := pi
+		switch {
+		case pi == restIdx:
+			ip, ok := e.(*ast.IdentPat)
+			if !ok {
+				continue
+			}
+			if l := fc.r.Locals[ip.ID]; l != nil && !l.ByRef && !fc.g.tcx.IsCopy(l.Ty) {
+				for j := restIdx; j < n-(len(x.Elems)-restIdx-1); j++ {
+					moved[j] = true
+				}
+			}
+			continue
+		case restIdx >= 0 && pi > restIdx:
+			i = n - (len(x.Elems) - pi)
+		}
+		if i >= 0 && i < n {
+			pats[i] = e
+			moved[i] = fc.patMoves(e)
+		}
+	}
+	type part struct{ lo, hi int } // [lo, hi) untouched, or lo == hi-1 moved
+	var parts []part
+	var keep []bool
+	for i := 0; i < n; {
+		j := i + 1
+		if !moved[i] {
+			for j < n && !moved[j] {
+				j++
+			}
+		}
+		parts, keep = append(parts, part{i, j}), append(keep, moved[i])
+		i = j
+	}
+	for k := len(parts) - 1; k >= 0; k-- {
+		pr := parts[k]
+		for i := pr.lo; i < pr.hi; i++ {
+			el := fmt.Sprintf("%s.a[%d]", place, i)
+			if keep[k] {
+				if pats[i] != nil { // else moved into the rest binding
+					fc.residualDrops(pats[i], el, t.Elem, now)
+				}
+			} else {
+				fc.residualDrops(nil, el, t.Elem, now)
+			}
+		}
 	}
 }

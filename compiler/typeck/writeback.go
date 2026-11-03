@@ -173,16 +173,26 @@ const (
 	usePlaceMut
 )
 
+// capUse is a use of a place (a variable or a place inside it) by a
+// closure body.
 type capUse struct {
-	value bool // moved (by-value use of a non-Copy local)
+	path  []CapProj
+	moved bool // used by value, not Copy
+	value bool // used by value
 	mut   bool
 	order int
+	// nodes lists, per occurrence, the expressions denoting the prefixes of
+	// path: nodes[0] is the variable's PathExpr, nodes[i] the expression
+	// whose place is path[:i] (0 when that is a dereference applied by an
+	// adjustment)
+	nodes [][]ast.NodeID
 }
 
 type capWalker struct {
 	fcx   *FnCtxt
 	stack []*ast.ClosureExpr
-	uses  map[ast.NodeID]map[*Local]*capUse
+	uses  map[ast.NodeID]map[*Local][]*capUse
+	first map[ast.NodeID]map[*Local]int // first use of each variable
 	n     int
 }
 
@@ -222,24 +232,43 @@ func (fcx *FnCtxt) analyzeCaptures() {
 	}
 }
 
+// preciseCaptures reports whether closures of the body capture disjoint
+// places (Rust 2021) rather than whole variables.
+func (fcx *FnCtxt) preciseCaptures() bool {
+	if os.Getenv("RUSTGO_WHOLE_CAPTURES") != "" {
+		return false
+	}
+	d := fcx.r.Inst.Def
+	if d == nil || d.Crate == nil {
+		return true
+	}
+	if d.Crate.Name == "std" {
+		return false
+	}
+	return d.Crate.Edition == "" || d.Crate.Edition >= "2021"
+}
+
 func (fcx *FnCtxt) analyzeCapturesOnce() {
-	w := &capWalker{fcx: fcx, uses: map[ast.NodeID]map[*Local]*capUse{}}
+	w := &capWalker{fcx: fcx, uses: map[ast.NodeID]map[*Local][]*capUse{}, first: map[ast.NodeID]map[*Local]int{}}
 	if fcx.r.Body != nil {
 		w.block(fcx.r.Body, useValue)
 	}
 	if fcx.r.ConstExpr != nil {
 		w.expr(fcx.r.ConstExpr, useValue)
 	}
+	precise := fcx.preciseCaptures()
 	for _, ce := range fcx.closureExprs {
 		ci := fcx.r.Closures[ce.ID]
 		us := w.uses[ce.ID]
+		first := w.first[ce.ID]
 		var locals []*Local
 		for l := range us {
 			locals = append(locals, l)
 		}
-		sort.Slice(locals, func(i, j int) bool { return us[locals[i]].order < us[locals[j]].order })
+		sort.Slice(locals, func(i, j int) bool { return first[locals[i]] < first[locals[j]] })
 		kind := 0
 		ci.Captures = nil
+		ci.CapExprs = nil
 		// a non-move async closure's future moves only the closure's params
 		var ownParams map[*Local]bool
 		if ce.MoveParamsOf != nil {
@@ -256,40 +285,164 @@ func (fcx *FnCtxt) analyzeCapturesOnce() {
 			}
 		}
 		for _, l := range locals {
-			u := us[l]
-			copyTy := fcx.t.IsCopy(l.Ty)
-			c := &Capture{Local: l, Ty: l.Ty}
-			moved := u.value && !copyTy
 			isMove := ce.Move && (ownParams == nil || ownParams[l])
-			switch {
-			case isMove:
-				c.ByRef = false
-			case moved:
-				c.ByRef = false
-			case u.mut:
-				c.ByRef = true
-				c.Mut = true
-			case l.Ty != nil && l.Ty.Kind == TRef && !l.Ty.Mut:
-				// A shared reference that is only read is captured by
-				// copy (rustc captures the reborrowed `*r` and truncates
-				// it to `r` by value), so the closure does not borrow the
-				// enclosing frame's local and may outlive it.
-				c.ByRef = false
-			default:
-				c.ByRef = true
+			type capPlace struct {
+				path []CapProj
+				rank int // 0 read, 1 mut, 2 by value
 			}
-			if moved {
-				kind = 2
-			} else if u.mut && kind < 1 {
-				kind = 1
+			var caps []*capPlace
+			for _, u := range us[l] {
+				if u.moved {
+					kind = 2
+				} else if u.mut && kind < 1 {
+					kind = 1
+				}
+				c := &capPlace{}
+				switch {
+				case isMove || u.moved:
+					c.rank = 2
+				case u.mut:
+					c.rank = 1
+				}
+				if precise {
+					c.path = w.truncateCapture(l, u.path, c.rank == 2)
+				}
+				// minimal capture set: an ancestor place absorbs its
+				// descendants (rustc's compute_min_captures)
+				merged := false
+				for _, o := range caps {
+					if PathPrefix(o.path, c.path) {
+						if c.rank > o.rank {
+							o.rank = c.rank
+						}
+						merged = true
+						break
+					}
+				}
+				if merged {
+					continue
+				}
+				keep := caps[:0]
+				for _, o := range caps {
+					if PathPrefix(c.path, o.path) {
+						if o.rank > c.rank {
+							c.rank = o.rank
+						}
+						continue
+					}
+					keep = append(keep, o)
+				}
+				caps = append(keep, c)
 			}
-			ci.Captures = append(ci.Captures, c)
+			// captures of one variable are ordered by field (drop order)
+			sort.SliceStable(caps, func(i, j int) bool { return capPathLess(caps[i].path, caps[j].path) })
+			for _, cp := range caps {
+				c := &Capture{Local: l, Path: cp.path, Ty: l.Ty}
+				if len(cp.path) > 0 {
+					c.Ty = cp.path[len(cp.path)-1].Ty
+				}
+				switch {
+				case cp.rank == 2:
+					c.ByRef = false
+				case cp.rank == 1:
+					c.ByRef = true
+					c.Mut = true
+				case c.Ty != nil && c.Ty.Kind == TRef && !c.Ty.Mut:
+					// A shared reference that is only read is captured by
+					// copy (rustc captures the reborrowed `*r` and truncates
+					// it to `r` by value), so the closure does not borrow the
+					// enclosing frame's local and may outlive it.
+					c.ByRef = false
+				default:
+					c.ByRef = true
+				}
+				idx := len(ci.Captures)
+				ci.Captures = append(ci.Captures, c)
+				if len(cp.path) == 0 {
+					continue
+				}
+				// the expressions denoting the captured place
+				for _, u := range us[l] {
+					if !PathPrefix(cp.path, u.path) {
+						continue
+					}
+					for _, ns := range u.nodes {
+						if n := ns[len(cp.path)]; n != 0 {
+							if ci.CapExprs == nil {
+								ci.CapExprs = map[ast.NodeID]int{}
+							}
+							ci.CapExprs[n] = idx
+						}
+					}
+				}
+			}
 		}
 		ci.Kind = kind
 	}
 }
 
-func (w *capWalker) record(l *Local, ctx useCtx) {
+func capPathLess(a, b []CapProj) bool {
+	for i := 0; i < len(a) && i < len(b); i++ {
+		if a[i].Deref != b[i].Deref {
+			return a[i].Deref
+		}
+		if a[i].Field != b[i].Field {
+			return a[i].Field < b[i].Field
+		}
+	}
+	return len(a) < len(b)
+}
+
+// truncateCapture applies rustc's capture precision rules to a used place:
+// by-value captures stop at the first dereference and do not move out of a
+// type with a destructor; reads through a shared reference capture the
+// reference; and a captured place never ends in a dereference (the
+// reference or Box itself is captured instead).
+func (w *capWalker) truncateCapture(l *Local, path []CapProj, byValue bool) []CapProj {
+	tyAt := func(i int) Ty { // type of the place path[:i]
+		if i == 0 {
+			return l.Ty
+		}
+		return path[i-1].Ty
+	}
+	if byValue {
+		for i, pr := range path {
+			if pr.Deref {
+				path = path[:i]
+				break
+			}
+		}
+		if len(path) > 0 && !w.isCopy(path[len(path)-1].Ty) {
+			if dt := w.fcx.t.LangOpt("drop"); dt != nil {
+				for i, pr := range path {
+					if t := tyAt(i); !pr.Deref && t != nil && t.Kind == TAdt && w.fcx.t.Implements(t, dt) {
+						path = path[:i]
+						break
+					}
+				}
+			}
+		}
+	} else {
+		for i := len(path) - 1; i >= 0; i-- {
+			if path[i].Deref {
+				if t := tyAt(i); t != nil && t.Kind == TRef && !t.Mut {
+					path = path[:i+1]
+				}
+				break
+			}
+		}
+	}
+	for len(path) > 0 && path[len(path)-1].Deref {
+		path = path[:len(path)-1]
+	}
+	return path
+}
+
+func (w *capWalker) record(l *Local, path []CapProj, nodes []ast.NodeID, ctx useCtx) {
+	pt := l.Ty
+	if len(path) > 0 {
+		pt = path[len(path)-1].Ty
+	}
 	moveSeen := false
 	for i := len(w.stack) - 1; i >= 0; i-- {
 		c := w.stack[i]
@@ -302,18 +455,32 @@ func (w *capWalker) record(l *Local, ctx useCtx) {
 		}
 		m := w.uses[c.ID]
 		if m == nil {
-			m = map[*Local]*capUse{}
+			m = map[*Local][]*capUse{}
 			w.uses[c.ID] = m
+			w.first[c.ID] = map[*Local]int{}
 		}
-		u := m[l]
+		var u *capUse
+		for _, o := range m[l] {
+			if len(o.path) == len(path) && PathPrefix(o.path, path) {
+				u = o
+				break
+			}
+		}
 		if u == nil {
 			w.n++
-			u = &capUse{order: w.n}
-			m[l] = u
+			u = &capUse{path: path, order: w.n}
+			m[l] = append(m[l], u)
+			if _, ok := w.first[c.ID][l]; !ok {
+				w.first[c.ID][l] = w.n
+			}
 		}
+		u.nodes = append(u.nodes, nodes)
 		switch eff {
 		case useValue:
 			u.value = true
+			if !w.isCopy(pt) {
+				u.moved = true
+			}
 		case usePlaceMut:
 			u.mut = true
 		}
@@ -321,6 +488,73 @@ func (w *capWalker) record(l *Local, ctx useCtx) {
 			moveSeen = true
 		}
 	}
+}
+
+// capPlace returns the place an (unadjusted) expression denotes when it is
+// a variable followed by field projections and dereferences of references
+// and Boxes, with the expressions denoting its prefixes (see capUse.nodes).
+func (w *capWalker) capPlace(e ast.Expr) (*Local, []CapProj, []ast.NodeID, bool) {
+	r := w.fcx.r
+	switch x := e.(type) {
+	case *ast.ParenExpr:
+		return w.capPlaceAdj(x.X)
+	case *ast.PathExpr:
+		if vr := r.Paths[x.ID]; vr != nil && vr.Kind == VLocal {
+			return vr.Local, nil, []ast.NodeID{x.ID}, true
+		}
+	case *ast.FieldExpr:
+		fr, ok := r.Fields[x.ID]
+		t := r.NodeTypes[x.ID]
+		if !ok || fr.Union || t == nil || t.IsUnsized() {
+			break
+		}
+		l, path, nodes, ok := w.capPlaceAdj(x.X)
+		if !ok {
+			break
+		}
+		bt := l.Ty
+		if len(path) > 0 {
+			bt = path[len(path)-1].Ty
+		}
+		if bt == nil || (bt.Kind == TAdt && bt.Def.ReprPacked() > 0) {
+			break
+		}
+		return l, append(path, CapProj{Field: fr.Index, Name: x.Name.Name, Ty: t}), append(nodes, x.ID), true
+	case *ast.UnaryExpr:
+		if x.Op != ast.UnDeref || r.Callees[x.ID] != nil {
+			break
+		}
+		t := r.NodeTypes[x.ID]
+		bt := r.AdjustedType(x.X)
+		if t == nil || t.IsUnsized() || bt == nil || !(bt.Kind == TRef || (bt.Kind == TAdt && bt.Def.LangItem == "owned_box")) {
+			break
+		}
+		l, path, nodes, ok := w.capPlaceAdj(x.X)
+		if !ok {
+			break
+		}
+		return l, append(path, CapProj{Deref: true, Ty: t}), append(nodes, x.ID), true
+	}
+	return nil, nil, nil, false
+}
+
+// capPlaceAdj is capPlace for an expression with its adjustments (only
+// builtin dereferences continue a place).
+func (w *capWalker) capPlaceAdj(e ast.Expr) (*Local, []CapProj, []ast.NodeID, bool) {
+	l, path, nodes, ok := w.capPlace(e)
+	if !ok {
+		return nil, nil, nil, false
+	}
+	cur := w.fcx.r.NodeTypes[e.GetID()]
+	for _, a := range w.fcx.r.Adjust[e.GetID()] {
+		if a.Kind != AdjDeref || cur == nil || !(cur.Kind == TRef || (cur.Kind == TAdt && cur.Def.LangItem == "owned_box")) || a.Target == nil || a.Target.IsUnsized() {
+			return nil, nil, nil, false
+		}
+		path = append(path, CapProj{Deref: true, Ty: a.Target})
+		nodes = append(nodes, 0)
+		cur = a.Target
+	}
+	return l, path, nodes, true
 }
 
 func (w *capWalker) isCopy(t Ty) bool {
@@ -421,15 +655,15 @@ func (w *capWalker) expr(e ast.Expr, ctx useCtx) {
 	switch x := e.(type) {
 	case *ast.PathExpr:
 		if vr := r.Paths[x.ID]; vr != nil && vr.Kind == VLocal {
-			c := ctx
-			if c == useValue && w.isCopy(vr.Local.Ty) {
-				c = usePlace
-			}
-			w.record(vr.Local, c)
+			w.record(vr.Local, nil, []ast.NodeID{x.ID}, ctx)
 		}
 	case *ast.ParenExpr:
 		w.expr(x.X, ctx)
 	case *ast.FieldExpr:
+		if l, path, nodes, ok := w.capPlace(x); ok {
+			w.record(l, path, nodes, ctx)
+			return
+		}
 		bc := ctx
 		if ctx == useValue && w.isCopy(r.NodeTypes[x.ID]) {
 			bc = usePlace
@@ -444,6 +678,10 @@ func (w *capWalker) expr(e ast.Expr, ctx useCtx) {
 		w.expr(x.Index, useValue)
 	case *ast.UnaryExpr:
 		if x.Op == ast.UnDeref {
+			if l, path, nodes, ok := w.capPlace(x); ok {
+				w.record(l, path, nodes, ctx)
+				return
+			}
 			bc := usePlace
 			if ctx == usePlaceMut {
 				bc = usePlaceMut

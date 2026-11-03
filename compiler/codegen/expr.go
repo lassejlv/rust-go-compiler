@@ -23,6 +23,10 @@ type operand struct {
 	flag    string // drop flag of the root (cleared when moved out)
 	movable bool   // place can be moved out of (rooted in a local/temp, no ref derefs)
 	ty      Ty
+	// tlocal/tpath: the place is a tracked field path of a split local
+	// (flag is pathFlags(tlocal, tpath))
+	tlocal *typeck.Local
+	tpath  []int
 }
 
 // value lowers e to a C rvalue (applying adjustments, moving out of places).
@@ -192,6 +196,11 @@ func (fc *fnGen) unsizePtr(v string, src, dst Ty) string {
 func (fc *fnGen) operand(e ast.Expr) operand {
 	t := fc.ty(e)
 	val := func(s string) operand { return operand{s: s, ty: t} }
+	if fc.closure != nil && fc.closure.CapExprs != nil {
+		if i, ok := fc.closure.CapExprs[e.GetID()]; ok {
+			return fc.upvarOperand(i, t)
+		}
+	}
 	switch x := e.(type) {
 	case *ast.LitExpr:
 		return val(fc.literal(x, t))
@@ -234,14 +243,14 @@ func (fc *fnGen) operand(e ast.Expr) operand {
 			return operand{s: fmt.Sprintf("((%s*)%s.ptr)->f%d", sn, fat, fr.Index), place: true, ty: t}
 		}
 		flag := base.flag
-		if pe, ok := unparen(x.X).(*ast.PathExpr); ok && len(fc.r.Adjust[x.X.GetID()]) == 0 {
-			if vr := fc.r.Paths[pe.ID]; vr != nil && vr.Kind == typeck.VLocal && fc.split[vr.Local][fr.Index] && fc.capIndex[vr.Local] == 0 {
-				if _, captured := fc.capIndex[vr.Local]; !captured {
-					flag = fmt.Sprintf("%s_%d", fc.flagName(vr.Local), fr.Index)
-				}
+		var tl *typeck.Local
+		var tp []int
+		if l, path := fc.fieldPath(x); l != nil && fc.tracked(l, path) {
+			if _, captured := fc.capIndex[l]; (!captured && !fc.pathCaps[l]) || fc.ownedUpvars[l] {
+				flag, tl, tp = fc.pathFlags(l, path), l, path
 			}
 		}
-		return operand{s: fmt.Sprintf("%s.f%d", base.s, fr.Index), place: true, flag: flag, movable: base.movable, ty: t}
+		return operand{s: fmt.Sprintf("%s.f%d", base.s, fr.Index), place: true, flag: flag, movable: base.movable, ty: t, tlocal: tl, tpath: tp}
 	case *ast.IndexExpr:
 		return fc.indexOperand(x, t)
 	case *ast.RefExpr:
@@ -711,6 +720,16 @@ func (fc *fnGen) storeTo(l ast.Expr, v string) {
 	if fc.g.needsDrop(t) {
 		tmp := fc.spill(v, t)
 		op := fc.placeOp(l)
+		if op.tlocal != nil && fc.trackedBelow(op.tlocal, op.tpath) {
+			// re-initializing a field of a partially moved local whose
+			// parts have their own flags
+			var parts []string
+			f := fc.pathFlag(op.tlocal, op.tpath)
+			fc.dropParts(&parts, op.tlocal, op.s, t, op.tpath, f)
+			fc.line("%s", strings.Join(parts, " "))
+			fc.line("%s = %s; %s = 1;", op.s, tmp, op.flag)
+			return
+		}
 		if strings.Contains(op.flag, "_") && !strings.Contains(op.flag, "=") {
 			// re-initializing a field of a partially moved local
 			fc.line("if (%s) %s(&%s);", op.flag, fc.g.dropFn(t), op.s)
@@ -916,7 +935,7 @@ func (fc *fnGen) structLit(x *ast.StructExpr, t Ty) string {
 			if vals[i] == "" {
 				vals[i] = fmt.Sprintf("%s.f%d", place, i)
 				if fc.g.needsDrop(fts[i]) {
-					fc.line("%s_%d = 0;", fc.flagName(l), i)
+					fc.line("%s = 0;", fc.pathFlags(l, []int{i}))
 				}
 			}
 		}
@@ -967,7 +986,7 @@ func (fc *fnGen) closureLit(x *ast.ClosureExpr, t Ty) string {
 	fc.g.closureFn(t)
 	var fs []string
 	for i, c := range ci.Captures {
-		p, flag := fc.localPlace(c.Local)
+		p, flag := fc.capturePlace(c)
 		if c.ByRef {
 			fs = append(fs, fmt.Sprintf(".c%d = &%s", i, p))
 		} else {
@@ -1651,4 +1670,79 @@ func (g *Gen) scalarConstLit(d *Def, args []Ty, t Ty) (string, bool) {
 
 func (fc *fnGen) isBoxTy(t Ty) bool {
 	return t != nil && t.Kind == TAdt && t.Def != nil && t.Def.LangItem == "owned_box"
+}
+
+// upvarOperand is the place of capture i of the closure being generated.
+func (fc *fnGen) upvarOperand(i int, t Ty) operand {
+	c := fc.closure.Captures[i]
+	if c.ByRef {
+		return operand{s: fmt.Sprintf("(*env->c%d)", i), place: true, ty: t}
+	}
+	flag := ""
+	if fc.closure.Kind == 2 && fc.g.needsDrop(c.Ty) {
+		// FnOnce body owns its by-value captures
+		flag = fmt.Sprintf("dfc%d", i)
+	}
+	return operand{s: fmt.Sprintf("env->c%d", i), place: true, flag: flag, movable: true, ty: t}
+}
+
+// capturePlace evaluates the place a closure being created captures (in
+// the enclosing body, possibly itself a closure capturing a part of it)
+// and returns it with the drop flag to clear when it is moved.
+func (fc *fnGen) capturePlace(c *typeck.Capture) (string, string) {
+	if len(c.Path) == 0 {
+		return fc.localPlace(c.Local)
+	}
+	var base, flag string
+	baseTy := c.Local.Ty
+	rest := c.Path
+	if fc.pathCaps[c.Local] {
+		// a part of a place the enclosing closure captured
+		found := false
+		for j, oc := range fc.closure.Captures {
+			if oc.Local == c.Local && len(oc.Path) > 0 && typeck.PathPrefix(oc.Path, c.Path) {
+				op := fc.upvarOperand(j, oc.Ty)
+				base, flag, baseTy, rest = op.s, op.flag, oc.Ty, c.Path[len(oc.Path):]
+				found = true
+				break
+			}
+		}
+		if !found {
+			fc.g.fatalf("%s: internal error: captured place of `%s` not found in the enclosing closure", c.Local.Span.Lo, c.Local.Name)
+		}
+	} else {
+		base, flag = fc.localPlace(c.Local)
+		if _, captured := fc.capIndex[c.Local]; !captured || fc.ownedUpvars[c.Local] {
+			// the longest tracked field path of the captured place
+			var path []int
+			for _, pr := range rest {
+				if pr.Deref {
+					break
+				}
+				path = append(path, pr.Field)
+			}
+			for k := len(path); k > 0; k-- {
+				if fc.tracked(c.Local, path[:k]) {
+					flag = fc.pathFlags(c.Local, path[:k])
+					break
+				}
+			}
+		}
+	}
+	p := base
+	cur := baseTy
+	for _, pr := range rest {
+		if pr.Deref {
+			flag = "" // moves never go through a dereference
+			if cur.Kind == TAdt {
+				p = "(*" + p + ".f0)" // Box
+			} else {
+				p = "(*" + p + ")"
+			}
+		} else {
+			p = fmt.Sprintf("%s.f%d", p, pr.Field)
+		}
+		cur = pr.Ty
+	}
+	return p, flag
 }

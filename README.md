@@ -73,7 +73,12 @@ targets other than x86_64-linux-gnu, incremental compilation.
   Selection drives inference (e.g. `collect::<Vec<_>>()`).
 * **Closures** get their signature from expected `Fn*` bounds; captures and
   the closure kind are computed by a use-analysis pass (by-ref, by-mut-ref or
-  by-move, like rustc).
+  by-move, like rustc). From Rust 2021 on, closures capture disjoint places
+  (`t.1`, `(*r).a.b`) with rustc's precision rules; moves out of fields of
+  locals get per-field drop flags.
+* **Formatting**: `format_args!` lowers to a call of `fmt::__format` with
+  static pieces/specs and an array of `&dyn Trait` arguments (`print!` calls
+  `io::__print` directly), so each use is a few lines of C.
 * **Drops** are elaborated with runtime drop flags, including partial moves
   out of struct fields, temporaries with Rust's temporary-lifetime rules, and
   unwinding on panic (a cleanup stack runs pending destructors before the

@@ -1,0 +1,107 @@
+-- locals
+make a
+make b
+make underscore
+drop underscore
+make c
+end of block
+drop c
+drop b
+drop a
+-- struct fields
+make t0
+make t1
+make second
+make first
+built holder
+drop first
+drop second
+drop t0
+drop t1
+-- temporaries in statement
+make temp1
+make temp2
+drop temp2
+drop temp1
+n = 10
+-- temporary in let binding extended
+make extended
+using extended
+-- match scrutinee temporary
+make scrutinee
+matched scrutinee
+drop scrutinee
+after match
+-- if let temporary (2021: lives to end of if-let else)
+make iflet
+in if-let iflet
+drop iflet
+after if let
+-- shadowing
+make shadow1
+x is shadow1+2
+-- enum variants
+make e2a
+make e2b
+make e1
+drop e1
+drop e2a
+drop e2b
+-- vec and box
+make v0
+make v1
+make v2
+make boxed
+took first Some("v0")
+drop v1
+drop v2
+iterator dropped
+drop v0
+drop boxed
+-- reassignment drops old value
+make y-old
+make y-new
+drop y-old
+reassigned to y-new
+-- function return temp
+make in-return
+make in-return-2
+drop in-return-2
+drop in-return
+ret 20
+-- tuple partial move
+make tA
+make tB
+moved tA
+drop tA
+drop tB
+-- array pattern partial move
+make a0
+make a1
+make a2
+moved a0 a2
+drop a2
+drop a0
+drop a1
+make b0
+make b1
+make b2
+make b3
+mid has 2
+drop b1
+drop b2
+drop b3
+drop b0
+-- closure capture drop
+make captured
+f() = 8
+drop captured
+-- block expression temps
+make blocktmp
+drop blocktmp
+len 16
+-- end of main
+drop y-new
+drop shadow1+2
+drop shadow1
+drop extended

@@ -201,142 +201,6 @@ func seqFields(pats []ast.Pat, n int, f func(pi, fi int)) {
 }
 
 // ---------------------------------------------------------------------------
-// Closure captures
-
-type capPath struct {
-	tplace
-	mut bool
-}
-
-// capturePaths returns the places a closure captures for a captured local:
-// like rustc 2021, a closure that only uses fields of a variable (s.a.b)
-// captures those fields, not the whole variable.
-func (b *builder) capturePaths(ci *typeck.ClosureInfo, c *typeck.Capture) []capPath {
-	base := b.localPlace(c.Local)
-	// a mutably captured `&mut` variable is captured as `*x` (a unique
-	// reborrow: `x` itself need not be mutable)
-	if c.ByRef && base.ty != nil && base.ty.Kind == TRef {
-		base = base.deref()
-	}
-	whole := []capPath{{tplace: base, mut: c.Mut}}
-	type step struct {
-		derefs int
-		field  int
-		name   string
-		ty     Ty
-	}
-	var chains [][]step
-	isWhole := false
-	onlyDerefs := func(adj []typeck.Adjustment) (int, bool) {
-		for _, a := range adj {
-			if a.Kind != typeck.AdjDeref {
-				return 0, false
-			}
-		}
-		return len(adj), true
-	}
-	ast.Walk(ci.Expr.Body, func(n any) bool {
-		if isWhole {
-			return false
-		}
-		switch x := n.(type) {
-		case *ast.FieldExpr:
-			var steps []step
-			var e ast.Expr = x
-			for {
-				fe, ok := unparen(e).(*ast.FieldExpr)
-				if !ok {
-					break
-				}
-				fr, ok := b.r.Fields[fe.ID]
-				if !ok || fr.Union {
-					return true
-				}
-				nd, ok := onlyDerefs(b.r.Adjust[fe.X.GetID()])
-				if !ok {
-					return true
-				}
-				steps = append([]step{{derefs: nd, field: fr.Index, name: fe.Name.Name, ty: b.r.NodeTypes[fe.ID]}}, steps...)
-				e = fe.X
-			}
-			pe, ok := unparen(e).(*ast.PathExpr)
-			if !ok {
-				return true
-			}
-			vr := b.r.Paths[pe.ID]
-			if vr == nil || vr.Kind != typeck.VLocal || vr.Local != c.Local {
-				return true
-			}
-			if !c.ByRef {
-				for _, st := range steps {
-					if st.derefs > 0 {
-						isWhole = true // moves stop at derefs
-						return false
-					}
-				}
-			}
-			chains = append(chains, steps)
-			return false
-		case *ast.PathExpr:
-			if vr := b.r.Paths[x.ID]; vr != nil && vr.Kind == typeck.VLocal && vr.Local == c.Local {
-				isWhole = true
-			}
-		case *ast.MacCallExpr:
-			isWhole = true
-		}
-		return true
-	})
-	if isWhole || len(chains) == 0 {
-		return whole
-	}
-	root := b.localPlace(c.Local)
-	key := func(ch []step) []int {
-		var k []int
-		for _, st := range ch {
-			k = append(k, -1-st.derefs, st.field)
-		}
-		return k
-	}
-	var out []capPath
-	for i, ch := range chains {
-		ki := key(ch)
-		dup := false
-		for j, o := range chains {
-			if i == j {
-				continue
-			}
-			kj := key(o)
-			if len(kj) > len(ki) {
-				continue
-			}
-			prefix := true
-			for k := range kj {
-				if kj[k] != ki[k] {
-					prefix = false
-					break
-				}
-			}
-			if prefix && (len(kj) < len(ki) || j < i) {
-				dup = true
-				break
-			}
-		}
-		if dup {
-			continue
-		}
-		tp := root
-		for _, st := range ch {
-			for d := 0; d < st.derefs; d++ {
-				tp = tp.deref()
-			}
-			tp = tplace{p: tp.p.project(Proj{Kind: PField, Field: st.field, Name: st.name}), ty: st.ty}
-		}
-		out = append(out, capPath{tplace: tp, mut: c.Mut})
-	}
-	return out
-}
-
-// ---------------------------------------------------------------------------
 // Bodies
 
 // buildFn builds the MIR of a function body.
@@ -384,13 +248,26 @@ func buildClosure(tcx *typeck.Tcx, r *typeck.Results, ci *typeck.ClosureInfo, na
 	b.newLocal(&LocalDecl{Kind: LReturn, Ty: ci.Output, Mut: true})
 	b.retBlock = b.newBlock()
 	b.pushScope()
+	b.closure = ci
 	for _, c := range ci.Captures {
 		ty := c.Ty
 		if c.ByRef {
 			ty = Ref(c.Ty, c.Mut)
 		}
-		id := b.newLocal(&LocalDecl{Kind: LUpvar, Ty: ty, Mut: c.Mut || c.Local.Mut, Name: c.Local.Name, Span: c.Local.Span, User: c.Local, UpvarByRef: c.ByRef})
-		b.upvars[c.Local] = &upvar{local: id, byRef: c.ByRef, mutRef: c.Mut}
+		name := c.Local.Name
+		for _, pr := range c.Path {
+			if pr.Deref {
+				name = "*" + name
+			} else {
+				name += "." + pr.Name
+			}
+		}
+		id := b.newLocal(&LocalDecl{Kind: LUpvar, Ty: ty, Mut: c.Mut || c.Local.Mut, Name: name, Span: c.Local.Span, User: c.Local, UpvarByRef: c.ByRef})
+		u := &upvar{local: id, byRef: c.ByRef, mutRef: c.Mut}
+		b.capUpvars = append(b.capUpvars, u)
+		if len(c.Path) == 0 {
+			b.upvars[c.Local] = u
+		}
 	}
 	for _, l := range ci.Params {
 		id := b.newLocal(&LocalDecl{Kind: LArg, Ty: l.Ty, Mut: l.Mut, Name: l.Name, Span: l.Span, User: l})

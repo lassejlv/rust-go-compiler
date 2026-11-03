@@ -93,12 +93,24 @@ type FieldRes struct {
 	Union bool
 }
 
-// Capture describes a variable captured by a closure.
+// Capture describes a place captured by a closure: a variable, or (Rust
+// 2021 disjoint captures) a place inside it reached through fields and
+// dereferences (`t.1`, `(*r).a.b`). A by-value capture's path has no
+// dereferences, and no path ends in a dereference.
 type Capture struct {
 	Local *Local
+	Path  []CapProj // projections from Local (empty: the whole variable)
 	ByRef bool
 	Mut   bool
-	Ty    Ty // the captured local's type
+	Ty    Ty // the type of the captured place
+}
+
+// CapProj is a projection of a captured place.
+type CapProj struct {
+	Deref bool // a dereference of a reference or Box (else a field)
+	Field int
+	Name  string // field name
+	Ty    Ty     // the type of the place after the projection
 }
 
 // ClosureInfo describes a closure expression in a particular instance.
@@ -111,6 +123,23 @@ type ClosureInfo struct {
 	Captures []*Capture
 	Results  *Results // owning body's results
 	Params   []*Local
+	// CapExprs maps the expressions of the body (and of nested closures)
+	// that denote a captured place with a path (field captures) to the
+	// index of that capture: a FieldExpr (unadjusted) or a PathExpr.
+	CapExprs map[ast.NodeID]int
+}
+
+// PathPrefix reports whether projections a are a prefix of b.
+func PathPrefix(a, b []CapProj) bool {
+	if len(a) > len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i].Deref != b[i].Deref || (!a[i].Deref && a[i].Field != b[i].Field) {
+			return false
+		}
+	}
+	return true
 }
 
 // ForInfo records how a for loop iterates.
