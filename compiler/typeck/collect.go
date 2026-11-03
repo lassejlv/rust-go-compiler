@@ -566,7 +566,14 @@ func pathSegs(p *ast.Path) []string {
 }
 
 func (ac *astConv) resolve(p *ast.Path, ns Namespace) (resolve.PathResult, error) {
-	return ac.t.R.ResolvePath(ac.scope, pathSegs(p), p.Global, ns, ac.firstLookup)
+	pr, err := ac.t.R.ResolvePath(ac.scope, pathSegs(p), p.Global, ns, ac.firstLookup)
+	if err == nil {
+		ac.t.checkGlobAmbiguity(p, ac.scope, ns, ac.firstLookup)
+	}
+	if err == nil && pr.Private {
+		ac.t.reportPrivatePath(p, pr)
+	}
+	return pr, err
 }
 
 func (ac *astConv) paramTy(gp *GenericParamDef) Ty {
@@ -711,6 +718,9 @@ func (ac *astConv) lowerDyn(bounds []*ast.Bound, sp lexer.Span) Ty {
 		return TyErr
 	}
 	// Fill in assoc type bindings from supertrait defaults? Keep as given.
+	if ac.scope != nil && !(t.R.Std != nil && ac.scope.Crate == t.R.Std) {
+		t.checkDynTrait(principal, bindings, sp)
+	}
 	sortBindings(bindings)
 	return Dyn(principal.Trait, principal.Args[1:], bindings, auto)
 }
@@ -863,7 +873,11 @@ func (ac *astConv) lowerPathType(x *ast.PathType) Ty {
 	}
 	pr, err := ac.resolve(x.Path, TypeNS)
 	if err != nil {
-		t.Errorf(x.Span, "%v", err)
+		if len(x.Path.Segments) == 1 && !x.Path.Global {
+			t.ErrorCode(x.Span, "E0412", "cannot find type `%s` in this scope", x.Path.Segments[0].Ident.Name)
+		} else {
+			t.Errorf(x.Span, "%v", err)
+		}
 		return TyErr
 	}
 	segs := x.Path.Segments

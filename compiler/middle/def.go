@@ -386,6 +386,9 @@ type NameBinding struct {
 	Res    Res
 	Import bool
 	Span   lexer.Span
+	// Vis is the visibility of the item or `use` declaration that made the
+	// binding (relative to the module holding it).
+	Vis ast.Visibility
 }
 
 // Module is a namespace: a `mod`, the crate root, an enum (for its
@@ -455,6 +458,7 @@ type Import struct {
 	Glob   bool
 	Span   lexer.Span
 	Done   bool
+	Vis    ast.Visibility
 }
 
 func NewModule(def *Def, parent *Module, crate *Crate, block bool) *Module {

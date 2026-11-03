@@ -738,7 +738,7 @@ func (p *Parser) parseVis() ast.Visibility {
 			case "self":
 				return ast.VisPrivate
 			}
-			return ast.VisRestricted
+			return ast.VisSuper
 		}
 		if t1.Is("in") {
 			p.next()
@@ -750,6 +750,9 @@ func (p *Parser) parseVis() ast.Visibility {
 			}
 			if len(path.Segments) == 1 && path.Segments[0].Ident.Name == "self" {
 				return ast.VisPrivate
+			}
+			if len(path.Segments) == 1 && path.Segments[0].Ident.Name == "super" {
+				return ast.VisSuper
 			}
 			return ast.VisRestricted
 		}

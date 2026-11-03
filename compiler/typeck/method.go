@@ -58,11 +58,18 @@ func (fcx *FnCtxt) checkMethodCall(x *ast.MethodCallExpr, expected Ty) Ty {
 	p := early
 	if p == nil {
 		fcx.methodNode = x.ID
+		fcx.privMethod = nil
+		fcx.checkPriv = x.Method.Hyg == 0
 		p = fcx.lookupMethod(rt, x.Method.Name, x.Span)
+		fcx.checkPriv = false
 		fcx.methodNode = 0
 	}
 	if p == nil {
-		fcx.errorf(x.Method.Span, "no method named `%s` found for `%s`", x.Method.Name, fcx.resolve(rt))
+		if fcx.privMethod != nil {
+			fcx.t.ErrorCode(x.Method.Span, "E0624", "method `%s` is private", x.Method.Name)
+		} else {
+			fcx.errorf(x.Method.Span, "no method named `%s` found for `%s`", x.Method.Name, fcx.resolve(rt))
+		}
 		for _, a := range x.Args {
 			fcx.checkExpr(a, nil)
 		}
@@ -132,6 +139,12 @@ func (fcx *FnCtxt) lookupMethod(recv Ty, name string, sp lexer.Span) *pick {
 				continue
 			}
 			if item, ok := impl.Impl.Items[name]; ok && item.Kind == DefFn && item.Fn.HasSelf {
+				if fcx.checkPriv && !fcx.t.assocItemAccessible(item, fcx.curMod()) {
+					// inaccessible methods are not candidates (E0624
+					// if nothing else is found)
+					fcx.privMethod = item
+					continue
+				}
 				seenImpl[impl] = true
 				inherent = append(inherent, methodCand{item: item, impl: impl})
 			}

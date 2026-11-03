@@ -80,6 +80,9 @@ func (fcx *FnCtxt) finCallee(c *Callee) {
 
 func (fcx *FnCtxt) writeback() {
 	r := fcx.r
+	if fcx.t.quiet == 0 && !fcx.t.isStd(fcx.def) {
+		fcx.checkUninferredLocals()
+	}
 	for id, t := range r.NodeTypes {
 		r.NodeTypes[id] = fcx.fin(t)
 	}
@@ -240,6 +243,7 @@ func (fcx *FnCtxt) analyzeCapturesOnce() {
 		sort.Slice(locals, func(i, j int) bool { return us[locals[i]].order < us[locals[j]].order })
 		kind := 0
 		ci.Captures = nil
+		ci.MovesValue = false
 		// a non-move async closure's future moves only the closure's params
 		var ownParams map[*Local]bool
 		if ce.MoveParamsOf != nil {
@@ -280,6 +284,9 @@ func (fcx *FnCtxt) analyzeCapturesOnce() {
 			}
 			if moved {
 				kind = 2
+				if l.Ty != nil && l.Ty.Kind != TRef {
+					ci.MovesValue = true
+				}
 			} else if u.mut && kind < 1 {
 				kind = 1
 			}
@@ -599,5 +606,64 @@ func (w *capWalker) assignLhs(l ast.Expr) {
 	case *ast.UnderscoreExpr:
 	default:
 		w.expr(l, usePlaceMut)
+	}
+}
+
+// checkUninferredLocals reports locals whose type inference left
+// unconstrained (rustc E0282).
+func (fcx *FnCtxt) checkUninferredLocals() {
+	var ls []*Local
+	for id, l := range fcx.r.Locals {
+		if l != nil && l.Node == id && l.Ty != nil {
+			ls = append(ls, l)
+		}
+	}
+	sort.Slice(ls, func(i, j int) bool { return ls[i].ID < ls[j].ID })
+	// variables standing for closure results are left alone: a closure
+	// whose body diverges returns `!`, which falls back to `()` (rustgo
+	// may not have recorded it as diverging)
+	closureVars := map[Ty]bool{}
+	for _, ci := range fcx.r.Closures {
+		if ci.Output != nil {
+			Walk(fcx.ic.resolve(ci.Output), func(x Ty) bool {
+				if x.Kind == TInfer {
+					closureVars[x] = true
+				}
+				return true
+			})
+		}
+	}
+	for _, l := range ls {
+		t := fcx.ic.resolve(l.Ty)
+		if t.HasProj() {
+			t = fcx.ic.resolve(fcx.ic.tryNormalize(t))
+		}
+		var unresolved Ty
+		Walk(t, func(x Ty) bool {
+			if x.Kind == TInfer && x.Sub == 0 && !closureVars[x] {
+				unresolved = x
+			}
+			return unresolved == nil
+		})
+		if unresolved != nil {
+			// a pending trait obligation on the variable (`_: FromStr`)
+			// makes it rustc's E0284
+			code := "E0282"
+			for _, o := range fcx.ic.obligations {
+				if o.Done || o.Pred == nil || o.Pred.Trait == nil {
+					continue
+				}
+				for _, a := range o.Pred.Trait.Args {
+					Walk(fcx.ic.resolve(a), func(x Ty) bool {
+						if x == unresolved {
+							code = "E0284"
+						}
+						return code == "E0282"
+					})
+				}
+			}
+			fcx.t.ErrorCode(l.Span, code, "type annotations needed")
+			return
+		}
 	}
 }
