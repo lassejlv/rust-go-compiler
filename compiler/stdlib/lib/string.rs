@@ -24,7 +24,16 @@ pub struct FromUtf8Error {
 
 /// A possible error value when converting a `String` from a UTF-16 byte slice.
 #[derive(Debug)]
-pub struct FromUtf16Error(());
+pub struct FromUtf16Error {
+    kind: FromUtf16ErrorKind,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum FromUtf16ErrorKind {
+    LoneSurrogate,
+    #[allow(dead_code)]
+    OddBytes,
+}
 
 /// A type alias for `Infallible`.
 pub type ParseError = crate::convert::Infallible;
@@ -97,7 +106,7 @@ impl String {
         while let Some(c) = it.next() {
             match c {
                 Ok(c) => ret.push(c),
-                Err(_) => return Err(FromUtf16Error(())),
+                Err(_) => return Err(FromUtf16Error { kind: FromUtf16ErrorKind::LoneSurrogate }),
             }
         }
         Ok(ret)
@@ -376,7 +385,6 @@ impl String {
     }
 
     /// Removes the specified range from the string in bulk, returning all removed characters as an iterator.
-    #[track_caller]
     pub fn drain<R>(&mut self, range: R) -> Drain<'_>
     where
         R: RangeBounds<usize>,
@@ -458,7 +466,10 @@ impl fmt::Display for FromUtf8Error {
 
 impl fmt::Display for FromUtf16Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Display::fmt("invalid utf-16: lone surrogate found", f)
+        fmt::Display::fmt(match self.kind {
+            FromUtf16ErrorKind::LoneSurrogate => "invalid utf-16: lone surrogate found",
+            FromUtf16ErrorKind::OddBytes => "invalid utf-16: odd number of bytes",
+        }, f)
     }
 }
 
@@ -605,6 +616,13 @@ impl fmt::Write for String {
     #[inline]
     fn write_char(&mut self, c: char) -> fmt::Result {
         self.push(c);
+        Ok(())
+    }
+
+    #[inline]
+    fn write_fmt(&mut self, args: fmt::Arguments<'_>) -> fmt::Result {
+        // the pieces are not observable: append the text at once
+        self.push_str(args.as_formatted_str());
         Ok(())
     }
 }

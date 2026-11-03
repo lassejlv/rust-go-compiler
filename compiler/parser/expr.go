@@ -524,15 +524,56 @@ func (p *Parser) parsePrimary(r restr) ast.Expr {
 	return nil
 }
 
+// widenParenInner gives the operator expression inside source parentheses
+// the span of the parentheses, like rustc's HIR lowering of `ExprKind::Paren`
+// (so an overflow in `(a + b)` is reported at the `(`). Method calls and
+// indexing keep their own panic locations in rustc, so only operators and
+// plain calls are widened. Parentheses from macro templates (zero-width
+// spans) are left alone.
+func widenParenInner(open, closeTok lexer.Token, pe *ast.ParenExpr) {
+	if open.Span.Hi.Off-open.Span.Lo.Off != 1 || closeTok.Span.Hi.Off-closeTok.Span.Lo.Off != 1 {
+		return
+	}
+	x := pe.X
+	for {
+		inner, ok := x.(*ast.ParenExpr)
+		if !ok {
+			break
+		}
+		x = inner.X
+	}
+	var sp *lexer.Span
+	switch e := x.(type) {
+	case *ast.BinaryExpr:
+		sp = &e.Span
+	case *ast.UnaryExpr:
+		sp = &e.Span
+	case *ast.AssignOpExpr:
+		sp = &e.Span
+	case *ast.CallExpr:
+		sp = &e.Span
+	default:
+		return
+	}
+	ps := pe.Span
+	if sp.Lo.File != ps.Lo.File || ps.Lo.Off > sp.Lo.Off || ps.Hi.Off < sp.Hi.Off {
+		return
+	}
+	*sp = ps
+}
+
 func (p *Parser) parseParenExpr() ast.Expr {
 	lo := p.lo()
-	p.expect("(")
+	open := p.expect("(")
 	if p.eat(")") {
 		return &ast.TupleExpr{ExprBase: p.eb(lo)}
 	}
 	first := p.parseExpr()
-	if p.eat(")") {
-		return &ast.ParenExpr{ExprBase: p.eb(lo), X: first}
+	if p.is(")") {
+		closeTok := p.next()
+		pe := &ast.ParenExpr{ExprBase: p.eb(lo), X: first}
+		widenParenInner(open, closeTok, pe)
+		return pe
 	}
 	elems := []ast.Expr{first}
 	for p.eat(",") {

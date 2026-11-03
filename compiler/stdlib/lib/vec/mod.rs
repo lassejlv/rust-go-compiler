@@ -283,7 +283,6 @@ impl<T> Vec<T> {
 
     /// Removes an element from the vector and returns it, replacing it with the last element.
     #[inline]
-    #[track_caller]
     pub fn swap_remove(&mut self, index: usize) -> T {
         let len = self.len;
         if index >= len {
@@ -478,7 +477,6 @@ impl<T> Vec<T> {
     }
 
     /// Removes the specified range from the vector in bulk, returning all removed elements as an iterator.
-    #[track_caller]
     pub fn drain<R>(&mut self, range: R) -> Drain<'_, T>
     where
         R: RangeBounds<usize>,

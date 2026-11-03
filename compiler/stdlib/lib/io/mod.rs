@@ -362,7 +362,15 @@ pub trait Write {
 
     /// Writes a formatted string into this writer.
     fn write_fmt(&mut self, args: fmt::Arguments<'_>) -> Result<()> {
-        self.write_all(args.as_formatted_str().as_bytes())
+        // each piece the formatting wrote is a separate `write_all`, like
+        // rustc's adapter over `fmt::write`
+        let n = args.segment_count();
+        let mut i = 0;
+        while i < n {
+            self.write_all(args.segment(i).as_bytes())?;
+            i += 1;
+        }
+        Ok(())
     }
 
     /// Creates a "by reference" adapter for this instance of `Write`.

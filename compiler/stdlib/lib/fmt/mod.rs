@@ -53,20 +53,72 @@ pub struct Arguments<'a> {
     s: crate::string::String,
     // the format string when it has no arguments (see `as_str`)
     lit: Option<&'static str>,
+    // byte offsets in `s` where the formatting wrote a new piece (each
+    // `write_str`/`write_char` of the formatter): writers get the pieces as
+    // separate writes, like rustc's `fmt::write`
+    marks: Marks,
     _marker: PhantomData<&'a ()>,
+}
+
+const INLINE_MARKS: usize = 10;
+
+/// Piece boundaries recorded while formatting (see `Arguments::marks`):
+/// the first few inline, so that formatting allocates nothing for them.
+/// (Offsets past 4 GiB are not recorded: such pieces are merged.)
+#[derive(Clone)]
+struct Marks {
+    n: u32,
+    inline: [u32; INLINE_MARKS],
+    more: crate::vec::Vec<u32>,
+}
+
+impl Marks {
+    #[inline]
+    fn new() -> Marks {
+        Marks { n: 0, inline: [0; INLINE_MARKS], more: crate::vec::Vec::new() }
+    }
+
+    #[inline]
+    fn get(&self, i: usize) -> usize {
+        (if i < INLINE_MARKS { self.inline[i] } else { self.more[i - INLINE_MARKS] }) as usize
+    }
+
+    /// Records that a piece starts at offset `at` (> 0) unless one does.
+    #[inline]
+    fn mark(&mut self, at: usize) {
+        let n = self.n as usize;
+        if n < INLINE_MARKS {
+            if n > 0 && self.inline[n - 1] as usize == at {
+                return;
+            }
+            self.inline[n] = at as u32;
+            self.n += 1;
+            return;
+        }
+        self.mark_more(at);
+    }
+
+    #[inline(never)]
+    fn mark_more(&mut self, at: usize) {
+        if self.get(self.n as usize - 1) == at || at > u32::MAX as usize {
+            return;
+        }
+        self.more.push(at as u32);
+        self.n += 1;
+    }
 }
 
 impl<'a> Arguments<'a> {
     /// Creates `Arguments` from already formatted text (used by `format_args!`).
     #[inline]
     pub fn new(s: crate::string::String) -> Arguments<'a> {
-        Arguments { s, lit: None, _marker: PhantomData }
+        Arguments { s, lit: None, marks: Marks::new(), _marker: PhantomData }
     }
 
     /// Creates `Arguments` for a format string without arguments (`as_str` returns it).
     #[inline]
     pub fn new_const(s: &'static str) -> Arguments<'a> {
-        Arguments { s: crate::string::String::from(s), lit: Some(s), _marker: PhantomData }
+        Arguments { s: crate::string::String::from(s), lit: Some(s), marks: Marks::new(), _marker: PhantomData }
     }
 
     /// Gets the formatted string, if it has no arguments to be formatted at runtime.
@@ -85,17 +137,53 @@ impl<'a> Arguments<'a> {
     pub(crate) fn into_string(self) -> crate::string::String {
         self.s
     }
+
+    /// The number of pieces the formatting wrote (see `segment`).
+    #[inline]
+    pub(crate) fn segment_count(&self) -> usize {
+        if self.s.is_empty() { 0 } else { self.marks.n as usize + 1 }
+    }
+
+    /// The text of the `i`-th piece the formatting wrote.
+    #[inline]
+    pub(crate) fn segment(&self, i: usize) -> &str {
+        let start = if i == 0 { 0 } else { self.marks.get(i - 1) };
+        let end = if i < self.marks.n as usize { self.marks.get(i) } else { self.s.len() };
+        unsafe { self.s.get_unchecked(start..end) }
+    }
+
+    /// Writes the formatted pieces to `w`, one `write_str` each.
+    #[inline]
+    pub(crate) fn write_pieces<W: Write + ?Sized>(&self, w: &mut W) -> Result {
+        let len = self.s.len();
+        if self.marks.n == 0 {
+            if len == 0 {
+                return Ok(());
+            }
+            return w.write_str(self.s.as_str());
+        }
+        let n = self.marks.n as usize;
+        let mut start = 0;
+        let mut i = 0;
+        while i <= n {
+            let end = if i < n { self.marks.get(i) } else { len };
+            w.write_str(unsafe { self.s.get_unchecked(start..end) })?;
+            start = end;
+            i += 1;
+        }
+        Ok(())
+    }
 }
 
 impl<'a> Debug for Arguments<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        f.write_str(self.s.as_str())
+        self.write_pieces(f)
     }
 }
 
 impl<'a> Display for Arguments<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        f.write_str(self.s.as_str())
+        self.write_pieces(f)
     }
 }
 
@@ -107,7 +195,7 @@ pub fn format(args: Arguments<'_>) -> crate::string::String {
 
 /// Writes formatted output into a `Write` sink.
 pub fn write<W: Write + ?Sized>(output: &mut W, args: Arguments<'_>) -> Result {
-    output.write_str(args.as_formatted_str())
+    args.write_pieces(output)
 }
 
 // Flag bits (as passed by `format_args!` to `set_spec`).
@@ -136,6 +224,9 @@ pub struct Formatter<'a> {
     depth: usize,
     /// Whether the last character written was a newline (for indentation).
     on_newline: bool,
+    /// Where to record the start of each write (see `Arguments::marks`);
+    /// null when not recording.
+    marks: *mut Marks,
     _marker: PhantomData<&'a ()>,
 }
 
@@ -169,6 +260,7 @@ impl<'a> Formatter<'a> {
             precision: None,
             depth: 0,
             on_newline: true,
+            marks: 0 as *mut Marks,
             _marker: PhantomData,
         }
     }
@@ -195,9 +287,24 @@ impl<'a> Formatter<'a> {
         self.buf.as_str()
     }
 
+    /// Records that a new piece starts at the end of the buffer.
+    #[inline]
+    fn mark(&mut self) {
+        let n = self.buf.len();
+        if n != 0 {
+            unsafe { (*self.marks).mark(n) }
+        }
+    }
+
     /// Writes some data to the underlying buffer.
     #[inline]
     pub fn write_str(&mut self, data: &str) -> Result {
+        if !self.marks.is_null() {
+            if data.is_empty() {
+                return Ok(());
+            }
+            self.mark();
+        }
         if self.depth == 0 {
             self.buf.push_str(data);
             return Ok(());
@@ -231,6 +338,9 @@ impl<'a> Formatter<'a> {
     /// Writes a single character to the underlying buffer.
     #[inline]
     pub fn write_char(&mut self, c: char) -> Result {
+        if !self.marks.is_null() {
+            self.mark();
+        }
         if self.depth == 0 || c != '\n' && !self.on_newline {
             self.buf.push(c);
             if self.depth != 0 {
@@ -246,7 +356,11 @@ impl<'a> Formatter<'a> {
     /// Writes some formatted information into this instance.
     #[inline]
     pub fn write_fmt(&mut self, fmt: Arguments<'_>) -> Result {
-        self.write_str(fmt.as_formatted_str())
+        if self.marks.is_null() {
+            // the pieces only matter to a recording formatter
+            return self.write_str(fmt.as_formatted_str());
+        }
+        fmt.write_pieces(self)
     }
 
     #[inline]
@@ -538,7 +652,7 @@ impl<'a> Write for Formatter<'a> {
 
     #[inline]
     fn write_fmt(&mut self, args: Arguments<'_>) -> Result {
-        Formatter::write_str(self, args.as_formatted_str())
+        Formatter::write_fmt(self, args)
     }
 }
 
@@ -556,7 +670,7 @@ pub trait Write {
 
     /// Glue for usage of the `write!` macro with implementors of this trait.
     fn write_fmt(&mut self, args: Arguments<'_>) -> Result {
-        self.write_str(args.as_formatted_str())
+        args.write_pieces(self)
     }
 }
 
@@ -648,6 +762,23 @@ pub struct __Spec {
 #[inline(never)]
 pub fn __format(pieces: &[&'static str], specs: &[__Spec], args: &[__Arg<'_>]) -> crate::string::String {
     let mut f = Formatter::new();
+    __format_into(&mut f, pieces, specs, args);
+    f.into_string()
+}
+
+/// Like `__format`, but builds the `Arguments` of `format_args!`,
+/// remembering the pieces the formatting wrote.
+#[doc(hidden)]
+#[inline(never)]
+pub fn __format_args<'a>(pieces: &[&'static str], specs: &[__Spec], args: &[__Arg<'_>]) -> Arguments<'a> {
+    let mut marks = Marks::new();
+    let mut f = Formatter::new();
+    f.marks = &mut marks;
+    __format_into(&mut f, pieces, specs, args);
+    Arguments { s: f.buf, lit: None, marks, _marker: PhantomData }
+}
+
+fn __format_into(f: &mut Formatter<'_>, pieces: &[&'static str], specs: &[__Spec], args: &[__Arg<'_>]) {
     let mut i = 0;
     while i < args.len() {
         let p = pieces[i];
@@ -661,22 +792,21 @@ pub fn __format(pieces: &[&'static str], specs: &[__Spec], args: &[__Arg<'_>]) -
             f.set_spec(' ', 0, 0, None, None);
         }
         let _ = match args[i] {
-            __Arg::Display(a) => a.fmt(&mut f),
-            __Arg::Debug(a) => a.fmt(&mut f),
-            __Arg::LowerHex(a) => a.fmt(&mut f),
-            __Arg::UpperHex(a) => a.fmt(&mut f),
-            __Arg::Octal(a) => a.fmt(&mut f),
-            __Arg::Binary(a) => a.fmt(&mut f),
-            __Arg::LowerExp(a) => a.fmt(&mut f),
-            __Arg::UpperExp(a) => a.fmt(&mut f),
-            __Arg::Pointer(a) => a.fmt(&mut f),
+            __Arg::Display(a) => a.fmt(f),
+            __Arg::Debug(a) => a.fmt(f),
+            __Arg::LowerHex(a) => a.fmt(f),
+            __Arg::UpperHex(a) => a.fmt(f),
+            __Arg::Octal(a) => a.fmt(f),
+            __Arg::Binary(a) => a.fmt(f),
+            __Arg::LowerExp(a) => a.fmt(f),
+            __Arg::UpperExp(a) => a.fmt(f),
+            __Arg::Pointer(a) => a.fmt(f),
         };
         i += 1;
     }
     if i < pieces.len() && !pieces[i].is_empty() {
         let _ = f.write_str(pieces[i]);
     }
-    f.into_string()
 }
 
 /// `?` formatting.

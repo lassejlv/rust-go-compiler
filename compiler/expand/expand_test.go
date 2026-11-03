@@ -352,7 +352,7 @@ const specNone = "::std::option::Option::None"
 
 func TestFormatArgsBasic(t *testing.T) {
 	got := expandExprSrc(t, "", `format_args!("a{}b{:?}", x + 1, y)`)
-	want := `::std::fmt::Arguments::new(::std::fmt::__format(&["a", "b"], &[], &[::std::fmt::__Arg::new_display(&(x + 1)), ::std::fmt::__Arg::new_debug(&y)]))`
+	want := `(::std::fmt::__format_args(&["a", "b"], &[], &[::std::fmt::__Arg::new_display(&(x + 1)), ::std::fmt::__Arg::new_debug(&y)]))`
 	if got != want {
 		t.Errorf("got\n%s\nwant\n%s", got, want)
 	}
@@ -366,10 +366,10 @@ func TestFormatArgsNoArgs(t *testing.T) {
 	}
 	// raw string format strings
 	got = expandExprSrc(t, "", `format_args!(r#"say "{}""#, v,)`)
-	contains(t, got, `__format(&["say \"", "\""], &[], &[::std::fmt::__Arg::new_display(&v)])`)
+	contains(t, got, `__format_args(&["say \"", "\""], &[], &[::std::fmt::__Arg::new_display(&v)])`)
 	// literal arguments of `{}` are inlined (like rustc)
 	got = expandExprSrc(t, "", `format_args!("{} {:?} {} {}", "s", 1, x, 0x10)`)
-	contains(t, got, `__format(&["s ", " ", " 16"], &[], &[::std::fmt::__Arg::new_debug(&1), ::std::fmt::__Arg::new_display(&x)])`)
+	contains(t, got, `__format_args(&["s ", " ", " 16"], &[], &[::std::fmt::__Arg::new_debug(&1), ::std::fmt::__Arg::new_display(&x)])`)
 	if got := expandExprSrc(t, "", `format_args!("{}-{}", "a", 2u8)`); got != `::std::fmt::Arguments::new_const("a-2")` {
 		t.Errorf("inlined literals: %s", got)
 	}
@@ -400,7 +400,7 @@ func TestFormatSpecs(t *testing.T) {
 		{`format_args!("{:'>4}", x)`, `fill: '\'', align: 2u8`},
 		{`format_args!("{:\\<4}", x)`, `fill: '\\', align: 1u8`},
 		// placeholders with the default spec need no spec array
-		{`format_args!("{} {:?}", x, y)`, `__format(&["", " "], &[], &[`},
+		{`format_args!("{} {:?}", x, y)`, `__format_args(&["", " "], &[], &[`},
 	}
 	for _, c := range cases {
 		got := expandExprSrc(t, "", c.src)
@@ -496,11 +496,11 @@ func TestPrintMacros(t *testing.T) {
 
 func TestWriteMacros(t *testing.T) {
 	got := expandExprSrc(t, "", `write!(f, "{}", x)`)
-	if !strings.HasPrefix(got, "f.write_fmt(::std::fmt::Arguments::new(::std::fmt::__format(") {
+	if !strings.HasPrefix(got, "f.write_fmt((::std::fmt::__format_args(") {
 		t.Errorf("write!: %s", got)
 	}
 	got = expandExprSrc(t, "", `writeln!(self.out, "v={}", x)`)
-	contains(t, got, "(self.out).write_fmt(", `__format(&["v=", "\n"]`)
+	contains(t, got, "(self.out).write_fmt(", `__format_args(&["v=", "\n"]`)
 	got = expandExprSrc(t, "", `writeln!(f)`)
 	if got != `f.write_fmt(::std::fmt::Arguments::new_const("\n"))` {
 		t.Errorf("writeln!(f): %s", got)
@@ -521,7 +521,7 @@ func TestPanicMacros(t *testing.T) {
 		`::std::rt::panic_fmt(::std::fmt::Arguments::new_const("boom 1"), "test.rs", 3, 5);`,
 		`"test.rs", 3, 5);`,
 		`::std::rt::panic_str("internal error: entered unreachable code", "test.rs", 4, 5);`,
-		`__format(&["internal error: entered unreachable code: x="], &[], &[::std::fmt::__Arg::new_display(&x)])`,
+		`__format_args(&["internal error: entered unreachable code: x="], &[], &[::std::fmt::__Arg::new_display(&x)])`,
 		`::std::rt::panic_str("not yet implemented", "test.rs", 6, 5);`,
 		`::std::rt::panic_fmt(::std::fmt::Arguments::new_const("not yet implemented: later"), "test.rs", 7, 5);`,
 		`::std::rt::panic_str("not implemented", "test.rs", 8, 5);`,
@@ -546,9 +546,9 @@ func TestAssertMacros(t *testing.T) {
 	b := fnBody(t, c, "main")
 	contains(t, b,
 		`if !(v.len() > 0) { ::std::rt::panic_str("assertion failed: v.len() > 0", "test.rs", 2, 5) }`,
-		`if !(a == b) { ::std::rt::panic_fmt(::std::fmt::Arguments::new(::std::fmt::__format(&["a=", " b="], &[], &[::std::fmt::__Arg::new_display(&a), ::std::fmt::__Arg::new_display(&b)])), "test.rs", 3, 5) }`,
+		`if !(a == b) { ::std::rt::panic_fmt((::std::fmt::__format_args(&["a=", " b="], &[], &[::std::fmt::__Arg::new_display(&a), ::std::fmt::__Arg::new_display(&b)])), "test.rs", 3, 5) }`,
 		`match (&(x + 1), &(2)) { (left_val, right_val) => { if !(*left_val == *right_val) { ::std::rt::assert_failed("==", &*left_val, &*right_val, ::std::option::Option::None, "test.rs", 4, 5); } }, }`,
-		`match (&(x), &(y)) { (left_val, right_val) => { if *left_val == *right_val { ::std::rt::assert_failed("!=", &*left_val, &*right_val, ::std::option::Option::Some(::std::fmt::Arguments::new(::std::fmt::__format(&["msg "], &[], &[::std::fmt::__Arg::new_display(&z)]))), "test.rs", 5, 5); } }, }`,
+		`match (&(x), &(y)) { (left_val, right_val) => { if *left_val == *right_val { ::std::rt::assert_failed("!=", &*left_val, &*right_val, ::std::option::Option::Some((::std::fmt::__format_args(&["msg "], &[], &[::std::fmt::__Arg::new_display(&z)]))), "test.rs", 5, 5); } }, }`,
 		`"test.rs", 5, 5); } }, }`,
 		`if !(ok) { ::std::rt::panic_str("assertion failed: ok", "test.rs", 6, 5) }`,
 		`assert_failed("==", &*left_val, &*right_val, ::std::option::Option::None, "test.rs", 7, 5)`,
@@ -604,7 +604,7 @@ func TestDbg(t *testing.T) {
 	noMacros(t, c)
 	b := fnBody(t, c, "main")
 	contains(t, b,
-		`let a = match (x * 2) { tmp => { ::std::io::_eprint(::std::fmt::Arguments::new(::std::fmt::__format(&["[test.rs:2:13] x * 2 = ", "\n"], &[::std::fmt::__Spec { fill: ' ', align: 0u8, flags: 4u32, width: `+specNone+`, precision: `+specNone+` }], &[::std::fmt::__Arg::new_debug(&(&tmp))]))); tmp }, };`,
+		`let a = match (x * 2) { tmp => { ::std::io::_eprint((::std::fmt::__format_args(&["[test.rs:2:13] x * 2 = ", "\n"], &[::std::fmt::__Spec { fill: ' ', align: 0u8, flags: 4u32, width: `+specNone+`, precision: `+specNone+` }], &[::std::fmt::__Arg::new_debug(&(&tmp))]))); tmp }, };`,
 		`::std::io::_eprint(::std::fmt::Arguments::new_const("[test.rs:3:5]\n"));`,
 		`let (p, q) = (match 1 { tmp =>`,
 		`"[test.rs:4:18] 1 = "`,
