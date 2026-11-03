@@ -1244,6 +1244,9 @@ func (fc *fnGen) callResolvedSpan(d *Def, args []Ty, vals []string, ret Ty, sp a
 func (fc *fnGen) builtinTraitCall(d *Def, args []Ty, vals []string, ret Ty) string {
 	switch d.Parent.LangItem {
 	case "clone":
+		if args[0].Kind == TClosure && !fc.g.tcx.IsCopy(args[0]) {
+			return fmt.Sprintf("%s(%s)", fc.g.closureCloneFn(args[0]), vals[0])
+		}
 		// bitwise copy of *self
 		return "(*" + vals[0] + ")"
 	case "fn", "fn_mut", "fn_once":
@@ -1279,6 +1282,50 @@ func (fc *fnGen) builtinTraitCall(d *Def, args []Ty, vals []string, ret Ty) stri
 	}
 	fc.g.fatalf("unsupported builtin trait method `%s` for `%s`", d.Path(), args[0])
 	return ""
+}
+
+// closureCloneFn returns a function cloning a closure capture by capture
+// (a closure is Clone when its by-value captures are).
+func (g *Gen) closureCloneFn(t Ty) string {
+	key := "cclone|" + t.Key()
+	if n, ok := g.vtables[key]; ok {
+		return n
+	}
+	g.fnN++
+	name := fmt.Sprintf("cclone%d", g.fnN)
+	g.vtables[key] = name
+	g.defineByValue(t)
+	ct := g.ctype(t)
+	ci := g.tcx.Closures[t]
+	var b strings.Builder
+	fmt.Fprintf(&b, "static %s %s(%s* self) { %s r;", ct, name, ct, ct)
+	for i, c := range ci.Captures {
+		if c.ByRef {
+			fmt.Fprintf(&b, " r.c%d = self->c%d;", i, i)
+			continue
+		}
+		fmt.Fprintf(&b, " r.c%d = %s;", i, g.cloneValue(c.Ty, fmt.Sprintf("&self->c%d", i)))
+	}
+	b.WriteString(" return r; }\n")
+	fmt.Fprintf(&g.protos, "static %s %s(%s* self);\n", ct, name, ct)
+	g.fns.WriteString(b.String())
+	return name
+}
+
+// cloneValue is a C expression cloning the value of type ty at ptr.
+func (g *Gen) cloneValue(ty Ty, ptr string) string {
+	if g.tcx.IsCopy(ty) {
+		return "(*" + ptr + ")"
+	}
+	if ty.Kind == TClosure {
+		return fmt.Sprintf("%s(%s)", g.closureCloneFn(ty), ptr)
+	}
+	cl := g.tcx.Lang("clone").Trait.Items["clone"]
+	rd, rargs, ok := g.tcx.ResolveAssocFn(cl, []Ty{ty})
+	if !ok || rd == nil || rd.Fn == nil || rd.Fn.Ast == nil || rd.Fn.Ast.Body == nil {
+		g.fatalf("error: no implementation of `Clone::clone` for `%s`", ty)
+	}
+	return fmt.Sprintf("%s(%s)", g.fnName(rd, rargs), ptr)
 }
 
 // closurePtrThunk returns a plain function pointer for a non-capturing closure.

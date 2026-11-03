@@ -520,6 +520,10 @@ impl<T> DoubleEndedIterator for IntoIter<T> {
 }
 
 impl<T, E> IntoIterator for Result<T, E> {
+    #[inline]
+    fn __flatten_bounds() -> (usize, Option<usize>) {
+        (0, Some(1))
+    }
     type Item = T;
     type IntoIter = IntoIter<T>;
     #[inline]
@@ -529,6 +533,10 @@ impl<T, E> IntoIterator for Result<T, E> {
 }
 
 impl<'a, T, E> IntoIterator for &'a Result<T, E> {
+    #[inline]
+    fn __flatten_bounds() -> (usize, Option<usize>) {
+        (0, Some(1))
+    }
     type Item = &'a T;
     type IntoIter = Iter<'a, T>;
     fn into_iter(self) -> Iter<'a, T> {
@@ -537,6 +545,10 @@ impl<'a, T, E> IntoIterator for &'a Result<T, E> {
 }
 
 impl<'a, T, E> IntoIterator for &'a mut Result<T, E> {
+    #[inline]
+    fn __flatten_bounds() -> (usize, Option<usize>) {
+        (0, Some(1))
+    }
     type Item = &'a mut T;
     type IntoIter = IterMut<'a, T>;
     fn into_iter(self) -> IterMut<'a, T> {

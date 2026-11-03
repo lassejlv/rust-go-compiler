@@ -832,16 +832,44 @@ where
     }
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let flo = match &self.frontiter {
-            Some(it) => it.size_hint().0,
-            None => 0,
+        let front = match &self.frontiter {
+            Some(it) => it.size_hint(),
+            None => (0, Some(0)),
         };
-        let blo = match &self.backiter {
-            Some(it) => it.size_hint().0,
-            None => 0,
+        let back = match &self.backiter {
+            Some(it) => it.size_hint(),
+            None => (0, Some(0)),
         };
-        (flo.saturating_add(blo), None)
+        flatten_size_hint(front, back, self.iter.size_hint(), U::__flatten_bounds())
     }
+}
+
+/// `Flatten`/`FlatMap::size_hint`: the partially consumed front and back
+/// inner iterators plus, per remaining outer item, the bounds its type
+/// guarantees (exact for arrays, at most one for `Option`/`Result`).
+fn flatten_size_hint(
+    front: (usize, Option<usize>),
+    back: (usize, Option<usize>),
+    outer: (usize, Option<usize>),
+    per_item: (usize, Option<usize>),
+) -> (usize, Option<usize>) {
+    let lo = front.0.saturating_add(back.0).saturating_add(outer.0.saturating_mul(per_item.0));
+    let rest = match outer.1 {
+        Some(0) => Some(0),
+        Some(n) => match per_item.1 {
+            Some(m) => n.checked_mul(m),
+            None => None,
+        },
+        None => None,
+    };
+    let hi = match (front.1, back.1, rest) {
+        (Some(a), Some(b), Some(c)) => match a.checked_add(b) {
+            Some(ab) => ab.checked_add(c),
+            None => None,
+        },
+        _ => None,
+    };
+    (lo, hi)
 }
 
 impl<I: DoubleEndedIterator, U, F> DoubleEndedIterator for FlatMap<I, U, F>
@@ -947,15 +975,15 @@ where
     }
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let flo = match &self.frontiter {
-            Some(it) => it.size_hint().0,
-            None => 0,
+        let front = match &self.frontiter {
+            Some(it) => it.size_hint(),
+            None => (0, Some(0)),
         };
-        let blo = match &self.backiter {
-            Some(it) => it.size_hint().0,
-            None => 0,
+        let back = match &self.backiter {
+            Some(it) => it.size_hint(),
+            None => (0, Some(0)),
         };
-        (flo.saturating_add(blo), None)
+        flatten_size_hint(front, back, self.iter.size_hint(), <I::Item as IntoIterator>::__flatten_bounds())
     }
 }
 

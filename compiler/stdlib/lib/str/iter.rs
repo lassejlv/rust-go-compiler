@@ -92,10 +92,16 @@ impl<'a> fmt::Debug for Chars<'a> {
 }
 
 /// An iterator over the `char`s of a string slice, and their positions.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 #[must_use]
 pub struct CharIndices<'a> {
     iter: Chars<'a>,
+}
+
+impl<'a> fmt::Debug for CharIndices<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("CharIndices").field("front_offset", &self.iter.front).field("iter", &self.iter).finish()
+    }
 }
 
 impl<'a> CharIndices<'a> {

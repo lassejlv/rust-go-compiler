@@ -667,8 +667,12 @@ impl<T: Clone> Clone for Vec<T> {
     }
 
     fn clone_from(&mut self, source: &Self) {
-        self.clear();
-        self.extend_from_slice(source.as_slice());
+        // drop what will not be overwritten, reuse the shared prefix's
+        // values (T::clone_from), clone the rest
+        self.truncate(source.len());
+        let (init, tail) = source.as_slice().split_at(self.len());
+        self.as_mut_slice().clone_from_slice(init);
+        self.extend_from_slice(tail);
     }
 }
 

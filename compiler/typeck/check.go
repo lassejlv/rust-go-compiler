@@ -46,6 +46,9 @@ type FnCtxt struct {
 	// argument type hints from the expected call result type
 	nextHints []Ty
 	argHints  []Ty
+	// closureHints: expected types (from argument hints) for closures at
+	// the tail of block arguments (`Box::new({ let k = 1; move |x| .. })`)
+	closureHints map[ast.NodeID]Ty
 	// diverging: inference variables that received a `!` value; they fall
 	// back to `()` (never-type fallback).
 	diverging []Ty

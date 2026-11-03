@@ -114,6 +114,10 @@ type ClosureInfo struct {
 	Captures   []*Capture
 	Results    *Results // owning body's results
 	Params     []*Local
+	// Sealed: the owning body is fully checked (signature resolved, kind
+	// and captures final), so trait answers about the closure can be
+	// cached globally.
+	Sealed bool
 }
 
 // ForInfo records how a for loop iterates.

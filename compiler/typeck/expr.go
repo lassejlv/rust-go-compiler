@@ -800,6 +800,15 @@ func (fcx *FnCtxt) checkRef(x *ast.RefExpr, expected Ty) Ty {
 			if h := fcx.shallow(hint); h.Kind == TAdt && h.IsUnsized() && !isPlaceExprTy(x.X) {
 				hint = nil
 			}
+			// likewise a call's result: an unsized expectation must not
+			// flow into the callee's generics (`&id([1u8, 2])` where `&[u8]`
+			// is expected infers `[u8; 2]`, then unsizes)
+			if h := fcx.shallow(hint); h != nil && h.IsUnsized() {
+				switch unparenExpr(x.X).(type) {
+				case *ast.CallExpr, *ast.MethodCallExpr:
+					hint = nil
+				}
+			}
 		}
 	}
 	t := fcx.checkExpr(x.X, hint)

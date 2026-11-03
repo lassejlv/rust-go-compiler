@@ -111,8 +111,8 @@ func (ic *InferCtxt) selectTrait(tr *TraitRef, depth int) Selection {
 	// cache them globally (typenum-style recursive impls are exponential
 	// otherwise)
 	args := ic.resolveList(tr.Args)
-	key, cacheable := concreteKey(tr.Trait, args, "")
 	t := ic.t
+	key, cacheable := t.concreteKey(tr.Trait, args, "")
 	if cacheable {
 		if sel, ok := t.selCache[key]; ok {
 			return sel
@@ -123,7 +123,23 @@ func (ic *InferCtxt) selectTrait(tr *TraitRef, depth int) Selection {
 		t.selActive[key] = true
 		defer delete(t.selActive, key)
 	}
+	var qc *canonicalizer
+	var qkey string
+	if !cacheable {
+		hit, out, c, k := ic.closureQuery("sel", tr.Trait, args, "")
+		if hit != nil {
+			sel := hit.sel
+			if len(out) > 0 {
+				sel.Args = out
+			}
+			return sel
+		}
+		qc, qkey = c, k
+	}
 	sel := ic.selectTraitUncached(&TraitRef{Trait: tr.Trait, Args: args}, depth)
+	if qc != nil && sel.Kind != SelAmbig {
+		ic.recordQuery(qc, qkey, sel.Args, sel)
+	}
 	if cacheable && sel.Kind != SelAmbig {
 		ok := true
 		for _, a := range sel.Args {
@@ -141,7 +157,7 @@ func (ic *InferCtxt) selectTrait(tr *TraitRef, depth int) Selection {
 
 // concreteKey identifies a trait ref (plus an optional assoc item name)
 // whose args contain neither inference variables nor type parameters.
-func concreteKey(trait *Def, args []Ty, name string) (string, bool) {
+func (t *Tcx) concreteKey(trait *Def, args []Ty, name string) (string, bool) {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%p", trait)
 	for _, a := range args {
@@ -152,7 +168,7 @@ func concreteKey(trait *Def, args []Ty, name string) (string, bool) {
 		// under inference although the type itself looks concrete
 		volatile := false
 		Walk(a, func(x Ty) bool {
-			if x.Kind == TClosure || x.Kind == TOpaque {
+			if x.Kind == TOpaque || x.Kind == TClosure && !t.sealedClosure(x) {
 				volatile = true
 			}
 			return !volatile
@@ -482,8 +498,13 @@ func (ic *InferCtxt) confirmImpl(impl *Def, args []Ty, depth int) {
 			if len(sp.Trait.Args) == 0 || sp.Trait.Args[0] == nil {
 				continue
 			}
-			if self := ic.shallow(sp.Trait.Args[0]); self.Kind == TInfer && self.Sub != 0 {
-				ic.selectTrait(sp.Trait, depth+1)
+			// likewise `K: Borrow<Q>` with Q a literal's variable
+			// (`map[&1]` on a `HashMap<u32, _>` → Q = u32)
+			for _, a := range sp.Trait.Args {
+				if a := ic.shallow(a); a != nil && a.Kind == TInfer && a.Sub != 0 {
+					ic.selectTrait(sp.Trait, depth+1)
+					break
+				}
 			}
 			continue
 		}
@@ -552,8 +573,23 @@ func (ic *InferCtxt) builtinClone(self Ty, depth int) (Selection, bool) {
 	case TFnDef, TFnPtr, TNever:
 		return Selection{Kind: SelBuiltin}, true
 	case TClosure:
-		r, _ := ic.builtinCopy(self, depth)
-		return r, true
+		// closures are Clone when their captures are (unique borrows
+		// are not)
+		ci := ic.t.Closures[self]
+		if ci == nil {
+			return Selection{Kind: SelAmbig}, true
+		}
+		var tys []Ty
+		for _, c := range ci.Captures {
+			if c.ByRef {
+				if c.Mut {
+					return Selection{Kind: SelNone}, true
+				}
+				continue
+			}
+			tys = append(tys, c.Ty)
+		}
+		return ic.allImpl(tys, "clone", depth), true
 	case TInfer:
 		if self.Sub != 0 {
 			return Selection{Kind: SelBuiltin}, true
@@ -661,8 +697,8 @@ func (ic *InferCtxt) builtinFn(tr *TraitRef, self Ty, depth int) (Selection, boo
 // if it cannot (yet) be determined.
 func (ic *InferCtxt) normalizeProjection(trait *Def, args []Ty, name string, depth int) Ty {
 	args = ic.resolveList(args)
-	key, cacheable := concreteKey(trait, args, name)
 	t := ic.t
+	key, cacheable := t.concreteKey(trait, args, name)
 	if cacheable {
 		if n, ok := t.projCache[key]; ok {
 			return n
@@ -673,7 +709,19 @@ func (ic *InferCtxt) normalizeProjection(trait *Def, args []Ty, name string, dep
 		t.projActive[key] = true
 		defer delete(t.projActive, key)
 	}
+	var qc *canonicalizer
+	var qkey string
+	if !cacheable {
+		hit, out, c, k := ic.closureQuery("proj", trait, args, name)
+		if hit != nil {
+			return out[0]
+		}
+		qc, qkey = c, k
+	}
 	n := ic.normalizeProjectionUncached(trait, args, name, depth)
+	if qc != nil && n != nil {
+		ic.recordQuery(qc, qkey, []Ty{n}, Selection{})
+	}
 	if cacheable && n != nil {
 		if r := ic.resolve(n); !r.HasInfer() {
 			t.projCache[key] = r
@@ -692,6 +740,35 @@ func (ic *InferCtxt) normalizeProjectionUncached(trait *Def, args []Ty, name str
 		return TyErr
 	}
 	if self.Kind == TInfer && self.Sub == 0 {
+		// a not-yet-revealed `impl Trait` value (a variable pending
+		// reveal): its declared bounds give the associated types
+		// (`impl Iterator<Item = &mut T>` with T still inferred)
+		for _, o := range ic.obligations {
+			if o.Done || o.Proj == nil || o.Proj.Kind != TOpaque || ic.shallow(o.Var) != self {
+				continue
+			}
+			op := Opaque(o.Proj.Def, ic.resolveList(o.Proj.Args), o.Proj.Index)
+			n := ic.normalizeProjection(trait, append([]Ty{op}, args[1:]...), name, depth+1)
+			if n == nil {
+				return nil
+			}
+			n = ic.resolve(n)
+			if n.HasOpaque() {
+				// the opaque type itself stands for the variable
+				// (`<impl Iterator as IntoIterator>::IntoIter`)
+				op = ic.resolve(op)
+				n = Fold(n, func(x Ty) Ty {
+					if x == op {
+						return self
+					}
+					return nil
+				})
+				if n.HasOpaque() {
+					return nil // would leak an unrevealed opaque type
+				}
+			}
+			return n
+		}
 		return nil
 	}
 	if self.Kind == TParam || self.Kind == TProjection {
@@ -960,7 +1037,11 @@ func (ic *InferCtxt) canonicalKey(tr *TraitRef) (string, bool) {
 				v := CanonicalVar(len(vars), x.Sub)
 				vars[x] = v
 				return v
-			case TClosure, TOpaque:
+			case TClosure:
+				if !ic.t.sealedClosure(x) {
+					volatile = true
+				}
+			case TOpaque:
 				volatile = true
 			}
 			return nil
@@ -968,4 +1049,11 @@ func (ic *InferCtxt) canonicalKey(tr *TraitRef) (string, bool) {
 		fmt.Fprintf(&b, ",%p", c)
 	}
 	return b.String(), !volatile
+}
+
+// sealedClosure reports whether a closure type's signature, kind and
+// captures are final (its body has been written back).
+func (t *Tcx) sealedClosure(c Ty) bool {
+	ci := t.Closures[c]
+	return ci != nil && ci.Sealed
 }
