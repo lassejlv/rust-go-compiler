@@ -340,6 +340,9 @@ type Crate struct {
 	Ast  *ast.Crate
 	// Edition is "2015", "2018", "2021" or "2024" ("" = 2021).
 	Edition string
+	// ProcMacroStub: a proc-macro crate registered only by its macro names
+	// (bound as modules in the type namespace; really the macro namespace).
+	ProcMacroStub bool
 	// Externs is the extern prelude: dependency crates by name. nil means
 	// "every loaded crate" (single-file compilation).
 	Externs map[string]*Crate

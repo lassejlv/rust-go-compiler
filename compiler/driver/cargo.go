@@ -833,6 +833,7 @@ func (bs *buildState) compileProgram(units []*crateUnit, binIdx int) (*codegen.P
 func procMacroStub(r *resolve.Resolver, u *crateUnit, ms map[string]*expand.ProcMacro) *Crate {
 	stub := r.AddCrate(u.key, &ast.Crate{})
 	stub.Edition = u.edition
+	stub.ProcMacroStub = true
 	names := make([]string, 0, len(ms))
 	for n := range ms {
 		names = append(names, n)

@@ -823,7 +823,7 @@ func (r *Resolver) bindImport(m *Module, imp *Import, ns Namespace, res Res) {
 	if ok && !old.Import {
 		// items shadow glob imports; a single import may not name the
 		// same thing as an item of the module (E0255)
-		if !imp.Glob && old.Res != res && r.checkDupImports(m) {
+		if !imp.Glob && old.Res != res && r.checkDupImports(m) && !macroRes(res) {
 			r.reportDupImport(imp, "E0255", name)
 		}
 		return
@@ -831,7 +831,7 @@ func (r *Resolver) bindImport(m *Module, imp *Import, ns Namespace, res Res) {
 	if ok && old.Res == res {
 		return
 	}
-	if ok && !imp.Glob && r.checkDupImports(m) {
+	if ok && !imp.Glob && r.checkDupImports(m) && !macroRes(res) && !macroRes(old.Res) {
 		if prev := r.bindingImport[old]; prev != nil && prev != imp && !prev.Glob && prev.Module == imp.Module {
 			// two single imports of one name in one namespace (E0252)
 			r.reportDupImport(imp, "E0252", name)
@@ -1417,4 +1417,10 @@ func (r *Resolver) reportDupImport(imp *Import, code, name string) {
 	}
 	r.dupReported[imp] = true
 	r.Errors = append(r.Errors, fmt.Sprintf("%s: error[%s]: the name `%s` is defined multiple times", imp.Span.Lo, code, name))
+}
+
+// macroRes reports a binding of a proc macro (modelled as a module of a
+// proc-macro stub crate; macros live in their own namespace).
+func macroRes(res Res) bool {
+	return res.Def != nil && res.Def.Crate != nil && res.Def.Crate.ProcMacroStub
 }
