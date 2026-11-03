@@ -618,6 +618,13 @@ impl fmt::Write for String {
         self.push(c);
         Ok(())
     }
+
+    #[inline]
+    fn write_fmt(&mut self, args: fmt::Arguments<'_>) -> fmt::Result {
+        // the pieces are not observable: append the text at once
+        self.push_str(args.as_formatted_str());
+        Ok(())
+    }
 }
 
 impl crate::str::FromStr for String {
