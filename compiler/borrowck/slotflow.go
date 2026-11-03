@@ -7,7 +7,107 @@ import (
 
 	"rustgo/compiler/ast"
 	. "rustgo/compiler/middle"
+	"rustgo/compiler/typeck"
 )
+
+// opaqueItemLabels labels, in the hidden type of an `impl Trait<Assoc =
+// X>` result (layout rl), the nodes of the concrete type of Assoc (the
+// items an iterator stores, `IntoIter<(&'s T, &'a U)>`) by X, so that
+// what is extracted from them gets X's regions instead of everything
+// the result holds at their depth. okParam vets the type parameters X
+// labels slots with.
+func opaqueItemLabels(tcx *typeck.Tcx, d *Def, it *ast.ImplTraitType, rl *layout, params map[string]bool, selfAst ast.Type, labels []string, okParam func(string, *lnode) bool) {
+	if tcx == nil || d.Fn == nil || rl.flat || rl.root.ty == nil || isWildKind(rl.root.ty) {
+		return
+	}
+	idx := -1
+	for i, a := range d.Fn.AstOpaques {
+		if a == it {
+			idx = i
+		}
+	}
+	if idx < 0 || idx >= len(d.Fn.OpaqueBounds) {
+		return
+	}
+	for _, b := range it.Bounds {
+		if b.Path == nil || len(b.Path.Segments) == 0 {
+			continue
+		}
+		seg := b.Path.Segments[len(b.Path.Segments)-1]
+		if seg.Args == nil || seg.Args.Parenthesized {
+			continue
+		}
+		for _, bd := range seg.Args.Bindings {
+			if bd.Ty == nil {
+				continue
+			}
+			var trait *Def
+			for _, p := range d.Fn.OpaqueBounds[idx] {
+				if p == nil || p.Trait == nil || len(p.Trait.Args) != 1 {
+					continue
+				}
+				for _, pb := range p.Bindings {
+					if pb.Name == bd.Name.Name && len(pb.Args) == 0 {
+						if trait != nil && trait != p.Trait.Trait {
+							return
+						}
+						trait = p.Trait.Trait
+					}
+				}
+			}
+			if trait == nil {
+				continue
+			}
+			item := tcx.Normalize(Projection(trait, []Ty{rl.root.ty}, bd.Name.Name))
+			if item == nil || item.HasProj() || item.HasOpaque() || item.HasParam() || item.HasInfer() || item.HasError() {
+				continue
+			}
+			// (not the captures of closures, which hold other things
+			// of that type)
+			var found []*lnode
+			var find func(n *lnode)
+			find = func(n *lnode) {
+				switch {
+				case n.ty == item:
+					found = append(found, n)
+				case n.ty != nil && n.ty.Kind == TClosure:
+				default:
+					for _, k := range n.kids {
+						find(k)
+					}
+				}
+			}
+			find(rl.root)
+			for _, n := range found {
+				if n == rl.root || n.start == n.end {
+					continue
+				}
+				sub := newLabeler(params, selfAst)
+				sub.out = true
+				sub.labels = make([]string, len(labels))
+				sub.proj = map[int]string{}
+				sub.occ = map[string][]*lnode{}
+				sub.walk(bd.Ty, n, 0)
+				good := len(sub.proj) == 0
+				for k := n.start; k < n.end && good; k++ {
+					if sub.labels[k] == "" || labels[k] != "" {
+						good = false
+					}
+				}
+				for name, ns := range sub.occ {
+					for _, x := range ns {
+						if !okParam(name, x) {
+							good = false
+						}
+					}
+				}
+				if good {
+					copy(labels[n.start:n.end], sub.labels[n.start:n.end])
+				}
+			}
+		}
+	}
+}
 
 // slotFlow derives the precise (per region slot) loan flow of a call from
 // the callee's declared signature, for the concrete argument and result
@@ -19,7 +119,7 @@ import (
 // like `collect::<B>()` or `F: FnMut(T) -> U`) are aligned by type or by
 // reference depth. Slots the signature does not describe keep the
 // depth-based flow.
-func slotFlow(fl *Flow, d *Def, selfAst ast.Type, params map[string]bool, gens []*ast.Generics, argTys []Ty, ret Ty, elided string, mutIn []bool) {
+func slotFlow(tcx *typeck.Tcx, fl *Flow, d *Def, selfAst ast.Type, params map[string]bool, gens []*ast.Generics, argTys []Ty, ret Ty, elided string, mutIn []bool) {
 	decl := d.Fn.Ast.Decl
 	if ret == nil {
 		return
@@ -63,6 +163,11 @@ func slotFlow(fl *Flow, d *Def, selfAst ast.Type, params map[string]bool, gens [
 		full   bool
 	}
 	w := newLabeler(params, selfAst)
+	if p := d.Parent; p != nil && p.Item != nil && selfAst != nil {
+		if im, ok := p.Item.Kind.(*ast.ImplItem); ok {
+			w.assoc = implAssocTypes(im)
+		}
+	}
 	args := make([]argInfo, len(argTys))
 	for i, t := range argTys {
 		l := layoutOf(t)
@@ -111,6 +216,13 @@ func slotFlow(fl *Flow, d *Def, selfAst ast.Type, params map[string]bool, gens [
 		for name := range a.occ {
 			inParams[name] = true
 		}
+	}
+	if it, ok := decl.Output.(*ast.ImplTraitType); ok {
+		// `impl Iterator<Item = (&'s T, &'a U)>`: the items within the
+		// hidden type have the regions the binding declares
+		opaqueItemLabels(tcx, d, it, rl, params, selfAst, out.labels, func(name string, n *lnode) bool {
+			return inParams[name] && !bad[name] && inst[name] == layoutOf(n.ty).key
+		})
 	}
 	// declared outlives relations between lifetimes ('b: 'a)
 	outlive := map[string][]string{} // 'a -> lifetimes that outlive it
@@ -218,13 +330,28 @@ func slotFlow(fl *Flow, d *Def, selfAst ast.Type, params map[string]bool, gens [
 			}
 			return
 		}
-		if caps {
-			if es, ok := capturedItems(i, s, n, al, rl); ok {
-				for _, e := range es {
-					add(e)
+		// a wrapper without regions of its own around the values
+		// (Option<Self::Item>): the values themselves, if s holds them
+		// (and no closure, which may make them or hold other values of
+		// their type)
+		for x := n; !hasClosure(s) && x.ty != nil && x.ty.Kind == TAdt && x.nlt == 0 && len(x.kids) == 1 && x.kids[0].start == x.start && x.kids[0].end == x.end; {
+			x = x.kids[0]
+			if m := findSame(s, x.ty); len(m) > 0 {
+				for _, y := range m {
+					for k := 0; k < x.end-x.start; k++ {
+						add(SlotEdge{Arg: i, From: y.start + k, To: x.start + k})
+					}
 				}
 				return
 			}
+		}
+		// values made by a closure: its summary (caps: also from what it
+		// captures; otherwise from the values it is applied to)
+		if es, ok := capturedItems(i, s, n, al, rl); ok && (caps || len(es) > 0) {
+			for _, e := range es {
+				add(e)
+			}
+			return
 		}
 		clos := map[int]bool{}
 		if !caps {
@@ -561,6 +688,50 @@ func capturedItems(i int, s, n *lnode, al, rl *layout) (edges []SlotEdge, ok boo
 		}
 	}
 	if sm.fromArgs() {
+		// the values the closure is applied to, where s holds them
+		// (outside closures) with the type of its one parameter
+		// (Map<vec::IntoIter<(&'s T, &'a U)>, F>): the result slots
+		// take the slots of the parameter the summary names
+		if len(sm.params) == 1 && !sm.params[0].flat && sm.params[0].root.ty != nil {
+			var ins []*lnode
+			var find func(x *lnode)
+			find = func(x *lnode) {
+				switch {
+				case x.ty == sm.params[0].root.ty:
+					ins = append(ins, x)
+				case x.ty != nil && x.ty.Kind == TClosure:
+				default:
+					for _, k := range x.kids {
+						find(k)
+					}
+				}
+			}
+			find(s)
+			good := len(ins) > 0
+			for _, x := range ins {
+				if x.end-x.start != sm.params[0].n() {
+					good = false
+				}
+			}
+			var es []SlotEdge
+			for _, pr := range pairs {
+				m, h := pr[0], pr[1]
+				for j := 0; good && j < h.end-h.start; j++ {
+					for _, a := range sm.fromArg[h.start+j] {
+						if a[0] != 0 {
+							good = false
+							break
+						}
+						for _, x := range ins {
+							es = append(es, SlotEdge{Arg: i, From: x.start + a[1], To: m.start + j})
+						}
+					}
+				}
+			}
+			if good {
+				return append(edges, es...), true
+			}
+		}
 		// the items of what the closure is applied to, by depth
 		clos := closureSlots(s)
 		shift := max(refLevels(s.ty, 0)-refLevels(n.ty, 0), 0)
@@ -686,6 +857,23 @@ func boundMentions(x, y string, gens []*ast.Generics, params map[string]bool) bo
 }
 
 // findSame returns the nodes of the subtree s (s included) of type t.
+// hasClosure reports whether the subtree s holds a closure (or a value of
+// a type whose regions are unknown, which may be one).
+func hasClosure(s *lnode) bool {
+	if s == nil {
+		return false
+	}
+	if s.wild || (s.ty != nil && s.ty.Kind == TClosure) {
+		return true
+	}
+	for _, k := range s.kids {
+		if hasClosure(k) {
+			return true
+		}
+	}
+	return false
+}
+
 func findSame(s *lnode, t Ty) []*lnode {
 	if s == nil || t == nil {
 		return nil

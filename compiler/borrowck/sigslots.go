@@ -2,6 +2,7 @@ package borrowck
 
 import (
 	"strconv"
+	"strings"
 
 	"rustgo/compiler/ast"
 	. "rustgo/compiler/middle"
@@ -26,6 +27,10 @@ type labeler struct {
 	proj       map[int]string      // slot -> X of an `X::Assoc` there
 	occ        map[string][]*lnode // type parameter (or "Self") -> its nodes
 	full       bool                // every slot is labeled
+	// assoc: the associated types the impl defines (`Self::Item` is
+	// labeled by its definition, in terms of the impl's parameters)
+	assoc   map[string]ast.Type
+	inAssoc int
 }
 
 func newLabeler(params map[string]bool, selfAst ast.Type) *labeler {
@@ -124,6 +129,9 @@ func (w *labeler) walk(a ast.Type, n *lnode, nest int) {
 				return
 			}
 		}
+		if len(segs) == 2 && first == "Self" && segs[1].Args == nil && w.assocLabel(segs[1].Ident.Name, n, nest) {
+			return
+		}
 		if len(segs) >= 2 && (w.params[first] || first == "Self") {
 			// X::Assoc: built from what X holds
 			for k := n.start; k < n.end; k++ {
@@ -190,6 +198,69 @@ func (w *labeler) walk(a ast.Type, n *lnode, nest int) {
 			w.walk(x.Elem, n.kids[0], nest+1)
 		}
 	}
+}
+
+// assocLabel labels node n, declared as `Self::name`, by the impl's
+// definition of that associated type. It only succeeds when every slot
+// gets a declared lifetime or a type parameter of the impl (the
+// parameters' instances then flow slot by slot).
+func (w *labeler) assocLabel(name string, n *lnode, nest int) bool {
+	t := w.assoc[name]
+	if t == nil || w.inAssoc > 2 {
+		return false
+	}
+	sub := &labeler{params: w.params, selfAst: w.selfAst, out: w.out, assoc: w.assoc, inAssoc: w.inAssoc + 1}
+	sub.labels = make([]string, len(w.labels))
+	sub.proj = map[int]string{}
+	sub.occ = map[string][]*lnode{}
+	sub.walk(t, n, nest+1)
+	if len(sub.proj) > 0 {
+		return false
+	}
+	// the names the impl's self type mentions (the values flowing in)
+	sw := &sigWalker{params: w.params}
+	sw.walk(w.selfAst, 0)
+	own := map[string]bool{"'static": true}
+	for _, o := range sw.occs {
+		own[o.name] = true
+	}
+	for k := n.start; k < n.end; k++ {
+		lb := sub.labels[k]
+		if lb == "" || lb == "'?" || strings.HasPrefix(lb, "'#") || strings.HasPrefix(lb, "'Self#") {
+			return false
+		}
+		if lb[0] != '\'' {
+			lb = lb[:strings.IndexByte(lb, '#')]
+		}
+		if !own[lb] {
+			return false
+		}
+	}
+	copy(w.labels[n.start:n.end], sub.labels[n.start:n.end])
+	for x, ns := range sub.occ {
+		w.occ[x] = append(w.occ[x], ns...)
+	}
+	return true
+}
+
+// implAssocTypes returns the associated types a trait impl defines
+// (without generics of their own).
+func implAssocTypes(im *ast.ImplItem) map[string]ast.Type {
+	if im == nil || im.Trait == nil {
+		return nil
+	}
+	var m map[string]ast.Type
+	for _, it := range im.Items {
+		ta, ok := it.Kind.(*ast.TypeAliasItem)
+		if !ok || ta.Ty == nil || (ta.Generics != nil && len(ta.Generics.Params) > 0) {
+			continue
+		}
+		if m == nil {
+			m = map[string]ast.Type{}
+		}
+		m[it.Name.Name] = ta.Ty
+	}
+	return m
 }
 
 // typeNames collects the type parameters (and Self) a type mentions, also

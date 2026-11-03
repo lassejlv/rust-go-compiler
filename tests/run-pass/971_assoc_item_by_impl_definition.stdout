@@ -1,0 +1,10 @@
+setosa (symbol=+)
+  5.1
+  4.9
+versicolor (symbol=o)
+  7.0
+virginica (symbol=x)
+  6.3
+  5.8
+[("setosa", '+'), ("versicolor", 'o'), ("virginica", 'x')]
+Some([3, 4])

@@ -465,7 +465,7 @@ func (b *builder) sigFlow(c *typeck.Callee, nargs int, ret Ty, argTys []Ty) *Flo
 				fl.Slots, fl.Covered, fl.ArgFull, fl.RetLay, fl.ArgLays, fl.IntoSlots, fl.ArgLabels = nil, nil, nil, nil, nil, nil, nil
 			}
 		}()
-		slotFlow(fl, d, selfTy, slotParams, gens, argTys, ret, elided, mutIn)
+		slotFlow(b.tcx, fl, d, selfTy, slotParams, gens, argTys, ret, elided, mutIn)
 	}()
 	return fl
 }
@@ -570,6 +570,8 @@ type loanChecker struct {
 	retLabels []string
 	// paramLabels: the labels of the parameters' slots (with sigSlots)
 	paramLabels [][]string
+	// tempSrc: temporaries assigned once, from a whole local (stores.go)
+	tempSrc map[LocalID]LocalID
 }
 
 var debugLoans = os.Getenv("RUSTGO_BORROWCK_DEBUG") != ""
@@ -1870,6 +1872,9 @@ func (lc *loanChecker) checkStmt(st *lstate, s Stmt, live bitset, own int) {
 			}
 		}
 		lc.access(s.Place, aWrite, live, -1, s.Span)
+		if lc.regions != nil && lc.sigSlots {
+			lc.checkAssignStore(st, s)
+		}
 	case SFakeRead:
 		lc.access(s.Place, aShallowRead, live, -1, s.Span)
 	case SStorageDead:

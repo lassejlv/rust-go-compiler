@@ -1148,6 +1148,11 @@ func (b *builder) callExpr(x *ast.CallExpr, dest tplace) {
 			if c.Kind == typeck.CallClosure {
 				b.closureCallSlots(fl, c.Ty, ops, dest.ty)
 			}
+			if fl.RetLay == nil {
+				// called through a type parameter (its Fn* bound) or a
+				// parameter declared `dyn Fn*` / `impl Fn*`
+				b.boundCallSlots(fl, c.Ty, fp.p, ops, dest.ty)
+			}
 		}
 		b.call(dest.p, ops, fl, "closure", sp, diverges)
 		return
