@@ -610,8 +610,8 @@ func buildFormatArgs(sp lexer.Span, in *formatInput) ([]ast.TokenTree, error) {
 	if allDefault {
 		specs = nil
 	}
-	callee := "::std::fmt::__format"
-	wrap := "::std::fmt::Arguments::new("
+	callee := "::std::fmt::__format_args"
+	wrap := "("
 	if in.direct != "" {
 		callee, wrap = in.direct, "("
 		in.isDirect = true

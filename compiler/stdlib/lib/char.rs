@@ -1589,12 +1589,8 @@ impl EscapeBuf {
             }
             Ok(())
         } else {
-            let mut i = self.start;
-            while i < self.end {
-                f.write_char(self.buf[i] as char)?;
-                i += 1;
-            }
-            Ok(())
+            // ASCII only: written as one piece, like rustc
+            f.write_str(unsafe { crate::str::from_utf8_unchecked(&self.buf[self.start..self.end]) })
         }
     }
 }
