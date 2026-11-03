@@ -257,13 +257,14 @@ impl crate::error::Error for BorrowMutError {}
 #[inline(never)]
 #[track_caller]
 fn panic_already_borrowed() -> ! {
-    crate::rt::panic_str("RefCell already borrowed", file!(), line!(), column!())
+    // (the payload is a String, as in std, which formats the error)
+    panic!("{}", BorrowMutError {})
 }
 
 #[inline(never)]
 #[track_caller]
 fn panic_already_mutably_borrowed() -> ! {
-    crate::rt::panic_str("RefCell already mutably borrowed", file!(), line!(), column!())
+    panic!("{}", BorrowError {})
 }
 
 impl<T> RefCell<T> {

@@ -169,7 +169,18 @@ __attribute__((noinline, cold)) static void rg_stdout_failed(void) {
     rg_panic_str("failed printing to stdout: Broken pipe (os error 32)", "library/std/src/io/stdio.rs", 1166, 9);
   }
 }
-static void rg_write_stdout(const uint8_t* p, uint64_t n) { if (n && fwrite(p, 1, n, stdout) != n) rg_stdout_failed(); }
+/* stdout is line-buffered like std's LineWriter (also when it is not a
+   terminal): text up to the last newline of a write is flushed, the rest
+   stays buffered. */
+static void rg_write_stdout(const uint8_t* p, uint64_t n) {
+  if (!n) return;
+  const uint8_t* nl = NULL;
+  for (uint64_t i = n; i > 0; i--) if (p[i - 1] == '\n') { nl = p + i - 1; break; }
+  if (!nl) { if (fwrite(p, 1, n, stdout) != n) rg_stdout_failed(); return; }
+  uint64_t k = (uint64_t)(nl - p) + 1;
+  if (fwrite(p, 1, k, stdout) != k || fflush(stdout) != 0) rg_stdout_failed();
+  if (k < n && fwrite(p + k, 1, n - k, stdout) != n - k) rg_stdout_failed();
+}
 static void rg_write_stderr(const uint8_t* p, uint64_t n) { fflush(stdout); if (n) fwrite(p, 1, n, stderr); }
 
 __attribute__((noreturn)) static void rg_exit(int32_t code) { fflush(stdout); exit(code); }

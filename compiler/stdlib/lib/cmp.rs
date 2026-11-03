@@ -360,6 +360,21 @@ macro_rules! __std_cmp_ord_prim {
                         Ordering::Greater
                     }
                 }
+
+                #[inline]
+                #[track_caller]
+                fn clamp(self, min: $t, max: $t) -> $t {
+                    if min > max {
+                        panic!("min > max. min = {:?}, max = {:?}", min, max);
+                    }
+                    if self < min {
+                        min
+                    } else if self > max {
+                        max
+                    } else {
+                        self
+                    }
+                }
             }
         )*
     };
