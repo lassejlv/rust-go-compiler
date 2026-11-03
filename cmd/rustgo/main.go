@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"runtime/debug"
 	"runtime/pprof"
 	"strings"
@@ -67,6 +68,7 @@ func main() {
 		// allocation profile (go tool pprof -sample_index=alloc_space)
 		defer func() {
 			if f, err := os.Create(p); err == nil {
+				runtime.GC() // (the profile is as of the last GC)
 				pprof.Lookup("allocs").WriteTo(f, 0)
 				f.Close()
 			}

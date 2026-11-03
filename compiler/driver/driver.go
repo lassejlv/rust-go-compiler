@@ -304,16 +304,20 @@ func Compile(opts *Options) error {
 	return compileC(opts, prog)
 }
 
-// Splitting the C program into several translation units compiled in
-// parallel pays off only for programs that are not small: every unit
-// re-parses the common header (runtime, types, prototypes; about 0.15s of
-// CPU time), and functions called across units can no longer be inlined.
-// Up to two units per CPU are made (the cost of C functions varies a lot,
-// so smaller units balance better), each with at least tuMinFnBytes of
-// function definitions (gcc -O1 takes about 0.5s for those).
+// The C program is split into several translation units compiled in
+// parallel. Every unit has a fixed cost (it re-parses the common header:
+// runtime, types, prototypes; about 0.13s of CPU time), and functions
+// called across units can no longer be inlined. With a fixed cost h per
+// unit and w for all the function definitions, n units take about
+// h + w/n, so one more unit shortens the compilation while
+// w/(n(n+1)) > h: in gcc -O1 terms, while n(n+1) < fnBytes/tuFixedFnBytes,
+// tuFixedFnBytes being the size of the functions gcc compiles in time h.
+// (A hello world gets 2 units, a 400KB program 3, large ones up to two
+// units per CPU: the cost of C functions varies a lot, so smaller units
+// balance better.)
 const (
-	tuMinFnBytes = 160 << 10
-	tuMax        = 16
+	tuFixedFnBytes = 48 << 10
+	tuMax          = 16
 )
 
 // unitCount picks the number of translation units for a program with
@@ -324,15 +328,16 @@ func unitCount(fnBytes int) int {
 			return n
 		}
 	}
-	n := 2 * runtime.NumCPU()
-	if n > tuMax {
-		n = tuMax
+	max := 2 * runtime.NumCPU()
+	if runtime.NumCPU() == 1 {
+		max = 1
 	}
-	if m := fnBytes / tuMinFnBytes; m < n {
-		n = m
+	if max > tuMax {
+		max = tuMax
 	}
-	if n < 1 {
-		n = 1
+	n := 1
+	for n < max && n*(n+1)*tuFixedFnBytes < fnBytes {
+		n++
 	}
 	return n
 }

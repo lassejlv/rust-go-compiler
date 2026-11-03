@@ -139,6 +139,9 @@ func (p *Program) Units(n int) []string {
 	parts := make([][]fnDef, n)
 	defUnit := map[string]int{}
 	total := len(p.fns)
+	// unit 0 also compiles the data definitions and main: it gets a
+	// correspondingly smaller share of the functions
+	extra := (len(p.data) + len(p.main)) / 2
 	start, u := 0, 0
 	for _, end := range p.fnEnds {
 		if end == start {
@@ -156,7 +159,7 @@ func (p *Program) Units(n int) []string {
 		defUnit[name] = u
 		start = end
 		// move on once this unit holds its share
-		if u < n-1 && start >= total*(u+1)/n {
+		if u < n-1 && start >= (total+extra)*(u+1)/n-extra {
 			u++
 		}
 	}
