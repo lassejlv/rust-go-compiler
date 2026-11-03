@@ -13,6 +13,7 @@ import (
 type Ctx struct {
 	report bool
 	tcx    *typeck.Tcx
+	fn     *Def // the function being checked (its signature's regions)
 }
 
 // CheckFn borrow-checks a function instance (and the closures in it) and
@@ -36,7 +37,7 @@ func CheckFn(tcx *typeck.Tcx, d *Def, r *typeck.Results) (msgs []string) {
 		if dump != "" && (dump == "1" || dump == d.Name) {
 			fmt.Fprint(os.Stderr, body.String())
 		}
-		c := &checker{body: body, md: buildMoveData(body), seen: map[string]bool{}, ctx: &Ctx{tcx: tcx}}
+		c := &checker{body: body, md: buildMoveData(body), seen: map[string]bool{}, ctx: &Ctx{tcx: tcx, fn: d}}
 		c.checkMoves()
 		c.checkLoans()
 		for _, dg := range c.diags {

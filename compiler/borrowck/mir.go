@@ -57,6 +57,9 @@ type Proj struct {
 	Variant int
 	Index   LocalID
 	Name    string // field name, for diagnostics
+	// DropTy: for PField, the base type when it implements Drop (moving
+	// the field out is E0509); nil otherwise.
+	DropTy Ty
 }
 
 // Place is a local followed by projections.
@@ -174,6 +177,11 @@ type LocalDecl struct {
 	User *typeck.Local
 	// Upvars: captured by reference (the local holds &T / &mut T).
 	UpvarByRef bool
+	// Params declared with a type parameter type: GenericMove when it is
+	// not bounded by Copy (moves even if the instance type is Copy);
+	// FnBound is the Fn* bound's kind (0 Fn, 1 FnMut, 2 FnOnce; -1 none).
+	GenericMove bool
+	FnBound     int
 }
 
 // Body is the MIR of one function or closure body.

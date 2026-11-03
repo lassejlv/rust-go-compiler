@@ -20,6 +20,8 @@ type Flow struct {
 	All bool
 	// Into: arguments stored into the referents of `&mut` arguments.
 	Into []IntoEdge
+	// Static: arguments that must not borrow locals ('static).
+	Static []StaticReq
 }
 
 func noFlow() *Flow { return &Flow{} }
@@ -65,14 +67,18 @@ func carriesBorrows(t Ty) bool {
 }
 
 // flowFor computes the loan flow of a resolved call.
-func (b *builder) flowFor(c *typeck.Callee, nargs int, ret Ty) *Flow {
+func (b *builder) flowFor(c *typeck.Callee, args []Operand, ret Ty) *Flow {
 	if c == nil {
 		return noFlow()
 	}
-	fl := b.sigFlow(c, nargs, ret)
+	tys := make([]Ty, len(args))
+	for i, a := range args {
+		tys[i] = a.Ty
+	}
+	fl := b.sigFlow(c, len(args), ret, tys)
 	if !carriesBorrows(ret) {
-		// only the stores into `&mut` arguments matter
-		return &Flow{Into: fl.Into}
+		// only the stores into `&mut` arguments and 'static requirements
+		return &Flow{Into: fl.Into, Static: fl.Static}
 	}
 	return fl
 }

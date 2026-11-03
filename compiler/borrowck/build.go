@@ -243,6 +243,9 @@ func (tp tplace) deref() tplace {
 }
 
 func (b *builder) operandOf(tp tplace) Operand {
+	if len(tp.p.Proj) == 0 && b.body.Locals[tp.p.Local].GenericMove {
+		return Operand{Kind: OMove, Place: tp.p, Ty: tp.ty}
+	}
 	if b.isCopy(tp.ty) {
 		return Operand{Kind: OCopy, Place: tp.p, Ty: tp.ty}
 	}
@@ -394,7 +397,14 @@ func (b *builder) overloadedDeref(tp tplace, mut bool, target Ty, c *typeck.Call
 	if info != nil {
 		b.ovl[res.p.Local] = info
 	}
-	b.call(res.p, []Operand{{Kind: OMove, Place: ref.p}}, refFlow(), "deref", sp, false)
+	// the target's contents sit below the pointer's own reference levels
+	// (Pin<&mut T> derefs through its &mut; Box/Vec/String own theirs)
+	shift := refLevels(tp.ty, 0) - refLevels(target, 0)
+	if shift < 0 {
+		shift = 0
+	}
+	fl := &Flow{Edges: []FlowEdge{{Arg: 0, From: 0, To: 0}, {Arg: 0, From: 1, To: 0}, {Arg: 0, From: 1 + shift, To: 1, Deep: true}}}
+	b.call(res.p, []Operand{{Kind: OMove, Place: ref.p}}, fl, "deref", sp, false)
 	return res.deref()
 }
 
@@ -417,7 +427,7 @@ func (b *builder) unadjPlace(e ast.Expr) tplace {
 		}
 		base := b.placeOf(x.X)
 		variant := 0
-		return tplace{p: base.p.project(Proj{Kind: PField, Field: fr.Index, Variant: variant, Name: x.Name.Name}), ty: b.nodeTy(e)}
+		return tplace{p: base.p.project(Proj{Kind: PField, Field: fr.Index, Variant: variant, Name: x.Name.Name, DropTy: b.dropTy(base.ty)}), ty: b.nodeTy(e)}
 	case *ast.IndexExpr:
 		if b.r.IndexBuiltin[x.ID] {
 			base := b.placeOf(x.X)
@@ -453,6 +463,17 @@ func (b *builder) unadjPlace(e ast.Expr) tplace {
 		}
 	}
 	return b.valueTempUnadj(e)
+}
+
+// dropTy returns t if it is an ADT implementing Drop.
+func (b *builder) dropTy(t Ty) Ty {
+	if t == nil || t.Kind != TAdt {
+		return nil
+	}
+	if dr := b.tcx.LangOpt("drop"); dr != nil && !t.HasInfer() && b.tcx.Implements(t, dr) {
+		return t
+	}
+	return nil
 }
 
 // staticPlace returns the place of a static item (a local that lives for
@@ -664,7 +685,7 @@ func (b *builder) operand(e ast.Expr) Operand {
 		return b.operandOf(b.placeOf(e))
 	}
 	t := b.valueTempUnadj(e)
-	return Operand{Kind: OMove, Place: t.p}
+	return Operand{Kind: OMove, Place: t.p, Ty: t.ty}
 }
 
 // operandNow evaluates e to an operand read now (a place operand is copied
@@ -733,7 +754,7 @@ func (b *builder) call(dest Place, args []Operand, flow *Flow, name string, sp l
 }
 
 func (b *builder) callTo(c *typeck.Callee, args []Operand, dest tplace, sp lexer.Span, name string) {
-	flow := b.flowFor(c, len(args), dest.ty)
+	flow := b.flowFor(c, args, dest.ty)
 	diverges := dest.ty != nil && dest.ty.Kind == TNever
 	b.call(dest.p, args, flow, name, sp, diverges)
 }
@@ -907,6 +928,15 @@ func (b *builder) binary(x *ast.BinaryExpr, dest tplace) {
 	}
 	l := b.operand(x.L)
 	r := b.operand(x.R)
+	if x.Op >= ast.BinEq {
+		// comparisons take their operands by reference (PartialEq::eq)
+		if l.Kind == OMove {
+			l.Kind = OCopy
+		}
+		if r.Kind == OMove {
+			r.Kind = OCopy
+		}
+	}
 	b.assign(dest.p, Rvalue{Kind: ROther, Ops: []Operand{l, r}}, sp)
 }
 
@@ -988,7 +1018,10 @@ func (b *builder) callExpr(x *ast.CallExpr, dest tplace) {
 		switch c.Kind {
 		case typeck.CallClosure:
 			kind = 0
-			if ci := b.tcx.Closures[c.Ty]; ci != nil && ci.Results == b.r {
+			if len(fp.p.Proj) == 0 && b.body.Locals[fp.p.Local].FnBound >= 0 {
+				// called through a generic parameter: its declared bound
+				kind = b.body.Locals[fp.p.Local].FnBound
+			} else if ci := b.tcx.Closures[c.Ty]; ci != nil && ci.Results == b.r {
 				// a closure of this body: its own kind (a closure from
 				// elsewhere is called through a generic bound we don't see)
 				kind = ci.Kind
@@ -1577,7 +1610,7 @@ func (b *builder) forExpr(x *ast.ForExpr) {
 	iter := b.temp(info.IterTy, sp)
 	b.scopes[len(b.scopes)-1].locals = append(b.scopes[len(b.scopes)-1].locals, iter.p.Local)
 	b.removeTemp(iter.p.Local)
-	b.call(iter.p, []Operand{src}, b.flowFor(info.IntoIter, 1, info.IterTy), "into_iter", sp, false)
+	b.call(iter.p, []Operand{src}, b.flowFor(info.IntoIter, []Operand{src}, info.IterTy), "into_iter", sp, false)
 	head := b.newBlock()
 	end := b.newBlock()
 	b.gotoBlock(head)
@@ -1594,7 +1627,8 @@ func (b *builder) forExpr(x *ast.ForExpr) {
 	next := b.temp(optTy, sp)
 	b.removeTemp(next.p.Local)
 	b.scopes[len(b.scopes)-1].locals = append(b.scopes[len(b.scopes)-1].locals, next.p.Local)
-	b.call(next.p, []Operand{{Kind: OMove, Place: ref.p}}, b.flowFor(info.Next, 1, optTy), "next", sp, false)
+	nextArgs := []Operand{{Kind: OMove, Place: ref.p, Ty: ref.ty}}
+	b.call(next.p, nextArgs, b.flowFor(info.Next, nextArgs, optTy), "next", sp, false)
 	body, exit := b.newBlock(), b.newBlock()
 	b.switchTo(body, exit)
 	b.cur = exit

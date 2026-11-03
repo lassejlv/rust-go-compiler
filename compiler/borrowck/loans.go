@@ -33,6 +33,8 @@ type sigWalker struct {
 	inSelf  int
 	implAll bool // output has `impl Trait`
 	named   bool // a named lifetime ('a, 'static) was seen
+	// selfElided numbers elided lifetimes inside the impl self type
+	selfElided int
 }
 
 func (w *sigWalker) add(name string, depth int) {
@@ -40,6 +42,13 @@ func (w *sigWalker) add(name string, depth int) {
 }
 
 func (w *sigWalker) lifetime(lt string, depth int) {
+	if (lt == "" || lt == "'_") && w.inSelf > 0 {
+		// an elided lifetime of the impl's self type (`impl Clone for
+		// &T`): a fixed impl lifetime, named by position
+		w.selfElided++
+		w.add(fmt.Sprintf("'Self#%d", w.selfElided), depth)
+		return
+	}
 	if lt == "" || lt == "'_" {
 		if w.inOut {
 			w.add("'?", depth)
@@ -51,6 +60,9 @@ func (w *sigWalker) lifetime(lt string, depth int) {
 	}
 	w.named = true
 	if lt == "'static" {
+		if !w.inOut {
+			w.add("'static", depth)
+		}
 		return
 	}
 	w.add(lt, depth)
@@ -107,15 +119,21 @@ func (w *sigWalker) path(p *ast.Path, depth int) {
 	first := p.Segments[0].Ident.Name
 	if first == "Self" {
 		if w.selfTy != nil && w.inSelf < 2 && len(p.Segments) == 1 {
+			if w.inSelf == 0 {
+				w.selfElided = 0
+			}
 			w.inSelf++
 			w.walk(w.selfTy, depth)
 			w.inSelf--
 			return
 		}
-		if len(p.Segments) == 1 {
+		// Self or Self::Assoc (an associated type of Self is made of what
+		// Self holds: an iterator's items borrow what it borrows)
+		if len(p.Segments) > 1 {
+			w.add("Self::", depth)
+		} else {
 			w.add("Self", depth)
 		}
-		// Self::Assoc projections are opaque: no flow
 		return
 	}
 	if w.params[first] {
@@ -134,12 +152,20 @@ func (w *sigWalker) genericArgsOf(p *ast.Path, depth int) {
 		if ga == nil {
 			continue
 		}
+		// a type with lifetime arguments holds its type arguments behind
+		// those references (Iter<'a, T> holds &'a T)
+		td := depth
+		for _, a := range ga.Args {
+			if a.Lifetime != "" {
+				td = depth + 1
+			}
+		}
 		for _, a := range ga.Args {
 			if a.Lifetime != "" {
 				w.lifetime(a.Lifetime, depth)
 			}
 			if a.Type != nil {
-				w.walk(a.Type, depth)
+				w.walk(a.Type, td)
 			}
 		}
 		for _, bd := range ga.Bindings {
@@ -168,11 +194,49 @@ func genericNames(g *ast.Generics, params map[string]bool) {
 	}
 }
 
+// staticBounded collects the type parameters bounded by 'static.
+func staticBounded(g *ast.Generics, out map[string]bool) {
+	if g == nil {
+		return
+	}
+	for _, p := range g.Params {
+		if p.Kind != ast.GPType {
+			continue
+		}
+		for _, bd := range p.Bounds {
+			if bd.Lifetime == "'static" {
+				out[p.Name.Name] = true
+			}
+		}
+	}
+	for _, wp := range g.Where {
+		pt, ok := wp.Ty.(*ast.PathType)
+		if !ok || pt.QSelf != nil || pt.Path == nil || len(pt.Path.Segments) != 1 {
+			continue
+		}
+		for _, bd := range wp.Bounds {
+			if bd.Lifetime == "'static" {
+				out[pt.Path.Segments[0].Ident.Name] = true
+			}
+		}
+	}
+}
+
 // sigFlow derives the loan flow of a call from the callee's declared
 // signature: lifetimes and type parameters shared by an input and the
 // output (with lifetime elision), and inputs written into `&mut` inputs.
-func (b *builder) sigFlow(c *typeck.Callee, nargs int, ret Ty) *Flow {
+func (b *builder) sigFlow(c *typeck.Callee, nargs int, ret Ty, argTys []Ty) *Flow {
 	d := c.Def
+	var selfConcrete Ty
+	if d != nil && d.InTrait() && len(c.Args) > 0 {
+		selfConcrete = c.Args[0]
+	}
+	if d != nil && d.InTrait() && len(c.Args) > 0 && !c.Args[0].HasInfer() && !c.Args[0].HasParam() {
+		// the implementation's signature is more precise than the trait's
+		if im, _, ok := b.tcx.ResolveAssocFn(d, c.Args); ok && im != nil {
+			d = im
+		}
+	}
 	if d == nil || d.Fn == nil || d.Fn.Ast == nil || d.Fn.Ast.Decl == nil {
 		return &Flow{All: true}
 	}
@@ -223,6 +287,28 @@ func (b *builder) sigFlow(c *typeck.Callee, nargs int, ret Ty) *Flow {
 	if len(ins) != nargs {
 		return &Flow{All: true}
 	}
+	statics := map[string]bool{}
+	staticBounded(d.Fn.Ast.Generics, statics)
+	var static []StaticReq
+	for i, os := range ins {
+		for _, o := range os {
+			if o.name == "'static" {
+				static = append(static, StaticReq{Arg: i, Depth: o.depth})
+			} else if statics[o.name] {
+				static = append(static, StaticReq{Arg: i, Depth: o.depth, Deep: true})
+			}
+		}
+	}
+	// 'static occurrences relate to nothing else
+	for i, os := range ins {
+		var keep []occ
+		for _, o := range os {
+			if o.name != "'static" {
+				keep = append(keep, o)
+			}
+		}
+		ins[i] = keep
+	}
 	// lifetime elision for the output
 	elided := ""
 	if sp := decl.SelfParam; sp != nil && (sp.Kind == ast.SelfRef || sp.Kind == ast.SelfRefMut) {
@@ -265,9 +351,53 @@ func (b *builder) sigFlow(c *typeck.Callee, nargs int, ret Ty) *Flow {
 		// a hidden elided lifetime in a path (`-> Iter<T>`)
 		outs = append(outs, occ{"'?", 0})
 	}
+	// output type parameters no input mentions (`collect::<B>()`): built
+	// from what the arguments hold
+	inNames := map[string]bool{}
+	for _, os := range ins {
+		for _, o := range os {
+			inNames[o.name] = true
+		}
+	}
 	fl := &Flow{}
 	seen := map[FlowEdge]bool{}
+	addEdge := func(e FlowEdge) {
+		if !seen[e] {
+			seen[e] = true
+			fl.Edges = append(fl.Edges, e)
+		}
+	}
+	// associated types / unconstrained outputs carry what the input holds,
+	// aligned at the innermost reference level (an iterator's items hold
+	// its borrows; `copied()` drops one level)
+	outLv := refLevels(ret, 0)
 	for _, o := range outs {
+		if o.name == "Self::" {
+			for i, os := range ins {
+				for _, io := range os {
+					if o.name == "Self::" && io.name != "Self" {
+						continue
+					}
+					if o.name != "Self::" && io.depth != 0 {
+						continue
+					}
+					var src Ty
+					if o.name == "Self::" {
+						src = selfConcrete
+					} else if i < len(argTys) {
+						src = argTys[i]
+					}
+					shift := 0
+					if src != nil {
+						if sl := refLevels(src, 0); sl > outLv+o.depth {
+							shift = sl - outLv - o.depth
+						}
+					}
+					addEdge(FlowEdge{Arg: i, From: io.depth + shift, To: o.depth, Deep: true})
+				}
+			}
+			continue
+		}
 		name := o.name
 		if name == "'?" {
 			if elided == "" {
@@ -278,11 +408,7 @@ func (b *builder) sigFlow(c *typeck.Callee, nargs int, ret Ty) *Flow {
 		for i, os := range ins {
 			for _, io := range os {
 				if io.name == name {
-					e := FlowEdge{Arg: i, From: io.depth, To: o.depth, Deep: true}
-					if !seen[e] {
-						seen[e] = true
-						fl.Edges = append(fl.Edges, e)
-					}
+					addEdge(FlowEdge{Arg: i, From: io.depth, To: o.depth, Deep: true})
 				}
 			}
 		}
@@ -308,7 +434,90 @@ func (b *builder) sigFlow(c *typeck.Callee, nargs int, ret Ty) *Flow {
 			}
 		}
 	}
+	fl.Static = static
 	return fl
+}
+
+// StaticReq: argument Arg must not hold loans of locals at Depth (and
+// deeper when Deep): its parameter requires 'static.
+type StaticReq struct {
+	Arg, Depth int
+	Deep       bool
+}
+
+// exactLevels returns the reference levels of t when they bound the loans
+// its values can hold (no closures, trait objects, type parameters, ...).
+func exactLevels(t Ty) (int, bool) {
+	if t == nil || t.HasParam() || t.HasInfer() || t.HasError() || t.HasProj() || t.HasOpaque() {
+		return 0, false
+	}
+	ok := true
+	var walk func(t Ty, depth int)
+	walk = func(t Ty, depth int) {
+		if t == nil || depth > 8 || !ok {
+			return
+		}
+		switch t.Kind {
+		case TClosure, TDyn, TFnPtr:
+			ok = false
+		case TRef, TArray, TSlice:
+			walk(t.Elem, depth+1)
+		case TTuple:
+			for _, e := range t.Elems {
+				walk(e, depth+1)
+			}
+		case TAdt:
+			for _, a := range t.Args {
+				walk(a, depth+1)
+			}
+		}
+	}
+	walk(t, 0)
+	if !ok {
+		return 0, false
+	}
+	return refLevels(t, 0), true
+}
+
+// truncate drops loans deeper than the reference levels of t.
+func truncate(v lval, t Ty) {
+	if n, ok := exactLevels(t); ok {
+		for d := n; d < len(v); d++ {
+			for i := range v[d] {
+				v[d][i] = 0
+			}
+		}
+	}
+}
+
+// refLevels counts the reference levels of a type: references and
+// structs with lifetime parameters (which hold references) add a level.
+func refLevels(t Ty, depth int) int {
+	if t == nil || depth > 8 {
+		return 0
+	}
+	switch t.Kind {
+	case TRef:
+		return 1 + refLevels(t.Elem, depth+1)
+	case TArray, TSlice:
+		return refLevels(t.Elem, depth+1)
+	case TTuple:
+		m := 0
+		for _, e := range t.Elems {
+			m = max(m, refLevels(e, depth+1))
+		}
+		return m
+	case TAdt:
+		m := 0
+		for _, a := range t.Args {
+			m = max(m, refLevels(a, depth+1))
+		}
+		if adtHasLifetimes(t.Def) {
+			return 1 + m
+		}
+		return m
+	}
+	return 0
 }
 
 func hasLifetimeAdt(t Ty) bool {
@@ -343,11 +552,12 @@ func hasLifetimeAdt(t Ty) bool {
 const maxDepth = 4
 
 type loan struct {
-	place Place
-	mut   bool
-	block int
-	stmt  int
-	span  lexer.Span
+	place  Place
+	mut    bool
+	block  int
+	stmt   int
+	span   lexer.Span
+	origin string // universal region pseudo-loan (place.Local = -1)
 }
 
 type loanChecker struct {
@@ -360,6 +570,8 @@ type loanChecker struct {
 	liveIn   []bitset // per block
 	reported map[string]bool
 	curState *lstate
+	regions  *sigRegions
+	params   []LocalID // argument locals in signature order
 }
 
 var debugLoans = os.Getenv("RUSTGO_BORROWCK_DEBUG") != ""
@@ -470,7 +682,9 @@ func (lc *loanChecker) opVal(st *lstate, o Operand) lval {
 	if o.Kind == OConst || (o.Ty != nil && !carriesBorrows(o.Ty)) {
 		return lc.emptyVal()
 	}
-	return lc.placeVal(st, o.Place)
+	v := lc.placeVal(st, o.Place)
+	truncate(v, o.Ty)
+	return v
 }
 
 func (lc *loanChecker) unionVal(a, b lval) {
@@ -485,11 +699,18 @@ func (lc *loanChecker) refVal(st *lstate, p Place, li int) lval {
 	if li >= 0 {
 		v[0].set(li)
 	}
-	// a reborrow through a reference keeps that reference's loans alive
-	for i, pr := range p.Proj {
-		if pr.Kind == PDeref && (pr.Deref == DRef || pr.Deref == DRefMut) {
-			pv := lc.placeVal(st, Place{Local: p.Local, Proj: p.Proj[:i]})
-			v[0].union(pv[0])
+	// a reborrow through references keeps their loans alive (rustc's
+	// reborrow constraints: from the last deref outwards, stopping after
+	// the first shared reference)
+	for i := len(p.Proj) - 1; i >= 0; i-- {
+		pr := p.Proj[i]
+		if pr.Kind != PDeref || (pr.Deref != DRef && pr.Deref != DRefMut) {
+			continue
+		}
+		pv := lc.placeVal(st, Place{Local: p.Local, Proj: p.Proj[:i]})
+		v[0].union(pv[0])
+		if pr.Deref == DRef {
+			break
 		}
 	}
 	inner := lc.placeVal(st, p)
@@ -509,6 +730,7 @@ func (lc *loanChecker) store(st *lstate, p Place, v lval) {
 		return
 	}
 	if len(p.Proj) == 0 {
+		truncate(v, lc.body.Locals[p.Local].Ty)
 		for d := 0; d < maxDepth; d++ {
 			lc.set(st, base+d, v[d])
 		}
@@ -576,11 +798,46 @@ func (c *checker) checkLoans() {
 	lc := &loanChecker{checker: c, loanAt: map[[2]int]int{}, nLocals: len(body.Locals), reported: map[string]bool{}}
 	for bi, bl := range body.Blocks {
 		for si, s := range bl.Stmts {
-			if s.Kind == SAssign && s.Rv.Kind == RRef {
+			if s.Kind == SAssign && s.Rv.Kind == RRef && !ignoreBorrow(s.Rv.Place) {
 				lc.loanAt[[2]int{bi, si}] = len(lc.loans)
 				lc.loans = append(lc.loans, loan{place: s.Rv.Place, mut: s.Rv.Mut, block: bi, stmt: si, span: s.Span})
 			}
 		}
+	}
+	type originAt struct {
+		local LocalID
+		depth int
+		loan  int
+	}
+	var origins []originAt
+	if c.ctx.fn != nil && body.ClosureKind < 0 {
+		lc.regions = fnRegions(c.ctx.fn)
+	}
+	for i, ld := range body.Locals {
+		if ld.Kind == LArg {
+			lc.params = append(lc.params, LocalID(i))
+		}
+	}
+	if lc.regions != nil && len(lc.regions.params) == len(lc.params) {
+		byName := map[string]int{}
+		for pi, os := range lc.regions.params {
+			for _, o := range os {
+				if o.name[0] != '\'' || o.name == "'static" || o.name == "'?" {
+					continue
+				}
+				li, ok := byName[o.name]
+				if !ok {
+					li = len(lc.loans)
+					byName[o.name] = li
+					lc.loans = append(lc.loans, loan{place: Place{Local: -1}, origin: o.name, span: body.Span})
+				}
+				if o.depth < maxDepth {
+					origins = append(origins, originAt{lc.params[pi], o.depth, li})
+				}
+			}
+		}
+	} else {
+		lc.regions = nil
 	}
 	lc.nLoans = len(lc.loans)
 	if lc.nLoans == 0 {
@@ -593,6 +850,11 @@ func (c *checker) checkLoans() {
 	lc.computeLiveness()
 	in := make([]*lstate, len(body.Blocks))
 	in[0] = lc.newState()
+	for _, o := range origins {
+		v := newBitset(lc.nLoans)
+		v.set(o.loan)
+		lc.or(in[0], int(o.local)*maxDepth+o.depth, v)
+	}
 	work := []int{0}
 	queued := map[int]bool{0: true}
 	for len(work) > 0 {
@@ -963,9 +1225,31 @@ func (lc *loanChecker) checkTerm(st *lstate, t Term, live bitset) {
 			lc.operandAccess(o, live, t.Span)
 		}
 		lc.access(t.Dest, aWrite, live, -1, t.Span)
+		if t.Flow != nil && lc.regions != nil {
+			lc.checkParamStores(st, t)
+		}
+		if t.Flow != nil {
+			for _, req := range t.Flow.Static {
+				if req.Arg < len(t.Args) {
+					lc.checkStatic(st, t.Args[req.Arg], req, t.Span)
+				}
+			}
+		}
 	case TReturn:
 		lc.checkReturn(st, t.Span)
 	}
+}
+
+// ignoreBorrow: like rustc, borrows of places behind a shared reference or
+// a raw pointer are not tracked (the data cannot be mutated through the
+// base; the reborrow's lifetime is still tied to the reference's loans).
+func ignoreBorrow(p Place) bool {
+	for _, pr := range p.Proj {
+		if pr.Kind == PDeref && (pr.Deref == DRef || pr.Deref == DRaw || pr.Deref == DRawMut) {
+			return true
+		}
+	}
+	return false
 }
 
 // overlap reports whether an access to place a may touch the loan's place
@@ -1015,6 +1299,9 @@ func (lc *loanChecker) access(p Place, k accessKind, live bitset, own int, sp le
 			continue
 		}
 		ln := lc.loans[li]
+		if ln.origin != "" {
+			continue
+		}
 		shallow := k == aWrite || k == aStorageDead || k == aShallowRead
 		if !overlap(p, ln.place, shallow) {
 			continue
@@ -1071,6 +1358,89 @@ func (lc *loanChecker) conflict(p Place, k accessKind, ln loan, sp lexer.Span) {
 	}
 }
 
+// checkParamStores checks values stored through `&mut` parameters against
+// the lifetimes the parameter's type declares.
+func (lc *loanChecker) checkParamStores(st *lstate, t Term) {
+	for _, e := range t.Flow.Into {
+		if e.Dst >= len(t.Args) || e.Src >= len(t.Args) {
+			continue
+		}
+		dst := lc.opVal(st, t.Args[e.Dst])
+		src := lc.opVal(st, t.Args[e.Src])
+		for li := 0; li < lc.nLoans; li++ {
+			if !dst[0].has(li) || lc.loans[li].origin != "" {
+				continue
+			}
+			p := lc.loans[li].place
+			pi := -1
+			for i, l := range lc.params {
+				if l == p.Local {
+					pi = i
+				}
+			}
+			if pi < 0 {
+				continue
+			}
+			k := 0
+			for _, pr := range p.Proj {
+				if pr.Kind == PDeref && (pr.Deref == DRef || pr.Deref == DRefMut) {
+					k++
+				}
+			}
+			if k == 0 {
+				continue // a local copy of the parameter
+			}
+			for kk := 0; e.SrcDepth+kk < maxDepth && k+e.DstDepth+kk < maxDepth; kk++ {
+				set, any := lc.regions.allowed(lc.regions.params[pi], k+e.DstDepth+kk)
+				if any {
+					break
+				}
+				for oi := 0; oi < lc.nLoans; oi++ {
+					if src[e.SrcDepth+kk].has(oi) && lc.loans[oi].origin != "" && !lc.regions.originOK(lc.loans[oi].origin, set) {
+						lc.regionError(lc.loans[oi].origin, t.Span)
+						return
+					}
+				}
+			}
+		}
+	}
+}
+
+// checkStatic reports an argument holding loans of locals where 'static is
+// required (E0373 for closures, E0597 otherwise).
+func (lc *loanChecker) checkStatic(st *lstate, o Operand, req StaticReq, sp lexer.Span) {
+	v := lc.opVal(st, o)
+	for d := req.Depth; d < maxDepth; d++ {
+		for li := 0; li < lc.nLoans; li++ {
+			if !v[d].has(li) {
+				continue
+			}
+			ln := lc.loans[li]
+			if ln.origin != "" {
+				if lc.regions != nil && !lc.regions.outlives(ln.origin, "'static") {
+					lc.regionError(ln.origin, sp)
+					return
+				}
+				continue
+			}
+			ld := lc.body.Locals[ln.place.Local]
+			if ld.Kind == LStatic || ld.Kind == LUpvar {
+				continue
+			}
+			name := lc.describe(Place{Local: ln.place.Local})
+			if o.Ty != nil && o.Ty.Kind == TClosure {
+				lc.errorf(sp, "E0373", "closure may outlive the current function, but it borrows `%s`, which is owned by the current function", name)
+			} else {
+				lc.errorf(ln.span, "E0597", "`%s` does not live long enough", name)
+			}
+			return
+		}
+		if !req.Deep {
+			break
+		}
+	}
+}
+
 // checkReturn reports returned references to locals (E0515).
 func (lc *loanChecker) checkReturn(st *lstate, sp lexer.Span) {
 	for d := 0; d < maxDepth; d++ {
@@ -1083,6 +1453,15 @@ func (lc *loanChecker) checkReturn(st *lstate, sp lexer.Span) {
 				continue
 			}
 			ln := lc.loans[li]
+			if ln.origin != "" {
+				if lc.regions != nil {
+					if set, any := lc.regions.allowed(lc.regions.out, d); !any && !lc.regions.originOK(ln.origin, set) {
+						lc.regionError(ln.origin, sp)
+						return
+					}
+				}
+				continue
+			}
 			through := false
 			for _, pr := range ln.place.Proj {
 				if pr.Kind == PDeref && pr.Deref != DBox {

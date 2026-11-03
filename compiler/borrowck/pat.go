@@ -121,8 +121,9 @@ func (b *builder) walkPat(p ast.Pat, tp tplace, bind func(*ast.IdentPat, *typeck
 		}
 		fts := b.fieldTypes(tp.ty, v.Index)
 		vn := variantNum(tp.ty, v)
+		dt := b.dropTy(tp.ty)
 		seqFields(x.Elems, len(fts), func(pi, fi int) {
-			b.walkPat(x.Elems[pi], tplace{p: tp.p.project(Proj{Kind: PField, Field: fi, Variant: vn}), ty: fts[fi]}, bind)
+			b.walkPat(x.Elems[pi], tplace{p: tp.p.project(Proj{Kind: PField, Field: fi, Variant: vn, DropTy: dt}), ty: fts[fi]}, bind)
 		})
 	case *ast.StructPat:
 		v := b.r.Variants[x.ID]
@@ -136,7 +137,7 @@ func (b *builder) walkPat(p ast.Pat, tp tplace, bind func(*ast.IdentPat, *typeck
 			if fi < 0 || fi >= len(fts) {
 				continue
 			}
-			b.walkPat(f.Pat, tplace{p: tp.p.project(Proj{Kind: PField, Field: fi, Variant: vn, Name: f.Name.Name}), ty: fts[fi]}, bind)
+			b.walkPat(f.Pat, tplace{p: tp.p.project(Proj{Kind: PField, Field: fi, Variant: vn, Name: f.Name.Name, DropTy: b.dropTy(tp.ty)}), ty: fts[fi]}, bind)
 		}
 	case *ast.RefPat:
 		b.walkPat(x.Pat, tp.deref(), bind)
@@ -346,8 +347,13 @@ func buildFn(tcx *typeck.Tcx, d *Def, r *typeck.Results) *builder {
 	b.newLocal(&LocalDecl{Kind: LReturn, Ty: r.RetTy, Mut: true})
 	b.retBlock = b.newBlock()
 	b.pushScope()
-	for _, l := range r.Params {
-		id := b.newLocal(&LocalDecl{Kind: LArg, Ty: l.Ty, Mut: l.Mut, Name: l.Name, Span: l.Span, User: l})
+	sig := tcx.FnSig(d)
+	for i, l := range r.Params {
+		ld := &LocalDecl{Kind: LArg, Ty: l.Ty, Mut: l.Mut, Name: l.Name, Span: l.Span, User: l, FnBound: -1}
+		if sig != nil && i < len(sig.Inputs) {
+			b.genericParamInfo(d, sig.Inputs[i], ld)
+		}
+		id := b.newLocal(ld)
 		b.locals[l] = id
 		b.scopes[0].locals = append(b.scopes[0].locals, id)
 	}
@@ -374,6 +380,50 @@ func buildFn(tcx *typeck.Tcx, d *Def, r *typeck.Results) *builder {
 	b.terminate(Term{Kind: TReturn, Span: fa.Body.Span})
 	b.fixupMutability()
 	return b
+}
+
+// genericParamInfo records the bounds of a parameter declared with a type
+// parameter type (rustc checks the generic body, not an instance).
+func (b *builder) genericParamInfo(d *Def, decl Ty, ld *LocalDecl) {
+	if decl == nil || decl.Kind != TParam || decl.Sub == 1 {
+		return
+	}
+	copyTr := b.tcx.LangOpt("copy")
+	isCopy := false
+	for _, p := range b.tcx.Generics(d).Predicates {
+		if p.Trait == nil || len(p.Trait.Args) == 0 {
+			continue
+		}
+		a := p.Trait.Args[0]
+		if a.Kind != TParam || a.Index != decl.Index {
+			continue
+		}
+		tr := p.Trait.Trait
+		if tr == copyTr {
+			isCopy = true
+		}
+		switch tr.LangItem {
+		case "fn":
+			if ld.FnBound < 0 || ld.FnBound > 0 {
+				ld.FnBound = 0
+			}
+		case "fn_mut":
+			if ld.FnBound < 0 || ld.FnBound > 1 {
+				ld.FnBound = 1
+			}
+		case "fn_once":
+			if ld.FnBound < 0 {
+				ld.FnBound = 2
+			}
+		}
+		// supertraits of the bound (e.g. a trait with a Copy supertrait)
+		for _, st := range b.tcx.AllSupertraits(p.Trait) {
+			if st.Trait == copyTr {
+				isCopy = true
+			}
+		}
+	}
+	ld.GenericMove = !isCopy
 }
 
 // buildClosure builds the MIR of a closure body.

@@ -421,6 +421,9 @@ func (c *checker) checkMoveOut(p Place, sp lexer.Span) {
 	}
 	for i, pr := range p.Proj {
 		switch {
+		case pr.Kind == PField && pr.DropTy != nil:
+			c.errorf(sp, "E0509", "cannot move out of type `%s`, which implements the `Drop` trait", pr.DropTy)
+			return
 		case pr.Kind == PDeref && pr.Deref != DBox:
 			base := Place{Local: p.Local, Proj: p.Proj[:i]}
 			if c.body.Locals[p.Local].Kind == LUpvar && i == 0 {
