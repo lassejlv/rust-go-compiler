@@ -29,7 +29,7 @@ type FnCtxt struct {
 	def        *Def
 	ac         *astConv
 
-	scopes   []map[string]*Local
+	scopes   []scope
 	modStack []*Module
 
 	retTy    Ty
@@ -152,7 +152,7 @@ func (t *Tcx) newFnCtxt(def *Def, args []Ty) *FnCtxt {
 		}
 	}
 	fcx.envAssocBounds()
-	fcx.scopes = []map[string]*Local{{}}
+	fcx.scopes = []scope{{locals: map[string]*Local{}}}
 	return fcx
 }
 
@@ -207,7 +207,15 @@ func (fcx *FnCtxt) errorf(sp lexer.Span, format string, args ...any) {
 // ---------------------------------------------------------------------------
 // Scopes and locals
 
-func (fcx *FnCtxt) pushScope() { fcx.scopes = append(fcx.scopes, map[string]*Local{}) }
+// scope is a scope of local variables. A block's scope is split where a
+// macro_rules! definition stands: the scope that starts there records the
+// definition (macDef), for the hygiene of the macro's identifiers.
+type scope struct {
+	locals map[string]*Local
+	macDef uint32
+}
+
+func (fcx *FnCtxt) pushScope() { fcx.scopes = append(fcx.scopes, scope{locals: map[string]*Local{}}) }
 func (fcx *FnCtxt) popScope()  { fcx.scopes = fcx.scopes[:len(fcx.scopes)-1] }
 
 func (fcx *FnCtxt) curClosure() ast.NodeID {
@@ -225,12 +233,14 @@ func (fcx *FnCtxt) newLocal(name string, hyg uint32, ty Ty, mut bool, sp lexer.S
 }
 
 // bindLocal makes l visible in the current scope under (name, hygiene
-// mark). Bindings from macro bodies only match uses from the same
-// expansion; a name-only index serves as a lenient fallback.
+// context): bindings from macro bodies only match uses from the same
+// expansion (see lookupLocal).
 func (fcx *FnCtxt) bindLocal(name string, hyg uint32, l *Local) {
-	sc := fcx.scopes[len(fcx.scopes)-1]
+	sc := fcx.scopes[len(fcx.scopes)-1].locals
 	sc[hygKey(name, hyg)] = l
-	sc["\x01"+name] = l
+	if hyg != 0 {
+		sc["\x01"+name] = l
+	}
 }
 
 func hygKey(name string, hyg uint32) string {
@@ -240,16 +250,33 @@ func hygKey(name string, hyg uint32) string {
 	return name + "\x00" + strconv.FormatUint(uint64(hyg), 10)
 }
 
+// lookupLocal finds the local variable an identifier with hygiene context
+// hyg names, walking the scopes outwards like rustc's ribs: once the walk
+// passes the definition of the local macro whose expansion created the
+// identifier, it is looked up as the identifier of the definition (with
+// the context it had there), so a macro body names the variables visible
+// where the macro is defined (macro_rules "mixed site" hygiene, see
+// ast.HygInfo).
 func (fcx *FnCtxt) lookupLocal(name string, hyg uint32) *Local {
-	key := hygKey(name, hyg)
+	orig := hyg
 	for i := len(fcx.scopes) - 1; i >= 0; i-- {
-		if l, ok := fcx.scopes[i][key]; ok {
+		sc := &fcx.scopes[i]
+		if l, ok := sc.locals[hygKey(name, hyg)]; ok {
 			return l
 		}
+		if sc.macDef != 0 {
+			hyg = ast.HygStrip(hyg, sc.macDef)
+		}
 	}
-	for i := len(fcx.scopes) - 1; i >= 0; i-- {
-		if l, ok := fcx.scopes[i]["\x01"+name]; ok {
-			return l
+	if orig == 0 {
+		// An identifier without context that names a variable bound by
+		// a macro body: tokens that went through a procedural macro
+		// lose their context here (rustc keeps it in their spans), so
+		// it may stand for the macro's variable.
+		for i := len(fcx.scopes) - 1; i >= 0; i-- {
+			if l, ok := fcx.scopes[i].locals["\x01"+name]; ok {
+				return l
+			}
 		}
 	}
 	return nil
@@ -980,8 +1007,10 @@ func blockTail(b *ast.Block) ast.Expr {
 // checkBlock checks a block; expected (may be nil) is the coercion target
 // for the tail expression.
 func (fcx *FnCtxt) checkBlock(b *ast.Block, expected Ty) Ty {
+	// (statements may split the block's scope, see checkStmt)
+	base := len(fcx.scopes)
 	fcx.pushScope()
-	defer fcx.popScope()
+	defer func() { fcx.scopes = fcx.scopes[:base] }()
 	if bm := fcx.t.R.BlockMods[b.ID]; bm != nil {
 		fcx.modStack = append(fcx.modStack, bm)
 		defer func() { fcx.modStack = fcx.modStack[:len(fcx.modStack)-1] }()
@@ -1029,7 +1058,14 @@ func (fcx *FnCtxt) checkStmt(s ast.Stmt) bool {
 			ty = fcx.checkExpr(x.Expr, nil)
 		}
 		return fcx.shallow(ty).Kind == TNever
-	case *ast.ItemStmt, *ast.EmptyStmt:
+	case *ast.EmptyStmt:
+		if x.MacroDef != 0 {
+			// the variables bound after a macro definition are not
+			// visible to its body (see lookupLocal)
+			fcx.scopes = append(fcx.scopes, scope{locals: map[string]*Local{}, macDef: x.MacroDef})
+		}
+		return false
+	case *ast.ItemStmt:
 		return false
 	case *ast.MacStmt:
 		fcx.errorf(x.Mac.Span, "macro `%s!` was not expanded", ast.PathString(x.Mac.Path))

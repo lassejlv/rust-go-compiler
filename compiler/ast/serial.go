@@ -179,6 +179,7 @@ func (e *Encoder) tok(t *Token) {
 		fl |= 4
 	}
 	e.buf = append(e.buf, fl)
+	e.u(uint64(t.Nt))
 }
 
 // Crate encodes a crate (except its LoadMod function).
@@ -429,6 +430,7 @@ func (d *Decoder) tok(t *Token) {
 	t.Raw = fl&1 != 0
 	t.Inner = fl&2 != 0
 	t.JointNext = fl&4 != 0
+	t.Nt = uint8(d.u())
 }
 
 // Crate decodes a crate written by Encoder.Crate.

@@ -208,6 +208,17 @@ func (e *Expander) litString(tts []ast.TokenTree, mac *ast.MacCall) (string, boo
 	return "", false, errAt(ttsSpan(tts, mac.Span), "expected a literal")
 }
 
+// strLitHyg returns the hygiene context of a string literal argument.
+func strLitHyg(tts []ast.TokenTree) uint32 {
+	if len(tts) == 1 && isInvisibleGroup(tts[0]) {
+		tts = tts[0].Inner
+	}
+	if len(tts) == 1 && tts[0].Delim == 0 && tts[0].Tok.Kind == lexer.Str {
+		return tts[0].Tok.Hyg
+	}
+	return 0
+}
+
 // formatArgsMac expands format_args!-style arguments: a format string
 // followed by arguments. prefix/suffix are added to the format string. With
 // allowEmpty, an empty argument list means the format string "".
@@ -240,6 +251,7 @@ func (e *Expander) formatArgsMacDirect(mac *ast.MacCall, tts []ast.TokenTree, pr
 		}
 		in.str = prefix + s + suffix
 		in.strSp = args[0].span(mac.Span)
+		in.strHyg = strLitHyg(args[0].tts)
 		seenNamed := false
 		for _, a := range args[1:] {
 			fa := &fmtArg{name: a.name, tts: a.tts, span: a.span(mac.Span)}

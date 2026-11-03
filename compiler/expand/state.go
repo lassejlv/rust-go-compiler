@@ -54,6 +54,7 @@ func (e *Expander) EncodeCrateState(crate string, enc *ast.Encoder) {
 		enc.String(mi[k].name)
 		enc.Bool(mi[k].proc)
 	}
+	enc.HygInfos()
 }
 
 // DecodeCrateState decodes the state of crate written by
@@ -117,7 +118,12 @@ func (e *Expander) DecodeCrateState(crate string, dec *ast.Decoder) (commit func
 		}
 		mi[k] = r
 	}
+	installHyg, err := dec.HygInfos()
+	if err != nil {
+		return nil, err
+	}
 	return func() {
+		installHyg()
 		e.macros[crate] = defs
 		e.crateOrder = append(e.crateOrder, crate)
 		if al != nil {

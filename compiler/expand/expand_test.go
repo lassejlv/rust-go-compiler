@@ -879,6 +879,7 @@ fn main() { let v = my_vec![1, 2]; let w = local!(); let h = helper!(); }
 
 func TestMacroRulesOrderAndScopes(t *testing.T) {
 	c := expandSrc(t, `
+macro_rules! later { () => { 42 }; }
 fn main() { let x = later!(); }
 fn f() {
     macro_rules! local { ($a:expr) => { $a + 100 }; }
@@ -891,11 +892,28 @@ mod m {
     macro_rules! in_mod { () => { 7 }; }
     pub fn g() -> i32 { in_mod!() }
 }
-macro_rules! later { () => { 42 }; }
 `)
 	s := crateString(c)
 	contains(t, s, "let x = 42;", "let y = 1 + 100;", "let z = 2 + 100;", "pub fn g() -> i32 { 7 }"[4:])
 	notContains(t, s, "MacroRulesItem")
+}
+
+// macro_rules! macros are textually scoped: a call written before the
+// definition is rejected, unless the macro is #[macro_export]ed.
+func TestMacroRulesUsedBeforeDefinition(t *testing.T) {
+	_, err := expandSrcErr(t, `
+fn main() { let x = later!(); }
+macro_rules! later { () => { 42 }; }
+`)
+	if err == nil || !strings.Contains(err.Error(), "cannot find macro `later`") {
+		t.Fatalf("want cannot find macro error, got %v", err)
+	}
+	c := expandSrc(t, `
+fn main() { let x = later!(); }
+#[macro_export]
+macro_rules! later { () => { 42 }; }
+`)
+	contains(t, crateString(c), "let x = 42;")
 }
 
 func TestMacroGeneratingMacro(t *testing.T) {

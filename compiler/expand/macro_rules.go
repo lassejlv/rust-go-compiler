@@ -20,6 +20,11 @@ type macroDef struct {
 	rules    []*macroRule
 	span     lexer.Span
 	body     []ast.TokenTree // the definition's body (see EncodeCrateState)
+	// expanded reports a definition produced by a macro expansion.
+	expanded bool
+	// hygDef identifies a macro defined in a block (the EmptyStmt
+	// marker left in its place, see ast.HygInfo); 0 at module level.
+	hygDef uint32
 }
 
 type macroRule struct {
@@ -565,10 +570,13 @@ func (e *Expander) invokeMacroRules(def *macroDef, mac *ast.MacCall) ([]ast.Toke
 		if ok {
 			hygieneMarks++
 			t := &transcriber{def: def, binds: binds, call: mac.Span, mark: hygieneMarks, cur: e.crate}
+			if def.hygDef != 0 {
+				ast.SetHygInfo(t.mark, ast.HygInfo{Def: def.hygDef})
+			}
 			return t.emit(r.rhs, nil)
 		}
 	}
-	return nil, errAt(mac.Span, "no rules of macro `%s` matched this invocation: `%s!(%s)`", def.name, def.name, truncate(TokensString(mac.Args), 80))
+	return nil, errAt(mac.Span, "no rules of macro `%s` matched this invocation: `%s!(%s)`", def.name, def.name, truncate(tokensLine(mac.Args), 80))
 }
 
 func truncate(s string, n int) string {
@@ -584,6 +592,30 @@ type transcriber struct {
 	call  lexer.Span
 	mark  uint32 // hygiene mark for identifiers from the macro body
 	cur   string // the crate being expanded
+	// ctxs maps the nonzero contexts of body tokens to their contexts
+	// in this expansion (body tokens without one get mark)
+	ctxs map[uint32]uint32
+}
+
+// ctx returns the syntax context in this expansion of a body token whose
+// context in the definition is h (see ast.HygInfo).
+func (t *transcriber) ctx(h uint32) uint32 {
+	if h == 0 {
+		return t.mark
+	}
+	if c, ok := t.ctxs[h]; ok {
+		return c
+	}
+	hygieneMarks++
+	c := hygieneMarks
+	if t.ctxs == nil {
+		t.ctxs = map[uint32]uint32{}
+	}
+	t.ctxs[h] = c
+	if t.def.hygDef != 0 {
+		ast.SetHygInfo(c, ast.HygInfo{Parent: h, Def: t.def.hygDef})
+	}
+	return c
 }
 
 // hygieneMarks numbers macro_rules expansions (hygiene of local variables).
@@ -612,11 +644,23 @@ func (t *transcriber) emit(ns []*tnode, idx []int) ([]ast.TokenTree, error) {
 		switch n.kind {
 		case tTok:
 			tt := n.tt
-			if tt.Delim == 0 && tt.Tok.Kind == lexer.Ident && tt.Tok.Text != "self" && tt.Tok.Text != "Self" {
-				// local variables named by the macro body are distinct
-				// from the caller's (macro_rules hygiene)
-				tt.Tok.Hyg = t.mark
+			switch tt.Tok.Kind {
+			case lexer.Ident:
+				if tt.Tok.Text == "self" || tt.Tok.Text == "Self" {
+					break
+				}
+				fallthrough
+			case lexer.Lifetime, lexer.Str:
+				// local variables and labels named by the macro body
+				// resolve at its definition (macro_rules hygiene); a
+				// string literal's context is that of the variables
+				// its format string captures
+				tt.Tok.Hyg = t.ctx(tt.Tok.Hyg)
 			}
+			// rustc transcribes the macro body's tokens with `Alone`
+			// spacing (stringify! prints `a+b` in a body as `a + b`);
+			// delimited groups keep their source spacing
+			tt.Tok.JointNext = false
 			out = append(out, tt)
 		case tGroup:
 			inner, err := t.emit(n.sub, idx)
@@ -666,7 +710,9 @@ func (t *transcriber) emit(ns []*tnode, idx []int) ([]ast.TokenTree, error) {
 			}
 			for i := 0; i < count; i++ {
 				if i > 0 && n.sep != nil {
-					out = append(out, ast.TokenTree{Tok: *n.sep})
+					sep := *n.sep
+					sep.JointNext = false
+					out = append(out, ast.TokenTree{Tok: sep})
 				}
 				res, err := t.emit(n.sub, append(idx[:len(idx):len(idx)], i))
 				if err != nil {
@@ -682,6 +728,31 @@ func (t *transcriber) emit(ns []*tnode, idx []int) ([]ast.TokenTree, error) {
 // emitFragment returns the tokens of a captured fragment. Expressions are
 // parenthesized to preserve their grouping.
 func emitFragment(f *fragment) []ast.TokenTree {
+	switch f.kind {
+	case "tt":
+		return f.tts // keeps its source spacing
+	case "ident", "lifetime":
+		// rustc substitutes a token with `Alone` spacing (NtIdent for an
+		// ident)
+		out := append([]ast.TokenTree(nil), f.tts...)
+		for i := range out {
+			out[i].Tok.JointNext = false
+			if f.kind == "ident" {
+				out[i].Tok.Nt |= lexer.NtIdent
+			}
+		}
+		return out
+	}
+	// other fragments are an invisible-delimited group in rustc, spaced
+	// `Alone` from what follows
+	if n := len(f.tts); n > 0 {
+		tts := append([]ast.TokenTree(nil), f.tts...)
+		tts[0].Tok.Nt |= lexer.NtStart
+		tts[n-1].Tok.Nt |= lexer.NtEnd
+		tts[n-1].Tok.JointNext = false
+		tts[n-1].CloseJoint = false
+		f = &fragment{kind: f.kind, tts: tts}
+	}
 	switch f.kind {
 	case "expr", "expr_2021":
 		if len(f.tts) > 1 {

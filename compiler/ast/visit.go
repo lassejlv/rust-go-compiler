@@ -4,6 +4,9 @@ package ast
 // Stmt, Expr, Pat, Type, *Arm, *Path. Returning false skips the children.
 type Visitor func(n any) bool
 
+// WalkItemKind traverses the children of an item (the nodes of its kind).
+func WalkItemKind(k ItemKind, v Visitor) { walkItemKind(k, v) }
+
 // Walk traverses an AST node in source order.
 func Walk(n any, v Visitor) {
 	switch x := n.(type) {

@@ -410,19 +410,19 @@ func (p *Parser) parsePrimary(r restr) ast.Expr {
 		p.expect(":")
 		switch {
 		case p.is("loop"):
-			return p.parseLoop(lo, label)
+			return setLabelHyg(p.parseLoop(lo, label), t.Hyg)
 		case p.is("while"):
-			return p.parseWhile(lo, label)
+			return setLabelHyg(p.parseWhile(lo, label), t.Hyg)
 		case p.is("for"):
-			return p.parseFor(lo, label)
+			return setLabelHyg(p.parseFor(lo, label), t.Hyg)
 		case p.is("{"):
 			b := p.parseBlock()
-			return &ast.BlockExpr{ExprBase: p.eb(lo), Block: b, Label: label}
+			return &ast.BlockExpr{ExprBase: p.eb(lo), Block: b, Label: label, LabelHyg: t.Hyg}
 		case p.is("unsafe") && p.isN(1, "{"):
 			p.next()
 			b := p.parseBlock()
 			b.Unsafe = true
-			return &ast.BlockExpr{ExprBase: p.eb(lo), Block: b, Label: label}
+			return &ast.BlockExpr{ExprBase: p.eb(lo), Block: b, Label: label, LabelHyg: t.Hyg}
 		}
 		p.errExpected("`loop`, `while`, `for` or block after label")
 	case lexer.Ident:
@@ -477,7 +477,8 @@ func (p *Parser) parsePrimary(r restr) ast.Expr {
 			p.next()
 			be := &ast.BreakExpr{}
 			if p.cur().Kind == lexer.Lifetime {
-				be.Label = p.next().Text
+				lt := p.next()
+				be.Label, be.LabelHyg = lt.Text, lt.Hyg
 			}
 			if p.canBeginExpr(r) {
 				be.Value = p.parseExprR(r)
@@ -488,7 +489,8 @@ func (p *Parser) parsePrimary(r restr) ast.Expr {
 			p.next()
 			ce := &ast.ContinueExpr{}
 			if p.cur().Kind == lexer.Lifetime {
-				ce.Label = p.next().Text
+				lt := p.next()
+				ce.Label, ce.LabelHyg = lt.Text, lt.Hyg
 			}
 			ce.ExprBase = p.eb(lo)
 			return ce
@@ -632,6 +634,19 @@ func (p *Parser) parseIf() ast.Expr {
 	}
 	ie.ExprBase = p.eb(lo)
 	return ie
+}
+
+// setLabelHyg records the hygiene context of a loop's label.
+func setLabelHyg(e ast.Expr, h uint32) ast.Expr {
+	switch x := e.(type) {
+	case *ast.LoopExpr:
+		x.LabelHyg = h
+	case *ast.WhileExpr:
+		x.LabelHyg = h
+	case *ast.ForExpr:
+		x.LabelHyg = h
+	}
+	return e
 }
 
 func (p *Parser) parseLoop(lo lexer.Pos, label string) ast.Expr {

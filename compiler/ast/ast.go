@@ -36,6 +36,11 @@ type TokenTree struct {
 	Open  Span        // span of the opening delimiter (groups only)
 	Close Span        // span of the closing delimiter (groups only)
 	Inner []TokenTree // group contents
+	// OpenJoint/CloseJoint record the source spacing of a group's
+	// delimiters (rustc's DelimSpacing): the first inner token immediately
+	// follows the opening delimiter / the next token immediately follows
+	// the closing one. They only affect how stringify! prints the group.
+	OpenJoint, CloseJoint bool
 }
 
 // ---------------------------------------------------------------------------
@@ -534,7 +539,11 @@ type MacStmt struct {
 	ImplicitSemi bool
 }
 
-type EmptyStmt struct{}
+// EmptyStmt: an empty statement. MacroDef is nonzero when it marks where a
+// macro_rules! definition was (the definition's hygiene id, see HygInfo).
+type EmptyStmt struct {
+	MacroDef uint32
+}
 
 func (*LetStmt) stmtNode()   {}
 func (*ExprStmt) stmtNode()  {}
@@ -696,9 +705,11 @@ type BlockExpr struct {
 	ExprBase
 	Block *Block
 	Label string // 'label: { ... }
-	Const bool   // const { }
-	Async bool   // async { } / async move { }
-	Move  bool   // async move { }
+	// LabelHyg is the hygiene context of the label (see HygInfo).
+	LabelHyg uint32
+	Const    bool // const { }
+	Async    bool // async { } / async move { }
+	Move     bool // async move { }
 }
 
 // IfExpr: Cond may contain LetExpr (if let / let chains joined by &&).
@@ -720,23 +731,26 @@ type LetExpr struct {
 
 type WhileExpr struct {
 	ExprBase
-	Cond  Expr
-	Body  *Block
-	Label string
+	Cond     Expr
+	Body     *Block
+	Label    string
+	LabelHyg uint32
 }
 
 type LoopExpr struct {
 	ExprBase
-	Body  *Block
-	Label string
+	Body     *Block
+	Label    string
+	LabelHyg uint32
 }
 
 type ForExpr struct {
 	ExprBase
-	Pat   Pat
-	Iter  Expr
-	Body  *Block
-	Label string
+	Pat      Pat
+	Iter     Expr
+	Body     *Block
+	Label    string
+	LabelHyg uint32
 }
 
 type Arm struct {
@@ -774,13 +788,15 @@ type ClosureExpr struct {
 
 type BreakExpr struct {
 	ExprBase
-	Label string
-	Value Expr
+	Label    string
+	LabelHyg uint32
+	Value    Expr
 }
 
 type ContinueExpr struct {
 	ExprBase
-	Label string
+	Label    string
+	LabelHyg uint32
 }
 
 type ReturnExpr struct {

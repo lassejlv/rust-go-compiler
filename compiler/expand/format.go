@@ -327,6 +327,7 @@ type fmtArg struct {
 type formatInput struct {
 	str    string
 	strSp  lexer.Span
+	strHyg uint32 // hygiene context of the string literal (of its captures)
 	args   []*fmtArg
 	byName map[string]int
 	npos   int
@@ -475,7 +476,9 @@ func buildFormatArgs(sp lexer.Span, in *formatInput) ([]ast.TokenTree, error) {
 			return i, nil
 		}
 		// implicit capture
-		a := &fmtArg{tts: []ast.TokenTree{identTok(r.Name, synthSpan(in.strSp))}, span: in.strSp, used: true, captured: true}
+		id := identTok(r.Name, synthSpan(in.strSp))
+		id.Tok.Hyg = in.strHyg
+		a := &fmtArg{tts: []ast.TokenTree{id}, span: in.strSp, used: true, captured: true}
 		in.args = append(in.args, a)
 		in.byName[r.Name] = len(in.args) - 1
 		return len(in.args) - 1, nil
