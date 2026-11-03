@@ -11,6 +11,10 @@ import (
 type tplace struct {
 	p  Place
 	ty Ty
+	// coerce: the destination is a coercion site with a known type (the
+	// return place, an annotated `let`): a `&mut` place stored into it is
+	// implicitly reborrowed, not moved.
+	coerce bool
 }
 
 type scope struct {
@@ -34,10 +38,13 @@ type upvar struct {
 }
 
 type builder struct {
-	tcx  *typeck.Tcx
-	r    *typeck.Results
-	body *Body
-	cur  int // current block (-1: unreachable code)
+	// retCoerce: the return place is a coercion site (declared return
+	// type)
+	retCoerce bool
+	tcx       *typeck.Tcx
+	r         *typeck.Results
+	body      *Body
+	cur       int // current block (-1: unreachable code)
 
 	locals map[*typeck.Local]LocalID
 	upvars map[*typeck.Local]*upvar // whole-variable captures
@@ -780,6 +787,12 @@ func (b *builder) exprInto(e ast.Expr, dest tplace) {
 			b.assign(dest.p, Rvalue{Kind: RRef, Place: tp.deref().p}, e.GetSpan())
 			return
 		}
+		if dest.coerce && dest.ty != nil && dest.ty.Kind == TRef && dest.ty.Mut && tp.ty != nil && tp.ty.Kind == TRef && tp.ty.Mut && len(tp.p.Proj) > 0 {
+			// a `&mut` place reached through a projection at a coercion
+			// site: an implicit reborrow `&mut *place`
+			b.assign(dest.p, Rvalue{Kind: RRef, Place: tp.deref().p, Mut: true}, e.GetSpan())
+			return
+		}
 		b.assign(dest.p, Rvalue{Kind: RUse, Ops: []Operand{b.operandOf(tp)}}, e.GetSpan())
 		return
 	}
@@ -1443,6 +1456,12 @@ func (b *builder) letStmt(x *ast.LetStmt) {
 	if ip, ok := x.Pat.(*ast.IdentPat); ok && ip.Sub == nil && x.Else == nil && len(b.r.PatDerefs[ip.ID]) == 0 {
 		if l := b.r.Locals[ip.ID]; l != nil && !l.ByRef {
 			id := b.userLocal(l)
+			if x.Ty != nil && l.Ty != nil && l.Ty.Kind == TRef && l.Ty.Mut && !b.isPlaceExpr(x.Init) && len(b.r.Adjust[x.Init.GetID()]) == 0 {
+				// `let r: &mut T = { ..; x.0 };`: the block tail reborrows
+				b.exprInto(x.Init, tplace{p: Place{Local: id}, ty: l.Ty, coerce: true})
+				b.endLetTemps(x.Init, sp)
+				return
+			}
 			if x.Ty != nil && l.Ty != nil && l.Ty.Kind == TRef && l.Ty.Mut {
 				// `let r: &mut T = v;` reborrows
 				b.assign(Place{Local: id}, Rvalue{Kind: RUse, Ops: []Operand{b.argOperand(x.Init)}}, sp)
@@ -1804,7 +1823,7 @@ func (b *builder) continueExpr(x *ast.ContinueExpr) {
 }
 
 func (b *builder) returnExpr(v ast.Expr, sp lexer.Span) {
-	ret := tplace{p: Place{Local: 0}, ty: b.body.Locals[0].Ty}
+	ret := tplace{p: Place{Local: 0}, ty: b.body.Locals[0].Ty, coerce: b.retCoerce}
 	if v != nil {
 		b.exprInto(v, ret)
 	} else {

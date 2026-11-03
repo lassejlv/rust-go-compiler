@@ -237,7 +237,8 @@ func buildFn(tcx *typeck.Tcx, d *Def, r *typeck.Results) *builder {
 			b.bindPat(p.Pat, tplace{p: Place{Local: b.locals[l]}, ty: l.Ty}, false)
 		}
 	}
-	b.block(fa.Body, tplace{p: Place{Local: 0}, ty: r.RetTy})
+	b.retCoerce = true
+	b.block(fa.Body, tplace{p: Place{Local: 0}, ty: r.RetTy, coerce: true})
 	b.popScope(fa.Body.Span)
 	b.gotoBlock(b.retBlock)
 	b.cur = b.retBlock
@@ -339,7 +340,8 @@ func buildClosureKind(tcx *typeck.Tcx, r *typeck.Results, ci *typeck.ClosureInfo
 		}
 	}
 	b.pushTemps()
-	b.exprInto(ci.Expr.Body, tplace{p: Place{Local: 0}, ty: ci.Output})
+	b.retCoerce = ci.Expr.Ret != nil
+	b.exprInto(ci.Expr.Body, tplace{p: Place{Local: 0}, ty: ci.Output, coerce: b.retCoerce})
 	b.popTemps(ci.Expr.Span)
 	b.popScope(ci.Expr.Span)
 	b.gotoBlock(b.retBlock)
