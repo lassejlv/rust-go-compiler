@@ -413,7 +413,7 @@ func (g *gen) generate() {
 	for _, sa := range g.sliceAllocs {
 		n, ts := sa[0], sa[1]
 		g.p("func (d *Decoder) make%s(n int) %s {", n, ts)
-		g.p("if n > chunkSize/4 { return make(%s, n) }", ts)
+		g.p("if n == 0 || n > chunkSize/4 { return make(%s, n) } // (never nil)", ts)
 		g.p("if len(d.chunk%s) < n { d.chunk%s = make(%s, chunkSize) }", n, n, ts)
 		g.p("x := d.chunk%s[:n:n]; d.chunk%s = d.chunk%s[n:]; return x", n, n, n)
 		g.p("}")

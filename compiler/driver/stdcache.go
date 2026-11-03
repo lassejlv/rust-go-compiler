@@ -194,6 +194,9 @@ func readStdCache(path string, exp *expand.Expander) *ast.Crate {
 		return nil
 	}
 	c, err := decodeStd(dec, exp)
+	if err != nil && os.Getenv("RUSTGO_STD_CACHE_DEBUG") != "" {
+		fmt.Fprintf(os.Stderr, "std cache: %v\n", err)
+	}
 	if err != nil {
 		// undo what was registered
 		lexer.Files = lexer.Files[:fileBase]

@@ -1,9 +1,11 @@
 package driver
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"testing"
 
 	"rustgo/compiler/ast"
@@ -81,7 +83,7 @@ func TestStdCacheRoundTrip(t *testing.T) {
 		}
 	}
 	if !reflect.DeepEqual(c, c2) {
-		t.Fatal("decoded std crate differs")
+		t.Fatal("decoded std crate differs: ", firstDiff(reflect.ValueOf(c), reflect.ValueOf(c2), "crate"))
 	}
 	if !exp2.IsCrateMacro("std", "__std_int_common") || exp2.IsCrateMacro("std", "no_such_macro") {
 		t.Fatal("std macros missing after decoding")
@@ -107,4 +109,47 @@ func TestStdCacheRoundTrip(t *testing.T) {
 	if readStdCache(path, expand.New()) != nil || len(lexer.Files) != n {
 		t.Fatal("corrupt cache file accepted")
 	}
+}
+
+// firstDiff returns the path of the first difference between a and b.
+func firstDiff(a, b reflect.Value, path string) string {
+	if a.Kind() != b.Kind() {
+		return path + ": kind"
+	}
+	switch a.Kind() {
+	case reflect.Ptr, reflect.Interface:
+		if a.IsNil() || b.IsNil() {
+			if a.IsNil() != b.IsNil() {
+				return path + ": nil"
+			}
+			return ""
+		}
+		if a.Kind() == reflect.Interface && a.Elem().Type() != b.Elem().Type() {
+			return path + ": type"
+		}
+		return firstDiff(a.Elem(), b.Elem(), path)
+	case reflect.Struct:
+		for i := 0; i < a.NumField(); i++ {
+			if d := firstDiff(a.Field(i), b.Field(i), path+"."+a.Type().Field(i).Name); d != "" {
+				return d
+			}
+		}
+		return ""
+	case reflect.Slice:
+		if a.IsNil() != b.IsNil() || a.Len() != b.Len() {
+			return path + ": len/nil"
+		}
+		for i := 0; i < a.Len(); i++ {
+			if d := firstDiff(a.Index(i), b.Index(i), path+"["+strconv.Itoa(i)+"]"); d != "" {
+				return d
+			}
+		}
+		return ""
+	case reflect.Func:
+		return ""
+	}
+	if !reflect.DeepEqual(a.Interface(), b.Interface()) {
+		return path + ": " + fmt.Sprint(a.Interface(), " != ", b.Interface())
+	}
+	return ""
 }

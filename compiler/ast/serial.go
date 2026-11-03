@@ -4,6 +4,9 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"runtime"
+	"sync"
+	"sync/atomic"
 
 	"rustgo/compiler/lexer"
 )
@@ -179,10 +182,32 @@ func (e *Encoder) tok(t *Token) {
 }
 
 // Crate encodes a crate (except its LoadMod function).
+//
+// The crate's items are encoded as independent segments (positions are
+// not encoded relative to another segment's) followed by a table of
+// their sizes, so that they can be decoded in parallel.
 func (e *Encoder) Crate(c *Crate) {
 	e.guard(func() {
 		e.encSl_Pt_Attr(c.Attrs)
-		e.encSl_Pt_Item(c.Items)
+		if c.Items == nil {
+			e.u(0)
+		} else {
+			e.u(uint64(len(c.Items)) + 1)
+			at := len(e.buf)
+			e.buf = binary.LittleEndian.AppendUint64(e.buf, 0) // size of the segments
+			sizes := make([]int, len(c.Items))
+			for i, it := range c.Items {
+				e.last = lexer.Pos{}
+				start := len(e.buf)
+				e.encPt_Item(it)
+				sizes[i] = len(e.buf) - start
+			}
+			binary.LittleEndian.PutUint64(e.buf[at:], uint64(len(e.buf)-at-8))
+			for _, n := range sizes {
+				e.u(uint64(n))
+			}
+			e.last = lexer.Pos{}
+		}
 		e.span(c.Span)
 		e.s(c.Dir)
 	})
@@ -411,11 +436,77 @@ func (d *Decoder) Crate() (c *Crate, err error) {
 	c = &Crate{}
 	err = d.guard(func() {
 		c.Attrs = d.decSl_Pt_Attr()
-		c.Items = d.decSl_Pt_Item()
+		if n := d.u(); n != 0 {
+			c.Items = make([]*Item, d.length(n-1))
+			size := binary.LittleEndian.Uint64(d.data[d.p:])
+			if size > uint64(d.end-d.p-8) {
+				panic(errCorrupt)
+			}
+			start := d.p + 8
+			d.p = start + int(size)
+			ends := make([]int, len(c.Items))
+			off := start
+			for i := range ends {
+				n := d.u()
+				if n > size {
+					panic(errCorrupt)
+				}
+				off += int(n)
+				ends[i] = off
+			}
+			if off != start+int(size) {
+				panic(errCorrupt)
+			}
+			d.decodeItems(c.Items, start, ends)
+		}
+		d.last = lexer.Pos{}
 		c.Span = d.span()
 		c.Dir = d.s()
 	})
 	return c, err
+}
+
+// decodeItems decodes the item segments ending at ends (the first starts
+// at start) into items, on several goroutines.
+func (d *Decoder) decodeItems(items []*Item, start int, ends []int) {
+	workers := runtime.GOMAXPROCS(0)
+	if workers > 8 {
+		workers = 8
+	}
+	if workers > len(items) {
+		workers = len(items)
+	}
+	var next atomic.Int64
+	var wg sync.WaitGroup
+	errs := make([]any, workers)
+	for w := 0; w < workers; w++ {
+		wg.Add(1)
+		go func(w int) {
+			defer wg.Done()
+			defer func() { errs[w] = recover() }()
+			sub := &Decoder{IDBase: d.IDBase, FileBase: d.FileBase, HygBase: d.HygBase, data: d.data, strs: d.strs}
+			for {
+				i := int(next.Add(1) - 1)
+				if i >= len(items) {
+					return
+				}
+				sub.p, sub.end, sub.last = start, ends[i], lexer.Pos{}
+				if i > 0 {
+					sub.p = ends[i-1]
+				}
+				items[i] = sub.decPt_Item()
+				if sub.p != sub.end {
+					panic(errCorrupt)
+				}
+			}
+		}(w)
+	}
+	wg.Wait()
+	for _, r := range errs {
+		if r != nil {
+			panic(r)
+		}
+	}
 }
 
 // TokenTrees decodes token trees.

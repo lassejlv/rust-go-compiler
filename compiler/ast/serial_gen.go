@@ -3946,9 +3946,9 @@ func (d *Decoder) newAsmOperand() *AsmOperand {
 	return x
 }
 func (d *Decoder) makeSl_TokenTree(n int) []TokenTree {
-	if n > chunkSize/4 {
+	if n == 0 || n > chunkSize/4 {
 		return make([]TokenTree, n)
-	}
+	} // (never nil)
 	if len(d.chunkSl_TokenTree) < n {
 		d.chunkSl_TokenTree = make([]TokenTree, chunkSize)
 	}
@@ -3957,9 +3957,9 @@ func (d *Decoder) makeSl_TokenTree(n int) []TokenTree {
 	return x
 }
 func (d *Decoder) makeSl_Pt_PathSegment(n int) []*PathSegment {
-	if n > chunkSize/4 {
+	if n == 0 || n > chunkSize/4 {
 		return make([]*PathSegment, n)
-	}
+	} // (never nil)
 	if len(d.chunkSl_Pt_PathSegment) < n {
 		d.chunkSl_Pt_PathSegment = make([]*PathSegment, chunkSize)
 	}
@@ -3968,9 +3968,9 @@ func (d *Decoder) makeSl_Pt_PathSegment(n int) []*PathSegment {
 	return x
 }
 func (d *Decoder) makeSl_GenericArg(n int) []GenericArg {
-	if n > chunkSize/4 {
+	if n == 0 || n > chunkSize/4 {
 		return make([]GenericArg, n)
-	}
+	} // (never nil)
 	if len(d.chunkSl_GenericArg) < n {
 		d.chunkSl_GenericArg = make([]GenericArg, chunkSize)
 	}
@@ -3979,9 +3979,9 @@ func (d *Decoder) makeSl_GenericArg(n int) []GenericArg {
 	return x
 }
 func (d *Decoder) makeSl_Pt_AssocBinding(n int) []*AssocBinding {
-	if n > chunkSize/4 {
+	if n == 0 || n > chunkSize/4 {
 		return make([]*AssocBinding, n)
-	}
+	} // (never nil)
 	if len(d.chunkSl_Pt_AssocBinding) < n {
 		d.chunkSl_Pt_AssocBinding = make([]*AssocBinding, chunkSize)
 	}
@@ -3990,9 +3990,9 @@ func (d *Decoder) makeSl_Pt_AssocBinding(n int) []*AssocBinding {
 	return x
 }
 func (d *Decoder) makeSl_Type(n int) []Type {
-	if n > chunkSize/4 {
+	if n == 0 || n > chunkSize/4 {
 		return make([]Type, n)
-	}
+	} // (never nil)
 	if len(d.chunkSl_Type) < n {
 		d.chunkSl_Type = make([]Type, chunkSize)
 	}
@@ -4001,9 +4001,9 @@ func (d *Decoder) makeSl_Type(n int) []Type {
 	return x
 }
 func (d *Decoder) makeSl_Pt_Bound(n int) []*Bound {
-	if n > chunkSize/4 {
+	if n == 0 || n > chunkSize/4 {
 		return make([]*Bound, n)
-	}
+	} // (never nil)
 	if len(d.chunkSl_Pt_Bound) < n {
 		d.chunkSl_Pt_Bound = make([]*Bound, chunkSize)
 	}
@@ -4012,9 +4012,9 @@ func (d *Decoder) makeSl_Pt_Bound(n int) []*Bound {
 	return x
 }
 func (d *Decoder) makeSl_Pt_Attr(n int) []*Attr {
-	if n > chunkSize/4 {
+	if n == 0 || n > chunkSize/4 {
 		return make([]*Attr, n)
-	}
+	} // (never nil)
 	if len(d.chunkSl_Pt_Attr) < n {
 		d.chunkSl_Pt_Attr = make([]*Attr, chunkSize)
 	}
@@ -4023,9 +4023,9 @@ func (d *Decoder) makeSl_Pt_Attr(n int) []*Attr {
 	return x
 }
 func (d *Decoder) makeSl_Pt_GenericParam(n int) []*GenericParam {
-	if n > chunkSize/4 {
+	if n == 0 || n > chunkSize/4 {
 		return make([]*GenericParam, n)
-	}
+	} // (never nil)
 	if len(d.chunkSl_Pt_GenericParam) < n {
 		d.chunkSl_Pt_GenericParam = make([]*GenericParam, chunkSize)
 	}
@@ -4034,9 +4034,9 @@ func (d *Decoder) makeSl_Pt_GenericParam(n int) []*GenericParam {
 	return x
 }
 func (d *Decoder) makeSl_Pt_WherePredicate(n int) []*WherePredicate {
-	if n > chunkSize/4 {
+	if n == 0 || n > chunkSize/4 {
 		return make([]*WherePredicate, n)
-	}
+	} // (never nil)
 	if len(d.chunkSl_Pt_WherePredicate) < n {
 		d.chunkSl_Pt_WherePredicate = make([]*WherePredicate, chunkSize)
 	}
@@ -4045,9 +4045,9 @@ func (d *Decoder) makeSl_Pt_WherePredicate(n int) []*WherePredicate {
 	return x
 }
 func (d *Decoder) makeSl_string(n int) []string {
-	if n > chunkSize/4 {
+	if n == 0 || n > chunkSize/4 {
 		return make([]string, n)
-	}
+	} // (never nil)
 	if len(d.chunkSl_string) < n {
 		d.chunkSl_string = make([]string, chunkSize)
 	}
@@ -4056,9 +4056,9 @@ func (d *Decoder) makeSl_string(n int) []string {
 	return x
 }
 func (d *Decoder) makeSl_Pt_Param(n int) []*Param {
-	if n > chunkSize/4 {
+	if n == 0 || n > chunkSize/4 {
 		return make([]*Param, n)
-	}
+	} // (never nil)
 	if len(d.chunkSl_Pt_Param) < n {
 		d.chunkSl_Pt_Param = make([]*Param, chunkSize)
 	}
@@ -4067,9 +4067,9 @@ func (d *Decoder) makeSl_Pt_Param(n int) []*Param {
 	return x
 }
 func (d *Decoder) makeSl_Pt_FieldDef(n int) []*FieldDef {
-	if n > chunkSize/4 {
+	if n == 0 || n > chunkSize/4 {
 		return make([]*FieldDef, n)
-	}
+	} // (never nil)
 	if len(d.chunkSl_Pt_FieldDef) < n {
 		d.chunkSl_Pt_FieldDef = make([]*FieldDef, chunkSize)
 	}
@@ -4078,9 +4078,9 @@ func (d *Decoder) makeSl_Pt_FieldDef(n int) []*FieldDef {
 	return x
 }
 func (d *Decoder) makeSl_Pt_Variant(n int) []*Variant {
-	if n > chunkSize/4 {
+	if n == 0 || n > chunkSize/4 {
 		return make([]*Variant, n)
-	}
+	} // (never nil)
 	if len(d.chunkSl_Pt_Variant) < n {
 		d.chunkSl_Pt_Variant = make([]*Variant, chunkSize)
 	}
@@ -4089,9 +4089,9 @@ func (d *Decoder) makeSl_Pt_Variant(n int) []*Variant {
 	return x
 }
 func (d *Decoder) makeSl_Pt_Item(n int) []*Item {
-	if n > chunkSize/4 {
+	if n == 0 || n > chunkSize/4 {
 		return make([]*Item, n)
-	}
+	} // (never nil)
 	if len(d.chunkSl_Pt_Item) < n {
 		d.chunkSl_Pt_Item = make([]*Item, chunkSize)
 	}
@@ -4100,9 +4100,9 @@ func (d *Decoder) makeSl_Pt_Item(n int) []*Item {
 	return x
 }
 func (d *Decoder) makeSl_Pt_UseTree(n int) []*UseTree {
-	if n > chunkSize/4 {
+	if n == 0 || n > chunkSize/4 {
 		return make([]*UseTree, n)
-	}
+	} // (never nil)
 	if len(d.chunkSl_Pt_UseTree) < n {
 		d.chunkSl_Pt_UseTree = make([]*UseTree, chunkSize)
 	}
@@ -4111,9 +4111,9 @@ func (d *Decoder) makeSl_Pt_UseTree(n int) []*UseTree {
 	return x
 }
 func (d *Decoder) makeSl_Stmt(n int) []Stmt {
-	if n > chunkSize/4 {
+	if n == 0 || n > chunkSize/4 {
 		return make([]Stmt, n)
-	}
+	} // (never nil)
 	if len(d.chunkSl_Stmt) < n {
 		d.chunkSl_Stmt = make([]Stmt, chunkSize)
 	}
@@ -4122,9 +4122,9 @@ func (d *Decoder) makeSl_Stmt(n int) []Stmt {
 	return x
 }
 func (d *Decoder) makeSl_Expr(n int) []Expr {
-	if n > chunkSize/4 {
+	if n == 0 || n > chunkSize/4 {
 		return make([]Expr, n)
-	}
+	} // (never nil)
 	if len(d.chunkSl_Expr) < n {
 		d.chunkSl_Expr = make([]Expr, chunkSize)
 	}
@@ -4133,9 +4133,9 @@ func (d *Decoder) makeSl_Expr(n int) []Expr {
 	return x
 }
 func (d *Decoder) makeSl_Pt_Arm(n int) []*Arm {
-	if n > chunkSize/4 {
+	if n == 0 || n > chunkSize/4 {
 		return make([]*Arm, n)
-	}
+	} // (never nil)
 	if len(d.chunkSl_Pt_Arm) < n {
 		d.chunkSl_Pt_Arm = make([]*Arm, chunkSize)
 	}
@@ -4144,9 +4144,9 @@ func (d *Decoder) makeSl_Pt_Arm(n int) []*Arm {
 	return x
 }
 func (d *Decoder) makeSl_Pt_ClosureParam(n int) []*ClosureParam {
-	if n > chunkSize/4 {
+	if n == 0 || n > chunkSize/4 {
 		return make([]*ClosureParam, n)
-	}
+	} // (never nil)
 	if len(d.chunkSl_Pt_ClosureParam) < n {
 		d.chunkSl_Pt_ClosureParam = make([]*ClosureParam, chunkSize)
 	}
@@ -4155,9 +4155,9 @@ func (d *Decoder) makeSl_Pt_ClosureParam(n int) []*ClosureParam {
 	return x
 }
 func (d *Decoder) makeSl_Pt_FieldInit(n int) []*FieldInit {
-	if n > chunkSize/4 {
+	if n == 0 || n > chunkSize/4 {
 		return make([]*FieldInit, n)
-	}
+	} // (never nil)
 	if len(d.chunkSl_Pt_FieldInit) < n {
 		d.chunkSl_Pt_FieldInit = make([]*FieldInit, chunkSize)
 	}
@@ -4166,9 +4166,9 @@ func (d *Decoder) makeSl_Pt_FieldInit(n int) []*FieldInit {
 	return x
 }
 func (d *Decoder) makeSl_Pt_FormatSpec(n int) []*FormatSpec {
-	if n > chunkSize/4 {
+	if n == 0 || n > chunkSize/4 {
 		return make([]*FormatSpec, n)
-	}
+	} // (never nil)
 	if len(d.chunkSl_Pt_FormatSpec) < n {
 		d.chunkSl_Pt_FormatSpec = make([]*FormatSpec, chunkSize)
 	}
@@ -4177,9 +4177,9 @@ func (d *Decoder) makeSl_Pt_FormatSpec(n int) []*FormatSpec {
 	return x
 }
 func (d *Decoder) makeSl_Pat(n int) []Pat {
-	if n > chunkSize/4 {
+	if n == 0 || n > chunkSize/4 {
 		return make([]Pat, n)
-	}
+	} // (never nil)
 	if len(d.chunkSl_Pat) < n {
 		d.chunkSl_Pat = make([]Pat, chunkSize)
 	}
@@ -4188,9 +4188,9 @@ func (d *Decoder) makeSl_Pat(n int) []Pat {
 	return x
 }
 func (d *Decoder) makeSl_Pt_FieldPat(n int) []*FieldPat {
-	if n > chunkSize/4 {
+	if n == 0 || n > chunkSize/4 {
 		return make([]*FieldPat, n)
-	}
+	} // (never nil)
 	if len(d.chunkSl_Pt_FieldPat) < n {
 		d.chunkSl_Pt_FieldPat = make([]*FieldPat, chunkSize)
 	}
@@ -4199,9 +4199,9 @@ func (d *Decoder) makeSl_Pt_FieldPat(n int) []*FieldPat {
 	return x
 }
 func (d *Decoder) makeSl_Pt_AsmOperand(n int) []*AsmOperand {
-	if n > chunkSize/4 {
+	if n == 0 || n > chunkSize/4 {
 		return make([]*AsmOperand, n)
-	}
+	} // (never nil)
 	if len(d.chunkSl_Pt_AsmOperand) < n {
 		d.chunkSl_Pt_AsmOperand = make([]*AsmOperand, chunkSize)
 	}
