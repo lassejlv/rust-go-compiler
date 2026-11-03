@@ -3,6 +3,7 @@ package borrowck
 import (
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 
 	"rustgo/compiler/ast"
@@ -16,8 +17,10 @@ import (
 
 // IntoEdge: a call writes arg[Src]'s loans (from depth SrcDepth) into the
 // referent of the `&mut` argument Dst (at depth DstDepth of the referent).
+// Name: the type parameter (or lifetime) of the signature both share.
 type IntoEdge struct {
 	Dst, DstDepth, Src, SrcDepth int
+	Name                         string
 }
 
 type occ struct {
@@ -440,7 +443,7 @@ func (b *builder) sigFlow(c *typeck.Callee, nargs int, ret Ty, argTys []Ty) *Flo
 				}
 				for _, jo := range js {
 					if jo.name == io.name {
-						fl.Into = append(fl.Into, IntoEdge{Dst: i, DstDepth: io.depth - 1, Src: j, SrcDepth: jo.depth})
+						fl.Into = append(fl.Into, IntoEdge{Dst: i, DstDepth: io.depth - 1, Src: j, SrcDepth: jo.depth, Name: io.name})
 					}
 				}
 			}
@@ -459,7 +462,7 @@ func (b *builder) sigFlow(c *typeck.Callee, nargs int, ret Ty, argTys []Ty) *Flo
 				if debugLoans {
 					fmt.Fprintf(os.Stderr, "borrowck: slotFlow %s: %v\n", d.Name, e)
 				}
-				fl.Slots, fl.Covered, fl.ArgFull, fl.RetLay, fl.ArgLays, fl.IntoSlots = nil, nil, nil, nil, nil, nil
+				fl.Slots, fl.Covered, fl.ArgFull, fl.RetLay, fl.ArgLays, fl.IntoSlots, fl.ArgLabels = nil, nil, nil, nil, nil, nil, nil
 			}
 		}()
 		slotFlow(fl, d, selfTy, slotParams, gens, argTys, ret, elided, mutIn)
@@ -565,6 +568,8 @@ type loanChecker struct {
 	// types give them; retLabels labels the return value's slots
 	sigSlots  bool
 	retLabels []string
+	// paramLabels: the labels of the parameters' slots (with sigSlots)
+	paramLabels [][]string
 }
 
 var debugLoans = os.Getenv("RUSTGO_BORROWCK_DEBUG") != ""
@@ -1044,12 +1049,17 @@ func (c *checker) checkLoans() {
 			var placed []originAt
 			ok := true
 			var names []string
+			var plabels [][]string
 			for pi, l := range lc.params {
 				w.label(r.inAst[pi], lc.localLayout(l))
 				if !w.full {
+					if debugLoans {
+						fmt.Fprintf(os.Stderr, "borrowck: parameter %d not labeled: %q\n", pi, w.labels)
+					}
 					ok = false
 					break
 				}
+				plabels = append(plabels, w.labels)
 				for k, lb := range w.labels {
 					if lb[0] == '\'' && lb != "'static" && lb != "'?" && !strings.HasPrefix(lb, "'#h") {
 						placed = append(placed, originAt{l, k, -1})
@@ -1059,6 +1069,11 @@ func (c *checker) checkLoans() {
 			}
 			if ok && w.elided == r.nElided {
 				lc.sigSlots = true
+				lc.paramLabels = plabels
+				// what the ADTs of the parameters' types imply
+				for pi, l := range lc.params {
+					impliedByLabels(lc.ctx.tcx, r, lc.localLayout(l), plabels[pi])
+				}
 				for i, o := range placed {
 					o.loan = loanOf(names[i])
 					origins = append(origins, o)
@@ -1143,6 +1158,18 @@ type closSummary struct {
 	ret     *layout
 	fromArg [][][2]int // result slot -> (parameter, slot)
 	caps    []bool     // result slot holds loans of captured variables
+	// capSlots: per result slot, the slots of the closure value its
+	// captured loans come from; capVague: a result slot holds captured
+	// loans of unknown slots (loans of the captured places themselves)
+	capSlots [][]int
+	capVague []bool
+	params   []*layout // the layouts of the parameters
+	// imprecise: the summary does not describe the result's regions
+	// precisely enough to replace the flow by depth: the body writes
+	// through captured references (stores into captured data are not
+	// tracked), or the closure declares its return type (which may
+	// shorten lifetimes)
+	imprecise bool
 }
 
 // fromArgs reports whether any result slot holds parameter regions.
@@ -1199,12 +1226,32 @@ func summarizeClosure(tcx *typeck.Tcx, t Ty, body *Body) {
 	}
 	var seeds []seed
 	argOf := map[int][2]int{}
+	// a captured-loans origin per slot of the closure value (capLoan:
+	// one the closure value does not hold in a known slot)
 	capLoan := len(lc.loans)
 	lc.loans = append(lc.loans, loan{place: Place{Local: -1}, origin: "'cap"})
-	ai := 0
+	cl := layoutOf(t)
+	capAt := map[int]int{} // loan -> slot of the closure value
+	capSlot := make([]int, cl.n())
+	for k := range capSlot {
+		capSlot[k] = len(lc.loans)
+		capAt[len(lc.loans)] = k
+		lc.loans = append(lc.loans, loan{place: Place{Local: -1}, origin: "'cap"})
+	}
+	nUp := 0
+	for _, ld := range body.Locals {
+		if ld.Kind == LUpvar {
+			nUp++
+		}
+	}
+	_, structured := capturesOf(t)
+	structured = structured && !cl.flat && !cl.root.wild && len(cl.root.kids) == nUp
+	var params []*layout
+	ai, ui := 0, 0
 	for i, ld := range body.Locals {
 		switch ld.Kind {
 		case LArg:
+			params = append(params, lc.localLayout(LocalID(i)))
 			for k := 0; k < lc.localLayout(LocalID(i)).n(); k++ {
 				argOf[len(lc.loans)] = [2]int{ai, k}
 				seeds = append(seeds, seed{LocalID(i), k, len(lc.loans)})
@@ -1212,9 +1259,41 @@ func summarizeClosure(tcx *typeck.Tcx, t Ty, body *Body) {
 			}
 			ai++
 		case LUpvar:
-			for k := 0; k < lc.localLayout(LocalID(i)).n(); k++ {
-				seeds = append(seeds, seed{LocalID(i), k, capLoan})
+			// the closure value holds the captured operands (in its
+			// slots for them, or by depth): a by-ref capture of a
+			// reference place `x` is made as `&*x` (see closure
+			// building), one level less than the upvar `&&T` the body
+			// sees
+			deref := ld.UpvarByRef && ld.Ty != nil && ld.Ty.Kind == TRef && ld.Ty.Elem != nil && ld.Ty.Elem.Kind == TRef
+			ul := lc.localLayout(LocalID(i))
+			for k := 0; k < ul.n(); k++ {
+				s := -1
+				switch {
+				case ul.flat || cl.flat:
+				case structured:
+					kid := cl.root.kids[ui]
+					w := kid.end - kid.start
+					if deref && ul.n() == w+1 {
+						s = kid.start + max(k-1, 0)
+					} else if !deref && ul.n() == w {
+						s = kid.start + k
+					}
+				case cl.root.wild:
+					d := ul.depth[k]
+					if deref && d > 0 {
+						d--
+					}
+					if d < cl.n() {
+						s = d
+					}
+				}
+				li := capLoan
+				if s >= 0 {
+					li = capSlot[s]
+				}
+				seeds = append(seeds, seed{LocalID(i), k, li})
 			}
+			ui++
 		}
 	}
 	lc.nLoans = len(lc.loans)
@@ -1230,7 +1309,8 @@ func summarizeClosure(tcx *typeck.Tcx, t Ty, body *Body) {
 	}
 	lc.solve(in)
 	rl := lc.localLayout(0)
-	sm := &closSummary{ret: rl, fromArg: make([][][2]int, rl.n()), caps: make([]bool, rl.n())}
+	sm := &closSummary{ret: rl, fromArg: make([][][2]int, rl.n()), caps: make([]bool, rl.n()), capSlots: make([][]int, rl.n()), capVague: make([]bool, rl.n()), params: params}
+	sm.imprecise = writesThroughCaptures(body)
 	for bi, bl := range body.Blocks {
 		if bl.Term.Kind != TReturn || in[bi] == nil {
 			continue
@@ -1245,20 +1325,65 @@ func summarizeClosure(tcx *typeck.Tcx, t Ty, body *Body) {
 				if !h.has(li) {
 					continue
 				}
-				if li == capLoan {
+				if d, ok := capAt[li]; ok {
 					sm.caps[j] = true
+					if !slices.Contains(sm.capSlots[j], d) {
+						sm.capSlots[j] = append(sm.capSlots[j], d)
+					}
+				} else if li == capLoan {
+					sm.caps[j] = true
+					sm.capVague[j] = true
 				} else if a, ok := argOf[li]; ok {
 					sm.fromArg[j] = append(sm.fromArg[j], a)
 				} else if lc.loans[li].origin == "" && lc.body.Locals[lc.loans[li].place.Local].Kind == LUpvar {
 					sm.caps[j] = true
+					sm.capVague[j] = true
 				}
 			}
 		}
 	}
 	closSummaries[t] = sm
 	if debugLoans {
-		fmt.Fprintf(os.Stderr, "borrowck: closure %s summary fromArg=%v caps=%v\n", t, sm.fromArg, sm.caps)
+		fmt.Fprintf(os.Stderr, "borrowck: closure %s summary fromArg=%v caps=%v capSlots=%v vague=%v\n", t, sm.fromArg, sm.caps, sm.capSlots, sm.capVague)
 	}
+}
+
+// writesThroughCaptures reports whether a closure body assigns to or
+// mutably borrows a place behind a reference it captured.
+func writesThroughCaptures(body *Body) bool {
+	behind := func(p Place) bool {
+		if p.Local < 0 || int(p.Local) >= len(body.Locals) || body.Locals[p.Local].Kind != LUpvar {
+			return false
+		}
+		ld := body.Locals[p.Local]
+		n := 0
+		for _, pr := range p.Proj {
+			if pr.Kind == PDeref {
+				n++
+			}
+		}
+		// the first deref of a by-value capture in an Fn/FnMut body
+		// reaches the captured value itself (see upvarPlace)
+		if !ld.UpvarByRef && (body.ClosureKind == 0 || body.ClosureKind == 1) {
+			n--
+		}
+		// a by-ref capture: its first deref reaches the captured place
+		if ld.UpvarByRef {
+			n--
+		}
+		return n > 0
+	}
+	for _, bl := range body.Blocks {
+		for _, s := range bl.Stmts {
+			if s.Kind != SAssign {
+				continue
+			}
+			if behind(s.Place) || (s.Rv.Kind == RRef && s.Rv.Mut && behind(s.Rv.Place)) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // ---------------------------------------------------------------------------
@@ -1533,6 +1658,12 @@ func (lc *loanChecker) aggVal(st *lstate, s Stmt) lval {
 				put(o, dl.root.kids[0].start, layoutOf(t.Elem))
 			}
 			return out
+		case t.Kind == TClosure && !dl.root.wild && len(ops) == len(dl.root.kids):
+			// the captured operands (see registerClosureCaps)
+			for k, o := range ops {
+				put(o, dl.root.kids[k].start, layoutOf(dl.root.kids[k].ty))
+			}
+			return out
 		case t.Kind == TAdt && t.Def.Adt != nil:
 			vi := s.Rv.Variant - 1
 			if vi < 0 && !t.Def.Adt.IsEnum() {
@@ -1617,6 +1748,9 @@ func (lc *loanChecker) transferTerm(st *lstate, t Term) {
 		}
 		precise := fl.RetLay != nil && len(fl.ArgLays) == len(args)
 		for i := 0; precise && i < len(args); i++ {
+			if fl.ArgLays[i] == nil {
+				continue // no slot flows from it
+			}
 			if t.Args[i].Kind == OConst {
 				args[i] = lc.emptyVal(fl.ArgLays[i])
 			}
@@ -1924,6 +2058,12 @@ func (lc *loanChecker) checkParamStores(st *lstate, t Term) {
 			if k == 0 {
 				continue // a local copy of the parameter
 			}
+			if lc.sigSlots && pi < len(lc.paramLabels) {
+				if lc.checkParamStoreSlots(p, pi, k, e, t.Flow, src, t.Span) {
+					return
+				}
+				continue
+			}
 			for kk := 0; e.SrcDepth+kk < maxDepth && k+e.DstDepth+kk < maxDepth; kk++ {
 				set, any := lc.regions.allowed(lc.regions.params[pi], k+e.DstDepth+kk)
 				if any {
@@ -1938,6 +2078,90 @@ func (lc *loanChecker) checkParamStores(st *lstate, t Term) {
 			}
 		}
 	}
+}
+
+// checkParamStoreSlots checks a store into the referent p of a `&mut`
+// based on parameter pi (through k references) by the slots of the
+// parameter's declared type p's slots map to (through fields of ADTs,
+// whose declared lifetimes are not ordered by depth). The store is
+// described by depth: an origin may go where one of the slots of p's
+// value at that depth is declared with a lifetime it outlives. It reports
+// whether an error was reported.
+func (lc *loanChecker) checkParamStoreSlots(p Place, pi, k int, e IntoEdge, fl *Flow, src []bitset, sp lexer.Span) bool {
+	info := lc.placeInfo(p)
+	if info.raw || info.lay.flat {
+		return false
+	}
+	// when p is the referent of the `&mut` argument: only the slots the
+	// signature stores into (those of the shared type parameter)
+	var only map[int]bool
+	if e.Name != "" && e.Name[0] != '\'' && e.Dst < len(fl.ArgLabels) && e.Dst < len(fl.ArgLays) && fl.ArgLays[e.Dst] != nil {
+		al, labels := fl.ArgLays[e.Dst], fl.ArgLabels[e.Dst]
+		if !al.flat && al.root.ty != nil && al.root.ty.Kind == TRef && len(al.root.kids) == 1 && len(labels) == al.n() {
+			if rl := layoutOf(al.root.ty.Elem); rl.key == info.lay.key && rl.n() == info.lay.n() && rl.n() == al.n()-1 {
+				only = map[int]bool{}
+				for s := 1; s < len(labels); s++ {
+					if lb := labels[s]; lb == e.Name || strings.HasPrefix(lb, e.Name+"#") {
+						only[s-1] = true
+					}
+				}
+				if len(only) == 0 {
+					only = nil
+				}
+			}
+		}
+	}
+	labels := lc.paramLabels[pi]
+	if debugLoans {
+		fmt.Fprintf(os.Stderr, "borrowck: %s store into %s (depth %d): slots %v of %q\n", sp.Lo, lc.body.placeString(p), e.DstDepth, info.m, labels)
+	}
+	for kk := 0; e.SrcDepth+kk < maxDepth && e.DstDepth+kk < maxDepth; kk++ {
+		set := map[string]bool{}
+		any, found := false, false
+		for j, d := range info.lay.depth {
+			if d != e.DstDepth+kk || j >= len(info.m) || (only != nil && !only[j]) {
+				continue
+			}
+			found = true
+			if len(info.m[j]) == 0 {
+				// no slot of the parameter ('static in a field's
+				// type): by depth
+				s, a := lc.regions.allowed(lc.regions.params[pi], k+e.DstDepth+kk)
+				for n := range s {
+					set[n] = true
+				}
+				any = any || a
+			}
+			for _, r := range info.m[j] {
+				lb := ""
+				if r < len(labels) {
+					lb = labels[r]
+				}
+				switch {
+				case lb == "" || lb[0] != '\'' || strings.HasPrefix(lb, "'#h"):
+					any = true // a type parameter's instance, or unknown
+				case lb == "'?":
+					if lc.regions.elided == "" {
+						any = true
+					} else {
+						set[lc.regions.elided] = true
+					}
+				default:
+					set[lb] = true
+				}
+			}
+		}
+		if any || !found {
+			continue
+		}
+		for oi := 0; oi < lc.nLoans; oi++ {
+			if src[e.SrcDepth+kk].has(oi) && lc.loans[oi].origin != "" && !lc.regions.originOK(lc.loans[oi].origin, set) {
+				lc.regionError(lc.loans[oi].origin, sp)
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // checkStatic reports an argument holding loans of locals where 'static is

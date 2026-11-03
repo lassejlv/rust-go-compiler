@@ -149,9 +149,11 @@ func slotFlow(fl *Flow, d *Def, selfAst ast.Type, params map[string]bool, gens [
 	fl.RetLay = rl
 	fl.ArgLays = make([]*layout, len(args))
 	fl.ArgFull = make([]bool, len(args))
+	fl.ArgLabels = make([][]string, len(args))
 	for i, a := range args {
 		fl.ArgLays[i] = a.lay
 		fl.ArgFull[i] = a.full
+		fl.ArgLabels[i] = a.labels
 	}
 	fl.Covered = make([]bool, rl.n())
 	seen := map[SlotEdge]bool{}
@@ -216,6 +218,14 @@ func slotFlow(fl *Flow, d *Def, selfAst ast.Type, params map[string]bool, gens [
 			}
 			return
 		}
+		if caps {
+			if es, ok := capturedItems(i, s, n, al, rl); ok {
+				for _, e := range es {
+					add(e)
+				}
+				return
+			}
+		}
 		clos := map[int]bool{}
 		if !caps {
 			clos = closureSlots(s)
@@ -244,6 +254,35 @@ func slotFlow(fl *Flow, d *Def, selfAst ast.Type, params map[string]bool, gens [
 			continue
 		}
 		srcs, producers := boundSources(name, gens, params)
+		if len(srcs) == 0 && len(producers) == 1 {
+			// made by a closure (`F: FnOnce(T) -> U`): its summary says
+			// which slots of its arguments and captures the result holds
+			argOcc := make([]map[string][]*lnode, len(args))
+			for i, a := range args {
+				argOcc[i] = a.occ
+			}
+			var edges []SlotEdge
+			ok := true
+			for f, inputs := range producers {
+				for _, n := range ns {
+					es, good := closureProduced(f, inputs, argOcc, n, params)
+					if !good {
+						ok = false
+						break
+					}
+					edges = append(edges, es...)
+				}
+			}
+			if ok {
+				for _, e := range edges {
+					add(e)
+				}
+				for _, n := range ns {
+					cover(n)
+				}
+				continue
+			}
+		}
 		// what the closures producing the values (F: FnMut(T) -> U) make
 		// them from: the inputs their results hold loans of
 		caps := false
@@ -361,6 +400,237 @@ func slotFlow(fl *Flow, d *Def, selfAst ast.Type, params map[string]bool, gens [
 	}
 }
 
+// closureProduced returns the flow into result node n (the result of
+// closure F, whose parameters are the bound's inputs) from the closure's
+// summary: its parameters' slots (inputs `X` or `&X` with X a type
+// parameter of the arguments) and the slots of the closure value its
+// captures sit in. good is false when that cannot be related precisely.
+func closureProduced(f string, inputs []ast.Type, occ []map[string][]*lnode, n *lnode, params map[string]bool) (edges []SlotEdge, good bool) {
+	fi := -1
+	var fn *lnode
+	for i, o := range occ {
+		for _, x := range o[f] {
+			if fn != nil {
+				return nil, false
+			}
+			fi, fn = i, x
+		}
+	}
+	if fn == nil || fn.ty == nil || fn.ty.Kind != TClosure {
+		return nil, false
+	}
+	sm := closSummaries[fn.ty]
+	if sm == nil || sm.ret == nil || sm.ret.flat || sm.imprecise || len(sm.params) != len(inputs) {
+		return nil, false
+	}
+	// the result node within the closure's result
+	off := -1
+	if sm.ret.root.ty == n.ty {
+		off = 0
+	} else if hits := findSame(sm.ret.root, n.ty); len(hits) == 1 {
+		off = hits[0].start
+	}
+	if off < 0 || off+(n.end-n.start) > sm.ret.n() {
+		return nil, false
+	}
+	// the argument node each closure parameter's slots come from (refs:
+	// the parameter's slot 0 is a reference the callee makes)
+	type src struct {
+		arg   int
+		node  *lnode
+		shift int
+	}
+	srcOf := func(k int) (src, bool) {
+		in := inputs[k]
+		for {
+			p, ok := in.(*ast.ParenType)
+			if !ok {
+				break
+			}
+			in = p.Elem
+		}
+		shift := 0
+		if r, ok := in.(*ast.RefType); ok {
+			shift = 1
+			in = r.Elem
+		}
+		pt, ok := in.(*ast.PathType)
+		if !ok || pt.QSelf != nil || pt.Path == nil || len(pt.Path.Segments) != 1 || pt.Path.Segments[0].Args != nil {
+			return src{}, false
+		}
+		x := pt.Path.Segments[0].Ident.Name
+		if !params[x] || x == "Self" {
+			return src{}, false
+		}
+		var s src
+		found := false
+		for i, o := range occ {
+			for _, nd := range o[x] {
+				if found {
+					return src{}, false
+				}
+				s, found = src{i, nd, shift}, true
+			}
+		}
+		if !found {
+			return src{}, false
+		}
+		pl := sm.params[k]
+		xl := layoutOf(s.node.ty)
+		if pl.flat || xl.flat || pl.n() != xl.n()+shift || pl.key != slotKeyPrefix(shift)+xl.key {
+			return src{}, false
+		}
+		return s, true
+	}
+	for j := 0; j < n.end-n.start; j++ {
+		rj := off + j
+		if sm.capVague[rj] {
+			return nil, false
+		}
+		for _, a := range sm.fromArg[rj] {
+			s, ok := srcOf(a[0])
+			if !ok || a[1] < s.shift {
+				return nil, false
+			}
+			edges = append(edges, SlotEdge{Arg: s.arg, From: s.node.start + a[1] - s.shift, To: n.start + j})
+		}
+		for _, d := range sm.capSlots[rj] {
+			if d >= fn.end-fn.start {
+				return nil, false
+			}
+			edges = append(edges, SlotEdge{Arg: fi, From: fn.start + d, To: n.start + j})
+		}
+	}
+	return edges, true
+}
+
+// capturedItems relates the values made by the one closure within node s
+// of argument i that produces values (an iterator's items: Map<I, F>) to
+// result node n from its summary: the slots of the closure value its
+// captures sit in and, when it also returns what its arguments hold, the
+// other slots of s by depth. ok is false when the summary does not say.
+func capturedItems(i int, s, n *lnode, al, rl *layout) (edges []SlotEdge, ok bool) {
+	var c *lnode
+	var sm *closSummary
+	ok = true
+	var walk func(x *lnode)
+	walk = func(x *lnode) {
+		if x.ty != nil && x.ty.Kind == TClosure {
+			m := closSummaries[x.ty]
+			switch {
+			case m == nil || m.ret == nil:
+				ok = false
+			case m.ret.n() == 0:
+				// produces nothing that holds loans (a predicate)
+			case c != nil:
+				ok = false
+			default:
+				c, sm = x, m
+			}
+			return
+		}
+		for _, k := range x.kids {
+			walk(k)
+		}
+	}
+	walk(s)
+	if !ok || c == nil || sm.ret.flat || sm.imprecise {
+		return nil, false
+	}
+	for _, v := range sm.capVague {
+		if v {
+			return nil, false
+		}
+	}
+	pairs := relateNodes(n, sm.ret)
+	if len(pairs) == 0 {
+		return nil, false
+	}
+	for _, pr := range pairs {
+		m, h := pr[0], pr[1]
+		if m.end-m.start != h.end-h.start {
+			return nil, false
+		}
+		for j := 0; j < h.end-h.start; j++ {
+			for _, d := range sm.capSlots[h.start+j] {
+				if d >= c.end-c.start {
+					return nil, false
+				}
+				edges = append(edges, SlotEdge{Arg: i, From: c.start + d, To: m.start + j})
+			}
+		}
+	}
+	if sm.fromArgs() {
+		// the items of what the closure is applied to, by depth
+		clos := closureSlots(s)
+		shift := max(refLevels(s.ty, 0)-refLevels(n.ty, 0), 0)
+		for j := n.start; j < n.end; j++ {
+			dj := rl.depth[j] - n.depth
+			for k := s.start; k < s.end; k++ {
+				if !clos[k] && al.depth[k]-s.depth == dj+shift {
+					edges = append(edges, SlotEdge{Arg: i, From: k, To: j})
+				}
+			}
+		}
+	}
+	return edges, true
+}
+
+// relateNodes relates the nodes of result node n to those of a closure's
+// result layout r that hold the same values: n is (or holds) r's type
+// (`collect` into Vec<R>), r holds n's (`next` of Option<N>), or both hold
+// a type T once in r and in n's every slot (Option<&T> collected into
+// Vec<&T>). Pairs are {node of n, node of r}; nil when unrelated.
+func relateNodes(n *lnode, r *layout) [][2]*lnode {
+	if r == nil || r.flat || n == nil {
+		return nil
+	}
+	var out [][2]*lnode
+	if n.ty == r.root.ty {
+		return [][2]*lnode{{n, r.root}}
+	}
+	if xs := findSame(n, r.root.ty); len(xs) > 0 {
+		for _, x := range xs {
+			out = append(out, [2]*lnode{x, r.root})
+		}
+		return out
+	}
+	if hs := findSame(r.root, n.ty); len(hs) == 1 {
+		return [][2]*lnode{{n, hs[0]}}
+	}
+	var try func(x *lnode) [][2]*lnode
+	try = func(x *lnode) [][2]*lnode {
+		if x != n && x.end > x.start {
+			if hs := findSame(r.root, x.ty); len(hs) == 1 {
+				xs := findSame(n, x.ty)
+				covered := 0
+				for _, y := range xs {
+					covered += y.end - y.start
+				}
+				if covered == n.end-n.start {
+					var ps [][2]*lnode
+					for _, y := range xs {
+						ps = append(ps, [2]*lnode{y, hs[0]})
+					}
+					return ps
+				}
+			}
+		}
+		for _, k := range x.kids {
+			if ps := try(k); ps != nil {
+				return ps
+			}
+		}
+		return nil
+	}
+	return try(n)
+}
+
+// slotKeyPrefix is the prefix references add to a slot key.
+func slotKeyPrefix(refs int) string {
+	return strings.Repeat("&", refs)
+}
+
 // alignInto records stores of argument si's node s into node n of the
 // referent of `&mut` argument di, aligned by depth.
 func alignInto(fl *Flow, si int, s *lnode, sl *layout, di int, n *lnode, dl *layout) {
@@ -437,7 +707,7 @@ func closureSlots(s *lnode) map[int]bool {
 	m := map[int]bool{}
 	var walk func(n *lnode)
 	walk = func(n *lnode) {
-		if n.wild && n.ty != nil && n.ty.Kind == TClosure {
+		if n.ty != nil && n.ty.Kind == TClosure {
 			for k := n.start; k < n.end; k++ {
 				m[k] = true
 			}
@@ -489,7 +759,7 @@ func projNodes(proj map[int]string, l *layout) []*lnode {
 func producedBy(nodes []*lnode) (owned, caps bool) {
 	var walk func(n *lnode)
 	walk = func(n *lnode) {
-		if n.wild && n.ty != nil && n.ty.Kind == TClosure {
+		if n.ty != nil && n.ty.Kind == TClosure {
 			sm := closSummaries[n.ty]
 			if sm == nil || sm.ret.n() == 0 {
 				return
