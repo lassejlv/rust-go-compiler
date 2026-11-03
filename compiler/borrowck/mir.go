@@ -159,8 +159,8 @@ type LocalKind uint8
 const (
 	LReturn LocalKind = iota
 	LArg
-	LVar   // user variable
-	LTemp  // compiler temporary
+	LVar    // user variable
+	LTemp   // compiler temporary
 	LUpvar  // closure capture
 	LStatic // promoted constant (rvalue static promotion)
 )
