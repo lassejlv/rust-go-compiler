@@ -517,10 +517,46 @@ func (fcx *FnCtxt) checkArgs(args []ast.Expr, ins []Ty, variadic bool, sp lexer.
 				if fcx.coerceToHint(a, i, ins[i]) {
 					continue
 				}
+				if ce := blockTailClosure(a); ce != nil && i < len(fcx.argHints) && fcx.argHints[i] != nil {
+					if eins, _ := fcx.expectedClosureSig(ins[i]); eins == nil {
+						if hins, _ := fcx.expectedClosureSig(fcx.argHints[i]); hins != nil {
+							if fcx.closureHints == nil {
+								fcx.closureHints = map[ast.NodeID]Ty{}
+							}
+							fcx.closureHints[ce.ID] = fcx.argHints[i]
+						}
+					}
+				}
 				fcx.checkExprCoerce(a, ins[i])
 			} else {
 				fcx.checkExpr(a, nil)
 			}
+		}
+	}
+}
+
+// blockTailClosure returns the closure at the tail of a block expression
+// (through nested blocks), or nil.
+func blockTailClosure(e ast.Expr) *ast.ClosureExpr {
+	b, ok := unparen(e).(*ast.BlockExpr)
+	if !ok || b.Async {
+		return nil
+	}
+	for {
+		t := blockTail(b.Block)
+		if t == nil {
+			return nil
+		}
+		switch x := unparen(t).(type) {
+		case *ast.ClosureExpr:
+			return x
+		case *ast.BlockExpr:
+			if x.Async {
+				return nil
+			}
+			b = x
+		default:
+			return nil
 		}
 	}
 }

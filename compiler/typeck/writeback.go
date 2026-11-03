@@ -160,6 +160,9 @@ func (fcx *FnCtxt) writeback() {
 	}
 	r.LocalCount = fcx.localCount
 	fcx.analyzeCaptures()
+	for _, ci := range r.Closures {
+		ci.Sealed = true
+	}
 }
 
 // ---------------------------------------------------------------------------

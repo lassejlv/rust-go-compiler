@@ -1,0 +1,26 @@
+5! = Some(120)
+10! = Some(3628800)
+12! = Some(479001600)
+13! = None
+20! = None
+4
+(4, true)
+2147483647
+None
+None
+-128
+None
+div overflow caught: true
+rem by zero caught: true
+shl overflow caught: true
+neg overflow caught: true
+usize underflow caught: true
+pow overflow caught: true
+as cast does not panic: Ok(-56)
+sum overflow caught: true
+i8 sub overflow caught: true
+shr overflow caught: true
+abs overflow caught: true
+product overflow caught: true
+add-assign overflow caught: true
+running sum 25

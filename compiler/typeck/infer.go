@@ -17,6 +17,9 @@ type InferCtxt struct {
 	env []*TraitRef
 	// evalCache memoizes evaluate() by canonical query (see canonicalKey).
 	evalCache map[string]SelKind
+	// queryCache memoizes selection/normalization over unsealed closures
+	// by canonical query (see canon.go).
+	queryCache map[string]*canonResp
 	// normNest counts nested tryNormalize calls (recursion bound).
 	normNest int
 	// envBindings: associated-type bindings of where-clauses

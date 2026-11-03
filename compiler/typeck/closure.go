@@ -80,6 +80,9 @@ func (fcx *FnCtxt) expectedClosureSig(expected Ty) ([]Ty, Ty) {
 
 func (fcx *FnCtxt) checkClosure(x *ast.ClosureExpr, expected Ty) Ty {
 	expIns, expOut := fcx.expectedClosureSig(expected)
+	if h := fcx.closureHints[x.ID]; h != nil && expIns == nil && expOut == nil {
+		expIns, expOut = fcx.expectedClosureSig(h)
+	}
 	ins := make([]Ty, len(x.Params))
 	for i, p := range x.Params {
 		switch {
