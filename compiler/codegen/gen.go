@@ -160,13 +160,14 @@ func (g *Gen) GenerateProgram(mainDef *Def) (prog *Program, err error) {
 	fmt.Fprintf(&m, "  %s();\n", mainName)
 	m.WriteString("  rg_flush_stdout();\n  return 0;\n}\n")
 	return &Program{
-		types:   g.fwd.String() + g.defs.String(),
-		protos:  g.protos.String(),
-		data:    g.statics.String() + g.vtdefs.String(),
-		fns:     g.fns.String(),
-		fnEnds:  g.fns.ends,
-		main:    m.String(),
-		UsesAsm: g.usesAsm,
+		types:    g.fwd.String() + g.defs.String(),
+		protos:   g.protos.String(),
+		data:     g.statics.String() + g.vtdefs.String(),
+		fns:      g.fns.String(),
+		fnEnds:   g.fns.ends,
+		main:     m.String(),
+		UsesAsm:  g.usesAsm,
+		LinkArgs: append([]string(nil), g.tcx.R.LinkArgs...),
 	}, nil
 }
 

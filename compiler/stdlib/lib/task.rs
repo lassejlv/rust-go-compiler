@@ -6,8 +6,11 @@ use crate::sync::Arc;
 
 /// Indicates whether a value is available.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[lang = "Poll"]
 pub enum Poll<T> {
+    #[lang = "Ready"]
     Ready(T),
+    #[lang = "Pending"]
     Pending,
 }
 

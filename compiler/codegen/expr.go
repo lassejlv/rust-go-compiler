@@ -1006,19 +1006,84 @@ func (fc *fnGen) tryExpr(x *ast.TryExpr, t Ty) string {
 	}
 	ok := tcx.Lang("Ok").Variant
 	errD := tcx.Lang("Err")
-	fc.line("if (!%s) {", fc.g.enumIs(st, v, ok))
+	g := fc.g
+	// res: the Result inside the operand; opt: the Option around it
+	res, resTy := v, st
+	var out string // the value of the `?` expression
+	if info.Src == typeck.TryPoll || info.Src == typeck.TryPollOpt {
+		ready := tcx.Lang("Ready")
+		out = fc.newName("t")
+		fc.line("%s %s;", fc.ctype(t), out)
+		fc.line("if (%s) {", g.enumIs(st, v, ready.Variant))
+		fc.ind++
+		inner := st.Args[0]
+		iv := fc.spill(fmt.Sprintf("%s.f0", g.enumPayload(st, v, ready.Variant.Index)), inner)
+		res, resTy = iv, inner
+		if info.Src == typeck.TryPollOpt {
+			some := tcx.Lang("Some")
+			fc.line("if (%s) {", g.enumIs(inner, iv, some.Variant))
+			fc.ind++
+			resTy = inner.Args[0]
+			res = fc.spill(fmt.Sprintf("%s.f0", g.enumPayload(inner, iv, some.Variant.Index)), resTy)
+		}
+	}
+	fc.line("if (!%s) {", g.enumIs(resTy, res, ok))
 	fc.ind++
-	e := fmt.Sprintf("%s.f0", fc.g.enumPayload(st, v, errD.Variant.Index))
+	e := fmt.Sprintf("%s.f0", g.enumPayload(resTy, res, errD.Variant.Index))
 	if info.From != nil {
 		e = fc.spill(fc.callResolved(info.From.Def, info.From.Args, []string{e}, info.OutErrTy), info.OutErrTy)
 	}
-	fc.emitReturn(fc.g.adtLiteral(info.OutTy, errD, []string{e}))
+	fc.emitReturn(fc.tryResidual(info, e))
 	fc.ind--
 	fc.line("}")
-	if isZST(t) {
-		return fc.unit()
+	okv := fc.unit()
+	okTy := resTy.Args[0]
+	if !isZST(okTy) {
+		okv = fmt.Sprintf("%s.f0", g.enumPayload(resTy, res, ok.Index))
 	}
-	return fmt.Sprintf("%s.f0", fc.g.enumPayload(st, v, ok.Index))
+	if out == "" {
+		if isZST(t) {
+			return fc.unit()
+		}
+		return okv
+	}
+	ready := tcx.Lang("Ready")
+	pending := tcx.Lang("Pending")
+	if info.Src == typeck.TryPollOpt {
+		some := tcx.Lang("Some")
+		ot := t.Args[0]
+		fc.line("%s = %s;", out, g.adtLiteral(t, ready, []string{g.adtLiteral(ot, some, []string{okv})}))
+		fc.ind--
+		fc.line("} else {")
+		fc.ind++
+		fc.line("%s = %s;", out, g.adtLiteral(t, ready, []string{g.adtLiteral(ot, tcx.Lang("None"), nil)}))
+		fc.ind--
+		fc.line("}")
+	} else {
+		fc.line("%s = %s;", out, g.adtLiteral(t, ready, []string{okv}))
+	}
+	fc.ind--
+	fc.line("} else {")
+	fc.line("  %s = %s;", out, g.adtLiteral(t, pending, nil))
+	fc.line("}")
+	return out
+}
+
+// tryResidual builds the return value of a failed `?` from the (converted)
+// error e: Err(e), Poll::Ready(Err(e)) or Poll::Ready(Some(Err(e))).
+func (fc *fnGen) tryResidual(info *typeck.TryInfo, e string) string {
+	tcx := fc.g.tcx
+	errD := tcx.Lang("Err")
+	switch info.Out {
+	case typeck.TryPoll:
+		rt := info.OutTy.Args[0]
+		return fc.g.adtLiteral(info.OutTy, tcx.Lang("Ready"), []string{fc.g.adtLiteral(rt, errD, []string{e})})
+	case typeck.TryPollOpt:
+		ot := info.OutTy.Args[0]
+		rt := ot.Args[0]
+		return fc.g.adtLiteral(info.OutTy, tcx.Lang("Ready"), []string{fc.g.adtLiteral(ot, tcx.Lang("Some"), []string{fc.g.adtLiteral(rt, errD, []string{e})})})
+	}
+	return fc.g.adtLiteral(info.OutTy, errD, []string{e})
 }
 
 // ---------------------------------------------------------------------------

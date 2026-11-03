@@ -124,6 +124,14 @@ type ForInfo struct {
 // TryInfo records how `?` is desugared.
 type TryInfo struct {
 	IsOption bool
+	// Src is the shape of the operand: TryOption, TryResult, TryPoll
+	// (Poll<Result<T, E>>, `?` yields Poll<T>) or TryPollOpt
+	// (Poll<Option<Result<T, E>>>, `?` yields Poll<Option<T>>).
+	Src int
+	// Out is the shape of the enclosing return type receiving the
+	// residual: TryOption, TryResult, TryPoll (Poll<Result<T, F>>) or
+	// TryPollOpt (Poll<Option<Result<T, F>>>).
+	Out int
 	// From converts the error (Result only), nil if the error types match.
 	From     *Callee
 	ErrTy    Ty // source error type
@@ -131,6 +139,14 @@ type TryInfo struct {
 	OkTy     Ty
 	OutTy    Ty // the enclosing fn/closure return type
 }
+
+// TryInfo shapes.
+const (
+	TryOption = iota
+	TryResult
+	TryPoll
+	TryPollOpt
+)
 
 // Results holds the type-checking results of one body instance.
 type Results struct {

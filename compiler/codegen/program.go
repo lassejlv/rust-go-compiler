@@ -41,6 +41,8 @@ type Program struct {
 	// UsesAsm: the program contains asm! (Rust's Intel-syntax templates:
 	// compile with -masm=intel)
 	UsesAsm bool
+	// LinkArgs: libraries named by #[link] attributes of extern blocks
+	LinkArgs []string
 }
 
 // Source returns the program as one translation unit.
