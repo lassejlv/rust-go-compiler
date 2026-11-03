@@ -30,6 +30,9 @@ type Flow struct {
 	ArgFull []bool
 	RetLay  *layout
 	ArgLays []*layout
+	// ArgLabels: the labels of the arguments' slots in the signature
+	// (sigslots.go), where computed
+	ArgLabels [][]string
 	// IntoSlots: slots of arguments stored into slots of the referent of
 	// a `&mut` argument (DstSlot in the argument's layout).
 	IntoSlots []IntoSlot
@@ -95,7 +98,7 @@ func (b *builder) flowFor(c *typeck.Callee, args []Operand, ret Ty) *Flow {
 	fl := b.sigFlow(c, len(args), ret, tys)
 	if !carriesBorrows(ret) {
 		// only the stores into `&mut` arguments and 'static requirements
-		return &Flow{Into: fl.Into, Static: fl.Static, IntoSlots: fl.IntoSlots, ArgLays: fl.ArgLays, ArgFull: fl.ArgFull, RetLay: fl.RetLay, Covered: fl.Covered}
+		return &Flow{Into: fl.Into, Static: fl.Static, IntoSlots: fl.IntoSlots, ArgLays: fl.ArgLays, ArgFull: fl.ArgFull, RetLay: fl.RetLay, Covered: fl.Covered, ArgLabels: fl.ArgLabels}
 	}
 	return fl
 }
@@ -233,4 +236,48 @@ func refsBesidesDyn(t Ty) bool {
 		return false
 	}
 	return carriesBorrows(t)
+}
+
+// closureCallSlots makes the flow of a call of a closure of this body
+// precise from its summary: each result slot holds the argument slots the
+// closure's result is made of (the result never borrows from the closure
+// itself; see the call's flow).
+func (b *builder) closureCallSlots(fl *Flow, ct Ty, args []Operand, ret Ty) {
+	sm := closSummaries[ct]
+	if sm == nil || sm.ret == nil || sm.ret.flat || sm.imprecise || ret == nil || len(args) != len(sm.params)+1 {
+		return
+	}
+	local := false
+	for _, ci := range b.r.Closures {
+		if ci.Ty == ct {
+			local = true
+			break
+		}
+	}
+	rl := layoutOf(ret)
+	if !local || rl.flat || rl.key != sm.ret.key || rl.n() != sm.ret.n() {
+		return
+	}
+	tys := b.argTypes(args)
+	for k, pl := range sm.params {
+		al := layoutOf(tys[k+1])
+		if pl.flat || (args[k+1].Kind != OConst && (al.key != pl.key || al.n() != pl.n())) {
+			return
+		}
+	}
+	fl.RetLay = rl
+	fl.ArgLays = append([]*layout{nil}, sm.params...) // nil: the callee
+	fl.ArgFull = make([]bool, len(args))
+	for i := range fl.ArgFull {
+		fl.ArgFull[i] = true
+	}
+	fl.Covered = make([]bool, rl.n())
+	for j := range fl.Covered {
+		fl.Covered[j] = true
+	}
+	for j, srcs := range sm.fromArg {
+		for _, a := range srcs {
+			fl.Slots = append(fl.Slots, SlotEdge{Arg: a[0] + 1, From: a[1], To: j})
+		}
+	}
 }

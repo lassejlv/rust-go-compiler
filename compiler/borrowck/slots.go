@@ -18,10 +18,12 @@ import (
 // has a reference depth (rustc's regions do not, but the signature flows of
 // calls are described by depth where they cannot be related precisely):
 // references and ADTs with lifetime parameters add a level, an ADT's type
-// arguments sit below its lifetimes (Iter<'a, T> holds &'a T). Types whose
-// regions are unknown (type parameters, trait objects, closures, opaque
-// types) get one slot per depth ("wild" slots). Whenever two layouts cannot
-// be related, loans are mapped by depth (the coarse model).
+// arguments sit below its lifetimes (Iter<'a, T> holds &'a T). A closure
+// built in a checked body holds the slots of its captured operands (like a
+// tuple, see registerClosureCaps). Types whose regions are unknown (type
+// parameters, trait objects, other closures, opaque types) get one slot
+// per depth ("wild" slots). Whenever two layouts cannot be related, loans
+// are mapped by depth (the coarse model).
 
 const maxSlots = 64
 
@@ -55,7 +57,43 @@ var (
 		return l
 	}()
 	ltCountCache = map[*Def][]string{}
+	// closureCaps: the types of the values closures of the bodies built
+	// so far capture; such a closure's slots are those of its captures
+	// (like a tuple's), others' are wild
+	closureCaps = map[Ty][]Ty{}
 )
+
+// registerClosureCaps records the captured operand types of closure type t
+// (unless its layout is in use already).
+func registerClosureCaps(t Ty, caps []Ty) {
+	if t == nil || t.Kind != TClosure {
+		return
+	}
+	layoutMu.Lock()
+	defer layoutMu.Unlock()
+	if _, ok := layoutCache[t]; ok {
+		return
+	}
+	if _, ok := closureCaps[t]; ok {
+		return
+	}
+	for _, c := range caps {
+		if c == nil {
+			return
+		}
+	}
+	closureCaps[t] = caps
+}
+
+// capturesOf returns the captured operand types of a closure type with a
+// structured layout (ok false: wild).
+func capturesOf(t Ty) ([]Ty, bool) {
+	if t == nil || t.Kind != TClosure {
+		return nil, false
+	}
+	c, ok := closureCaps[t]
+	return c, ok
+}
 
 // adtLifetimes returns the names of an ADT's lifetime parameters.
 func adtLifetimes(d *Def) []string {
@@ -129,6 +167,13 @@ func (l *layout) walk(t Ty, d, nest int) *lnode {
 		n.end = len(l.depth)
 		return n
 	}
+	if caps, ok := capturesOf(t); ok {
+		for _, c := range caps {
+			n.kids = append(n.kids, l.walk(c, d, nest+1))
+		}
+		n.end = len(l.depth)
+		return n
+	}
 	if isWildKind(t) {
 		n.wild = true
 		for k := 0; k < maxDepth; k++ {
@@ -169,6 +214,21 @@ func (l *layout) walk(t Ty, d, nest int) *lnode {
 func slotKey(t Ty, nest int) string {
 	if nest > 12 {
 		return "!"
+	}
+	if caps, ok := capturesOf(t); ok {
+		var parts []string
+		any := false
+		for _, c := range caps {
+			k := slotKey(c, nest+1)
+			if k != "" {
+				any = true
+			}
+			parts = append(parts, k)
+		}
+		if !any {
+			return ""
+		}
+		return "C(" + strings.Join(parts, ",") + ")"
 	}
 	if isWildKind(t) {
 		return "?"
@@ -306,7 +366,7 @@ func computeAdtField(tcx *typeck.Tcx, t Ty, variant, field int) (fi *fieldInfo) 
 	if f.Ast != nil {
 		astTy = f.Ast.Ty
 	}
-	fw := &fieldWalker{p: pl, ltIdx: ltIdx, allLts: allLts}
+	fw := &fieldWalker{p: pl, ltIdx: ltIdx, allLts: allLts, scope: d.Scope}
 	fw.walk(astTy, f.Ty, 0)
 	if fw.bad || len(fw.m) != cl.n() {
 		fi.m = collapseMap(pl, cl, 0)
@@ -322,9 +382,86 @@ type fieldWalker struct {
 	allLts []int
 	m      [][]int
 	bad    bool
+	scope  *Module           // where the field's type names resolve
+	ren    map[string]string // lifetime parameters of a type alias -> arguments
+}
+
+// aliasTy returns the type a type alias named by a stands for (`type Row
+// = &'static str;`), with the module its names resolve in and its
+// lifetime parameters' arguments (ren, given the renaming in effect
+// where a is written). Only single-segment paths to aliases without type
+// parameters are followed.
+func aliasTy(scope *Module, a ast.Type, outer map[string]string) (ast.Type, *Module, map[string]string, bool) {
+	pt, ok := a.(*ast.PathType)
+	if !ok || scope == nil || pt.QSelf != nil || pt.Path == nil || len(pt.Path.Segments) != 1 {
+		return nil, nil, nil, false
+	}
+	seg := pt.Path.Segments[0]
+	name := seg.Ident.Name
+	if name == "Self" {
+		return nil, nil, nil, false
+	}
+	// names of the enclosing blocks, then of the module
+	for m, n := scope, 0; m != nil && n < 64; m, n = m.Parent, n+1 {
+		b := m.Lookup(name, TypeNS)
+		if b == nil {
+			if !m.Block {
+				break
+			}
+			continue
+		}
+		d := b.Res.Def
+		if d == nil || d.Kind != DefTyAlias || d.Alias == nil || d.Alias.TyAst == nil || d.Item == nil {
+			return nil, nil, nil, false
+		}
+		ta, ok := d.Item.Kind.(*ast.TypeAliasItem)
+		if !ok {
+			return nil, nil, nil, false
+		}
+		var ps []string
+		if ta.Generics != nil {
+			for _, gp := range ta.Generics.Params {
+				if gp.Kind != ast.GPLifetime {
+					return nil, nil, nil, false
+				}
+				ps = append(ps, gp.Name.Name)
+			}
+		}
+		var args []string
+		if seg.Args != nil {
+			if seg.Args.Parenthesized || len(seg.Args.Bindings) > 0 {
+				return nil, nil, nil, false
+			}
+			for _, ga := range seg.Args.Args {
+				if ga.Lifetime == "" || ga.Lifetime == "'_" {
+					return nil, nil, nil, false
+				}
+				args = append(args, ga.Lifetime)
+			}
+		}
+		if len(args) != len(ps) {
+			return nil, nil, nil, false
+		}
+		var ren map[string]string
+		if len(ps) > 0 {
+			ren = map[string]string{}
+			for i, p := range ps {
+				x := args[i]
+				if r, ok := outer[x]; ok {
+					x = r
+				}
+				ren[p] = x
+			}
+		}
+		return d.Alias.TyAst, d.Scope, ren, true
+	}
+	return nil, nil, nil, false
 }
 
 func (w *fieldWalker) lt(name string) []int {
+	if r, ok := w.ren[name]; ok {
+		name = r
+	}
 	if name == "'static" {
 		return nil
 	}
@@ -350,6 +487,13 @@ func (w *fieldWalker) walk(a ast.Type, g Ty, nest int) {
 	}
 	if g == nil {
 		w.bad = true
+		return
+	}
+	if t, sc, ren, ok := aliasTy(w.scope, a, w.ren); ok && g.Kind != TParam {
+		oldScope, oldRen := w.scope, w.ren
+		w.scope, w.ren = sc, ren
+		w.walk(t, g, nest+1)
+		w.scope, w.ren = oldScope, oldRen
 		return
 	}
 	if g.Kind == TParam {
@@ -442,4 +586,239 @@ func (w *fieldWalker) walk(a ast.Type, g Ty, nest int) {
 			w.walk(ea, ga, nest+1)
 		}
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Implied bounds of ADTs
+
+var adtOutlivesCache = map[*Def][][2]string{}
+
+// adtOutlives returns the outlives relations between an ADT's lifetime
+// parameters (and 'static) that its well-formedness implies (pairs {x,
+// y}: x: y): its declared bounds and those its fields' types imply
+// (`&'b mut Vec<&'a str>` implies 'a: 'b), also through the ADTs they
+// mention.
+func adtOutlives(tcx *typeck.Tcx, d *Def) (out [][2]string) {
+	if d == nil || d.Item == nil || tcx == nil {
+		return nil
+	}
+	if r, ok := adtOutlivesCache[d]; ok {
+		return r
+	}
+	adtOutlivesCache[d] = nil // cycles: nothing more
+	defer func() {
+		if recover() != nil {
+			out = nil
+		}
+		adtOutlivesCache[d] = out
+	}()
+	lts := adtLifetimes(d)
+	if len(lts) == 0 {
+		return nil
+	}
+	own := map[string]bool{"'static": true}
+	for _, n := range lts {
+		own[n] = true
+	}
+	seen := map[[2]string]bool{}
+	add := func(x, y string) {
+		k := [2]string{x, y}
+		if x != y && own[x] && own[y] && !seen[k] {
+			seen[k] = true
+			out = append(out, k)
+		}
+	}
+	var g *ast.Generics
+	switch k := d.Item.Kind.(type) {
+	case *ast.StructItem:
+		g = k.Generics
+	case *ast.EnumItem:
+		g = k.Generics
+	case *ast.UnionItem:
+		g = k.Generics
+	}
+	if g != nil {
+		for _, gp := range g.Params {
+			if gp.Kind == ast.GPLifetime {
+				for _, bd := range gp.Bounds {
+					add(gp.Name.Name, bd.Lifetime)
+				}
+			}
+		}
+		for _, wp := range g.Where {
+			if wp.Lifetime != "" {
+				for _, bd := range wp.Bounds {
+					add(wp.Lifetime, bd.Lifetime)
+				}
+			}
+		}
+	}
+	tcx.AdtFields(d)
+	if d.Adt == nil {
+		return out
+	}
+	iw := &impliedWalker{tcx: tcx, add: add, scope: d.Scope}
+	for _, v := range d.Adt.Variants {
+		for _, f := range v.Fields {
+			if f.Ast != nil && f.Ty != nil {
+				iw.walk(f.Ast.Ty, f.Ty, 0)
+			}
+		}
+	}
+	return out
+}
+
+// impliedWalker collects the outlives relations a type implies: each
+// lifetime outlives the references and ADT lifetimes it is nested in. The
+// syntax a is followed while it matches the type g.
+type impliedWalker struct {
+	tcx   *typeck.Tcx
+	add   func(x, y string)
+	outer []string
+	scope *Module
+	ren   map[string]string
+}
+
+func (w *impliedWalker) name(lt string) string {
+	if r, ok := w.ren[lt]; ok {
+		return r
+	}
+	return lt
+}
+
+func (w *impliedWalker) walk(a ast.Type, g Ty, nest int) {
+	if a == nil || g == nil || nest > 12 {
+		return
+	}
+	for {
+		p, ok := a.(*ast.ParenType)
+		if !ok {
+			break
+		}
+		a = p.Elem
+	}
+	if t, sc, ren, ok := aliasTy(w.scope, a, w.ren); ok {
+		oldScope, oldRen := w.scope, w.ren
+		w.scope, w.ren = sc, ren
+		w.walk(t, g, nest+1)
+		w.scope, w.ren = oldScope, oldRen
+		return
+	}
+	nested := func(lts []string, kids func()) {
+		for _, x := range lts {
+			for _, o := range w.outer {
+				w.add(x, o)
+			}
+		}
+		n := len(w.outer)
+		w.outer = append(w.outer, lts...)
+		kids()
+		w.outer = w.outer[:n]
+	}
+	switch g.Kind {
+	case TRef:
+		r, ok := a.(*ast.RefType)
+		if !ok || r.Lifetime == "" || r.Lifetime == "'_" {
+			return
+		}
+		nested([]string{w.name(r.Lifetime)}, func() { w.walk(r.Elem, g.Elem, nest+1) })
+	case TTuple:
+		if tt, ok := a.(*ast.TupleType); ok && len(tt.Elems) == len(g.Elems) {
+			for i, e := range g.Elems {
+				w.walk(tt.Elems[i], e, nest+1)
+			}
+		}
+	case TArray:
+		if at, ok := a.(*ast.ArrayType); ok {
+			w.walk(at.Elem, g.Elem, nest+1)
+		}
+	case TSlice:
+		if at, ok := a.(*ast.SliceType); ok {
+			w.walk(at.Elem, g.Elem, nest+1)
+		}
+	case TAdt:
+		pt, ok := a.(*ast.PathType)
+		if !ok || pt.QSelf != nil || pt.Path == nil || len(pt.Path.Segments) == 0 {
+			return
+		}
+		seg := pt.Path.Segments[len(pt.Path.Segments)-1]
+		if seg.Ident.Name != g.Def.Name || seg.Args == nil || seg.Args.Parenthesized {
+			return
+		}
+		var ltArgs []string
+		var tyArgs []ast.Type
+		for _, ga := range seg.Args.Args {
+			if ga.Lifetime != "" {
+				ltArgs = append(ltArgs, ga.Lifetime)
+			} else if ga.Type != nil {
+				tyArgs = append(tyArgs, ga.Type)
+			}
+		}
+		params := adtLifetimes(g.Def)
+		if len(ltArgs) != len(params) {
+			ltArgs = nil
+		}
+		sub := map[string]string{"'static": "'static"}
+		for i, p := range params {
+			if ltArgs != nil && ltArgs[i] != "'_" {
+				sub[p] = w.name(ltArgs[i])
+			}
+		}
+		// the nested ADT's own implied bounds, in terms of its arguments
+		for _, pr := range adtOutlives(w.tcx, g.Def) {
+			x, okx := sub[pr[0]]
+			y, oky := sub[pr[1]]
+			if okx && oky {
+				w.add(x, y)
+			}
+		}
+		var lts []string
+		for _, p := range params {
+			if x, ok := sub[p]; ok {
+				lts = append(lts, x)
+			}
+		}
+		nested(lts, func() {
+			if len(tyArgs) > len(g.Args) {
+				return
+			}
+			for i, ta := range tyArgs { // defaults: not written
+				w.walk(ta, g.Args[i], nest+1)
+			}
+		})
+	}
+}
+
+// impliedByLabels adds to r the outlives relations the ADTs in a value of
+// layout l imply, given the labels of its slots.
+func impliedByLabels(tcx *typeck.Tcx, r *sigRegions, l *layout, labels []string) {
+	if l == nil || l.flat {
+		return
+	}
+	var walk func(n *lnode)
+	walk = func(n *lnode) {
+		if n == nil {
+			return
+		}
+		if n.ty != nil && n.ty.Kind == TAdt && n.nlt > 0 {
+			params := adtLifetimes(n.ty.Def)
+			sub := map[string]string{"'static": "'static"}
+			for i, p := range params {
+				if k := n.start + i; i < n.nlt && k < len(labels) && len(labels[k]) > 1 && labels[k][0] == '\'' && labels[k] != "'?" {
+					sub[p] = labels[k]
+				}
+			}
+			for _, pr := range adtOutlives(tcx, n.ty.Def) {
+				x, okx := sub[pr[0]]
+				y, oky := sub[pr[1]]
+				if okx && oky && x != y {
+					r.addOutlives(x, y)
+				}
+			}
+		}
+		for _, k := range n.kids {
+			walk(k)
+		}
+	}
+	walk(l.root)
 }

@@ -85,7 +85,17 @@ func (w *labeler) param(name string, n *lnode) {
 }
 
 func (w *labeler) walk(a ast.Type, n *lnode, nest int) {
-	if n == nil || n.start == n.end || a == nil || nest > 12 {
+	if n == nil || a == nil || nest > 12 {
+		return
+	}
+	if n.start == n.end {
+		// a closure capturing nothing that holds loans: still the
+		// instance of its parameter (its summary relates its result)
+		if pt, ok := a.(*ast.PathType); ok && n.ty != nil && n.ty.Kind == TClosure && pt.QSelf == nil && pt.Path != nil && len(pt.Path.Segments) == 1 && pt.Path.Segments[0].Args == nil {
+			if name := pt.Path.Segments[0].Ident.Name; name != "Self" && w.params[name] {
+				w.occ[name] = append(w.occ[name], n)
+			}
+		}
 		return
 	}
 	switch x := a.(type) {

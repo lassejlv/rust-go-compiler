@@ -1145,6 +1145,9 @@ func (b *builder) callExpr(x *ast.CallExpr, dest tplace) {
 			for i := 1; i < len(ops); i++ {
 				fl.Edges = append(fl.Edges, FlowEdge{Arg: i, From: 0, To: 0, Deep: true})
 			}
+			if c.Kind == typeck.CallClosure {
+				b.closureCallSlots(fl, c.Ty, ops, dest.ty)
+			}
 		}
 		b.call(dest.p, ops, fl, "closure", sp, diverges)
 		return
@@ -1349,11 +1352,19 @@ func (b *builder) closureExpr(x *ast.ClosureExpr, dest tplace) {
 		kind = k
 	}
 	cb := buildClosureKind(b.tcx, b.r, ci, b.name+"::{closure}", kind)
-	summarizeClosure(b.tcx, ci.Ty, cb.body)
 	b.closures = append(b.closures, cb.body)
 	b.closures = append(b.closures, cb.closures...)
 	needMut := cb.upvarMutUses()
 	var ops []Operand
+	var capTys []Ty
+	defer func() {
+		// the closure value holds the captured operands (slots.go)
+		registerClosureCaps(ci.Ty, capTys)
+		summarizeClosure(b.tcx, ci.Ty, cb.body)
+		if sm := closSummaries[ci.Ty]; sm != nil && ci.Expr.Ret != nil {
+			sm.imprecise = true
+		}
+	}()
 	for _, c := range ci.Captures {
 		cp := b.capturedPlace(c)
 		if c.ByRef {
@@ -1366,9 +1377,11 @@ func (b *builder) closureExpr(x *ast.ClosureExpr, dest tplace) {
 			t := b.temp(Ref(cp.ty, mut), sp)
 			b.assign(t.p, Rvalue{Kind: RRef, Place: cp.p, Mut: mut}, sp)
 			ops = append(ops, Operand{Kind: OMove, Place: t.p})
+			capTys = append(capTys, t.ty)
 			continue
 		}
 		ops = append(ops, b.operandOf(cp))
+		capTys = append(capTys, cp.ty)
 	}
 	b.assign(dest.p, Rvalue{Kind: RAggregate, Ops: ops}, sp)
 }
