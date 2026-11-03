@@ -443,6 +443,22 @@ func unitCount(fnBytes int) int {
 	return n
 }
 
+// debugCFlags turn off the gcc -O1 passes that cost the most compile time
+// for the least speed of rustgo's C (IPA analyses and points-to, scalar
+// replacement, dead stores, jump threading, loop header copying, value
+// numbering, forward propagation, if-conversion, branch probabilities):
+// debug builds (no --release, no -O) compile about 20% faster than with
+// -O1 and still run at about -O1 speed (-O0 compiles only a little faster
+// but runs several times slower: rustgo's C relies on register allocation
+// and inlining of its many small functions).
+var debugCFlags = []string{
+	"-fno-ipa-pure-const", "-fno-ipa-reference", "-fno-ipa-modref", "-fno-tree-pta",
+	"-fno-tree-sra", "-fno-tree-dse", "-fno-dse",
+	"-fno-tree-dominator-opts", "-fno-tree-ch", "-fno-tree-loop-optimize",
+	"-fno-tree-fre", "-fno-tree-forwprop",
+	"-fno-guess-branch-probability", "-fno-if-conversion", "-fno-if-conversion2",
+}
+
 // compileC writes the C source and invokes the C compiler. Large programs
 // are compiled as several translation units in parallel, then linked.
 func compileC(opts *Options, prog *codegen.Program) error {
@@ -463,13 +479,19 @@ func compileC(opts *Options, prog *codegen.Program) error {
 		cc = "gcc"
 	}
 	ol := opts.OptLevel
+	debug := false
 	if ol == "" {
 		ol = "1"
 		if opts.Release {
 			ol = "2"
+		} else {
+			debug = true
 		}
 	}
 	cflags := []string{"-O" + ol, "-w", "-fwrapv", "-fno-strict-aliasing", "-pipe"}
+	if debug && strings.Contains(filepath.Base(cc), "gcc") { // (gcc flags)
+		cflags = append(cflags, debugCFlags...)
+	}
 	if opts.Release {
 		cflags = append(cflags, "-DRG_NO_OVERFLOW_CHECKS")
 	}
