@@ -272,6 +272,10 @@ func (t *Tcx) checkCallBounds(r *Results, c *Callee, sp ast.Span) {
 					what = "shared"
 				}
 				t.ErrorCode(sp, "E0277", "`%s` cannot be %s between threads safely", self, what)
+			} else if tr.Name == "Send" {
+				if held := t.asyncHeldNotSend(r, self); held != nil {
+					t.Errorf(sp, "future cannot be sent between threads safely: `%s` is held across an await point", held)
+				}
 			}
 		}
 	}
@@ -341,4 +345,89 @@ func (t *Tcx) notSend(ty Ty, send *Def, seen map[Ty]bool, depth int) Ty {
 		}
 	}
 	return nil
+}
+
+// asyncHeldNotSend finds a local of an async block (the future ty) that is
+// not Send and is held across an `.await` (rustc's generator witness):
+// declared by a `let` before an await of the same block and used after it.
+// Conservative: only locals mentioned after the await are considered.
+func (t *Tcx) asyncHeldNotSend(r *Results, ty Ty) Ty {
+	if ty == nil || ty.Kind != TAdt || !t.isStd(ty.Def) || ty.Def.Name != "AsyncBlock" || len(ty.Args) == 0 || ty.Args[0].Kind != TClosure {
+		return nil
+	}
+	ci := t.Closures[ty.Args[0]]
+	if ci == nil || ci.Expr == nil {
+		return nil
+	}
+	var found Ty
+	isAwait := func(n any) bool {
+		has := false
+		ast.Walk(n, func(x any) bool {
+			switch e := x.(type) {
+			case *ast.ClosureExpr, *ast.ItemStmt:
+				return false
+			case *ast.CallExpr:
+				if pe, ok := e.Fn.(*ast.PathExpr); ok && len(pe.Path.Segments) > 0 && pe.Path.Segments[len(pe.Path.Segments)-1].Ident.Name == "__yield_now" {
+					has = true
+				}
+			}
+			return !has
+		})
+		return has
+	}
+	mentions := func(n any, l *Local) bool {
+		has := false
+		ast.Walk(n, func(x any) bool {
+			if pe, ok := x.(*ast.PathExpr); ok {
+				if vr := r.Paths[pe.ID]; vr != nil && vr.Local == l {
+					has = true
+				}
+			}
+			return !has
+		})
+		return has
+	}
+	ast.Walk(ci.Expr.Body, func(n any) bool {
+		if found != nil {
+			return false
+		}
+		switch b := n.(type) {
+		case *ast.ClosureExpr, *ast.ItemStmt:
+			return false
+		case *ast.Block:
+			for i, st := range b.Stmts {
+				ls, ok := st.(*ast.LetStmt)
+				if !ok || ls.Init == nil {
+					continue
+				}
+				ip, ok := ls.Pat.(*ast.IdentPat)
+				if !ok {
+					continue
+				}
+				l := r.Locals[ip.ID]
+				if l == nil || l.ByRef || l.Ty == nil || l.Ty.HasInfer() || l.Ty.HasParam() {
+					continue
+				}
+				if newInferCtxt(t).autoHolds("Send", l.Ty, 0, map[autoKey]bool{}) {
+					continue
+				}
+				for j := i + 1; j < len(b.Stmts); j++ {
+					if isAwait(b.Stmts[j]) && !mentions(b.Stmts[j], l) {
+						for k := j + 1; k < len(b.Stmts); k++ {
+							if mentions(b.Stmts[k], l) {
+								found = l.Ty
+								return false
+							}
+						}
+						break
+					}
+					if mentions(b.Stmts[j], l) {
+						break // (used or moved in a statement before the await)
+					}
+				}
+			}
+		}
+		return true
+	})
+	return found
 }
