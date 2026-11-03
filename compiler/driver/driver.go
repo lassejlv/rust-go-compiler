@@ -305,13 +305,14 @@ func Compile(opts *Options) error {
 }
 
 // Splitting the C program into several translation units compiled in
-// parallel pays off only for large programs: every unit re-parses the
-// common header (runtime, types, prototypes), and functions called across
-// units can no longer be inlined. Up to two units per CPU are made (the
-// cost of C functions varies a lot, so smaller units balance better), each
-// with at least tuMinFnBytes of function definitions.
+// parallel pays off only for programs that are not small: every unit
+// re-parses the common header (runtime, types, prototypes; about 0.15s of
+// CPU time), and functions called across units can no longer be inlined.
+// Up to two units per CPU are made (the cost of C functions varies a lot,
+// so smaller units balance better), each with at least tuMinFnBytes of
+// function definitions (gcc -O1 takes about 0.5s for those).
 const (
-	tuMinFnBytes = 1 << 20
+	tuMinFnBytes = 160 << 10
 	tuMax        = 16
 )
 

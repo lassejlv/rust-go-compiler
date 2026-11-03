@@ -536,6 +536,9 @@ func (bs *buildState) runBuildScript(u *crateUnit) error {
 	popts.Output = exe
 	popts.EmitC = ""
 	popts.LinkArgs = nil
+	// like cargo, which builds build scripts without optimization: they
+	// run once, and compile much faster
+	popts.OptLevel = "0"
 	if err := compileC(&popts, src); err != nil {
 		return err
 	}

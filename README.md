@@ -34,6 +34,8 @@ Options: `-o <out>`, `--release`, `--emit-c <file>` (dump generated C),
 The embedded std is parsed and macro-expanded once per compiler build and
 cached in `$RUSTGO_CACHE_DIR` (default: the user cache directory, e.g.
 `~/.cache/rustgo`); `RUSTGO_STD_CACHE=0` disables the cache.
+`RUSTGO_CPUPROFILE=<file>` / `RUSTGO_MEMPROFILE=<file>` write pprof CPU /
+allocation profiles of the compiler itself.
 
 `rustgo build` reads the crate graph with `cargo metadata --offline` (crates
 must already be in the local cargo registry or be path dependencies), runs
