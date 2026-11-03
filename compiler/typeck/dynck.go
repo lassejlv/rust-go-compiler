@@ -157,9 +157,28 @@ func (t *Tcx) dynCompatible(tr *Def, seen map[*Def]bool) bool {
 		}
 	}
 	for _, st := range t.Supertraits(tr) {
+		if st.Trait != nil && t.isStd(st.Trait) && stdSizedTraits[st.Trait.Name] && st.Trait.Trait != nil && t.stdTraitSized(st.Trait) {
+			return false // `trait Shape: Clone`
+		}
 		if st.Trait != nil && !t.isStd(st.Trait) && !t.dynCompatible(st.Trait, seen) {
 			return false
 		}
 	}
 	return true
+}
+
+// stdSizedTraits are the std traits that have `Sized` as a (transitive)
+// supertrait in the real std (rustgo's std is only trusted for these).
+var stdSizedTraits = map[string]bool{"Clone": true, "Copy": true, "Default": true, "From": true, "Into": true,
+	"TryFrom": true, "TryInto": true, "FromStr": true, "FromIterator": true, "Sum": true, "Product": true}
+
+// stdTraitSized reports whether a std trait has `Sized` among its
+// transitive supertraits.
+func (t *Tcx) stdTraitSized(tr *Def) bool {
+	for _, st := range t.AllSupertraits(&TraitRef{Trait: tr, Args: t.Generics(tr).Identity()}) {
+		if st.Trait.LangItem == "sized" {
+			return true
+		}
+	}
+	return false
 }

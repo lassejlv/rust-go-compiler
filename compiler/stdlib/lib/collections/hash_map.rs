@@ -950,7 +950,7 @@ pub struct VacantEntry<'a, K: 'a, V: 'a> {
     key: K,
 }
 
-impl<'a, K: Eq + Hash, V> Entry<'a, K, V> {
+impl<'a, K, V> Entry<'a, K, V> {
     /// Ensures a value is in the entry by inserting the default if empty, and returns a mutable reference to the value in the entry.
     #[inline]
     pub fn or_insert(self, default: V) -> &'a mut V {
@@ -1018,7 +1018,7 @@ impl<'a, K: Eq + Hash, V> Entry<'a, K, V> {
     }
 }
 
-impl<'a, K: Eq + Hash, V: Default> Entry<'a, K, V> {
+impl<'a, K, V: Default> Entry<'a, K, V> {
     /// Ensures a value is in the entry by inserting the default value if empty.
     #[inline]
     pub fn or_default(self) -> &'a mut V {
@@ -1029,7 +1029,7 @@ impl<'a, K: Eq + Hash, V: Default> Entry<'a, K, V> {
     }
 }
 
-impl<'a, K: Eq + Hash, V> OccupiedEntry<'a, K, V> {
+impl<'a, K, V> OccupiedEntry<'a, K, V> {
     /// Gets a reference to the key in the entry.
     #[inline]
     pub fn key(&self) -> &K {
@@ -1093,7 +1093,7 @@ impl<'a, K: Eq + Hash, V> OccupiedEntry<'a, K, V> {
     }
 }
 
-impl<'a, K: Eq + Hash, V> VacantEntry<'a, K, V> {
+impl<'a, K, V> VacantEntry<'a, K, V> {
     /// Gets a reference to the key that would be used when inserting a value through the `VacantEntry`.
     #[inline]
     pub fn key(&self) -> &K {

@@ -261,6 +261,9 @@ func (t *Tcx) checkCoherence() {
 		}
 		// a generic impl without bounds overlaps every impl it covers
 		if t.isStd(tr) {
+			if tr.LangItem == "from" {
+				t.checkReflexiveFrom(tr)
+			}
 			continue
 		}
 		for _, a := range t.traitImpls[tr] {
@@ -282,6 +285,53 @@ func (t *Tcx) checkCoherence() {
 		}
 	}
 	t.checkImpls()
+}
+
+// checkReflexiveFrom reports impls of `From<X> for Y` outside std that
+// overlap core's `impl<T> From<T> for T` (E0119): X and Y unify (the
+// impl's parameters taken as unknowns) and none of the impl's
+// where-clauses certainly fails then.
+func (t *Tcx) checkReflexiveFrom(from *Def) {
+	for _, impl := range t.traitImpls[from] {
+		if t.isStd(impl) || impl.Impl.Negative || impl.Impl.Ast == nil {
+			continue
+		}
+		tr := impl.Impl.TraitRef
+		if len(tr.Args) != 2 || tr.Args[0].HasProj() || tr.Args[1].HasProj() || tr.Args[0].HasError() || tr.Args[1].HasError() ||
+			tr.Args[0].HasOpaque() || tr.Args[1].HasOpaque() {
+			continue
+		}
+		g := t.Generics(impl)
+		konst := false
+		for _, p := range g.Params {
+			konst = konst || p.Const
+		}
+		if konst {
+			continue
+		}
+		ic := newInferCtxt(t)
+		args := make([]Ty, len(g.Params))
+		for i := range args {
+			args[i] = ic.newVar()
+		}
+		a, b := Subst(tr.Args[0], args), Subst(tr.Args[1], args)
+		if !ic.unify(a, b) {
+			continue
+		}
+		fails := false
+		for _, p := range g.Predicates {
+			if p.Maybe || p.Trait == nil {
+				continue
+			}
+			if ic.evaluate(p.Subst(args), 0) == SelNone {
+				fails = true
+			}
+		}
+		if fails {
+			continue
+		}
+		t.ErrorCode(impl.Span, "E0119", "conflicting implementations of trait `From<%s>` for type `%s`", tr.Args[1], tr.Args[0])
+	}
 }
 
 // TraitImpls returns all impls of a trait.

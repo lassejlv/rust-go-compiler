@@ -20,18 +20,6 @@ pub struct BinaryHeap<T> {
 }
 
 impl<T: Ord> BinaryHeap<T> {
-    /// Creates an empty `BinaryHeap` as a max-heap.
-    #[inline]
-    pub const fn new() -> BinaryHeap<T> {
-        BinaryHeap { data: Vec::new() }
-    }
-
-    /// Creates an empty `BinaryHeap` with at least the specified capacity.
-    #[inline]
-    pub fn with_capacity(capacity: usize) -> BinaryHeap<T> {
-        BinaryHeap { data: Vec::with_capacity(capacity) }
-    }
-
     /// Returns a mutable reference to the greatest item in the binary heap, or `None` if it is empty.
     pub fn peek_mut(&mut self) -> Option<PeekMut<'_, T>> {
         if self.is_empty() {
@@ -218,14 +206,26 @@ impl<T: Ord> BinaryHeap<T> {
             self.rebuild_tail(first_removed);
         }
     }
+}
+
+impl<T> BinaryHeap<T> {
+    /// Creates an empty `BinaryHeap` as a max-heap.
+    #[inline]
+    pub const fn new() -> BinaryHeap<T> {
+        BinaryHeap { data: Vec::new() }
+    }
+
+    /// Creates an empty `BinaryHeap` with at least the specified capacity.
+    #[inline]
+    pub fn with_capacity(capacity: usize) -> BinaryHeap<T> {
+        BinaryHeap { data: Vec::with_capacity(capacity) }
+    }
 
     /// Clears the binary heap, returning an iterator over the removed elements in heap order.
     pub fn drain(&mut self) -> vec::Drain<'_, T> {
         self.data.drain(..)
     }
-}
 
-impl<T> BinaryHeap<T> {
     /// Returns an iterator visiting all values in the underlying vector, in arbitrary order.
     pub fn iter(&self) -> slice::Iter<'_, T> {
         self.data.iter()
