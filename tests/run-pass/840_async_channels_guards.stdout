@@ -1,0 +1,27 @@
+produce p1-0
+produce p2-0
+consume p1-0
+consume p2-0
+produce p1-1
+consume p1-1
+produce p1-2
+produce p2-1
+consume p1-2
+consume p2-1
+task 0 done at round 10
+task 1 done at round 13
+task 2 done at round 14
+consumed 5
+(block_on polls=1)
+fib 610
+(block_on polls=4)
+v=21 log=["drop inner", "drop outer"]
+(block_on polls=1)
+8
+(block_on polls=1)
+27
+(block_on polls=7)
+total 34
+(block_on polls=1)
+42
+Ready(9)

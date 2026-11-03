@@ -1,0 +1,18 @@
+circle area=7.069 perim=9.425
+[2x3] rect
+[4x4] square
+poly3 area=6.000 perim=12.000
+poly5 area=7.500 perim=10.715
+total area = 42.5686
+largest: Rect { w: 4.0, h: 4.0 }
+named: circle
+named: rect
+named: square
+named: poly3
+named: poly5
+perim sum = 6.14159
+square > poly3 > poly5 > rect > circle
+Rect {
+    w: 2.0,
+    h: 3.0,
+}

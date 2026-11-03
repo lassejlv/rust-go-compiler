@@ -1,0 +1,19 @@
+buffered 1
+args 1
+var true
+0 "alpha 1"
+1 "beta 22"
+2 ""
+3 "gamma 333"
+4 "delta"
+"alpha" pos=5
+"delta"
+"1\n"
+[[97], [98], [], [99]]
+"X-2 tail"
+copied 1234
+"   42|"
+"first sec"
+custom bad data InvalidData
+entity not found
+no newline at end

@@ -1,0 +1,32 @@
+-- all by salary desc, name
+name      |dept      |salary    |age       |remote    
+e         |e         |130.0|38        |n         
+a         |e         |120.5|34        |y         
+h         |s         |99.9|31        |n         
+b         |e         |95.0|45        |n         
+f         |o         |88.8|41        |y         
+g         |o         |88.8|23        |n         
+c         |s         |70.2|29        |y         
+d         |s         |N         |52        |n         
+i         |h         |N         |60        |y         
+-- eng or remote, age>30, top 3 by age
+name      |dept      |salary    |age       |remote    
+a         |e         |120.5|34        |y         
+e         |e         |130.0|38        |n         
+f         |o         |88.8|41        |y         
+-- name like %e, not null salary
+name      |dept      |salary    
+a         |e         |120.5
+g         |o         |88.8
+-- null salary
+name      |salary    
+d         |N         
+i         |N         
+   eng:        3 345.500 115.167       45
+    hr:        1 -0.000      NUL       60
+   ops:        2 177.600 88.800       41
+ sales:        3 170.150 85.075       52
+remote=no: [Int(2), Text("heidi")]
+remote=yes: [Int(1), Text("carol")]
+Some(Less)
+Less

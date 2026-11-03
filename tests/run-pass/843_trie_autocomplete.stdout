@@ -1,0 +1,18 @@
+words=16 nodes=42
+ car: ["car", "card", "care", "careful", "cart"]
+ cat: ["cat", "catalog", "category"]
+  do: ["do", "dodge", "dog", "door", "doorman"]
+   z: ["zebra", "zèle", "zéro"]
+   x: []
+    : ["car", "card", "care", "careful", "cart"]
+contains car=true ca=false doorman=true
+prefix counts: ca=Some(9) do=Some(5)
+remove card=true card again=false ca=false
+remove careful=true -> ["car", "care", "cart"]
+words=14 nodes=38
+lcp="inter"
+lcp after 'in' = "in"
+dor -> [(1, "do"), (1, "dog"), (1, "door")]
+catt -> [(1, "cart"), (1, "cat"), (2, "car")]
+zero -> [(1, "zéro"), (2, "zebra"), (3, "car")]
+cabbage -> [(4, "care"), (5, "car"), (5, "cart")]

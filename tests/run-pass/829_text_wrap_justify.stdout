@@ -1,0 +1,83 @@
++---- wrap 16 -----+
+| The quick brown  |
+| fox jumps over   |
+| the lazy dog.    |
+| Pack my box with |
+| five dozen       |
+| liquor jugs!     |
+| Supercalifragili |
+| sticexpialidocio |
+| us words get     |
+| split. Ünïcödé   |
+| wörds cöunt by   |
+| chars.           |
++------------------+
++--- justified ----+
+| The  quick brown |
+| fox  jumps  over |
+| the   lazy  dog. |
+| Pack my box with |
+| five       dozen |
+| liquor     jugs! |
+| Supercalifragili |
+| sticexpialidocio |
+| us   words   get |
+| split.   Ünïcödé |
+| wörds  cöunt  by |
+| chars.           |
++------------------+
++-------- wrap 24 ---------+
+| The quick brown fox      |
+| jumps over the lazy dog. |
+| Pack my box with five    |
+| dozen liquor jugs!       |
+| Supercalifragilisticexpi |
+| alidocious words get     |
+| split. Ünïcödé wörds     |
+| cöunt by chars.          |
++--------------------------+
++------- justified --------+
+| The   quick   brown  fox |
+| jumps over the lazy dog. |
+| Pack  my  box  with five |
+| dozen    liquor    jugs! |
+| Supercalifragilisticexpi |
+| alidocious   words   get |
+| split.   Ünïcödé   wörds |
+| cöunt by chars.          |
++--------------------------+
++---------------- wrap 40 -----------------+
+| The quick brown fox jumps over the lazy  |
+| dog. Pack my box with five dozen liquor  |
+| jugs! Supercalifragilisticexpialidocious |
+| words get split. Ünïcödé wörds cöunt by  |
+| chars.                                   |
++------------------------------------------+
++--------------- justified ----------------+
+| The  quick brown fox jumps over the lazy |
+| dog.  Pack my box with five dozen liquor |
+| jugs! Supercalifragilisticexpialidocious |
+| words  get split. Ünïcödé wörds cöunt by |
+| chars.                                   |
++------------------------------------------+
+The quick brown fox jumps over
+the lazy dog. Pack my box with
+   five dozen liquor jugs!    
+Supercalifragilisticexpialidoc
+ious words get split. Ünïcödé 
+    wörds cöunt by chars.
+name      |      value |    count
+----------+------------+---------
+alpha     |      1.500 |      +10
+βeta      |    -22.125 |       -3
+gamma-ray |   1234.568 |       +0
+δ         |      0.000 |  +999999
+    total |    1.214e3 |  1000006
+00: [  indented] trimmed=[indented] len=10
+01: [	tabbed] trimmed=[tabbed] len=7
+02: [windows line] trimmed=[windows line] len=12
+03: [] trimmed=[] len=0
+04: [last] trimmed=[last] len=4
+["name", "age", "city"]
+["Smith, J", "42", "NYC"]
+["Doe", "", "San \"Fran\""]

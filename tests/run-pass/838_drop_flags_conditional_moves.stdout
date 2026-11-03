@@ -1,0 +1,99 @@
+maybe(true)
+  consume x
+  drop x
+  end of maybe
+  drop y
+maybe(false)
+  kept y in branch
+  drop y
+  end of maybe
+  drop x
+loop_moves(4)
+  consume slot0
+  drop slot0
+  consume s2
+  drop s2
+  loop done
+  drop s1
+loop_moves(3)
+  consume slot0
+  drop slot0
+  consume s2
+  drop s2
+  loop done
+partial(true)
+  consume pb
+  drop pb
+  got a=pa
+  drop pa
+  drop pc
+partial(false)
+  got a=pa
+  drop pa
+  drop pb
+  drop pc
+match_move
+  consume m1
+  drop m1
+  after match
+match_move
+  ref m2
+  after match
+  drop m2
+match_move
+  none
+  after match
+reassign
+  drop a1
+  b=a2 a=a3
+  drop a2
+  drop a3
+ret_early(0)
+  drop t2
+  got Some("t1")
+  drop t1
+ret_early(1)
+  drop t2
+  drop t1
+  got None
+ret_early(2)
+  drop t1
+  got Some("t2")
+  drop t2
+temporaries
+  drop blocktemp
+  drop blockval
+  n=8
+  drop expr_temp2
+  drop expr_temp
+  len=19
+  in match scrutinee
+  drop scrutinee
+  in if let
+  drop iflet
+  drop underscore
+  end temporaries
+  drop named_underscore
+closures
+  calling with cap_move
+  ref cap_ref
+  calling with cap_move
+  closures end
+  drop cap_ref
+  drop cap_move
+vec_ops
+  drop v3
+  truncated
+  drop v0
+  drop v2
+  popped, x=v1
+  drop v_new
+  drop v_replaced
+  vec dropped
+  drop v1
+  drop boxed_cap
+  boxed boxed_cap
+main end arr0 arr2
+  drop arr2
+  drop arr0
+  drop arr1

@@ -1,0 +1,52 @@
+'a' U+0061 len8=1 len16=1 alpha=true num=false alnum=true ws=false up=false low=true ctrl=false punct=false digit10=None digit16=Some(10)
+'Z' U+005A len8=1 len16=1 alpha=true num=false alnum=true ws=false up=true low=false ctrl=false punct=false digit10=None digit16=None
+'7' U+0037 len8=1 len16=1 alpha=false num=true alnum=true ws=false up=false low=false ctrl=false punct=false digit10=Some(7) digit16=Some(7)
+' ' U+0020 len8=1 len16=1 alpha=false num=false alnum=false ws=true up=false low=false ctrl=false punct=false digit10=None digit16=None
+'\t' U+0009 len8=1 len16=1 alpha=false num=false alnum=false ws=true up=false low=false ctrl=true punct=false digit10=None digit16=None
+'é' U+00E9 len8=2 len16=1 alpha=true num=false alnum=true ws=false up=false low=true ctrl=false punct=false digit10=None digit16=None
+'ß' U+00DF len8=2 len16=1 alpha=true num=false alnum=true ws=false up=false low=true ctrl=false punct=false digit10=None digit16=None
+'Σ' U+03A3 len8=2 len16=1 alpha=true num=false alnum=true ws=false up=true low=false ctrl=false punct=false digit10=None digit16=None
+'σ' U+03C3 len8=2 len16=1 alpha=true num=false alnum=true ws=false up=false low=true ctrl=false punct=false digit10=None digit16=None
+'ς' U+03C2 len8=2 len16=1 alpha=true num=false alnum=true ws=false up=false low=true ctrl=false punct=false digit10=None digit16=None
+'中' U+4E2D len8=3 len16=1 alpha=true num=false alnum=true ws=false up=false low=false ctrl=false punct=false digit10=None digit16=None
+'😀' U+1F600 len8=4 len16=2 alpha=false num=false alnum=false ws=false up=false low=false ctrl=false punct=false digit10=None digit16=None
+'\0' U+0000 len8=1 len16=1 alpha=false num=false alnum=false ws=false up=false low=false ctrl=true punct=false digit10=None digit16=None
+'_' U+005F len8=1 len16=1 alpha=false num=false alnum=false ws=false up=false low=false ctrl=false punct=true digit10=None digit16=None
+'Ⅻ' U+216B len8=3 len16=1 alpha=true num=true alnum=true ws=false up=true low=false ctrl=false punct=false digit10=None digit16=None
+'٣' U+0663 len8=2 len16=1 alpha=false num=true alnum=true ws=false up=false low=false ctrl=false punct=false digit10=None digit16=None
+'ǅ' U+01C5 len8=2 len16=1 alpha=true num=false alnum=true ws=false up=false low=false ctrl=false punct=false digit10=None digit16=None
+'\u{301}' U+0301 len8=2 len16=1 alpha=false num=false alnum=false ws=false up=false low=false ctrl=false punct=false digit10=None digit16=None
+a upper=A (1) lower=a (1)
+ß upper=SS (2) lower=ß (1)
+Σ upper=Σ (1) lower=σ (1)
+ǅ upper=Ǆ (1) lower=ǆ (1)
+İ upper=İ (1) lower=i̇ (2)
+ﬃ upper=FFI (3) lower=ﬃ (1)
+ŉ upper=ʼN (2) lower=ŉ (1)
+bytes=55 chars=33 upper=GRÜSSE, JÜRGEN! ΣΊΣΥΦΟΣ — 東京 🚀🚀 OK lower=grüße, jürgen! σίσυφος — 東京 🚀🚀 ok
+ascii_up=GRüßE, JüRGEN! ΣΊΣΥΦΟΣ — 東京 🚀🚀 OK 
+2:ü 4:ß 10:ü 18:Σ 20:Ί 22:Σ 
+rev=ko 🚀🚀 京東 — ΣΟΦΥΣΊΣ !negrüJ ,eßürG
+utf16=[61, d83d, de00] back=Ok("a😀")
+euro bytes [226, 130, 172] str=€
+from_u32 Some('A') None Some('😀')
+from_digit Some('7') Some('b') None
+escape: a\"b\\c\n\u{2603} | tab\t\u{7f}é | \u{e9}\u{1f600}
+char escape: \' \u{e9} \r
+Khoor, Zruog! abc
+Round Trip
+[The Quick  Brown Fox]
+digit sum 15
+cmp true true Greater
+range abcdeXY
+is_char_boundary false true true
+Ok("naïve") Err((2, None))
+Hi��!
+eq_ignore_ascii_case true false
+mixed case ÄÖ
+[97, 98, 769, 99]
+121
+z
+"trim me"
+[true, true, true]
+true

@@ -1,0 +1,63 @@
+use std::panic;
+use std::hint::black_box as bb;
+fn msg(r: Result<(), Box<dyn std::any::Any + Send>>) -> String {
+    match r { Ok(()) => "ok".into(), Err(p) => p.downcast_ref::<String>().cloned().or_else(|| p.downcast_ref::<&str>().map(|s| s.to_string())).unwrap_or("?".into()) }
+}
+fn main() {
+    panic::set_hook(Box::new(|_| {}));
+    let tests: Vec<(&str, Box<dyn Fn() + panic::RefUnwindSafe>)> = vec![
+        ("abs", Box::new(|| { bb(i32::MIN).abs(); })),
+        ("neg", Box::new(|| { let x = bb(i8::MIN); let _ = -x; })),
+        ("shl", Box::new(|| { let _ = 1u32 << bb(32); })),
+        ("shr", Box::new(|| { let _ = 1i64 >> bb(64); })),
+        ("sub", Box::new(|| { let _ = bb(0usize) - 1; })),
+        ("mul", Box::new(|| { let _ = bb(u64::MAX) * 2; })),
+        ("div", Box::new(|| { let _ = bb(i32::MIN) / -1; })),
+        ("rem", Box::new(|| { let _ = bb(i32::MIN) % -1; })),
+        ("rem0", Box::new(|| { let _ = bb(5u8) % bb(0); })),
+        ("pow", Box::new(|| { let _ = bb(10u32).pow(10); })),
+        ("addassign", Box::new(|| { let mut x = bb(250u8); x += 10; bb(x); })),
+        ("i128", Box::new(|| { let _ = bb(i128::MAX) + 1; })),
+        ("cast_ok", Box::new(|| { let _ = bb(300i32) as u8; })),
+        ("slice", Box::new(|| { let v = [1, 2, 3]; let _ = &v[bb(2)..bb(1)]; })),
+        ("slice_end", Box::new(|| { let v = [1, 2, 3]; let _ = &v[..bb(5)]; })),
+        ("str_slice", Box::new(|| { let s = "aé"; let _ = &s[bb(2)..]; })),
+        ("vec_remove", Box::new(|| { let mut v = vec![1]; v.remove(bb(3)); })),
+        ("vec_insert", Box::new(|| { let mut v = vec![1]; v.insert(bb(3), 0); })),
+        ("swap_remove", Box::new(|| { let mut v: Vec<i32> = vec![]; v.swap_remove(bb(0)); })),
+        ("drain", Box::new(|| { let mut v = vec![1, 2]; v.drain(bb(1)..bb(5)); })),
+        ("split_at", Box::new(|| { let v = [1, 2]; let _ = v.split_at(bb(3)); })),
+        ("chunks0", Box::new(|| { let v = [1, 2]; let _ = v.chunks(bb(0)); })),
+        ("step0", Box::new(|| { let _ = (0..5).step_by(bb(0)); })),
+        ("copy_from", Box::new(|| { let mut a = [0; 3]; a.copy_from_slice(&[1, 2][..bb(2)]); })),
+        ("unwrap_none", Box::new(|| { let o: Option<i32> = bb(None); o.unwrap(); })),
+        ("unwrap_err", Box::new(|| { let r: Result<i32, String> = bb(Err("bad".into())); r.unwrap(); })),
+        ("expect_err", Box::new(|| { let r: Result<i32, i32> = bb(Err(5)); r.expect("ctx"); })),
+        ("unwrap_err_ok", Box::new(|| { let r: Result<i32, i32> = bb(Ok(5)); r.unwrap_err(); })),
+        ("from_utf8", Box::new(|| { String::from_utf8(bb(vec![0xff])).unwrap(); })),
+        ("parse", Box::new(|| { "x".parse::<i32>().unwrap(); })),
+        ("char_from_digit", Box::new(|| { char::from_digit(1, bb(40)); })),
+        ("deque", Box::new(|| { let d: std::collections::VecDeque<i32> = std::collections::VecDeque::new(); let _ = d[bb(0)]; })),
+        ("btree", Box::new(|| { let m: std::collections::BTreeMap<i32, i32> = Default::default(); let _ = m[&bb(1)]; })),
+        ("hashmap", Box::new(|| { let m: std::collections::HashMap<&str, i32> = Default::default(); let _ = m[bb("k")]; })),
+        ("assert_ne", Box::new(|| { assert_ne!(bb(1), 1); })),
+        ("assert_eq_msg", Box::new(|| { assert_eq!(bb("a"), "b", "values {} differ", 2); })),
+        ("debug_assert", Box::new(|| { debug_assert!(bb(1) > 2, "dbg"); })),
+        ("refcell", Box::new(|| { let c = std::cell::RefCell::new(0); let _a = c.borrow(); let _b = c.borrow_mut(); })),
+        ("array_idx", Box::new(|| { let a = [1u8; 4]; let _ = a[bb(4)]; })),
+        ("isqrt_neg", Box::new(|| { let _ = bb(-4i32).isqrt(); })),
+        ("ilog0", Box::new(|| { let _ = bb(0u32).ilog2(); })),
+        ("div_ceil0", Box::new(|| { let _ = bb(5u32).div_ceil(0); })),
+        ("repeat", Box::new(|| { let _ = "ab".repeat(bb(usize::MAX)); })),
+        ("clamp", Box::new(|| { let _ = bb(5).clamp(3, 1); })),
+        ("fclamp", Box::new(|| { let _ = bb(5.0f64).clamp(3.0, 1.0); })),
+        ("rotate", Box::new(|| { let mut v = [1, 2]; v.rotate_left(bb(3)); })),
+        ("swap", Box::new(|| { let mut v = [1, 2]; v.swap(0, bb(2)); })),
+        ("string_remove", Box::new(|| { let mut s = String::from("é"); s.remove(bb(1)); })),
+        ("string_insert", Box::new(|| { let mut s = String::from("é"); s.insert(bb(1), 'x'); })),
+        ("truncate", Box::new(|| { let mut s = String::from("é"); s.truncate(bb(1)); })),
+        ("split_off", Box::new(|| { let mut v = vec![1]; v.split_off(bb(2)); })),
+        ("fmt_width", Box::new(|| { let _ = format!("{:1$}", 1, bb(3)); })),
+    ];
+    for (n, t) in tests { println!("{:<14} {}", n, msg(panic::catch_unwind(|| t()))); }
+}

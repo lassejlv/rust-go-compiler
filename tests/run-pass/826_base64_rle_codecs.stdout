@@ -1,0 +1,27 @@
+"" ->  -> ok=true
+"f" -> Zg== -> ok=true
+"fo" -> Zm8= -> ok=true
+"foo" -> Zm9v -> ok=true
+"foob" -> Zm9vYg== -> ok=true
+"fooba" -> Zm9vYmE= -> ok=true
+"foobar" -> Zm9vYmFy -> ok=true
+"Many hands make light work." -> TWFueSBoYW5kcyBtYWtlIGxpZ2h0IHdvcmsu -> ok=true
+"ünïcødé ✓" -> w7xuw69jw7hkw6kg4pyT -> ok=true
+decode "abc": Err("bad length 3")
+decode "ab$d": Err("bad char '$' in chunk 0")
+decode "a=bc": Err("misplaced pad")
+decode "TWFu\nTWFu": Ok("ManMan")
+ABEiM0RVZneImaq7zN3u/w== 00112233445566778899aabbccddeeff
+rle 67 -> "12WB12W3B24WB14W" round=true
+rle 3 -> "abc" round=true
+rle 9 -> "2a3b4c" round=true
+rle 0 -> "" round=true
+rle 18 -> "12z2€" round=true
+crc32("") = 00000000 adler = 00000001
+crc32("a") = e8b7be43 adler = 00620062
+crc32("abc") = 352441c2 adler = 024d0127
+crc32("The quick brown fox jumps over the lazy dog") = 414fa339 adler = 5bdc0fda
+crc32("123456789") = cbf43926 adler = 091e01de
+Some([222, 173, 190, 239]) None None
+0a110d0a06124b040d4b01181c0b attack at dawn
+[('o', 4), ('e', 3), ('h', 2), ('r', 2), ('t', 2), ('u', 2)]

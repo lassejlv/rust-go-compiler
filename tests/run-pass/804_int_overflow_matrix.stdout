@@ -1,0 +1,123 @@
+   u8: max=255 min=0 bits=8
+  checked_add None checked_sub None checked_mul None checked_div0 None
+  wrapping add 3 sub 255 mul 244 neg 249 shl 14
+  saturating add 255 sub 0 mul 255
+  overflowing add (3, true) sub (255, true) mul (248, true) neg (0, false)
+  pow None None 193 255
+  ones=6 lz=5 tz=3 rotl=56 swap=7 rev=224
+  rem_euclid 1 div_euclid 50 checked_rem None Some(0)
+  u16: max=65535 min=0 bits=16
+  checked_add None checked_sub None checked_mul None checked_div0 None
+  wrapping add 3 sub 65535 mul 65524 neg 65529 shl 14
+  saturating add 65535 sub 0 mul 65535
+  overflowing add (3, true) sub (65535, true) mul (65528, true) neg (0, false)
+  pow Some(16807) None 29121 65535
+  ones=14 lz=13 tz=3 rotl=56 swap=1792 rev=57344
+  rem_euclid 1 div_euclid 13106 checked_rem None Some(0)
+  u32: max=4294967295 min=0 bits=32
+  checked_add None checked_sub None checked_mul None checked_div0 None
+  wrapping add 3 sub 4294967295 mul 4294967284 neg 4294967289 shl 14
+  saturating add 4294967295 sub 0 mul 4294967295
+  overflowing add (3, true) sub (4294967295, true) mul (4294967288, true) neg (0, false)
+  pow Some(16807) None 4152848833 4294967295
+  ones=30 lz=29 tz=3 rotl=56 swap=117440512 rev=3758096384
+  rem_euclid 1 div_euclid 858993458 checked_rem None Some(0)
+  u64: max=18446744073709551615 min=0 bits=64
+  checked_add None checked_sub None checked_mul None checked_div0 None
+  wrapping add 3 sub 18446744073709551615 mul 18446744073709551604 neg 18446744073709551609 shl 14
+  saturating add 18446744073709551615 sub 0 mul 18446744073709551615
+  overflowing add (3, true) sub (18446744073709551615, true) mul (18446744073709551608, true) neg (0, false)
+  pow Some(16807) None 12233820880559894977 18446744073709551615
+  ones=62 lz=61 tz=3 rotl=56 swap=504403158265495552 rev=16140901064495857664
+  rem_euclid 1 div_euclid 3689348814741910322 checked_rem None Some(0)
+ u128: max=340282366920938463463374607431768211455 min=0 bits=128
+  checked_add None checked_sub None checked_mul None checked_div0 None
+  wrapping add 3 sub 340282366920938463463374607431768211455 mul 340282366920938463463374607431768211444 neg 340282366920938463463374607431768211449 shl 14
+  saturating add 340282366920938463463374607431768211455 sub 0 mul 340282366920938463463374607431768211455
+  overflowing add (3, true) sub (340282366920938463463374607431768211455, true) mul (340282366920938463463374607431768211448, true) neg (0, false)
+  pow Some(16807) None 6366805760909027985741435139224001 340282366920938463463374607431768211455
+  ones=126 lz=125 tz=3 rotl=56 swap=9304595970494411110326649421962412032 rev=297747071055821155530452781502797185024
+  rem_euclid 1 div_euclid 68056473384187692692674921486353642290 checked_rem None Some(0)
+usize: max=18446744073709551615 min=0 bits=64
+  checked_add None checked_sub None checked_mul None checked_div0 None
+  wrapping add 3 sub 18446744073709551615 mul 18446744073709551604 neg 18446744073709551609 shl 14
+  saturating add 18446744073709551615 sub 0 mul 18446744073709551615
+  overflowing add (3, true) sub (18446744073709551615, true) mul (18446744073709551608, true) neg (0, false)
+  pow Some(16807) None 12233820880559894977 18446744073709551615
+  ones=62 lz=61 tz=3 rotl=56 swap=504403158265495552 rev=16140901064495857664
+  rem_euclid 1 div_euclid 3689348814741910322 checked_rem None Some(0)
+   i8: max=127 min=-128 bits=8
+  checked_add None checked_sub None checked_mul None checked_div0 None
+  wrapping add -125 sub 127 mul 116 neg -7 shl 14
+  saturating add 127 sub -128 mul 127
+  overflowing add (-125, true) sub (127, true) mul (-8, true) neg (-128, true)
+  pow None None -63 127
+  ones=5 lz=5 tz=3 rotl=56 swap=7 rev=-32
+  rem_euclid 1 div_euclid 24 checked_rem None Some(-1)
+  [signed i8] abs None wabs -128 uabs 128 sign -1 0 div_euclid -4 rem_euclid 3 checked_div(min,-1) None wrapping_div -128 overflowing_div (-128, true) checked_neg None sat_neg 127
+  is_negative true is_positive false abs_diff 144 pow -64
+  i16: max=32767 min=-32768 bits=16
+  checked_add None checked_sub None checked_mul None checked_div0 None
+  wrapping add -32765 sub 32767 mul 32756 neg -7 shl 14
+  saturating add 32767 sub -32768 mul 32767
+  overflowing add (-32765, true) sub (32767, true) mul (-8, true) neg (-32768, true)
+  pow Some(16807) None 29121 32767
+  ones=13 lz=13 tz=3 rotl=56 swap=1792 rev=-8192
+  rem_euclid 1 div_euclid 6552 checked_rem None Some(-1)
+  [signed i16] abs None wabs -32768 uabs 32768 sign -1 0 div_euclid -4 rem_euclid 3 checked_div(min,-1) None wrapping_div -32768 overflowing_div (-32768, true) checked_neg None sat_neg 32767
+  is_negative true is_positive false abs_diff 32784 pow -64
+  i32: max=2147483647 min=-2147483648 bits=32
+  checked_add None checked_sub None checked_mul None checked_div0 None
+  wrapping add -2147483645 sub 2147483647 mul 2147483636 neg -7 shl 14
+  saturating add 2147483647 sub -2147483648 mul 2147483647
+  overflowing add (-2147483645, true) sub (2147483647, true) mul (-8, true) neg (-2147483648, true)
+  pow Some(16807) None -142118463 2147483647
+  ones=29 lz=29 tz=3 rotl=56 swap=117440512 rev=-536870912
+  rem_euclid 1 div_euclid 429496728 checked_rem None Some(-1)
+  [signed i32] abs None wabs -2147483648 uabs 2147483648 sign -1 0 div_euclid -4 rem_euclid 3 checked_div(min,-1) None wrapping_div -2147483648 overflowing_div (-2147483648, true) checked_neg None sat_neg 2147483647
+  is_negative true is_positive false abs_diff 2147483664 pow -64
+  i64: max=9223372036854775807 min=-9223372036854775808 bits=64
+  checked_add None checked_sub None checked_mul None checked_div0 None
+  wrapping add -9223372036854775805 sub 9223372036854775807 mul 9223372036854775796 neg -7 shl 14
+  saturating add 9223372036854775807 sub -9223372036854775808 mul 9223372036854775807
+  overflowing add (-9223372036854775805, true) sub (9223372036854775807, true) mul (-8, true) neg (-9223372036854775808, true)
+  pow Some(16807) None -6212923193149656639 9223372036854775807
+  ones=61 lz=61 tz=3 rotl=56 swap=504403158265495552 rev=-2305843009213693952
+  rem_euclid 1 div_euclid 1844674407370955160 checked_rem None Some(-1)
+  [signed i64] abs None wabs -9223372036854775808 uabs 9223372036854775808 sign -1 0 div_euclid -4 rem_euclid 3 checked_div(min,-1) None wrapping_div -9223372036854775808 overflowing_div (-9223372036854775808, true) checked_neg None sat_neg 9223372036854775807
+  is_negative true is_positive false abs_diff 9223372036854775824 pow -64
+ i128: max=170141183460469231731687303715884105727 min=-170141183460469231731687303715884105728 bits=128
+  checked_add None checked_sub None checked_mul None checked_div0 None
+  wrapping add -170141183460469231731687303715884105725 sub 170141183460469231731687303715884105727 mul 170141183460469231731687303715884105716 neg -7 shl 14
+  saturating add 170141183460469231731687303715884105727 sub -170141183460469231731687303715884105728 mul 170141183460469231731687303715884105727
+  overflowing add (-170141183460469231731687303715884105725, true) sub (170141183460469231731687303715884105727, true) mul (-8, true) neg (-170141183460469231731687303715884105728, true)
+  pow Some(16807) None 6366805760909027985741435139224001 170141183460469231731687303715884105727
+  ones=125 lz=125 tz=3 rotl=56 swap=9304595970494411110326649421962412032 rev=-42535295865117307932921825928971026432
+  rem_euclid 1 div_euclid 34028236692093846346337460743176821144 checked_rem None Some(-1)
+  [signed i128] abs None wabs -170141183460469231731687303715884105728 uabs 170141183460469231731687303715884105728 sign -1 0 div_euclid -4 rem_euclid 3 checked_div(min,-1) None wrapping_div -170141183460469231731687303715884105728 overflowing_div (-170141183460469231731687303715884105728, true) checked_neg None sat_neg 170141183460469231731687303715884105727
+  is_negative true is_positive false abs_diff 170141183460469231731687303715884105744 pow -64
+isize: max=9223372036854775807 min=-9223372036854775808 bits=64
+  checked_add None checked_sub None checked_mul None checked_div0 None
+  wrapping add -9223372036854775805 sub 9223372036854775807 mul 9223372036854775796 neg -7 shl 14
+  saturating add 9223372036854775807 sub -9223372036854775808 mul 9223372036854775807
+  overflowing add (-9223372036854775805, true) sub (9223372036854775807, true) mul (-8, true) neg (-9223372036854775808, true)
+  pow Some(16807) None -6212923193149656639 9223372036854775807
+  ones=61 lz=61 tz=3 rotl=56 swap=504403158265495552 rev=-2305843009213693952
+  rem_euclid 1 div_euclid 1844674407370955160 checked_rem None Some(-1)
+  [signed isize] abs None wabs -9223372036854775808 uabs 9223372036854775808 sign -1 0 div_euclid -4 rem_euclid 3 checked_div(min,-1) None wrapping_div -9223372036854775808 overflowing_div (-9223372036854775808, true) checked_neg None sat_neg 9223372036854775807
+  is_negative true is_positive false abs_diff 9223372036854775824 pow -64
+30! = 265252859812191058636308480000000
+30! hex = 0xd13f6370f96865df5dd54000000
+30! / 7! = 52629535677022035443712000000 rem 109361473
+-170141183460469231731687303715884105728 -170141183460469231731687303715884105727 None
+128 18446744073709551615 0
+3402823669 20938463426481119284349108225
+-27670116110564327424 -9223372036854775808 0
+44 4294967295 340282366920938463463374607431768211455 -1 0
+3 -3 2147483647 0
+0 340282366920938463463374607431768211455 255
+Ok(-1295) true true
+[18, 52, 86, 120] [120, 86, 52, 18]
+3735928559 32767
+None 128
+true 4 3

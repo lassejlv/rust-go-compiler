@@ -1,0 +1,21 @@
+disp(5) disp(hi) disp(2.5)
+inherent woof | trait woof | generic speak | dog
+dog &dog
+generic speak cat
+len via inherent 999 len via deref 3
+[0, 1, 2, 3] first=Some(0) contains=true reads=4
+HELLO 5 true
+1.7320508075688772 9 10
+-1 16
+999 6
+Some(4) [1, 2, 3] len=3 6
+42 "abab" [2, 4]
+["xx", "yzyz"]
+HEY! OWN!
+3 items! 2 items!
+BOXED! 5
+2 [8, 7]
+25 disp(5) 6
+disp(x) 1
+Some(1)
+disp(1) disp(z)

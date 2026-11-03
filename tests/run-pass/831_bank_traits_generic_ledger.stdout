@@ -1,0 +1,18 @@
+#0  ok
+#1  ok
+#2  ok
+#3  FAILED: ACC-0002 short by $50.00
+#4  ok
+#5  FAILED: cannot transfer to same account
+#6  FAILED: no such account ACC-0099
+#7  FAILED: ACC-0003 short by $0.50
+#8  ok
+#9  ok
+#10 FAILED: no such account ACC-0099
+#0  FAILED: ACC-0001 is frozen
+#1  FAILED: ACC-0001 is frozen
+ACC-0001 alice         $9,461.98 basic                  frozen=true hist=[1234567, -300050, 11681]
+ACC-0002 bob               $0.00 premium(od=$500.00)    frozen=false hist=[10000, -45000]
+ACC-0003 carol         $3,036.47 basic                  frozen=false hist=[300050, -151, 3748]
+total $12,148.45 raw=1214845
+[$0.05         ] [$1,000,000,000.01] [$0.00]

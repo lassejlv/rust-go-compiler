@@ -1,0 +1,19 @@
+chunk 0 sum 4501500 primes 430
+chunk 1 sum 13501500 primes 353
+chunk 2 sum 22501500 primes 334
+chunk 3 sum 31501500 primes 321
+chunk 4 sum 40501500 primes 316
+chunk 5 sum 49501500 primes 310
+chunk 6 sum 38001000 primes 198
+total 200010000 primes 2262
+counter=17982 rets=[0, 10, 20, 30, 40, 50] hits=[0, 1, 4, 9, 16, 25]
+12 msgs first=Some((0, "w0-0")) last=Some((3, "w3-2"))
+table [1, 8, 27, 64, 125, 216, 343, 512] sum 1296
+  1  2  3  4  5  6
+  2  4  6  8 10 12
+  3  6  9 12 15 18
+  4  8 12 16 20 24
+  5 10 15 20 25 30
+  6 12 18 24 30 36
+join err? true
+Some("named-worker")

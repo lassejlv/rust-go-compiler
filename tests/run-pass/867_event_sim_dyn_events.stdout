@@ -1,0 +1,6 @@
+t=20 report: queue=3 served=5 balked=0
+t=40 report: queue=3 served=10 balked=0
+t=60 report: queue=1 served=15 balked=0
+end t=106 served=26 balked=0 avg_wait=4.462 max_wait=Some(7)
+{"arrive": 26, "depart": 26, "report": 3, "start": 26}
+pending events 0 queue 0

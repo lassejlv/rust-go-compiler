@@ -1,0 +1,25 @@
+[Red, Green, Blue] Blue Some(Green) None
+-1 44 10
+5 0
+{"a": 1, "b": 2}
+3 9
+Settings { width: 80, title: "untitled", ratio: 1.5 } ["width", "title", "ratio"]
+5 -1 6 16
+20
+[[1, 2], [3, 4], []]
+[7, 7, 7] [1, 2, 3]
+60
+[("a", 3), ("b", 0), ("c", 5)]
+[0, 5, 55, 610, 6765, 75025, 832040, 9227465, 102334155, 1134903170] 2880067194370816120
+v1.2-3
+origin
+left P { x: -5, y: 1 }
+other
+small x=2 y=10
+other
+diag 7
+far 100
+other
+66 839_macros_consts_patterns
+true true
+[Some(1), Some(2)] [P { x: 1, y: 2 }, P { x: 3, y: 4 }] [W(1), W(2), W(3)]

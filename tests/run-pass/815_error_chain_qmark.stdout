@@ -1,0 +1,21 @@
+1 + 2 * 3              = 7
+(1 + 2) * 3            = 9
+x * y - "héllo"        = -17
+10 / (x - 6)           ! division by zero | chain: division by zero | DivZero
+z + 1                  ! unknown variable `z` | chain: unknown variable `z` | Unknown("z")
+1 + $                  ! could not parse | chain: could not parse <- lexing failed <- unexpected char '$' at 4 | Parse(Lex(UnexpectedChar('$', 4)))
+"abc                   ! could not parse | chain: could not parse <- lexing failed <- unterminated string starting at 0 | Parse(Lex(UnterminatedString(0)))
+(1 + 2                 ! could not parse | chain: could not parse <- unexpected end of input | Parse(Eof)
+1 2                    ! could not parse | chain: could not parse <- expected end, found Num(2) | Parse(UnexpectedToken { found: "Num(2)", expected: "end" })
+((((((((1))))))))      = 1
+1+1+1+1+1+1+1+1        ! nesting too deep (7) | chain: nesting too deep (7) | Depth(7)
+                       ! could not parse | chain: could not parse <- unexpected end of input | Parse(Eof)
+x*x*x*x*x*x*x*x        ! nesting too deep (7) | chain: nesting too deep (7) | Depth(7)
+x * 20 -> half=60
+x * 100 -> boxed err: number too large to fit in target type
+y -> boxed err: number too small to fit in target type
+q -> boxed err: unknown variable `q`
+Ok([1, 8, 3])
+Err("division by zero")
+could not parse <- lexing failed <- unterminated string starting at 4
+downcast ok: Parse(Lex(UnterminatedString(4)))

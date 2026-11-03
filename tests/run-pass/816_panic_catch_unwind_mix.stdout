@@ -1,0 +1,31 @@
+risky(5) = 20
+risky(-3) panicked with String: negative input: -3
+risky(0) panicked with String: index out of bounds: the len is 0 but the index is 0
+risky(13) panicked with u32: 13
+risky(7) panicked with String: seven is unlucky
+risky(8) panicked with String: called `Result::unwrap()` on an `Err` value: "eight"
+risky(20) = 5
+counter=1 is_err=true
+overflow caught: Err("&str: attempt to add with overflow")
+div caught: Err("&str: attempt to divide by zero")
+index caught: Err("String: index out of bounds: the len is 3 but the index is 10")
+slice caught: Err("String: end byte index 2 is not a char boundary; it is inside 'é' (bytes 1..3 of string)")
+refcell caught: Err("String: RefCell already borrowed")
+inner was err: true
+nested: Err("&str: outer 2")
+assert: Err("String: assertion `left == right` failed: math is broken\n  left: 2\n right: 3")
+assert2: Err("&str: assertion failed: false")
+unimpl: Err("&str: not implemented: later")
+todo: Err("&str: not yet implemented")
+unreachable: Err("&str: internal error: entered unreachable code: state 3")
+resumed: Err("&str: first")
+log[0] drop risky
+log[1] drop risky
+log[2] drop risky
+log[3] drop risky
+log[4] drop risky
+log[5] drop risky
+log[6] drop risky
+log[7] drop b
+log[8] drop a
+about to fail for real

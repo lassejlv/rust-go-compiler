@@ -1,0 +1,19 @@
+<1.0> <4.0> Sq(1.0) big=false eq=false sq=Some(Sq(2.0))
+<3.0> <12.0> Ci(1.0) big=true eq=false sq=None
+<4.0> <16.0> Sq(2.0) big=true eq=false sq=Some(Sq(4.0))
+10
+true Ok(1.0)
+Some(6)
+[("apple", 5), ("fig", 3), ("kiwi", 4), ("pear", 4)]
+[("a", 1), ("apple", 5), ("fig", 3), ("kiwi", 4), ("pear", 4), ("zz", 2)]
+[(1, 'a'), (3, 'C')]
+box[hey] box[box[i5]] box[i7] none
+box[i3]
+drop 1
+end scope
+drop 2
+drop "a"
+after destructure
+drop 'y'
+end main
+drop 'x'

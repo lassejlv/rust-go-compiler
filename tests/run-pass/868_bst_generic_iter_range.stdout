@@ -1,0 +1,16 @@
+replaced 30 (old v1)
+len 10 height 4
+[20, 30, 35, 40, 45, 50, 60, 65, 70, 80]
+get 45=Some("v8") 99=None
+range 33..=65 [(35, "v7"), (40, "v4"), (45, "v8"), (50, "v0"), (60, "v5!"), (65, "v9")]
+range ..40 [20, 30, 35]
+range 66.. [70, 80]
+remove 30 -> Some("v10"); now [20, 35, 40, 45, 50, 60, 65, 70, 80]
+remove 50 -> Some("v0"); now [20, 35, 40, 45, 60, 65, 70, 80]
+remove 99 -> None; now [20, 35, 40, 45, 60, 65, 70, 80]
+remove 20 -> Some("v3"); now [35, 40, 45, 60, 65, 70, 80]
+remove 70 -> Some("v2"); now [35, 40, 45, 60, 65, 80]
+pop_min Some((35, "v7")) height 3
+brown:1 dog:1 end:1 fox:1 jumps:1 lazy:1 over:1 quick:1 the:3 
+unique 177 sorted true first Some(3) last Some(991) height 15
+[964, 976, 979, 982, 991]

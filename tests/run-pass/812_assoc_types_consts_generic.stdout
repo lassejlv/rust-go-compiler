@@ -1,0 +1,16 @@
+Sum(55) Prod(3628800) MaxM(9)
+(Sum(9), Prod(48)) names sum pair max
+(Sum(0), (Prod(1), MaxM(-9223372036854775808)))
+stack["c","b","a"] first=Some("c")
+pair[1.5,-2.5] first=Some(1.5)
+stack[] first=None
+triangle 4-gon 6-gon total=9 8
+|  58  64|
+| 139 154|
+|   1   4|
+|   2   5|
+|   3   6|
+cells 6 16 7
+|1.252.75|
+|2.756.25|
+i32:42 21 [254, 255, 255, 255] i32:7

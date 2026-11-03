@@ -1,0 +1,24 @@
+glob *.rs         main.rs      true
+glob *.rs         main.rc      false
+glob a*b*c        aXXbYYc      true
+glob a*b*c        abcabd       false
+glob ?at          cat          true
+glob ?at          at           false
+glob **x          x            true
+glob *                         true
+glob a?c*         abcdef       true
+glob *a*a*a*a*b   aaaaaaaaaaaa false
+ab*c               on "xxabbbcyy"                  => Some((2, "abbbc"))
+^ab*c              on "xxabc"                      => None
+colou?r            on "my favourite color"         => Some((13, "color"))
+\d+-\d+            on "call 555-1234 now"          => Some((5, "555-1234"))
+[a-c]+[^a-c]       on "zzabcabcd!"                 => Some((2, "abcabcd"))
+(ab)+              on "xxababab"                   => Some((2, "ababab"))
+cat|dog|bird       on "hotdog stand"               => Some((3, "dog"))
+^(a|b)*c$          on "ababbac"                    => Some((0, "ababbac"))
+^(a|b)*c$          on "ababxc"                     => None
+\w+@\w+\.com       on "mail bob_1@example.com today" => Some((5, "bob_1@example.com"))
+h.llo              on "say hallo"                  => Some((4, "hallo"))
+x*                 on "aaa"                        => Some((0, ""))
+(a|ab)(c|bcd)(d*)  on "abcd"                       => Some((0, "abcd"))
+[Char('a'), Star(Alt([[Char('b')], [Char('c')]])), Opt(Class([('x', 'z')], true)), End]

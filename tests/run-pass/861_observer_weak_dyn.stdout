@@ -1,0 +1,16 @@
+published to 4
+  dropping logger(T:) with 1 lines
+y=20 handled by 3
+  threshold>10 unsubscribed
+z=30 handled by 2
+w=1 handled by 2
+strong(log_a)=1 weak=1
+  relay unsubscribed
+after sink dropped: 1
+A lines ["A:x=5", "A:y=20", "A:z=30", "A:w=1", "A:q=0"]
+S lines ["S:relayed.x=500", "S:relayed.y=2000", "S:relayed.z=3000", "S:relayed.w=100"]
+hub history [("x", 5), ("y", 20), ("z", 30), ("w", 1), ("q", 0)]
+  dropping logger(A:) with 5 lines
+observers left 0
+end
+  dropping logger(S:) with 4 lines

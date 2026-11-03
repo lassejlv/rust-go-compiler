@@ -1,0 +1,8 @@
+1 :: 2.5 :: -3 :: 4 :: nil len=4
+sum=4.5
+4 :: -3 :: 2.5 :: 1 :: nil
+"str" :: Some(1) :: ['a'] :: nil ['a'] :: Some(1) :: "str" :: nil
+2 5 15 30
+25
+(5 + -(X + -Y)) = Some(-2) (lookups 2) depth 5
+None lookups 2

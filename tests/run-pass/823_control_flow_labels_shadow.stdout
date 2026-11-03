@@ -1,0 +1,18 @@
+Some((0, 2, 1, 1)) Some((0, 0, 1, 0)) None
+count 17
+found 280
+collatz best (111, 27)
+["digit:5", "neg:-3", "digit:8", "big:12", "very neg:-7"]
+inner shadow
+inner2 6
+outer 7.5
+1 -> small
+6 -> big
+-4 -> neg
+has zero
+visited 13
+diag 15 anti 15 spiral [1, 2, 3, 6, 9, 8, 7, 4, 5]
+Ok(13)
+1,2,Fizz,4,Buzz,Fizz,7,8,Fizz,Buzz,11,Fizz,13,14,FizzBuzz
+12
+done 14

@@ -1,0 +1,9 @@
+print Some(4)
+print Some(3)
+print Some(2)
+print Some(1)
+print Some(0)
+print Some(120)
+halting with 3 after 57 steps; pc=15 stack=[120] steps=57
+outputs: 6
+exiting with code 3

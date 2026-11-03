@@ -1,0 +1,30 @@
+peek Some("hotfix")
+t= 3 ran hotfix   prio=9 seq=3
+t= 4 ran page     prio=9 seq=6
+t= 6 ran deploy   prio=5 seq=1
+t=10 ran test     prio=5 seq=4
+t=12 ran verify   prio=3 seq=100
+t=17 ran compile  prio=2 seq=0
+t=18 ran lint     prio=2 seq=2
+t=19 ran docs     prio=1 seq=5
+min-heap firsts [5, 10, 20] remaining len 3
+into_sorted_vec [50, 40, 30]
+len 10 top Some(9) vec-sorted [1, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+after peek_mut top Some(8)
+drained sorted [3, 4, 5, 6, 7, 8]
+rr [('D', 7), ('B', 10), ('C', 15), ('A', 16)]
+sliding max [3, 3, 5, 5, 6, 7, 7, 7, 2]
+merge [0, 1, 2, 3, 4, 5, 9, 10, 11]
+deque [5, 3, 1, 0, 2, 4] front Some(5) back Some(4) [2]=1
+rotl [1, 0, 2, 4, 5, 3]
+rotr [4, 5, 3, 1, 0, 2]
+slices total 6
+sorted [0, 1, 2, 3, 4, 5] contains3 true pos Some(4)
+[0, 99, 1, 3, 4, 5]
+remove(0)=Some(0) swap_remove_back(0)=Some(99) -> [5, 1, 3, 4]
+[5, 1] [3, 4]
+[5, 1, 4, 3] rev [3, 4, 1, 5]
+[50] [10, 40, 30]
+palindrome true
+range iter [4, 5, 6, 7]
+binary_search Ok(6) Err(10)

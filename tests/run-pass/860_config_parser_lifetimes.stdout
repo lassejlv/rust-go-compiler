@@ -1,0 +1,12 @@
+[client] {"empty": List([]), "retries": Int(5)}
+[root] {"name": Str("demo"), "version": Int(3)}
+[server] {"host": Str("localhost"), "port": Int(8080), "tls": Bool(false)}
+[server.limits] {"conns": Int(100), "paths": List([Str("/a"), Str("/b"), Int(7), Bool(true)])}
+Some("demo") Some(8080) None Some(List([Str("/a"), Str("/b"), Int(7), Bool(true)]))
+[("server", "host"), ("server", "port"), ("server", "tls"), ("server.limits", "conns"), ("server.limits", "paths")]
+Some(("paths", List([Str("/a"), Str("/b"), Int(7), Bool(true)])))
+name outlives doc: demo
+line 2: unterminated string (in "b = \"open")
+line 3: expected key = value (in "c")
+line 5: bad value "x": invalid digit found in string (in "d = [1, x]")
+line 6: bad value "99999999999999999999": number too large to fit in target type (in "e = 99999999999999999999")

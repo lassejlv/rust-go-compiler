@@ -1,0 +1,28 @@
+  0 Word    "Hello"
+  5 Punct   ","
+  7 Word    "world"
+ 12 Punct   "!"
+ 14 Number  "42"
+ 17 Word    "apples"
+ 24 Punct   "&"
+ 26 Number  "7"
+ 28 Word    "pears"
+ 33 Punct   "—"
+ 36 Word    "fresh"
+ 41 Punct   "."
+ 43 Word    "Ünïcode"
+ 53 Word    "wörds"
+ 60 Number  "2024"
+sum of numbers 2073
+title=Hello words=["Hello", "world", "apples", "pears", "fresh", "Ünïcode", "wörds"]
+longest in scope short
+longest Hello
+("key", Some("value=x")) ("novalue", None) ("a", Some("b"))
+best Some(9.25) top [9.25, 9.0, 4.75]
+best str Some("zebra")
+name=Some("override") port=Some("8080") missing=None
+db values ["localhost", "5432"]
+port+1 8081
+["", "abcXYZ", "def"]
+2024|wörds|Ünïcode|.
+["a", "1"] [" ", "b", "2"]

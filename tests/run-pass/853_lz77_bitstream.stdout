@@ -1,0 +1,9 @@
+in=  35 toks=  10 matches=  2 bytes=  18 ratio=0.514 ok=true
+in=  74 toks=   2 matches=  1 bytes=   7 ratio=0.095 ok=true
+in=  16 toks=  16 matches=  0 bytes=  21 ratio=1.312 ok=true
+in=  88 toks=  41 matches= 10 bytes=  65 ratio=0.739 ok=true
+in= 600 toks= 253 matches=  2 bytes= 291 ratio=0.485 ok=true
+in=   0 toks=   0 matches=  0 bytes=   3 ratio=3.000 ok=true
+[Lit(97), Lit(98), Lit(99), Match { dist: 3, len: 9 }, Lit(88)]
+[cb, ab, ff, ff, ff, ff, 00]
+[Some(1), Some(5), Some(2748), Some(4294967295), Some(0), None]

@@ -1,0 +1,64 @@
+[(18, "lamb"), (31, "lamb"), (44, "lamb")]
+[37, 24, 11]
+["Mary had a little lamb,", " little lamb,", " little lamb"]
+["a", "b", "", "c"]
+["c", "", "b", "a"]
+["lamb", "little", "Mary had a little lamb, little lamb,"]
+["M", "ry h", "d a little lamb, little lamb, little lamb"]
+"abc"
+"abc"
+["", "", "a", "b", "", ""]
+["a", "b", "c"]
+Some(5) Some(0)
+Some(("Mary had a little lamb, little lamb", "little lamb")) Some(("k", "v:w"))
+Mary had a little goat, little goat, little lamb
+Some((8, 'r'))
+true
+Less
+OWDY, wrl Some('d') H
+OWD | Y, wrl
+abcd ef
+"SS"
+2
+"όσος"
+"x"
+[120, 32, 32]
+[99, 98, 97]
+["a", "b", "c"]
+3
+["a", "b", "c"]
+true
+true
+Some("el")
+[["x", "1"], ["y", "2"]]
+"aBc"
+"0a1b2c"
+["lines", "with", "endings"]
+"tab\\tsep"
+"€"
+Some("é")
+None
+Some(0)
+"aaabb"
+xyz x/y/z
+4
+Ok("abc")
+"c b a"
+"ace"
+["eht", "tac"]
+-1
+Some(Greater)
+Some("b")
+["Apple", "apple", "banana", "cherry"]
+["banana", "cherry", "Apple", "apple"]
+"AB"
+"ABC"
+Some('c')
+"eca"
+[1, 4, 1]
+4
+Err("incomplete utf-8 byte sequence from index 0")
+Err("invalid utf-8 sequence of 1 bytes from index 1")
+Err("invalid utf-16: lone surrogate found")
+"a�b"
+[Ok('a'), Err(56320), Ok('😀')]

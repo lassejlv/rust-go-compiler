@@ -1,0 +1,21 @@
+V3 { x: -1.0, y: 2.5, z: 7.0 }
+V3 { x: 3.0, y: 1.5, z: -1.0 }
+V3 { x: 6.5, y: -10.0, z: 4.5 }
+V3 { x: 2.0, y: 4.0, z: 6.0 } V3 { x: -1.0, y: 0.25, z: 2.0 } V3 { x: -0.25, y: -0.5, z: -0.75 }
+dot=11 len=12.74755 &+=V3 { x: -1.0, y: 2.5, z: 7.0 }
+V3 { x: -6.0, y: 100.0, z: 18.25 } c[0]=-6 c[2]=18.25
+V3 { x: -7.0, y: 102.5, z: 25.25 } V3 { x: -0.7000000000000001, y: 10.25, z: 2.5250000000000004 }
+cmp Some(Greater) None true
+0010000000000001 1110110011111111 1100110011111110 0101111100001110
+0000111100011010 1101000001111000 false
+Mod7(2) Mod7(2) Mod7(2) 2 None true
+[Some(Less), Some(Greater), Some(Less), Some(Greater), Some(Less), Some(Greater), Some(Less), None]
+[F, D(1), D(2), C { plus: false }, C { plus: true }, B(2.0), B(3.5), A]
+*...
+..#.
+...@
+true
+Greater
+Less
+Greater
+Some(Less)

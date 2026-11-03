@@ -1,0 +1,9 @@
+Some("quickly") ["quick", "brown", "jumps"] []
+[("quick", "brown")]
+[(2, "brown"), (3, "fox"), (5, "over"), (8, "dog")]
+["the", "quick", "brown", "fox", "jumps"] | ["over", "the", "lazy", "dog", "quickly"]
+the quick brown fox jumps over the lazy dog quickly static
+Some("quick") ("ctx", Some("quick"))
+["a", "quick", "z"] Some("quick")
+quickly
+[("the", 2), ("brown", 1), ("dog", 1)]

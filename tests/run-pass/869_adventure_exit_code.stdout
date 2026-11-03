@@ -1,0 +1,19 @@
+> look             [hall] items: ["lamp"]; exits: [N, E]
+> go east          ! the way E is locked (needs key)
+> take the lamp    taken lamp
+> n                you walk N to library
+> take key         taken key
+> take sword       ! no sword here
+> dance wildly     ! I don't know how to 'dance'
+> s                you walk S to hall
+> use key on door  the key unlocks the door
+> e                you walk E to vault
+> get gem          taken gem
+> drop lamp        dropped
+> look             [vault] items: ["lamp"]; exits: [W]
+> i                carrying ["gem", "key"]
+> go up            ! 'up' is not a direction
+>                  ! say something
+> w                you walk W to hall
+> quit             bye after 15 moves, score 80
+won=true final: [hall] items: []; exits: [N, E]

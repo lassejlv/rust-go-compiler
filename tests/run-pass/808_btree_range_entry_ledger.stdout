@@ -1,0 +1,40 @@
+20240101 +1000 -0 [1000]
+20240103 +40 -20 [-20, 40]
+20240105 +503 -100 [500, -100, 3]
+20240110 +75 -5 [75, -5]
+20240115 +12 -300 [-300, 12]
+20240120 +60 -0 [60]
+20240131 +7 -0 [7]
+20240201 +1 -999 [-999, 1]
+-- range [0105, 0115]
+20240105 n=3
+20240110 n=2
+20240115 n=2
+-- range (0105, 0131)
+20240110 20240115 20240120 
+-- range ..0104 rev
+20240103 20240101 
+-- range (Unbounded, Included 0110)
+net through 0110 = 1493
+first Some(20240101) last Some((20240201, 2))
+next after 0111 Some(20240115), prev before Some(20240110)
+removed hat=1
+vacant key zebra
+{"and": 2, "bat": 1, "cat": 11, "dog": 99, "eel": 4, "sat": 1, "the": 3, "zebra": 26}
+pop_first Some(("and", 2)) pop_last Some(("zebra", 26))
+retained {"bat": 1, "cat": 11, "eel": 4, "sat": 1, "the": 3}
+lo {"bat": 1, "cat": 11} hi {"eel": 4, "sat": 1, "the": 3}
+appended {"bat": 1, "cat": 11, "eel": 4, "sat": 1, "the": 3} lo now empty=true
+keys ["bat", "cat", "eel", "sat", "the"] values [1, 11, 4, 1, 21]
+{"bat": 2, "cat": 12, "eel": 5, "sat": 2, "the": 22}
+inverted {2: ["bat", "sat"], 5: ["eel"], 12: ["cat"], 22: ["the"]}
+union [2, 3, 4, 6, 8, 9, 10, 12, 14, 15, 16, 18]
+inter [6, 12, 18]
+diff [2, 4, 8, 10, 14, 16]
+symdiff {2, 3, 4, 8, 9, 10, 14, 15, 16}
+range 5..13 [6, 8, 10, 12]
+subset true disjoint false
+insert dup false remove true take Some(6) replace Some(8)
+first Some(2) last Some(18) {2, 3, 6, 8, 9, 10, 12, 14, 15, 16, 18}
+ceil(11) Some(12) floor(11) Some(10)
+a-words ["apple", "apricot", "avocado"]

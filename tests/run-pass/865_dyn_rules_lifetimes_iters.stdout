@@ -1,0 +1,10 @@
+abc [Some("c"), Some("abc"), None]
+xy [None, None, Some("y")]
+abxyz [Some("xyz"), Some("abxyz"), None]
+q [None, None, None]
+[Some("c"), Some("y"), Some("xyz"), None]
+[Prefix("ab"), MinLen(3), Prefix("x")]
+["abc", "abcd"]
+[3, 2, 1]
+["hi!!", "!hi"]
+t

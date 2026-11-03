@@ -1,0 +1,42 @@
+#ff8000 -> #ff8000 / rgb(255, 128, 0) / Rgb { r: 255, g: 128, b: 0 } / 16744448
+#FFF -> error: expected 6 hex digits, got 3 (BadLength(3))
+00ff00 -> error: missing '#' (NoHash)
+#12345g -> error: invalid hex '5g' (BadHex("5g"))
+#0a0B0c -> #0a0b0c / rgb(10, 11, 12) / Rgb { r: 10, g: 11, b: 12 } / 658188
+#0a141e 660510
+Ok(Rgb { r: 18, g: 52, b: 86 })
+Err("0x1000000 out of range")
+ok #010203
+err need 3 components, got 2
+err number too large to fit in target type
+err number too small to fit in target type
+Fahrenheit(212.0)
+Fahrenheit(-40.0)
+("a", 5)
+("b", -12)
+'c=x': invalid digit found in string
+'=3': missing '#'
+'noeq': missing '='
+'d=99999999999999999999': number too large to fit in target type
+Ok(6) Err(ParseIntError { kind: InvalidDigit })
+Err("number too large to fit in target type")
+Ok(-128)
+true
+Ok('🦀')
+Err("converted integer out of range for `char`")
+Ok(65) Ok(233)
+a
+Err("cannot parse integer from empty string")
+Err("invalid digit found in string")
+Err("number too large to fit in target type")
+Err("number too small to fit in target type")
+Ok(7)
+Err("invalid float literal")
+Ok(true) Err("provided string was not `true` or `false`")
+Ok('x') Err("too many characters in string")
+[1, 2, 3]
+Err("invalid digit found in string")
+hello [104, 101, 108, 108, 111] hello ab [101, 108, 108] true
+128 4.5
+Some([1, 2]) None
+plain message / "plain message"

@@ -1,0 +1,28 @@
+[1, 2, 3, 4, 5]
+[5, 4, 3, 2, 1]
+[5, 4, 3, 2, 1, 3, 9]
+[5, 4, 2, 1, 9]
+[9, 8, 7] [1, 2]
+right left
+[40, 30, 20, 10]
+[1, 2, 3] a Buffer { data: [104, 105], name: "b", flushed: 1 }
+Buffer { data: [104, 105], name: "b", flushed: 1 } Buffer { data: [], name: "", flushed: 0 }
+Running { ticks: 0, log: ["start"] }
+Running { ticks: 1, log: ["start", "tick0"] }
+Running { ticks: 2, log: ["start", "tick0", "tick1"] }
+Done(["start", "tick0", "tick1", "stop"])
+Done(["start", "tick0", "tick1", "stop"])
+Done(["start", "tick0", "tick1", "stop"])
+Some(5) None
+Some(1) Some(2)
+["a", "c"] [None, None, None]
+[] [abc] true
+55
+16 8 10 8
+8 8 0
+false true
+[1, 1, 1] manual
+replaced; old is 2
+drop noisy 2
+end
+drop noisy 3
