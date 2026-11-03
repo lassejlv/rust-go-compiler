@@ -92,8 +92,10 @@ func (fcx *FnCtxt) checkExprKind(e ast.Expr, expected Ty) Ty {
 			}
 		}
 		st := fcx.structurally(fcx.checkExpr(x.X, hint))
-		switch st.Kind {
-		case TRef, TAdt, TFnDef, TClosure:
+		// (`as _`: the target comes from the context, not the operand)
+		switch tk := fcx.shallow(target).Kind; {
+		case tk == TInfer:
+		case st.Kind == TRef, st.Kind == TAdt, st.Kind == TFnDef, st.Kind == TClosure:
 			// casts that are coercions (unsizing, reborrows, fn pointers)
 			s := fcx.ic.snapshot()
 			prev := append([]Adjustment(nil), fcx.r.Adjust[x.X.GetID()]...)
