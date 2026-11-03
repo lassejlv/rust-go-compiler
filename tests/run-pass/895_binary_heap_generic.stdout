@@ -1,0 +1,11 @@
+peek Some(1) len 7
+[1, 2, 3, 5, 7, 8, 9]
+Some("echo") Some("delta")
+["a", "b", "aa", "bb", "ccc", "dddd"]
+5 2 urgent
+5 5 fire
+2 1 write
+2 3 read
+1 4 idle
+[Reverse(-1), Reverse(3)]
+[Some(0), Some(3), Some(1), Some(4), Some(7), None]

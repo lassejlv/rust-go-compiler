@@ -1,0 +1,5 @@
+VecStore { items: [("count", "6"), ("pi", "3.25")] }
+3.25 None 9
+Some(true) ["count", "pi", "app.count", "app.pi", "app.flag"]
+Some(6)
+Collect { nums: 13, strs: ["AB", "CD"] }

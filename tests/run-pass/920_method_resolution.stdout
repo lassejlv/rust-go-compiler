@@ -1,0 +1,14 @@
+inherent woof
+trait woof
+trait woof
+trait woof#1
+ref(trait woof)#101
+ref(ref(meow))#200
+box(meow)#0
+meow+meow#0
+ref(trait woof)+ref(meow)#0
+trait woof
+meow
+A B
+7 70 700
+70 700

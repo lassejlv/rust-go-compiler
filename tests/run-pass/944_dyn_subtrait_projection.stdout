@@ -1,0 +1,9 @@
+6951
+99162322
+repeat(1) [1, 1]
+str [97, 98]
+Some(3) 9
+a=Some("apple")/APPLE/5
+b=Some("bear")/BEAR/4
+z=None//0
+Pairs([("a", "apple"), ("b", "bear")])

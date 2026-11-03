@@ -1,0 +1,14 @@
+i8: sum=0 prod=-6 mean=0.000 max=2 absfirst=3
+i32: sum=5 prod=-120 mean=1.667 max=6 absfirst=4
+i64: sum=100003 prod=300000 mean=50001.500 max=100000 absfirst=100000
+u16: sum=24 prod=504 mean=8.000 max=9 absfirst=7
+u64: sum=1048579 prod=3145728 mean=524289.500 max=1048576 absfirst=1048576
+usize: sum=6 prod=8 mean=2.000 max=2 absfirst=2
+f32: sum=0.75 prod=-3.375 mean=0.375 max=2.25 absfirst=1.5
+f64: sum=0.6000000000000001 prod=0.006000000000000001 mean=0.200 max=0.3 absfirst=0.1
+1594323 1099511627776 3.375 1024
+6 21 1
+321 5
+[0.0, 0.25, 0.5, 0.75]
+[1, 4, 7]
+7

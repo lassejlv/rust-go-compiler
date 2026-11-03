@@ -1,0 +1,13 @@
+Key { major: 1, minor: "z" } => 3
+Key { major: 2, minor: "a" } => 2
+Key { major: 2, minor: "b" } => 0
+[Key { major: 1, minor: "z" }, Key { major: 2, minor: "a" }, Key { major: 2, minor: "b" }]
+{Low, Mid(2), Mid(5), High { v: 0, boost: true }, High { v: 1, boost: false }, High { v: 1, boost: true }}
+[(Low, 1), (Mid(2), 1), (Mid(5), 2), (High { v: 0, boost: true }, 1), (High { v: 1, boost: false }, 1), (High { v: 1, boost: true }, 1)]
+Some(High { v: 1, boost: true })
+true
+Equal
+[Tagged("a", 9), Tagged("x", 1), Tagged("x", 3)]
+[Tagged("x", 3), Tagged("x", 1), Tagged("a", 9)]
+2 [Key { major: Low, minor: Tagged("p", true) }, Key { major: Mid(-1), minor: Tagged("q", false) }]
+Some(Less)

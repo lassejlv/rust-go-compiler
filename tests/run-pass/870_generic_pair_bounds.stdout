@@ -1,0 +1,11 @@
+<3 | three>
+<three | 3>
+Pair { a: "three", b: 3 }
+Pair { a: 5, b: 4.5 }
+7.25
+z
+Left(5)
+Right(5)
+Left("hi")
+[20, 40, 60, 80, 100] ["o1", "o3", "o5", "o7", "o9"]
+true

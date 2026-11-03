@@ -1,0 +1,16 @@
+Just(8) Nothing
+Just("4")
+9 4
+Nothing Just((4, 'c'))
+Just(5) Just(1)
+Bad("none") ""
+Just("x") Nothing true
+Good(Just(5))
+Bad("bad:q")
+Good(Nothing)
+Good([1, 2])
+Bad("bad:z")
+Bad(3)
+Just(3) Nothing
+Just('z') Nothing
+8

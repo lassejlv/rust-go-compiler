@@ -1,0 +1,31 @@
+end scope 1
+drop 'x'
+drop 2.5
+drop "two"
+drop 1
+drop 99
+consumed 99
+drop 10
+drop 11
+drop 12
+after vec drop
+drop 6
+kept 5
+drop "p"
+kept "q"
+drop "q"
+drop 5
+reassign
+drop 1
+drop 2
+holding 3
+drop 3
+end holder
+drop "ignored"
+after underscore
+drop 7
+mapped Some(8)
+rc1 dropped
+drop "rc"
+end last
+drop [1]

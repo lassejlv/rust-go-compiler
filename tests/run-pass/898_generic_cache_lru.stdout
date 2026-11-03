@@ -1,0 +1,11 @@
+None
+None
+Some(1)
+Some("b")
+None Some(3)
+Some("a")
+["c", "d"] hits=2 misses=1
+sq1 sq4 sq1 sq9 sq16 sq1 sq4 
+[1, 2, 4] 2 5
+23416728348467685 calls=81
+601080390 calls=288

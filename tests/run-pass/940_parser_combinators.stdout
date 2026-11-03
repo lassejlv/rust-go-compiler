@@ -1,0 +1,13 @@
+OK  null                                          => null
+OK   true                                         => true
+OK  -12.5                                         => -12.5
+OK  "hi there"                                    => "hi there"
+OK  [1, 2, [3, []], "x"]                          => [1,2,[3,[]],"x"]
+OK  {"b": 1, "a": [true, false, null], "c": {"d": "e"}} => {"a":[true,false,null],"b":1,"c":{"d":"e"}}
+ERR [1, 2                                         => at 5 expected "]"
+ERR {"k" 1}                                       => at 1 expected "}"
+ERR [1.]                                          => at 1 expected "]"
+ERR tru                                           => at 0 expected "{"
+ERR [] x                                          => at 3 expected end of input
+Ok(([2, 3, 1], ""))
+Ok((42.0, ";"))

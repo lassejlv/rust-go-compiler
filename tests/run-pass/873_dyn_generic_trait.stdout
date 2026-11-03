@@ -1,0 +1,11 @@
+  add3 : 2 -> 5
+  mul4 : 5 -> 20
+  add-1 : 20 -> 19
+result 19
+  suffix(ab) : "x" -> "xab"
+  rep2 : "xab" -> "xabxab"
+  upper : "xabxab" -> "XABXAB"
+result XABXAB
+19
+QQQ
+["add3", "mul4", "add-1"]

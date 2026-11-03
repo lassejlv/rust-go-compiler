@@ -1,0 +1,16 @@
+true true false
+true true None
+2
+true true false
+0.9.9 < 1.2.3-alpha < 1.2.3-beta < 1.2.3 < 1.2.10 < 1.10.0
+Some("1.10.0")
+Greater
+true
+Some(9.25) None
+Some(3.0)
+Some("1.2.3-alpha")
+Greater
+Less Greater
+Some(Greater)
+Greater
+Greater

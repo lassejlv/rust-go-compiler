@@ -1,0 +1,16 @@
+typed q
+upper Q
+clicked at 3,-4
+no handler for quit
+2
+1 alpha Pos(3, 6) vel=Some(Vel(1, 2))
+2 beta Pos(10, 10) vel=None
+3 ? Pos(-8, 5) vel=Some(Vel(-1, 0))
+0
+i32 5
+String "s"
+&str "lit"
+a Pos
+unknown
+true
+false

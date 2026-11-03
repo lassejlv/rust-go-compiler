@@ -1,0 +1,20 @@
+Fahrenheit(212.0)
+Celsius(100.0) true
+Wrapper("hi") Wrapper([1, 2])
+Ok(Even(4))
+Err(Odd(5))
+Err(TooBig)
+Err("conv: number too small to fit in target type")
+Err("Odd(7)")
+Ok(Even(8))
+Ok(Even(10))
+[Point { x: 1, y: 2 }, Point { x: 3, y: 4 }]
+[Point { x: 0.5, y: 1.5 }]
+(9, 8)
+[1, -2, 3]
+["a", "b"]
+[Fahrenheit(32.0), Fahrenheit(-40.0)]
+Ok([Even(2), Even(4), Even(6)])
+Err(Odd(3))
+true
+Ok([1, 255])

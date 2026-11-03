@@ -1,0 +1,11 @@
+block area=6 depth=4 vol=24.00
+block area=5 depth=1 vol=5.00
+block area=9 depth=3 vol=27.00
+best Some("block area=9 depth=3 vol=27.00")
+areas 20
+cyl area=3.0 depth=2.0 vol=6.00
+cyl area=0.75 depth=10.0 vol=7.50
+best Some("cyl")
+areas 3.75
+true
+ann / Hello, ann / HELLO, ANN [P("ann")]

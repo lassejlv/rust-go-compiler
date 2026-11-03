@@ -1,0 +1,15 @@
+Vector { v: [1.0, 2.0, 3.0] } dot=2 dim=3
+Vector { v: [-3.0, 0.0, 1.0] }
+Vector { v: [1.0, 3.0, 3.0] }
+Vector { v: [-4.0, 3.0] } 5
+5 [0.0, 0.0, 0.0, 0.0, 0.0]
+push 10 evicted None -> [10]
+push 20 evicted None -> [10, 20]
+push 30 evicted None -> [10, 20, 30]
+push 40 evicted Some(10) -> [20, 30, 40]
+push 50 evicted Some(20) -> [30, 40, 50]
+cap 7
+6 80
+Some((1, 4)) None
+[[1, 2], [3, 4]]
+[[9, 8, 7], [6, 5, 4]]

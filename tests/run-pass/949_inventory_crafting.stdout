@@ -1,0 +1,23 @@
+added 5 wood
+added 4 iron
+added 3 gold
+added 2 stone
+[4/6 slots, 87kg/150kg] woodx5 stonex2 ironx4 goldx3
+can craft: {"planks"}
+craft ring x1 failed: requires tool pickaxe | [4/6 slots, 87kg/150kg] woodx5 stonex2 ironx4 goldx3
+crafted planks x2 -> +8 | [5/6 slots, 89kg/150kg] woodx3 stonex2 ironx4 goldx3 plankx8
+crafted sticks x1 -> +4 | [6/6 slots, 91kg/150kg] woodx3 stonex2 ironx4 goldx3 plankx6 stickx4
+craft pickaxe x1 failed: no free slots (6 used) | [6/6 slots, 91kg/150kg] woodx3 stonex2 ironx4 goldx3 plankx6 stickx4
+craft ring x1 failed: requires tool pickaxe | [6/6 slots, 91kg/150kg] woodx3 stonex2 ironx4 goldx3 plankx6 stickx4
+craft ring x1 failed: requires tool pickaxe | [6/6 slots, 91kg/150kg] woodx3 stonex2 ironx4 goldx3 plankx6 stickx4
+craft planks x10 failed: missing wood: need 10 have 3 | [6/6 slots, 91kg/150kg] woodx3 stonex2 ironx4 goldx3 plankx6 stickx4
+craft anvil x1 failed: unknown recipe "anvil" | [6/6 slots, 91kg/150kg] woodx3 stonex2 ironx4 goldx3 plankx6 stickx4
+can craft: {"pickaxe", "planks", "sticks"}
+worth 228c
+worth doubled 456c
+Ok(())
+Err(NoSlots(2))
+Err(Missing { item: Gold, need: 1, have: 0 })
+[2/2 slots, 2kg/1000kg] ringx2
+all weights 41kg max 12kg
+[    gold] [stick   ]

@@ -1,0 +1,13 @@
+10
+"sss"
+[0, 2, 4, 6]
+("ss", ["", "s", "ss"])
+Some((2, Some(4)))
+None
+Stats { count: 3, total: 13, history: [5, -2, 10] }
+Stats { count: 2, total: 0.75, history: [0.5, 0.25] }
+0.75 Stats { count: 0, total: 0.0, history: [] } true
+Registry { items: {"k": [1]}, queue: ["k"], name: None }
+0 "" (false, '\0', None)
+[] [0, 0, 0] Stats { count: 0, total: 0, history: [] }
+[Stats { count: 0, total: 0, history: [] }, Stats { count: 0, total: 0, history: [] }]

@@ -1,0 +1,11 @@
+a:int:42
+b:str:"hi!"
+c:vec:4
+d:some[inner:int:7]
+e:none
+f:pair(i3,i4)
+g:pair(x:int:1,y:int:2)
+Tagged { tag: "sv", v: ["q", "q"] }
+byte/string
+vec/string
+homog hetero

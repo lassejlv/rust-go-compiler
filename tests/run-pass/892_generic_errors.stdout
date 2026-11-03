@@ -1,0 +1,15 @@
+ok a 5
+ok b 42
+err missing key
+err missing value
+err parse error: invalid digit found in string
+err domain error: 500 exceeds 100
+ok f -7
+Ok(6)
+parse error: invalid digit found in string
+domain error: 9 too big
+Ok(200)
+loading byte: number too large to fit in target type
+boxed ok 42
+boxed err negative: -1
+boxed err invalid digit found in string

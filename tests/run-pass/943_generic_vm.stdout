@@ -1,0 +1,13 @@
+fact10 int: ok top=Some("3628800") out=["3628800"] steps=141 vars=2
+fact5 dyn: ok top=Some("120") out=["120"] steps=76 vars=2
+fact25 wrap: ok top=Some("7034535277573963776") out=["7034535277573963776"] steps=336 vars=2
+strings: ok top=Some("ababab!") out=["ababab!"] steps=7 vars=0
+mixed float: ok top=None out=["3.50", "false"] steps=8 vars=0
+type err: error: type error: Sub on bool and int (out=[], steps=3)
+eq mixed: ok top=None out=["false"] steps=4 vars=0
+div zero: error: division by zero (out=[], steps=3)
+underflow: error: stack underflow at pc=1 (out=[], steps=2)
+unbound: error: unbound variable zz (out=[], steps=1)
+bad jump: error: bad jump target 99 (out=[], steps=2)
+infinite: error: step limit exceeded (out=[], steps=501)
+halt: ok top=Some("4") out=[] steps=4 vars=0

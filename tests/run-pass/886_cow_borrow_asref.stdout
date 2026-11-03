@@ -1,0 +1,14 @@
+hello -> hello [B]
+Hello World -> hello_world [O]
+x y -> x_y [O]
+[1, 2, 3] true / [1, 2, 3] false
+Some(2) None
+Some([1])
+5
+3
+131 6 40
+borrowed str [4, 5]
+base (borrowed) tags=["a", "b"] (borrowed)
+base (borrowed) tags=["a", "b", "c"] (owned)
+renamed (owned) tags=["a", "b", "c"] (owned)
+6 lit! own

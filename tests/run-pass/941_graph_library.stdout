@@ -1,0 +1,19 @@
+nodes ["a", "b", "c", "d", "e"] edges 6
+bfs ["a", "b", "c", "d", "e"]
+dfs ["a", "b", "d", "e", "c"]
+  a dist=0 via=None
+  b dist=3 via=Some("c")
+  c dist=1 via=Some("a")
+  d dist=8 via=Some("b")
+  e dist=11 via=Some("d")
+path Some(["a", "c", "b", "d", "e"])
+topo Ok(["a", "c", "b", "d", "e"])
+topo after cycle Err("b")
+components [[1, 2, 3], [4, 5], [6]]
+grid path len 14 cost 13
+*#***
+*#*#*
+*#*#*
+***#*
+reachable 14
+unreachable None

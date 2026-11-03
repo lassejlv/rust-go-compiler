@@ -1,0 +1,13 @@
+parse<i64> -> filter(dropped=0) -> square
+[144, 49, 1600, 25]
+parse<i64> -> filter(dropped=1) -> square
+[(1, 12), (2, 19), (3, 16), (4, 56), (5, 61)]
+n=5 sum=61 min=Some(-3) max=Some(40)
+dyn[trim+lower -> filter(dropped=0)] -> count(5 keys) [1, 1, 1, 2, 1, 2, 3, 1]
+{"and": 2, "cat": 1, "dog": 1, "end": 1, "the": 3}
+dyn[upper]   ["  HI ", "   "]
+dyn[trim]    ["Hi", ""]
+dyn[trim+lower -> filter(dropped=1)] ["hi"]
+[None, Some(1), None, Some(2), None, Some(3)]
+["dyn[inc]", "dyn[filter(dropped=3)]", "dyn[half]"]
+parse<f64> -> fmt ["3.14", "2.00"]

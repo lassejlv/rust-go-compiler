@@ -1,0 +1,8 @@
+Scene { shapes: [Sq(2.0), Rect(1.0, 3.0)], name: "a" }
+Scene { shapes: [Sq(4.0), Rect(2.0, 6.0)], name: "a2" }
+35
+Sq(1.5) Sq(1.5) 2.25
+upper: ABC
+rev: cba
+len: [5]
+upper: [[X]]

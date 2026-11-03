@@ -1,0 +1,9 @@
+ok       [ OK ]         area=6 Button { label: "OK" }
+cancel   [ Cancel ]     area=10 Button { label: "Cancel" }
+volume   0|----|11      area=10 Slider { min: 0, max: 11 }
+gap                     area=3 Spacer(3)
+missing  <none>
+total area 29
+0 -> 20
+1 -> #10
+2 -> 2.5

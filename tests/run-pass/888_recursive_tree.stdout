@@ -1,0 +1,16 @@
+dup 30
+[20, 30, 40, 50, 60, 65, 70, 80]
+h=4 min=Some(20) has40=true has45=false
+sum=415
+["n6", "n2", "n5", "n1", "n4", "n2", "n0", "n3"]
+Some("brown") bdfjloqt
+5 ["root", "a", "a1", "a2", "b"]
+"root"
+  "a"
+    "a1"
+    "a2"
+  "b"
+[16, 9, 4, 1]
+[1, 4, 9, 16]
+pop=Some(1)
+[4, 9, 16]

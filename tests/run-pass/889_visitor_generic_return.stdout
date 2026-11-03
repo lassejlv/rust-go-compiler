@@ -1,0 +1,12 @@
+(2 * (3 + x))
+let x = 4 in (2 * (3 + x))
+(1 / (y - y))
+let y = -2.5 in (1 / (y - y))
+let y = 7 in (y % 2)
+Err("unbound x")
+Ok(14.0)
+Err("unbound y")
+Err("div by zero")
+Err("bad op %")
+30 ["x", "x", "y", "y", "y", "y", "y"]
+[3, 4, 3, 4, 3]

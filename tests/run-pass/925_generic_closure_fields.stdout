@@ -1,0 +1,8 @@
+["=1", "=12", "=123"] 123
+["[]", "[2]", "[2]", "[2, 4]"]
+calls 4
+["seen 3"]
+["big 9", "seen 9"]
+seen 2
+Some((0, "a")) Some((1, "b")) None
+(9, false) (16, false) (9, true) (16, true)
