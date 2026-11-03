@@ -300,7 +300,6 @@ impl<T> VecDeque<T> {
     }
 
     /// Removes the specified range from the deque in bulk, returning all removed elements as an iterator.
-    #[track_caller]
     pub fn drain<R: RangeBounds<usize>>(&mut self, range: R) -> Drain<'_, T> {
         let r = slice::range(range, self.len);
         let mut removed = Vec::with_capacity(r.end - r.start);

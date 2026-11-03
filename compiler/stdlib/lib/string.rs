@@ -385,7 +385,6 @@ impl String {
     }
 
     /// Removes the specified range from the string in bulk, returning all removed characters as an iterator.
-    #[track_caller]
     pub fn drain<R>(&mut self, range: R) -> Drain<'_>
     where
         R: RangeBounds<usize>,
