@@ -1,0 +1,12 @@
+B1 B2 B3
+B4
+B5 ["B6", "B7"]
+B8|B9
+4
+trait clone
+110
+(3, 6)
+B11
+["B12", "B13"]
+inherent clone
+inherent to_string 1 999 0

@@ -1,0 +1,11 @@
+B1 B2 dbgB3
+inherent
+[dbgB5]
+Some(dbgB2)
+[dbgB1, dbgB2, dbgB3] true
+{dbgB4: 2, dbgB5: 1}
+true
+[2, 1, 0]
+6
+["inherent"]
+B2

@@ -16,6 +16,8 @@ type FnCtxt struct {
 	relBaseIsParam bool
 	// methodNode is the method call being probed (for methodHint).
 	methodNode ast.NodeID
+	// recPicks collects the method picks of a generic check (genericPicks)
+	recPicks map[ast.NodeID]*genPick
 	// checkPriv: the method probe skips inherent methods not visible here
 	// (recording the last one skipped in privMethod).
 	checkPriv  bool
@@ -83,6 +85,15 @@ func (t *Tcx) CheckInstance(def *Def, args []Ty) *Results {
 	}
 	t.inProgress[key] = true
 	defer delete(t.inProgress, key)
+	if n := len(t.genPickOuter); n > 0 && t.quiet > t.genPickOuter[n-1].quiet && !anyHasParam(args) {
+		// a concrete instance (an `impl Trait` callee) reached from the
+		// generic check of genericPicks: checked like outside of it, not
+		// quietly (its results are kept)
+		o := t.genPickOuter[n-1]
+		q, pl := t.quiet, t.poly
+		t.quiet, t.poly = o.quiet, o.poly
+		defer func() { t.quiet, t.poly = q, pl }()
+	}
 	t.BuildImpls()
 	fcx := t.newFnCtxt(def, args)
 	switch def.Kind {
