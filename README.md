@@ -56,6 +56,17 @@ C translation units compiled in parallel.
   uuid, itoa, ryu, bumpalo, crossbeam-utils, getrandom, rustix (libc and raw
   syscall backends), polling, num_cpus, ttf-parser, zlib-rs, hybrid-array,
   typenum, x11rb-protocol and many smaller ones.
+* Invalid programs are rejected with rustc's error codes
+  (`file:line:col: error[E0XXX]: ...`): besides resolution and type errors,
+  match exhaustiveness and refutable bindings (E0004/E0005, Maranget's
+  usefulness algorithm with integer-range and slice-length splitting),
+  privacy of items, fields and methods (E0603/E0616/E0451/E0624), unsafety
+  (E0133), trait impl conformance (E0046/E0407/E0050/E0053), coherence and
+  orphan rules (E0119/E0117), duplicate definitions (E0428/E0592), casts,
+  dyn compatibility, constant evaluation errors (E0080) and more. These
+  checks give up silently on anything they do not model, and items of the
+  embedded std (whose visibilities and signatures do not mirror the real
+  std's in every detail) are exempt from the privacy and impl checks.
 
 Not implemented: the borrow checker (programs are assumed to be valid Rust),
 targets other than x86_64-linux-gnu, incremental compilation.
