@@ -768,6 +768,15 @@ func (bs *buildState) compileProgram(units []*crateUnit, binIdx int) (*codegen.P
 				return nil, err
 			}
 		}
+		if i == binIdx && u.genAST == nil {
+			ent := "main"
+			if u.test {
+				ent = "__rustgo_test_main"
+			} else if hasFn(c, "__rustgo_main") {
+				ent = "__rustgo_main"
+			}
+			addGlobalAllocInit(c, ent)
+		}
 		lexer.KeepDocs = false
 		if u.collectDocs {
 			exp.CollectDocs = false
@@ -801,7 +810,9 @@ func (bs *buildState) compileProgram(units []*crateUnit, binIdx int) (*codegen.P
 	}
 	tcx := typeck.NewTcx(r)
 	entry := "main"
-	if units[binIdx].test {
+	if b := binCrate.Root.Lookup("__rustgo_ga_main", ValueNS); b != nil {
+		entry = "__rustgo_ga_main"
+	} else if units[binIdx].test {
 		entry = "__rustgo_test_main"
 	} else if b := binCrate.Root.Lookup("__rustgo_main", ValueNS); b != nil {
 		entry = "__rustgo_main"
@@ -974,4 +985,13 @@ func encodedCfgFlags() string {
 		parts = append(parts, "--cfg", c)
 	}
 	return strings.Join(parts, "\x1f")
+}
+
+func hasFn(c *ast.Crate, name string) bool {
+	for _, it := range c.Items {
+		if _, ok := it.Kind.(*ast.FnItem); ok && it.Name.Name == name {
+			return true
+		}
+	}
+	return false
 }

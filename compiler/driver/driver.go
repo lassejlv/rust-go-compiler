@@ -229,6 +229,7 @@ func Frontend(opts *Options) (*typeck.Tcx, *Def, error) {
 		}
 		entry = e
 	}
+	entry = addGlobalAllocInit(userCrate, entry)
 	t2 := time.Now()
 	r := resolve.New()
 	r.IsBuiltinMacro = expand.IsBuiltinMacro
@@ -281,6 +282,50 @@ func addMainWrapper(c *ast.Crate) string {
 		return "__rustgo_main"
 	}
 	return "main"
+}
+
+// addGlobalAllocInit wraps the entry point to install the crate's
+// `#[global_allocator]` static (if any) before anything else runs. Returns
+// the new entry name.
+func addGlobalAllocInit(c *ast.Crate, entry string) string {
+	var path []string
+	var find func(items []*ast.Item, prefix []string) bool
+	find = func(items []*ast.Item, prefix []string) bool {
+		for _, it := range items {
+			switch k := it.Kind.(type) {
+			case *ast.StaticItem:
+				for _, a := range it.Attrs {
+					if a.Path == "global_allocator" {
+						path = append(append([]string{}, prefix...), it.Name.Name)
+						return true
+					}
+				}
+			case *ast.ModItem:
+				if find(k.Items, append(append([]string{}, prefix...), it.Name.Name)) {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	if !find(c.Items, nil) {
+		return entry
+	}
+	src := fmt.Sprintf("fn __rustgo_ga_main() { ::std::alloc::__rg_register_global_alloc(&crate::%s); crate::%s(); }", strings.Join(path, "::"), entry)
+	wc, err := parser.ParseCrate(lexer.AddFile("<global-allocator>", src), src)
+	if err != nil {
+		return entry
+	}
+	ast.Walk(wc, func(n any) bool {
+		if pe, ok := n.(*ast.Path); ok && len(pe.Segments) > 0 && pe.Segments[0].Ident.Name == "crate" {
+			for _, seg := range pe.Segments {
+				seg.Ident.Hyg = testHarnessMark
+			}
+		}
+		return true
+	})
+	c.Items = append(c.Items, wc.Items...)
+	return "__rustgo_ga_main"
 }
 
 func loadEmbeddedStd() (*ast.Crate, error) {

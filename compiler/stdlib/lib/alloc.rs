@@ -213,20 +213,64 @@ pub struct System;
 unsafe impl GlobalAlloc for System {
     #[inline]
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        alloc(layout)
+        if layout.size == 0 {
+            return layout.align as *mut u8;
+        }
+        intrinsics::sys_alloc(layout.size, layout.align)
     }
     #[inline]
     unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
-        alloc_zeroed(layout)
+        let p = self.alloc(layout);
+        if layout.size != 0 {
+            intrinsics::write_bytes(p, 0, layout.size);
+        }
+        p
     }
     #[inline]
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        dealloc(ptr, layout)
+        if layout.size != 0 {
+            intrinsics::sys_dealloc(ptr, layout.size, layout.align)
+        }
     }
     #[inline]
     unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
-        realloc(ptr, layout, new_size)
+        if layout.size == 0 {
+            return self.alloc(Layout { size: new_size, align: layout.align });
+        }
+        if new_size == 0 {
+            intrinsics::sys_dealloc(ptr, layout.size, layout.align);
+            return layout.align as *mut u8;
+        }
+        intrinsics::sys_realloc(ptr, layout.size, layout.align, new_size)
     }
+}
+
+// `#[global_allocator]`: the generated entry point registers the static,
+// and the runtime's allocation functions call it from then on.
+static mut __RG_GLOBAL_ALLOC: *const () = 0 as *const ();
+
+#[doc(hidden)]
+pub fn __rg_register_global_alloc<A: GlobalAlloc + 'static>(a: &'static A) {
+    unsafe {
+        __RG_GLOBAL_ALLOC = a as *const A as *const ();
+        intrinsics::set_global_alloc(
+            __rg_ga_alloc::<A> as fn(usize, usize) -> *mut u8,
+            __rg_ga_dealloc::<A> as fn(*mut u8, usize, usize),
+            __rg_ga_realloc::<A> as fn(*mut u8, usize, usize, usize) -> *mut u8,
+        );
+    }
+}
+
+fn __rg_ga_alloc<A: GlobalAlloc>(size: usize, align: usize) -> *mut u8 {
+    unsafe { (*(__RG_GLOBAL_ALLOC as *const A)).alloc(Layout { size, align }) }
+}
+
+fn __rg_ga_dealloc<A: GlobalAlloc>(p: *mut u8, size: usize, align: usize) {
+    unsafe { (*(__RG_GLOBAL_ALLOC as *const A)).dealloc(p, Layout { size, align }) }
+}
+
+fn __rg_ga_realloc<A: GlobalAlloc>(p: *mut u8, old: usize, align: usize, new_size: usize) -> *mut u8 {
+    unsafe { (*(__RG_GLOBAL_ALLOC as *const A)).realloc(p, Layout { size: old, align }, new_size) }
 }
 
 /// The global memory allocator (forwards to `System`).

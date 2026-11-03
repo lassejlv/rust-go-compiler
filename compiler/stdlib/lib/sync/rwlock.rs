@@ -219,6 +219,21 @@ impl<'a, T: ?Sized> DerefMut for RwLockWriteGuard<'a, T> {
     }
 }
 
+impl<'a, T: ?Sized> RwLockWriteGuard<'a, T> {
+    /// Downgrades a write-locked guard into a read-locked guard without
+    /// letting another writer in between.
+    pub fn downgrade(s: Self) -> RwLockReadGuard<'a, T> {
+        let lock = s.lock;
+        crate::mem::forget(s);
+        // the writer (-1) becomes a single reader (1); waiting readers may
+        // now enter as well
+        lock.state.store(1, SeqCst);
+        lock.seq.fetch_add(1, SeqCst);
+        futex_wake_all(&lock.seq);
+        RwLockReadGuard { lock }
+    }
+}
+
 impl<'a, T: ?Sized> Drop for RwLockWriteGuard<'a, T> {
     fn drop(&mut self) {
         if !self.panicking && panicking() {

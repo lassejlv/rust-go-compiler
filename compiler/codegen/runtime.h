@@ -523,7 +523,11 @@ static void rg_drop_noop(void* p) { (void)p; }
   (_v != _v) ? (T)0 : (_v <= (double)(MN)) ? (T)(MN) : (_v >= (double)(MX)) ? (T)(MX) : (T)_v; })
 
 /* ---- memory ---- */
-static uint8_t* rg_alloc(uint64_t size, uint64_t align) {
+/* the `#[global_allocator]`, when installed (rg_sys_* is the system one) */
+RG_GLOBAL uint8_t* (*rg_ga_alloc)(uint64_t, uint64_t);
+RG_GLOBAL void (*rg_ga_dealloc)(uint8_t*, uint64_t, uint64_t);
+RG_GLOBAL uint8_t* (*rg_ga_realloc)(uint8_t*, uint64_t, uint64_t, uint64_t);
+static uint8_t* rg_sys_alloc(uint64_t size, uint64_t align) {
   void* p;
   if (size == 0) size = 1;
   if (align <= 16) p = malloc(size);
@@ -531,18 +535,21 @@ static uint8_t* rg_alloc(uint64_t size, uint64_t align) {
   if (!p) { fprintf(stderr, "memory allocation of %llu bytes failed\n", (unsigned long long)size); abort(); }
   return (uint8_t*)p;
 }
-static uint8_t* rg_realloc(uint8_t* p, uint64_t old, uint64_t align, uint64_t size) {
+static uint8_t* rg_sys_realloc(uint8_t* p, uint64_t old, uint64_t align, uint64_t size) {
   if (align <= 16) {
     void* q = realloc(p, size ? size : 1);
     if (!q) { fprintf(stderr, "memory allocation failed\n"); abort(); }
     return (uint8_t*)q;
   }
-  uint8_t* q = rg_alloc(size, align);
+  uint8_t* q = rg_sys_alloc(size, align);
   memcpy(q, p, old < size ? old : size);
   free(p);
   return q;
 }
-static void rg_dealloc(uint8_t* p, uint64_t size, uint64_t align) { (void)size; (void)align; free(p); }
+static void rg_sys_dealloc(uint8_t* p, uint64_t size, uint64_t align) { (void)size; (void)align; free(p); }
+static uint8_t* rg_alloc(uint64_t size, uint64_t align) { return rg_ga_alloc ? rg_ga_alloc(size, align) : rg_sys_alloc(size, align); }
+static uint8_t* rg_realloc(uint8_t* p, uint64_t old, uint64_t align, uint64_t size) { return rg_ga_realloc ? rg_ga_realloc(p, old, align, size) : rg_sys_realloc(p, old, align, size); }
+static void rg_dealloc(uint8_t* p, uint64_t size, uint64_t align) { if (rg_ga_dealloc) rg_ga_dealloc(p, size, align); else rg_sys_dealloc(p, size, align); }
 static int rg_memcmp(const uint8_t* a, const uint8_t* b, uint64_t n) { return n ? memcmp(a, b, n) : 0; }
 
 static int rg_str_eq(Fat a, Fat b) { return a.meta == b.meta && (a.meta == 0 || memcmp(a.ptr, b.ptr, a.meta) == 0); }

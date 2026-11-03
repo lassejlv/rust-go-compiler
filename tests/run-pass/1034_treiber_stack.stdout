@@ -1,5 +1,5 @@
 len 1000
-first [0, 1, 2] last [3248, 3249]
+popped 990 distinct 990
 popped per thread total 990
 Some("c") Some("b")
 stack dropped with 1 nodes left

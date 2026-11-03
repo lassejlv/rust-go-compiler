@@ -62,7 +62,7 @@ fn main() {
     let mut all = vec![];
     for _ in 0..990 { all.push(s.pop().unwrap()); }
     all.sort();
-    println!("first {:?} last {:?}", &all[..3], &all[all.len() - 2..]);
+    println!("popped {} distinct {}", all.len(), { let mut d = all.clone(); d.dedup(); d.len() });
     let per_thread: Vec<usize> = (0..4).map(|t| all.iter().filter(|&&v| v / 1000 == t).count()).collect();
     println!("popped per thread total {}", per_thread.iter().sum::<usize>());
     let single = Stack::new();

@@ -126,6 +126,14 @@ func (fc *fnGen) intrinsic(d *Def, args []Ty, v []string, ret Ty, sp ast.Span) s
 		return fmt.Sprintf("rg_realloc(%s, %s, %s, %s)", v[0], v[1], v[2], v[3])
 	case "dealloc":
 		return fmt.Sprintf("(rg_dealloc(%s, %s, %s), (Unit){})", v[0], v[1], v[2])
+	case "sys_alloc":
+		return fmt.Sprintf("rg_sys_alloc(%s, %s)", v[0], v[1])
+	case "sys_realloc":
+		return fmt.Sprintf("rg_sys_realloc(%s, %s, %s, %s)", v[0], v[1], v[2], v[3])
+	case "sys_dealloc":
+		return fmt.Sprintf("(rg_sys_dealloc(%s, %s, %s), (Unit){})", v[0], v[1], v[2])
+	case "set_global_alloc":
+		return fmt.Sprintf("(rg_ga_alloc = (void*)(%s), rg_ga_dealloc = (void*)(%s), rg_ga_realloc = (void*)(%s), (Unit){})", v[0], v[1], v[2])
 	case "copy":
 		if isZST(arg(0)) {
 			return "((Unit){})"

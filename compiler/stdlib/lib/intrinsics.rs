@@ -20,6 +20,16 @@ extern "rust-intrinsic" {
     pub fn alloc(size: usize, align: usize) -> *mut u8;
     pub fn realloc(p: *mut u8, old_size: usize, align: usize, new_size: usize) -> *mut u8;
     pub fn dealloc(p: *mut u8, size: usize, align: usize);
+    // the system allocator itself (alloc/realloc/dealloc go through the
+    // `#[global_allocator]` when one is installed)
+    pub fn sys_alloc(size: usize, align: usize) -> *mut u8;
+    pub fn sys_realloc(p: *mut u8, old_size: usize, align: usize, new_size: usize) -> *mut u8;
+    pub fn sys_dealloc(p: *mut u8, size: usize, align: usize);
+    pub fn set_global_alloc(
+        alloc: fn(usize, usize) -> *mut u8,
+        dealloc: fn(*mut u8, usize, usize),
+        realloc: fn(*mut u8, usize, usize, usize) -> *mut u8,
+    );
 
     // ---- raw memory
     pub fn copy<T>(src: *const T, dst: *mut T, count: usize);
