@@ -131,7 +131,9 @@ compilation.
   all of them are of kinds detected independently of the weaker parts of
   rustgo's polymorphic reasoning (missing methods and operators on type
   parameters, parameters against concrete types, unsatisfied bounds of
-  user functions; see `typeck/genbody.go`).
+  user functions and std-trait bounds of std items such as `T: Display`
+  of a format argument, `T: Ord` of `sort` or `T: Send` of a spawned
+  closure's capture; see `typeck/genbody.go`).
 * **Trait selection** supports user impls, blanket impls with where clauses,
   built-in impls (`Copy`/`Clone` for structural types, `Fn*` for closures, fn
   items and fn pointers, `Sized`, auto traits), trait objects and supertraits.

@@ -2,12 +2,14 @@ package typeck
 
 // Item-level checks of impls (mirrors parts of rustc_hir_analysis):
 // trait impls must implement exactly the trait's items with matching
-// signatures (E0046, E0407, E0437, E0438, E0050, E0053, E0185, E0186),
-// inherent impls of one type must not define an item twice (E0592), trait
-// impls must respect the orphan rule (E0117) and must not overlap (E0119).
+// signatures (E0046, E0407, E0437, E0438, E0050, E0053, E0185, E0186,
+// E0049, E0195), inherent impls of one type must not define an item twice
+// (E0592), trait impls must respect the orphan rule (E0117) and must not
+// overlap (E0119).
 //
-// Impls in std and impls of std traits are not checked: rustgo's std does
-// not mirror the real std's traits item by item.
+// Impls in std are not checked. Impls of std traits are only checked for
+// the items rustgo's std mirrors (stdRequired, stdCompared): its traits do
+// not mirror the real std's item by item.
 
 import (
 	"fmt"

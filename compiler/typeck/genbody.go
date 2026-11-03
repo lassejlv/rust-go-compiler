@@ -20,11 +20,26 @@ package typeck
 //     bounds do not include the operator trait (only a where-clause can
 //     provide one: an impl for all T of a foreign trait is not allowed);
 //   - E0614: `*t` for a type parameter without a Deref bound;
+//   - E0369 also for `&T == &T` (and `<`...) without `T: PartialEq`;
 //   - E0308: a type parameter against another one or against a type with
-//     a known constructor (`u8`, `&T`, `Vec<T>`; no unresolved parts);
+//     a known constructor (`u8`, `&T`, `Vec<T>`; no unresolved parts), at
+//     the top or under the same constructors (`Option<T>`/`Option<&T>`);
 //   - E0277: an unsatisfied `T: Trait` where-clause of a called item of a
 //     non-std crate, T a type parameter not bounded by Trait, and Trait
-//     without impls for all types (`impl<T> Trait for T`).
+//     without impls for all types (`impl<T> Trait for T`);
+//   - E0277: an unsatisfied where-clause of a called std item `T: Trait`
+//     or `&T: Trait` for the std traits whose bounds rustgo's std mirrors
+//     and that only a where-clause gives a type parameter (Display, Debug
+//     and the other formatting traits, Hash, Eq, Ord; see polyStdTrait):
+//     format arguments, `sort`, `HashMap::insert`; and the one failing
+//     where-clause of a std collection's FromIterator/Extend impl;
+//   - E0277: `Send`/`Sync` bounds of called functions on a type parameter
+//     reached through references, tuples, closure captures (lacking both
+//     traits then) and a few std containers (polyAutoBounds, after the
+//     closures' capture analysis);
+//   - E0277: a primitive scalar without Hash/Eq/Ord/a formatting trait
+//     (`f32: Hash` in a derived `hash<H>`), and a `?Sized` type parameter
+//     as a parameter or return type (polyUnsizedSig).
 //
 // Errors about erroneous types (`{error}`) and operator outputs after an
 // unsatisfied operator bound are consequences of other errors. A body
