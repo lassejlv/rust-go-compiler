@@ -417,7 +417,9 @@ func (b *builder) overloadedDeref(tp tplace, mut bool, target Ty, c *typeck.Call
 		shift = 0
 	}
 	fl := &Flow{Edges: []FlowEdge{{Arg: 0, From: 0, To: 0}, {Arg: 0, From: 1, To: 0}, {Arg: 0, From: 1 + shift, To: 1, Deep: true}}}
-	b.call(res.p, []Operand{{Kind: OMove, Place: ref.p}}, fl, "deref", sp, false)
+	dargs := []Operand{{Kind: OMove, Place: ref.p}}
+	projSlots(fl, b.argTypes(dargs), res.ty, true)
+	b.call(res.p, dargs, fl, "deref", sp, false)
 	return res.deref()
 }
 
@@ -463,7 +465,10 @@ func (b *builder) unadjPlace(e ast.Expr) tplace {
 			if info != nil {
 				b.ovl[res.p.Local] = info
 			}
-			b.call(res.p, []Operand{{Kind: OMove, Place: ref.p}, idx}, refFlow(), "index", e.GetSpan(), false)
+			iargs := []Operand{{Kind: OMove, Place: ref.p}, idx}
+			fl := refFlow()
+			projSlots(fl, b.argTypes(iargs), res.ty, false)
+			b.call(res.p, iargs, fl, "index", e.GetSpan(), false)
 			return res.deref()
 		}
 	case *ast.UnaryExpr:
@@ -1073,7 +1078,19 @@ func (b *builder) callExpr(x *ast.CallExpr, dest tplace) {
 	}
 	switch c.Kind {
 	case typeck.CallCtor:
-		b.aggregate(x.Args, dest, sp)
+		var ops []Operand
+		for _, e := range x.Args {
+			ops = append(ops, b.argOperand(e))
+		}
+		rv := Rvalue{Kind: RAggregate, Ops: ops}
+		if d := c.Def; d != nil {
+			if d.Variant != nil {
+				rv.Variant = d.Variant.Index + 1
+			} else if d.Adt != nil && len(d.Adt.Variants) == 1 {
+				rv.Variant = 1
+			}
+		}
+		b.assign(dest.p, rv, sp)
 		return
 	case typeck.CallClosure, typeck.CallDynFn, typeck.CallFnPtr:
 		fp := b.placeOf(x.Fn)
@@ -1113,9 +1130,12 @@ func (b *builder) callExpr(x *ast.CallExpr, dest tplace) {
 			ops = append(ops, b.argOperand(a))
 		}
 		diverges := dest.ty != nil && dest.ty.Kind == TNever
-		// the output of a Fn* call cannot borrow from the closure itself
+		// the output of a Fn* call cannot borrow from the closure itself;
+		// the output of a `dyn Fn` / fn pointer only borrows from the
+		// arguments through the references it has (`Box<dyn Trait>` there
+		// is 'static)
 		fl := noFlow()
-		if carriesBorrows(dest.ty) {
+		if carriesBorrows(dest.ty) && (c.Kind == typeck.CallClosure || refsBesidesDyn(dest.ty)) {
 			for i := 1; i < len(ops); i++ {
 				fl.Edges = append(fl.Edges, FlowEdge{Arg: i, From: 0, To: 0, Deep: true})
 			}
@@ -1131,10 +1151,48 @@ func (b *builder) callExpr(x *ast.CallExpr, dest tplace) {
 			b.operand(x.Fn)
 		}
 	}
-	for _, a := range x.Args {
-		ops = append(ops, b.argOperand(a))
-	}
+	ops = append(ops, b.twoPhaseArgs(x.Args, false)...)
 	b.callTo(c, ops, dest, sp, defName(c))
+}
+
+// twoPhaseArgs evaluates call arguments. A `&mut` place passed on is
+// implicitly reborrowed (`&mut *p`) with a two-phase borrow: the reborrow
+// is taken after the other arguments are evaluated (`f(p, p.len())`), and
+// those are read into temporaries first. deferred: the caller takes a
+// two-phase borrow afterwards too (a method receiver).
+func (b *builder) twoPhaseArgs(args []ast.Expr, deferred bool) []Operand {
+	ops := make([]Operand, len(args))
+	later := map[int]tplace{}
+	for i, a := range args {
+		t := b.adjTy(a)
+		if t != nil && t.Kind == TRef && t.Mut && (b.isPlaceExpr(a) || len(b.r.Adjust[a.GetID()]) > 0) {
+			tp := b.placeOf(a)
+			if tp.ty != nil && tp.ty.Kind == TRef && tp.ty.Mut && !(len(tp.p.Proj) == 0 && b.isTempLocal(tp.p.Local)) {
+				later[i] = tp
+				continue
+			}
+			ops[i] = b.reborrow(tp, a.GetSpan())
+			continue
+		}
+		ops[i] = b.operand(a)
+	}
+	if len(later) == 0 && !deferred {
+		return ops
+	}
+	for i, o := range ops {
+		if _, ok := later[i]; ok || o.Kind == OConst || (len(o.Place.Proj) == 0 && b.isTempLocal(o.Place.Local)) {
+			continue
+		}
+		t := b.temp(b.adjTy(args[i]), args[i].GetSpan())
+		b.assign(t.p, Rvalue{Kind: RUse, Ops: []Operand{o}}, args[i].GetSpan())
+		ops[i] = Operand{Kind: OMove, Place: t.p, Ty: o.Ty}
+	}
+	for i := range args {
+		if tp, ok := later[i]; ok {
+			ops[i] = b.reborrow(tp, args[i].GetSpan())
+		}
+	}
+	return ops
 }
 
 func defName(c *typeck.Callee) string {
@@ -1179,10 +1237,7 @@ func (b *builder) methodCall(x *ast.MethodCallExpr, dest tplace) {
 	if c != nil {
 		b.expectClosureKinds(c, x.Args, 1)
 	}
-	var ops []Operand
-	for _, a := range x.Args {
-		ops = append(ops, b.argOperand(a))
-	}
+	ops := b.twoPhaseArgs(x.Args, last != nil || mutRecv)
 	var r Operand
 	if last == nil && mutRecv {
 		// a `&mut` receiver is reborrowed (two-phase: after the arguments)
@@ -1205,11 +1260,15 @@ func (b *builder) methodCall(x *ast.MethodCallExpr, dest tplace) {
 func (b *builder) structExpr(x *ast.StructExpr, dest tplace) {
 	sp := x.Span
 	var ops []Operand
+	v := b.r.Variants[x.ID]
+	var fields []int
 	for _, f := range x.Fields {
 		ops = append(ops, b.argOperand(f.Expr))
+		if v != nil {
+			fields = append(fields, v.FieldIndex(f.Name.Name))
+		}
 	}
 	if x.Base != nil {
-		v := b.r.Variants[x.ID]
 		given := map[int]bool{}
 		if v != nil {
 			for _, f := range x.Fields {
@@ -1225,12 +1284,19 @@ func (b *builder) structExpr(x *ast.StructExpr, dest tplace) {
 					continue
 				}
 				ops = append(ops, b.operandOf(tplace{p: base.p.project(Proj{Kind: PField, Field: i}), ty: ft}))
+				fields = append(fields, i)
 			}
 		} else {
 			ops = append(ops, b.operandOf(base))
+			fields = append(fields, -1)
 		}
 	}
-	b.assign(dest.p, Rvalue{Kind: RAggregate, Ops: ops}, sp)
+	rv := Rvalue{Kind: RAggregate, Ops: ops}
+	if v != nil && len(fields) == len(ops) {
+		rv.Variant = v.Index + 1
+		rv.Fields = fields
+	}
+	b.assign(dest.p, rv, sp)
 }
 
 func (b *builder) fieldTypes(t Ty, vi int) []Ty {
@@ -1277,6 +1343,7 @@ func (b *builder) closureExpr(x *ast.ClosureExpr, dest tplace) {
 		kind = k
 	}
 	cb := buildClosureKind(b.tcx, b.r, ci, b.name+"::{closure}", kind)
+	summarizeClosure(b.tcx, ci.Ty, cb.body)
 	b.closures = append(b.closures, cb.body)
 	b.closures = append(b.closures, cb.closures...)
 	needMut := cb.upvarMutUses()

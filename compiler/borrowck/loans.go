@@ -3,6 +3,7 @@ package borrowck
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"rustgo/compiler/ast"
 	"rustgo/compiler/lexer"
@@ -244,13 +245,16 @@ func (b *builder) sigFlow(c *typeck.Callee, nargs int, ret Ty, argTys []Ty) *Flo
 	params := map[string]bool{"Self": true}
 	genericNames(d.Fn.Ast.Generics, params)
 	var selfTy ast.Type
+	gens := []*ast.Generics{d.Fn.Ast.Generics}
 	if p := d.Parent; p != nil && p.Item != nil {
 		switch k := p.Item.Kind.(type) {
 		case *ast.ImplItem:
 			genericNames(k.Generics, params)
 			selfTy = k.SelfTy
+			gens = append(gens, k.Generics)
 		case *ast.TraitItem:
 			genericNames(k.Generics, params)
+			gens = append(gens, k.Generics)
 		}
 	}
 	w := &sigWalker{params: params, selfTy: selfTy}
@@ -328,6 +332,11 @@ func (b *builder) sigFlow(c *typeck.Callee, nargs int, ret Ty, argTys []Ty) *Flo
 		if len(names) == 1 {
 			for n := range names {
 				elided = n
+			}
+		}
+		if sp := decl.SelfParam; sp != nil && sp.Kind == ast.SelfTyped {
+			if lt := selfRefLifetime(sp.Ty); lt != "" {
+				elided = lt
 			}
 		}
 	}
@@ -438,6 +447,23 @@ func (b *builder) sigFlow(c *typeck.Callee, nargs int, ret Ty, argTys []Ty) *Flo
 		}
 	}
 	fl.Static = static
+	slotParams := map[string]bool{}
+	for k := range params {
+		if k != "Self" || selfTy == nil {
+			slotParams[k] = true
+		}
+	}
+	func() {
+		defer func() {
+			if e := recover(); e != nil {
+				if debugLoans {
+					fmt.Fprintf(os.Stderr, "borrowck: slotFlow %s: %v\n", d.Name, e)
+				}
+				fl.Slots, fl.Covered, fl.ArgFull, fl.RetLay, fl.ArgLays, fl.IntoSlots = nil, nil, nil, nil, nil, nil
+			}
+		}()
+		slotFlow(fl, d, selfTy, slotParams, gens, argTys, ret, elided, mutIn)
+	}()
 	return fl
 }
 
@@ -446,51 +472,6 @@ func (b *builder) sigFlow(c *typeck.Callee, nargs int, ret Ty, argTys []Ty) *Flo
 type StaticReq struct {
 	Arg, Depth int
 	Deep       bool
-}
-
-// exactLevels returns the reference levels of t when they bound the loans
-// its values can hold (no closures, trait objects, type parameters, ...).
-func exactLevels(t Ty) (int, bool) {
-	if t == nil || t.HasParam() || t.HasInfer() || t.HasError() || t.HasProj() || t.HasOpaque() {
-		return 0, false
-	}
-	ok := true
-	var walk func(t Ty, depth int)
-	walk = func(t Ty, depth int) {
-		if t == nil || depth > 8 || !ok {
-			return
-		}
-		switch t.Kind {
-		case TClosure, TDyn, TFnPtr:
-			ok = false
-		case TRef, TArray, TSlice:
-			walk(t.Elem, depth+1)
-		case TTuple:
-			for _, e := range t.Elems {
-				walk(e, depth+1)
-			}
-		case TAdt:
-			for _, a := range t.Args {
-				walk(a, depth+1)
-			}
-		}
-	}
-	walk(t, 0)
-	if !ok {
-		return 0, false
-	}
-	return refLevels(t, 0), true
-}
-
-// truncate drops loans deeper than the reference levels of t.
-func truncate(v lval, t Ty) {
-	if n, ok := exactLevels(t); ok {
-		for d := n; d < len(v); d++ {
-			for i := range v[d] {
-				v[d][i] = 0
-			}
-		}
-	}
 }
 
 // refLevels counts the reference levels of a type: references and
@@ -578,14 +559,27 @@ type loanChecker struct {
 	// loans by the local their place is based on (see indexLoans)
 	localLoans map[LocalID][]int
 	derefLoans map[LocalID][]int
+	localLays  []*layout
+	placeInfos map[string]*placeInfo
+	// sigSlots: the parameters' origins sit in the slots their declared
+	// types give them; retLabels labels the return value's slots
+	sigSlots  bool
+	retLabels []string
 }
 
 var debugLoans = os.Getenv("RUSTGO_BORROWCK_DEBUG") != ""
 
-// lstate: loans held by each local at each depth (sparse).
+// lstate: loans held by each local in each region slot of its type
+// (sparse; see slots.go).
 type lstate struct {
-	holds map[int]bitset // [local*maxDepth + depth]
+	holds map[int]bitset // [local<<slotBits | slot]
 }
+
+const slotBits = 7
+
+func skey(l LocalID, s int) int { return int(l)<<slotBits | s }
+
+func keyLocal(k int) int { return k >> slotBits }
 
 func (lc *loanChecker) newState() *lstate {
 	return &lstate{holds: map[int]bitset{}}
@@ -617,7 +611,7 @@ func (st *lstate) join(o *lstate) bool {
 // prune drops the entries of dead locals.
 func (st *lstate) prune(live bitset) {
 	for i := range st.holds {
-		if !live.has(i / maxDepth) {
+		if !live.has(keyLocal(i)) {
 			delete(st.holds, i)
 		}
 	}
@@ -643,42 +637,218 @@ func (lc *loanChecker) set(st *lstate, i int, v bitset) {
 	st.holds[i] = v.clone()
 }
 
-type lval []bitset // loans by depth
+// lval: the loans of a value, per slot of its layout.
+type lval struct {
+	lay *layout
+	s   []bitset
+}
 
-func (lc *loanChecker) emptyVal() lval {
-	v := make(lval, maxDepth)
-	for i := range v {
-		v[i] = newBitset(lc.nLoans)
+func (lc *loanChecker) emptyVal(l *layout) lval {
+	v := lval{lay: l, s: make([]bitset, l.n())}
+	for i := range v.s {
+		v.s[i] = newBitset(lc.nLoans)
 	}
 	return v
 }
 
-func (lc *loanChecker) localVal(st *lstate, l LocalID) lval {
-	v := lc.emptyVal()
-	for d := 0; d < maxDepth; d++ {
-		if h := st.holds[int(l)*maxDepth+d]; h != nil {
-			v[d].copyFrom(h)
+// depthView merges the slots of v by depth (the coarse model).
+func (lc *loanChecker) depthView(v lval) []bitset {
+	dv := make([]bitset, maxDepth)
+	for d := range dv {
+		dv[d] = newBitset(lc.nLoans)
+	}
+	for i, d := range v.lay.depth {
+		if d < maxDepth {
+			dv[d].union(v.s[i])
+		}
+	}
+	return dv
+}
+
+// fromDepths builds a value of layout l from loans by depth.
+func (lc *loanChecker) fromDepths(dv []bitset, l *layout) lval {
+	v := lc.emptyVal(l)
+	for i, d := range l.depth {
+		if d < maxDepth {
+			v.s[i].union(dv[d])
 		}
 	}
 	return v
+}
+
+// conv converts v to layout to: slot by slot when the layouts agree, by
+// depth otherwise.
+func (lc *loanChecker) conv(v lval, to *layout) lval {
+	if v.lay == to || (v.lay.key == to.key && v.lay.n() == to.n()) {
+		return v
+	}
+	out := lc.emptyVal(to)
+	for j, m := range collapseMap(v.lay, to, 0) {
+		for _, i := range m {
+			out.s[j].union(v.s[i])
+		}
+	}
+	return out
+}
+
+func (lc *loanChecker) localLayout(l LocalID) *layout {
+	if lc.localLays[l] == nil {
+		lc.localLays[l] = layoutOf(lc.body.Locals[l].Ty)
+	}
+	return lc.localLays[l]
+}
+
+func (lc *loanChecker) localVal(st *lstate, l LocalID) lval {
+	v := lc.emptyVal(lc.localLayout(l))
+	for i := range v.s {
+		if h := st.holds[skey(l, i)]; h != nil {
+			v.s[i].copyFrom(h)
+		}
+	}
+	return v
+}
+
+// placeInfo: the layout of the value at a place, and for each of its
+// slots the slots of the root local it is stored in.
+type placeInfo struct {
+	lay *layout
+	m   [][]int
+	raw bool // behind a raw pointer: not tracked
+}
+
+// projTy returns the type of a projection of a value of type t (nil:
+// unknown).
+func (lc *loanChecker) projTy(t Ty, pr Proj) Ty {
+	if t == nil {
+		return nil
+	}
+	switch pr.Kind {
+	case PDeref:
+		switch t.Kind {
+		case TRef, TPtr:
+			return t.Elem
+		case TAdt:
+			if len(t.Args) > 0 && t.Def != nil && t.Def.Name == "Box" {
+				return t.Args[0]
+			}
+		}
+	case PField:
+		switch t.Kind {
+		case TTuple:
+			if pr.Field < len(t.Elems) {
+				return t.Elems[pr.Field]
+			}
+		case TAdt:
+			v := 0
+			if pr.Variant > 0 {
+				v = pr.Variant - 1
+			}
+			if fi := adtField(lc.ctx.tcx, t, v, pr.Field); fi != nil {
+				return fi.ty
+			}
+		}
+	case PIndex:
+		if t.Kind == TArray || t.Kind == TSlice {
+			return t.Elem
+		}
+	}
+	return nil
+}
+
+func (lc *loanChecker) placeInfo(p Place) *placeInfo {
+	if len(p.Proj) == 0 {
+		l := lc.localLayout(p.Local)
+		return &placeInfo{lay: l, m: rangeMap(0, l.n())}
+	}
+	k := lc.body.placeString(p)
+	if pi, ok := lc.placeInfos[k]; ok {
+		return pi
+	}
+	ty := lc.body.Locals[p.Local].Ty
+	cur := lc.localLayout(p.Local)
+	m := rangeMap(0, cur.n())
+	for _, pr := range p.Proj {
+		if pr.Kind == PDeref && (pr.Deref == DRaw || pr.Deref == DRawMut) {
+			pi := &placeInfo{raw: true, lay: flatLayout}
+			lc.placeInfos[k] = pi
+			return pi
+		}
+		cty := lc.projTy(ty, pr)
+		cl := layoutOf(cty)
+		var cm [][]int
+		if cty != nil && !cur.flat && !cl.flat && cur.root.ty == ty {
+			root := cur.root
+			switch {
+			case pr.Kind == PDeref && ty.Kind == TRef && len(root.kids) == 1:
+				cm = rangeMap(root.kids[0].start, cl.n())
+			case pr.Kind == PDeref && pr.Deref == DBox && ty.Kind == TAdt && len(root.kids) > 0:
+				cm = rangeMap(root.kids[0].start, cl.n())
+			case pr.Kind == PField && ty.Kind == TTuple && pr.Field < len(root.kids):
+				cm = rangeMap(root.kids[pr.Field].start, cl.n())
+			case pr.Kind == PField && ty.Kind == TAdt:
+				v := 0
+				if pr.Variant > 0 {
+					v = pr.Variant - 1
+				}
+				if fi := adtField(lc.ctx.tcx, ty, v, pr.Field); fi != nil && len(fi.m) == cl.n() {
+					cm = fi.m
+				}
+			case pr.Kind == PIndex && len(root.kids) == 1:
+				cm = rangeMap(root.kids[0].start, cl.n())
+			}
+			if cm != nil {
+				// the kid's subtree must have the child's layout
+				for _, x := range cm {
+					for _, i := range x {
+						if i >= cur.n() {
+							cm = nil
+							break
+						}
+					}
+					if cm == nil {
+						break
+					}
+				}
+			}
+		}
+		if cm == nil {
+			shift := 0
+			if pr.Kind == PDeref && (pr.Deref == DRef || pr.Deref == DRefMut) {
+				shift = 1
+			}
+			cm = collapseMap(cur, cl, shift)
+		}
+		nm := make([][]int, len(cm))
+		for j, xs := range cm {
+			seen := map[int]bool{}
+			for _, x := range xs {
+				for _, r := range m[x] {
+					if !seen[r] {
+						seen[r] = true
+						nm[j] = append(nm[j], r)
+					}
+				}
+			}
+		}
+		m, cur, ty = nm, cl, cty
+	}
+	pi := &placeInfo{lay: cur, m: m}
+	lc.placeInfos[k] = pi
+	return pi
 }
 
 // placeVal returns the loans held by the value at place p.
 func (lc *loanChecker) placeVal(st *lstate, p Place) lval {
-	v := lc.localVal(st, p.Local)
-	for _, pr := range p.Proj {
-		if pr.Kind != PDeref {
-			continue
-		}
-		switch pr.Deref {
-		case DRef, DRefMut:
-			nv := lc.emptyVal()
-			for d := 1; d < maxDepth; d++ {
-				nv[d-1].copyFrom(v[d])
+	pi := lc.placeInfo(p)
+	v := lc.emptyVal(pi.lay)
+	if pi.raw {
+		return v
+	}
+	for j, rs := range pi.m {
+		for _, r := range rs {
+			if h := st.holds[skey(p.Local, r)]; h != nil {
+				v.s[j].union(h)
 			}
-			v = nv
-		case DRaw, DRawMut:
-			return lc.emptyVal()
 		}
 	}
 	return v
@@ -686,24 +856,47 @@ func (lc *loanChecker) placeVal(st *lstate, p Place) lval {
 
 func (lc *loanChecker) opVal(st *lstate, o Operand) lval {
 	if o.Kind == OConst || (o.Ty != nil && !carriesBorrows(o.Ty)) {
-		return lc.emptyVal()
+		return lc.emptyVal(layoutOf(o.Ty))
 	}
 	v := lc.placeVal(st, o.Place)
-	truncate(v, o.Ty)
+	if o.Ty != nil {
+		v = lc.conv(v, layoutOf(o.Ty))
+	}
 	return v
 }
 
 func (lc *loanChecker) unionVal(a, b lval) {
-	for d := range a {
-		a[d].union(b[d])
+	b = lc.conv(b, a.lay)
+	for i := range a.s {
+		a.s[i].union(b.s[i])
 	}
 }
 
 // refVal is the value of `&place` created by loan li.
-func (lc *loanChecker) refVal(st *lstate, p Place, li int) lval {
-	v := lc.emptyVal()
+func (lc *loanChecker) refVal(st *lstate, p Place, li int, mut bool) lval {
+	inner := lc.placeVal(st, p)
+	var rl *layout
+	if t := inner.lay.root.ty; t != nil && !inner.lay.flat {
+		rl = layoutOf(Ref(t, mut))
+	}
+	var v lval
+	if rl != nil && !rl.flat && rl.n() == inner.lay.n()+1 {
+		v = lc.emptyVal(rl)
+		for i := range inner.s {
+			v.s[i+1].union(inner.s[i])
+		}
+	} else {
+		// by depth
+		dv := lc.depthView(inner)
+		nd := make([]bitset, maxDepth)
+		nd[0] = newBitset(lc.nLoans)
+		for d := 0; d+1 < maxDepth; d++ {
+			nd[d+1] = dv[d]
+		}
+		v = lc.fromDepths(nd, flatLayout)
+	}
 	if li >= 0 {
-		v[0].set(li)
+		v.s[0].set(li)
 	}
 	// a reborrow through references keeps their loans alive (rustc's
 	// reborrow constraints: from the last deref outwards, stopping after
@@ -714,47 +907,40 @@ func (lc *loanChecker) refVal(st *lstate, p Place, li int) lval {
 			continue
 		}
 		pv := lc.placeVal(st, Place{Local: p.Local, Proj: p.Proj[:i]})
-		v[0].union(pv[0])
+		v.s[0].union(lc.depthView(pv)[0])
 		if pr.Deref == DRef {
 			break
 		}
-	}
-	inner := lc.placeVal(st, p)
-	for d := 0; d+1 < maxDepth; d++ {
-		v[d+1].union(inner[d])
 	}
 	return v
 }
 
 func (lc *loanChecker) store(st *lstate, p Place, v lval) {
-	base := int(p.Local) * maxDepth
 	if !carriesBorrows(lc.body.Locals[p.Local].Ty) {
 		// values that cannot hold references hold no loans
-		for d := 0; d < maxDepth; d++ {
-			delete(st.holds, base+d)
+		n := lc.localLayout(p.Local).n()
+		for s := 0; s < n; s++ {
+			delete(st.holds, skey(p.Local, s))
 		}
 		return
 	}
+	pi := lc.placeInfo(p)
+	if pi.raw {
+		return
+	}
+	v = lc.conv(v, pi.lay)
 	if len(p.Proj) == 0 {
-		truncate(v, lc.body.Locals[p.Local].Ty)
-		for d := 0; d < maxDepth; d++ {
-			lc.set(st, base+d, v[d])
+		for s := range v.s {
+			lc.set(st, skey(p.Local, s), v.s[s])
 		}
 		return
 	}
-	// writes through derefs land in the referent: weak update at the
-	// corresponding depth of the root
-	n := 0
-	for _, pr := range p.Proj {
-		if pr.Kind == PDeref && (pr.Deref == DRef || pr.Deref == DRefMut) {
-			n++
+	// writes into a part (or through derefs, into the referent): weak
+	// update of the root's slots
+	for j, rs := range pi.m {
+		for _, r := range rs {
+			lc.or(st, skey(p.Local, r), v.s[j])
 		}
-		if pr.Kind == PDeref && (pr.Deref == DRaw || pr.Deref == DRawMut) {
-			return
-		}
-	}
-	for d := 0; d+n < maxDepth; d++ {
-		lc.or(st, base+d+n, v[d])
 	}
 }
 
@@ -773,7 +959,7 @@ func (lc *loanChecker) killDerefLoans(st *lstate, l LocalID, v lval) {
 		}
 	}
 	// also from the value being assigned (`cur = &mut (*cur).next`)
-	for _, h := range v {
+	for _, h := range v.s {
 		for _, li := range lis {
 			h.clear(li)
 		}
@@ -825,7 +1011,7 @@ func (c *checker) checkLoans() {
 	}
 	type originAt struct {
 		local LocalID
-		depth int
+		slot  int
 		loan  int
 	}
 	var origins []originAt
@@ -837,21 +1023,64 @@ func (c *checker) checkLoans() {
 			lc.params = append(lc.params, LocalID(i))
 		}
 	}
+	lc.localLays = make([]*layout, len(body.Locals))
+	lc.placeInfos = map[string]*placeInfo{}
 	if lc.regions != nil && len(lc.regions.params) == len(lc.params) {
+		r := lc.regions
 		byName := map[string]int{}
-		for pi, os := range lc.regions.params {
-			for _, o := range os {
-				if o.name[0] != '\'' || o.name == "'static" || o.name == "'?" {
-					continue
+		loanOf := func(name string) int {
+			li, ok := byName[name]
+			if !ok {
+				li = len(lc.loans)
+				byName[name] = li
+				lc.loans = append(lc.loans, loan{place: Place{Local: -1}, origin: name, span: body.Span})
+			}
+			return li
+		}
+		// the parameters' regions by slot, when the declared types
+		// describe all of them
+		if len(r.inAst) == len(lc.params) {
+			w := newLabeler(r.tparams, r.selfAst)
+			var placed []originAt
+			ok := true
+			var names []string
+			for pi, l := range lc.params {
+				w.label(r.inAst[pi], lc.localLayout(l))
+				if !w.full {
+					ok = false
+					break
 				}
-				li, ok := byName[o.name]
-				if !ok {
-					li = len(lc.loans)
-					byName[o.name] = li
-					lc.loans = append(lc.loans, loan{place: Place{Local: -1}, origin: o.name, span: body.Span})
+				for k, lb := range w.labels {
+					if lb[0] == '\'' && lb != "'static" && lb != "'?" && !strings.HasPrefix(lb, "'#h") {
+						placed = append(placed, originAt{l, k, -1})
+						names = append(names, lb)
+					}
 				}
-				if o.depth < maxDepth {
-					origins = append(origins, originAt{lc.params[pi], o.depth, li})
+			}
+			if ok && w.elided == r.nElided {
+				lc.sigSlots = true
+				for i, o := range placed {
+					o.loan = loanOf(names[i])
+					origins = append(origins, o)
+				}
+				w.out = true
+				w.label(r.outAst, lc.localLayout(0))
+				lc.retLabels = w.labels
+			}
+		}
+		if !lc.sigSlots {
+			for pi, os := range r.params {
+				lay := lc.localLayout(lc.params[pi])
+				for _, o := range os {
+					if o.name[0] != '\'' || o.name == "'static" || o.name == "'?" {
+						continue
+					}
+					li := loanOf(o.name)
+					for k, d := range lay.depth {
+						if d == o.depth {
+							origins = append(origins, originAt{lc.params[pi], k, li})
+						}
+					}
 				}
 			}
 		}
@@ -873,8 +1102,18 @@ func (c *checker) checkLoans() {
 	for _, o := range origins {
 		v := newBitset(lc.nLoans)
 		v.set(o.loan)
-		lc.or(in[0], int(o.local)*maxDepth+o.depth, v)
+		lc.or(in[0], skey(o.local, o.slot), v)
 	}
+	lc.solve(in)
+	for bi := range body.Blocks {
+		if in[bi] != nil {
+			lc.runBlock(bi, in[bi], true)
+		}
+	}
+}
+
+// solve computes the loans held at the entry of each block (in[0] given).
+func (lc *loanChecker) solve(in []*lstate) {
 	work := []int{0}
 	queued := map[int]bool{0: true}
 	for len(work) > 0 {
@@ -882,7 +1121,7 @@ func (c *checker) checkLoans() {
 		work = work[1:]
 		queued[bi] = false
 		out := lc.runBlock(bi, in[bi], false)
-		for _, sc := range body.Blocks[bi].Term.Targets {
+		for _, sc := range lc.body.Blocks[bi].Term.Targets {
 			o := out.clone()
 			o.prune(lc.liveIn[sc])
 			if in[sc] == nil {
@@ -896,10 +1135,129 @@ func (c *checker) checkLoans() {
 			}
 		}
 	}
-	for bi := range body.Blocks {
-		if in[bi] != nil {
-			lc.runBlock(bi, in[bi], true)
+}
+
+// closSummary: what a closure's result holds of its parameters' regions
+// (per result slot: the parameter slots, or captured data).
+type closSummary struct {
+	ret     *layout
+	fromArg [][][2]int // result slot -> (parameter, slot)
+	caps    []bool     // result slot holds loans of captured variables
+}
+
+// fromArgs reports whether any result slot holds parameter regions.
+func (s *closSummary) fromArgs() bool {
+	for _, x := range s.fromArg {
+		if len(x) > 0 {
+			return true
 		}
+	}
+	return false
+}
+
+func (s *closSummary) fromCaps() bool {
+	for _, x := range s.caps {
+		if x {
+			return true
+		}
+	}
+	return false
+}
+
+var closSummaries = map[Ty]*closSummary{}
+
+// summarizeClosure runs the loan analysis on a closure body with an origin
+// per slot of each parameter (and one for the captures).
+func summarizeClosure(tcx *typeck.Tcx, t Ty, body *Body) {
+	if t == nil || body == nil {
+		return
+	}
+	defer func() {
+		if e := recover(); e != nil {
+			delete(closSummaries, t)
+			if debugLoans {
+				fmt.Fprintf(os.Stderr, "borrowck: closure summary: %v\n", e)
+			}
+		}
+	}()
+	c := &checker{body: body, seen: map[string]bool{}, ctx: &Ctx{tcx: tcx}}
+	lc := &loanChecker{checker: c, loanAt: map[[2]int]int{}, nLocals: len(body.Locals), reported: map[string]bool{}}
+	for bi, bl := range body.Blocks {
+		for si, s := range bl.Stmts {
+			if s.Kind == SAssign && s.Rv.Kind == RRef && !ignoreBorrow(s.Rv.Place) {
+				lc.loanAt[[2]int{bi, si}] = len(lc.loans)
+				lc.loans = append(lc.loans, loan{place: s.Rv.Place, mut: s.Rv.Mut, block: bi, stmt: si, span: s.Span})
+			}
+		}
+	}
+	lc.localLays = make([]*layout, len(body.Locals))
+	lc.placeInfos = map[string]*placeInfo{}
+	type seed struct {
+		local LocalID
+		slot  int
+		loan  int
+	}
+	var seeds []seed
+	argOf := map[int][2]int{}
+	capLoan := len(lc.loans)
+	lc.loans = append(lc.loans, loan{place: Place{Local: -1}, origin: "'cap"})
+	ai := 0
+	for i, ld := range body.Locals {
+		switch ld.Kind {
+		case LArg:
+			for k := 0; k < lc.localLayout(LocalID(i)).n(); k++ {
+				argOf[len(lc.loans)] = [2]int{ai, k}
+				seeds = append(seeds, seed{LocalID(i), k, len(lc.loans)})
+				lc.loans = append(lc.loans, loan{place: Place{Local: -1}, origin: "'arg"})
+			}
+			ai++
+		case LUpvar:
+			for k := 0; k < lc.localLayout(LocalID(i)).n(); k++ {
+				seeds = append(seeds, seed{LocalID(i), k, capLoan})
+			}
+		}
+	}
+	lc.nLoans = len(lc.loans)
+	lc.indexLoans()
+	lc.dropUse = make([]bool, len(body.Locals))
+	lc.computeLiveness()
+	in := make([]*lstate, len(body.Blocks))
+	in[0] = lc.newState()
+	for _, sd := range seeds {
+		v := newBitset(lc.nLoans)
+		v.set(sd.loan)
+		lc.or(in[0], skey(sd.local, sd.slot), v)
+	}
+	lc.solve(in)
+	rl := lc.localLayout(0)
+	sm := &closSummary{ret: rl, fromArg: make([][][2]int, rl.n()), caps: make([]bool, rl.n())}
+	for bi, bl := range body.Blocks {
+		if bl.Term.Kind != TReturn || in[bi] == nil {
+			continue
+		}
+		out := lc.runBlock(bi, in[bi], false)
+		for j := 0; j < rl.n(); j++ {
+			h := out.holds[skey(0, j)]
+			if h == nil {
+				continue
+			}
+			for li := 0; li < lc.nLoans; li++ {
+				if !h.has(li) {
+					continue
+				}
+				if li == capLoan {
+					sm.caps[j] = true
+				} else if a, ok := argOf[li]; ok {
+					sm.fromArg[j] = append(sm.fromArg[j], a)
+				} else if lc.loans[li].origin == "" && lc.body.Locals[lc.loans[li].place.Local].Kind == LUpvar {
+					sm.caps[j] = true
+				}
+			}
+		}
+	}
+	closSummaries[t] = sm
+	if debugLoans {
+		fmt.Fprintf(os.Stderr, "borrowck: closure %s summary fromArg=%v caps=%v\n", t, sm.fromArg, sm.caps)
 	}
 }
 
@@ -1078,15 +1436,15 @@ func (lc *loanChecker) runBlock(bi int, in *lstate, report bool) *lstate {
 		live := after[i]
 		for i, h := range st.holds {
 			// a local overwritten here no longer holds its old loans
-			if h != nil && live.has(i/maxDepth) && LocalID(i/maxDepth) != ud.def {
+			if h != nil && live.has(keyLocal(i)) && LocalID(keyLocal(i)) != ud.def {
 				ll.union(h)
 			}
 		}
 		uses := ud.uses
 		// loans held by values used by this statement are live here too
 		for _, u := range uses {
-			for d := 0; d < maxDepth; d++ {
-				if h := st.holds[int(u)*maxDepth+d]; h != nil {
+			for k := 0; k < lc.localLayout(u).n(); k++ {
+				if h := st.holds[skey(u, k)]; h != nil {
 					ll.union(h)
 				}
 			}
@@ -1119,31 +1477,104 @@ func (lc *loanChecker) transferStmt(st *lstate, bi, si int, s Stmt) {
 	case SAssign:
 		var v lval
 		switch s.Rv.Kind {
-		case RUse, RAggregate:
-			v = lc.emptyVal()
-			for _, o := range s.Rv.Ops {
-				lc.unionVal(v, lc.opVal(st, o))
+		case RUse:
+			if len(s.Rv.Ops) > 0 {
+				v = lc.opVal(st, s.Rv.Ops[0])
+			} else {
+				v = lc.emptyVal(flatLayout)
 			}
+		case RAggregate:
+			v = lc.aggVal(st, s)
 		case RRef:
 			li := -1
 			if x, ok := lc.loanAt[[2]int{bi, si}]; ok {
 				li = x
 			}
-			v = lc.refVal(st, s.Rv.Place, li)
+			v = lc.refVal(st, s.Rv.Place, li, s.Rv.Mut)
 		default:
-			v = lc.emptyVal()
+			v = lc.emptyVal(flatLayout)
 		}
 		if len(s.Place.Proj) == 0 {
 			lc.killDerefLoans(st, s.Place.Local, v)
 		}
 		lc.store(st, s.Place, v)
 	case SStorageDead:
-		base := int(s.Place.Local) * maxDepth
-		for d := 0; d < maxDepth; d++ {
-			delete(st.holds, base+d)
+		n := lc.localLayout(s.Place.Local).n()
+		for k := 0; k < n; k++ {
+			delete(st.holds, skey(s.Place.Local, k))
 		}
 		lc.killLocalLoans(st, s.Place.Local)
 	}
+}
+
+// aggVal is the value of an aggregate: each operand lands in the slots of
+// its component.
+func (lc *loanChecker) aggVal(st *lstate, s Stmt) lval {
+	pi := lc.placeInfo(s.Place)
+	dl := pi.lay
+	out := lc.emptyVal(dl)
+	t := dl.root.ty
+	ops := s.Rv.Ops
+	put := func(o Operand, start int, cl *layout) {
+		ov := lc.conv(lc.opVal(st, o), cl)
+		for j := range ov.s {
+			out.s[start+j].union(ov.s[j])
+		}
+	}
+	if !dl.flat && t != nil {
+		switch {
+		case t.Kind == TTuple && len(ops) == len(dl.root.kids):
+			for k, o := range ops {
+				put(o, dl.root.kids[k].start, layoutOf(t.Elems[k]))
+			}
+			return out
+		case t.Kind == TArray && len(dl.root.kids) == 1:
+			for _, o := range ops {
+				put(o, dl.root.kids[0].start, layoutOf(t.Elem))
+			}
+			return out
+		case t.Kind == TAdt && t.Def.Adt != nil:
+			vi := s.Rv.Variant - 1
+			if vi < 0 && !t.Def.Adt.IsEnum() {
+				vi = 0
+			}
+			if vi < 0 {
+				break
+			}
+			for k, o := range ops {
+				f := k
+				if s.Rv.Fields != nil {
+					if k >= len(s.Rv.Fields) {
+						f = -1
+					} else {
+						f = s.Rv.Fields[k]
+					}
+				}
+				var fi *fieldInfo
+				if f >= 0 {
+					fi = adtField(lc.ctx.tcx, t, vi, f)
+				}
+				if fi == nil {
+					lc.unionVal(out, lc.opVal(st, o))
+					continue
+				}
+				ov := lc.conv(lc.opVal(st, o), layoutOf(fi.ty))
+				for j, rs := range fi.m {
+					if j >= len(ov.s) {
+						break
+					}
+					for _, r := range rs {
+						out.s[r].union(ov.s[j])
+					}
+				}
+			}
+			return out
+		}
+	}
+	for _, o := range ops {
+		lc.unionVal(out, lc.opVal(st, o))
+	}
+	return out
 }
 
 func (lc *loanChecker) transferTerm(st *lstate, t Term) {
@@ -1154,47 +1585,101 @@ func (lc *loanChecker) transferTerm(st *lstate, t Term) {
 	for i, o := range t.Args {
 		args[i] = lc.opVal(st, o)
 	}
-	v := lc.emptyVal()
-	if t.Flow != nil {
-		if t.Flow.All {
-			for _, a := range args {
-				lc.unionVal(v, a)
-			}
-		}
-		for _, e := range t.Flow.Edges {
-			if e.Arg >= len(args) {
-				continue
-			}
-			a := args[e.Arg]
-			for k := 0; e.From+k < maxDepth && e.To+k < maxDepth; k++ {
-				v[e.To+k].union(a[e.From+k])
-				if !e.Deep {
-					break
+	dpi := lc.placeInfo(t.Dest)
+	var v lval
+	fl := t.Flow
+	if fl == nil {
+		v = lc.emptyVal(dpi.lay)
+	} else {
+		// what each argument contributes by depth (the coarse model)
+		dres := make([][]bitset, len(args))
+		for i, a := range args {
+			dv := lc.depthView(a)
+			r := make([]bitset, maxDepth)
+			for d := range r {
+				r[d] = newBitset(lc.nLoans)
+				if fl.All {
+					r[d].union(dv[d])
 				}
 			}
+			for _, e := range fl.Edges {
+				if e.Arg != i {
+					continue
+				}
+				for k := 0; e.From+k < maxDepth && e.To+k < maxDepth; k++ {
+					r[e.To+k].union(dv[e.From+k])
+					if !e.Deep {
+						break
+					}
+				}
+			}
+			dres[i] = r
 		}
-		for _, e := range t.Flow.Into {
+		precise := fl.RetLay != nil && len(fl.ArgLays) == len(args)
+		for i := 0; precise && i < len(args); i++ {
+			if t.Args[i].Kind == OConst {
+				args[i] = lc.emptyVal(fl.ArgLays[i])
+			}
+			if args[i].lay.key != fl.ArgLays[i].key || args[i].lay.n() != fl.ArgLays[i].n() {
+				precise = false
+			}
+		}
+		if precise {
+			v = lc.emptyVal(fl.RetLay)
+			for j, d := range fl.RetLay.depth {
+				if d >= maxDepth {
+					continue
+				}
+				for i := range args {
+					if fl.Covered[j] && fl.ArgFull[i] {
+						continue
+					}
+					v.s[j].union(dres[i][d])
+				}
+			}
+			for _, e := range fl.Slots {
+				v.s[e.To].union(args[e.Arg].s[e.From])
+			}
+		} else {
+			merged := make([]bitset, maxDepth)
+			for d := range merged {
+				merged[d] = newBitset(lc.nLoans)
+				for i := range args {
+					merged[d].union(dres[i][d])
+				}
+			}
+			v = lc.fromDepths(merged, dpi.lay)
+		}
+		for _, e := range fl.Into {
 			if e.Dst >= len(args) || e.Src >= len(args) {
 				continue
 			}
+			src := lc.depthView(args[e.Src])
 			// the places the `&mut` argument borrows receive the loans
-			for li := 0; li < lc.nLoans; li++ {
-				if !args[e.Dst][0].has(li) {
-					continue
-				}
-				p := lc.loans[li].place
-				through := false
-				for _, pr := range p.Proj {
-					if pr.Kind == PDeref && pr.Deref != DBox {
-						through = true
+			for _, p := range lc.borrowedPlaces(args[e.Dst]) {
+				pl := lc.localLayout(p.Local)
+				for k, d := range pl.depth {
+					if d >= e.DstDepth && d-e.DstDepth+e.SrcDepth < maxDepth {
+						lc.or(st, skey(p.Local, k), src[d-e.DstDepth+e.SrcDepth])
 					}
 				}
-				if through {
+			}
+		}
+		if len(fl.IntoSlots) > 0 && precise {
+			for _, e := range fl.IntoSlots {
+				dl := fl.ArgLays[e.Dst]
+				if dl.flat || dl.root.ty == nil || dl.root.ty.Kind != TRef || e.DstSlot < 1 {
 					continue
 				}
-				base := int(p.Local) * maxDepth
-				for k := 0; e.DstDepth+k < maxDepth && e.SrcDepth+k < maxDepth; k++ {
-					lc.or(st, base+e.DstDepth+k, args[e.Src][e.SrcDepth+k])
+				rl := layoutOf(dl.root.ty.Elem)
+				for _, p := range lc.borrowedPlaces(args[e.Dst]) {
+					pi := lc.placeInfo(p)
+					if pi.raw || pi.lay.key != rl.key || pi.lay.n() != rl.n() || e.DstSlot-1 >= len(pi.m) {
+						continue
+					}
+					for _, r := range pi.m[e.DstSlot-1] {
+						lc.or(st, skey(p.Local, r), args[e.Src].s[e.SrcSlot])
+					}
 				}
 			}
 		}
@@ -1203,6 +1688,35 @@ func (lc *loanChecker) transferTerm(st *lstate, t Term) {
 		lc.killDerefLoans(st, t.Dest.Local, v)
 	}
 	lc.store(st, t.Dest, v)
+}
+
+// borrowedPlaces returns the places (not behind references) a reference
+// value's loans borrow.
+func (lc *loanChecker) borrowedPlaces(v lval) []Place {
+	var out []Place
+	if len(v.s) == 0 {
+		return nil
+	}
+	ref := v.s[0]
+	if v.lay.flat || v.lay.root.ty == nil || v.lay.root.ty.Kind != TRef {
+		ref = lc.depthView(v)[0]
+	}
+	for li := 0; li < lc.nLoans; li++ {
+		if !ref.has(li) || lc.loans[li].origin != "" {
+			continue
+		}
+		p := lc.loans[li].place
+		through := false
+		for _, pr := range p.Proj {
+			if pr.Kind == PDeref && pr.Deref != DBox {
+				through = true
+			}
+		}
+		if !through {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 func (lc *loanChecker) checkStmt(st *lstate, s Stmt, live bitset, own int) {
@@ -1336,7 +1850,7 @@ func (lc *loanChecker) access(p Place, k accessKind, live bitset, own int, sp le
 			var holders []string
 			for i, h := range lc.curState.holds {
 				if h.has(li) {
-					holders = append(holders, fmt.Sprintf("_%d@%d", i/maxDepth, i%maxDepth))
+					holders = append(holders, fmt.Sprintf("_%d@%d", keyLocal(i), i&(1<<slotBits-1)))
 				}
 			}
 			fmt.Fprintf(os.Stderr, "borrowck: %s access %d to %s conflicts with loan %d of %s (%v) held by %v\n", sp.Lo, k, lc.body.placeString(p), li, lc.body.placeString(ln.place), ln.span.Lo, holders)
@@ -1385,8 +1899,8 @@ func (lc *loanChecker) checkParamStores(st *lstate, t Term) {
 		if e.Dst >= len(t.Args) || e.Src >= len(t.Args) {
 			continue
 		}
-		dst := lc.opVal(st, t.Args[e.Dst])
-		src := lc.opVal(st, t.Args[e.Src])
+		dst := lc.depthView(lc.opVal(st, t.Args[e.Dst]))
+		src := lc.depthView(lc.opVal(st, t.Args[e.Src]))
 		for li := 0; li < lc.nLoans; li++ {
 			if !dst[0].has(li) || lc.loans[li].origin != "" {
 				continue
@@ -1429,7 +1943,7 @@ func (lc *loanChecker) checkParamStores(st *lstate, t Term) {
 // checkStatic reports an argument holding loans of locals where 'static is
 // required (E0373 for closures, E0597 otherwise).
 func (lc *loanChecker) checkStatic(st *lstate, o Operand, req StaticReq, sp lexer.Span) {
-	v := lc.opVal(st, o)
+	v := lc.depthView(lc.opVal(st, o))
 	for d := req.Depth; d < maxDepth; d++ {
 		for li := 0; li < lc.nLoans; li++ {
 			if !v[d].has(li) {
@@ -1461,10 +1975,35 @@ func (lc *loanChecker) checkStatic(st *lstate, o Operand, req StaticReq, sp lexe
 	}
 }
 
+// returnOK reports whether an origin may be returned in slot (at depth d)
+// of the return value.
+func (lc *loanChecker) returnOK(origin string, slot, d int) bool {
+	r := lc.regions
+	if lc.sigSlots && slot < len(lc.retLabels) && lc.retLabels[slot] != "" {
+		lb := lc.retLabels[slot]
+		if lb[0] != '\'' {
+			return true // a type parameter's instance: any region
+		}
+		if lb == "'?" {
+			lb = r.elided
+			if lb == "" {
+				return true
+			}
+		}
+		return r.originOK(origin, map[string]bool{lb: true})
+	}
+	if d >= maxDepth {
+		return true
+	}
+	set, any := r.allowed(r.out, d)
+	return any || r.originOK(origin, set)
+}
+
 // checkReturn reports returned references to locals (E0515).
 func (lc *loanChecker) checkReturn(st *lstate, sp lexer.Span) {
-	for d := 0; d < maxDepth; d++ {
-		h, ok := st.holds[d] // local 0
+	rl := lc.localLayout(0)
+	for slot, d := range rl.depth {
+		h, ok := st.holds[skey(0, slot)]
 		if !ok {
 			continue
 		}
@@ -1474,11 +2013,9 @@ func (lc *loanChecker) checkReturn(st *lstate, sp lexer.Span) {
 			}
 			ln := lc.loans[li]
 			if ln.origin != "" {
-				if lc.regions != nil {
-					if set, any := lc.regions.allowed(lc.regions.out, d); !any && !lc.regions.originOK(ln.origin, set) {
-						lc.regionError(ln.origin, sp)
-						return
-					}
+				if lc.regions != nil && !lc.returnOK(ln.origin, slot, d) {
+					lc.regionError(ln.origin, sp)
+					return
 				}
 				continue
 			}

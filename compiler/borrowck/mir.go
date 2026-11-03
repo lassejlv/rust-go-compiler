@@ -12,7 +12,7 @@
 //     borrowed locals going out of scope (E0597, E0515, E0716).
 //
 // Types carry no lifetimes after type checking, so regions are modeled by
-// loan sets attached to values (by reference depth) and propagated through
+// loan sets attached to values (per region slot of their type, see slots.go) and propagated through
 // calls according to the callee's declared signature. Whenever the model
 // is unsure it drops loans: that can miss errors but never reports errors
 // for valid programs.
@@ -106,6 +106,11 @@ type Rvalue struct {
 	Ops   []Operand
 	Place Place
 	Mut   bool
+	// RAggregate of an ADT: the variant (index+1; 0 unknown) and the
+	// field each operand initializes (nil: in order; -1: the whole value,
+	// a struct update base)
+	Variant int
+	Fields  []int
 }
 
 // StmtKind classifies statements.

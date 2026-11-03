@@ -1,0 +1,12 @@
+built 3
+sq4=16 sq2=4 sq7=49 alpha=100 be=40
+best: Some("alpha")
+first=4 largest=9 
+picked ref 9
+trimmed lens [6, 1, 3]
+first-half lens [4, 0, 2]
+cache v49 3 v144 size=2
+groups ["even:[1, 4]", "odd:[2, 3]"]
+longest word: brownish
+closure as fn ptr: Some(5)
+add=7,max=4,pow=81

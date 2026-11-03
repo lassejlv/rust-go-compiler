@@ -1,0 +1,14 @@
+enable error: no plugin 'missing'
+factories: ["count", "double", "offset", "upper"]
+  upper[x] (prio 10)
+  counter (prio 3)
+  doubler (prio 0)
+  offset (prio -5)
+  counter (prio -9)
+20 => 47 errors=["upper[x]: Unsupported(\"upper\", \"20\")"]
+"ab" => "ABAB" errors=[]
+[1, "q", [-4]] => [2, "QQ", [-8]] errors=[]
+4611686018427387904 => 4611686018427387911 errors=["upper[x]: Unsupported(\"upper\", \"4611686018427387904\")", "doubler: Failed(\"overflow\")"]
+counters: [(3, 4), (-9, 4)]
+uppers: ["upper[x]"]
+doublers: 1
