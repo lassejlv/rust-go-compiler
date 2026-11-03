@@ -651,6 +651,7 @@ func (r *Resolver) tryImport(imp *Import, report bool) bool {
 	var privRes Res
 	pubSeen := false
 	var tooPrivate *Def // a same-crate item re-exported more visibly than it is
+	reexportOK := false
 	if len(imp.Path) == 1 {
 		// `use foo;` / `use foo as bar;`
 		macroCrate = m.Crate
@@ -728,6 +729,8 @@ func (r *Resolver) tryImport(imp *Import, report bool) bool {
 					!b.Import && b.Res.Def.Item != nil && b.Res.Def.Item.Vis == ast.VisPrivate && b.Res.Def.Item.Name.Hyg == 0 &&
 					(imp.Vis == ast.VisPub || (imp.Vis == ast.VisCrate && target != m.Crate.Root)) {
 					tooPrivate = b.Res.Def
+				} else {
+					reexportOK = true // (another namespace may be re-exportable)
 				}
 			}
 			return b.Res, true, true
@@ -748,7 +751,7 @@ func (r *Resolver) tryImport(imp *Import, report bool) bool {
 	if !determined {
 		return false
 	}
-	if found && tooPrivate != nil && !r.reexportChecked[imp] {
+	if found && tooPrivate != nil && !reexportOK && !r.reexportChecked[imp] {
 		if r.reexportChecked == nil {
 			r.reexportChecked = map[*Import]bool{}
 		}
