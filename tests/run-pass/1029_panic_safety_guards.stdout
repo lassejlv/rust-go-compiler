@@ -1,0 +1,21 @@
+ok len 3
+drop Noisy(0)
+drop Noisy(1)
+drop Noisy(2)
+hook: fail at 3
+guard cleaning 3 items
+drop Noisy(10)
+drop Noisy(11)
+drop Noisy(12)
+caught true
+hook: unwinding
+drop Noisy(99)
+deferred runs during unwind
+result err true counter 1
+hook: in map
+drop Noisy(2)
+drop Noisy(1)
+map panic caught true
+Some(42)
+resume payload Some(7)
+end

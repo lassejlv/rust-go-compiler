@@ -1,0 +1,9 @@
+pool shut down, 20 jobs executed by 4 workers
+0! = 1
+4! = 24
+8! = 40320
+12! = 479001600
+16! = 20922789888000
+count 20
+pool shut down, 4 jobs executed by 2 workers
+["ALPHA", "BRAVO", "CHARLIE", "DELTA"]

@@ -1,0 +1,14 @@
+global 8000
+swap 10 now 20
+cas ok Ok(20)
+cas fail Err(30)
+fetch_sub 30 fetch_and 25 fetch_or 8 fetch_xor 9
+now 246
+fetch_max 246 fetch_min 1000 -> -7
+fetch_update Ok(-7) -> 49
+fetch_update Err(49)
+into_inner 6
+spin total 1500
+published 123
+atomicptr old 5 new 6
+bool fetch_not true -> false

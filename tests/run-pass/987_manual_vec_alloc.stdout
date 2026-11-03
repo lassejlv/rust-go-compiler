@@ -1,0 +1,19 @@
+grow 0 -> 2
+grow 2 -> 4
+grow 4 -> 8
+removed 4 -> [0, 100, 1, 9, 16]
+pop Some(16)
+layout u64 size=8 align=8
+l2 24 8
+arr 14 2
+extend size=8 off=4 padded=8
+bad align: true
+grow 0 -> 2
+grow 2 -> 4
+got b
+drop b
+drop c
+drop a
+dealloc cap 4
+zeroed [0, 0, 9, 0]
+dealloc cap 8

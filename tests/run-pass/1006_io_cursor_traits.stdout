@@ -1,0 +1,17 @@
+"hello WORLD!" pos=12
+"hello"
+rest " WORLD!"
+total 356
+["a,", "b,", ",", "c"]
+[[122], [121], [120]]
+1, 2, 3 DONE 12
+copied 10 "zzzzzzzzzz"
+take 0123
+chain abcd
+[120, 121, 122]
+empty ""
+sink wrote 7
+[7, 7, 7]
+boxed writers ok 2
+slice write [97, 98, 0, 0] remaining 2
+"slice" left " reader"

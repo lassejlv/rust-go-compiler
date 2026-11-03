@@ -1,0 +1,14 @@
+strlen = 10
+abs = 42 labs = 1234567890123
+atoi = -317
+strtol = 255 rest = " zz"
+strcmp sign = -1
+[7, 7, 7, 7, 1, 1, 9, 8, 7, 1]
+SHOUT
+copied = apple
+"abc" [97, 98, 99, 0]
+nul err: true
+nul position 1
+lit 3
+Roundtrip
+"c-string literal" len=16

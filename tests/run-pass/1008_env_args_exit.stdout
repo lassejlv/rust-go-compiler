@@ -1,0 +1,14 @@
+argc 1
+argv0 nonempty true
+args().skip(1) []
+Ok("alpha")
+Err(NotPresent)
+[("RG1008_A", "alpha"), ("RG1008_B", "beta=gamma")]
+after remove true
+var_os Some("beta=gamma")
+"/usr/bin:/bin"
+["/a", "/b/c", "", "/d"]
+cwd absolute true
+temp_dir absolute true
+consts linux unix
+exiting with 17

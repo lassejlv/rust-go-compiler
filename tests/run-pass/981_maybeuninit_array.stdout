@@ -1,0 +1,10 @@
+["item0", "item1", "item4", "item9"]
+deadbeef
+drop Noisy(1)
+read Noisy(2)
+drop Noisy(2)
+after
+[0, 0, 0, 0]
+[3, 6, 9, 12, 15]
+inner 9
+drop Noisy(9)

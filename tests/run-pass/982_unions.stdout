@@ -1,0 +1,12 @@
+bits of 1.0 = 0x3f800000
+float = 3.1415927
+[8, 7, 6, 5, 4, 3, 2, 1]
+[1800, 1286, 772, 258]
+copy v=0x0102030405060708
+size 8 align 8
+I(42)
+F(2.5)
+w.a = hello
+w.n = 5
+destructured 77
+matched 3

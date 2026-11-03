@@ -1,0 +1,13 @@
+parent before child
+child inherits stdout
+child status Some(0)
+wc says 20000 (true)
+stdout empty true stderr "kept\n"
+try_wait running true
+killed success=false code=None
+signal Some(9)
+second-first
+args ["%s|", "a b", "c"]
+a b|c|
+no newline yet <child>
+done

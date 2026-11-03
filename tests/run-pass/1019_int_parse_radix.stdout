@@ -1,0 +1,42 @@
+    ff base 16 = 255
+  -101 base  2 = -5
+    zz base 36 = 1295
+   777 base  8 = 511
+     Z base 36 = 35
+   +42 base 10 = 42
+ 1_000 base 10 err InvalidDigit (invalid digit found in string)
+       base 10 err Empty (cannot parse integer from empty string)
+     - base 10 err InvalidDigit (invalid digit found in string)
+   12a base 10 err InvalidDigit (invalid digit found in string)
+    80 base  8 err InvalidDigit (invalid digit found in string)
+Err(PosOverflow)
+Err(true)
+Err("invalid digit found in string")
+Ok(340282366920938463463374607431768211455)
+Ok(-170141183460469231731687303715884105728)
+Ok(18446744073709551615)
+Ok(-2147483648)
+11011110101011011011111011101111
+33653337357 deadbeef DEADBEEF 0xdeadbeef 0xDEADBEEF 0o10 0b101
+[0x00000000ff] [00000101] [      1000] [100       ] [   ABC    ]
+ff 1111111111111110
+0x8000000000000000
++5 -5 +1.00
+1.2345e3 1.2E-4 7e0
+[a, ff] [AB]
+(
+    16,
+)
+11110100001001000000 1212210202001 11333311 f4240 lfls 
+true
+Ok(-5)
+67
+208 13330 878082066
+None 88
+(-56, true) -128
+2 -4
+1099511627776 81
+Some(16) 3
+258 -1
+[2, 1] [63, 192, 0, 0]
+2 15

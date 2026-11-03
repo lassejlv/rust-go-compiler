@@ -1,0 +1,7 @@
+add: 15 None
+mul: 120 Some(-120)
+sub: -15 Some(15)
+77
+total 60
+same fn eq: true
+[-5, 36, 6]

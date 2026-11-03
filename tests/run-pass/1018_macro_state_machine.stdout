@@ -1,0 +1,15 @@
+Closed
+Closed --open--> Opened
+Opened ignores lock
+Opened --close--> Closed
+Closed --lock--> Locked
+Locked ignores open
+Locked --unlock--> Closed
+Closed --open--> Opened
+Closed -open-> Opened
+Opened -close-> Closed
+Closed -lock-> Locked
+Locked -unlock-> Closed
+Perm(READ | EXEC) true false
+Perm()
+Perm(READ | WRITE | EXEC)

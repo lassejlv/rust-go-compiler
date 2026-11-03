@@ -1,0 +1,23 @@
+count after into_raw 2
+via raw rc
+count 3
+ptr_eq true
+count end 1
+drop rc
+--
+[1, 2, 3] 2
+1
+get_mut shared None
+106 6
+try_unwrap Ok(6)
+upgrade weak target
+weak_count 1
+drop weak target
+upgrade after true
+empty weak None
+cyclic 7
+[4, 5, 6] 3
+ARC STR
+Some("unwrap me")
+pinned pinned
+drop pinned

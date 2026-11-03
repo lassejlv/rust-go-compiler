@@ -1,0 +1,11 @@
+main counter 3
+tls dtor child-guard
+child (0, 10, ["child"])
+main still 3
+main log ["main"]
+const tl 99
+set/get 50
+with_borrow len 2
+replace old 50 new 7
+[0, 1, 2]
+try_with ok true

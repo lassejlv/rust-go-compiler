@@ -1,0 +1,15 @@
+0 -> 0
+1 -> 500500
+2 -> 2001000
+3 -> 4501500
+4 -> 8002000
+5 -> 12502500
+6 -> 18003000
+7 -> 24503500
+[2, 4, 6]
+Some("worker-7")
+main name Some("main")
+unnamed true
+finished-eventually 5
+ids differ true
+outer+inner

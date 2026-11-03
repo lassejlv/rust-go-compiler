@@ -1,0 +1,19 @@
+read_line n=7 "first\r\n"
+read_line n=7 "second\n"
+read_line n=1 "\n"
+read_line n=17 "fourth no newline"
+lines ["first", "second", "", "fourth no newline"]
+fill_buf "firs" cap 4
+rest len 30
+buffer len before flush <= 16: true
+big len 5000
+sum 499500
+after truncate "short"
+mode 640
+readonly true
+is_symlink true target_is_crlf true
+via link len 32
+canonical ends with crlf.txt true
+hard link content "short"
+["big.txt", "crlf.txt", "hard", "link"]
+cleaned true

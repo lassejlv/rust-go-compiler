@@ -1,0 +1,22 @@
+let _unused: u8 = 5
+let _w = 1 + 2
+1 + 2 * 3                    => 7
+vec![1, 2, 3].len()          => 3
+"a".to_owned() + "b"         => "ab"
+if true { 1 } else { 2 }     => 1
+[1u8; 3]                     => [1, 1, 1]
+(1, 'c', "s")                => (1, 'c', "s")
+hello, world!12.5true
+v1.72.0
+a.b.c
+struct Foo<'a, T: Clone> where T: Copy { x: &'a T }
+a+b - c
+x => y, z
+#[derive(Debug)] fn f() -> u8 { 0 }
+x10y-3z
+0 ""
+true true false
+[1, 2, 3, 4]
+true true true 1017_macro_stringify_concat
+-1
+r"raw" b"bytes" 'x' 1_000u32 0xFFi64 1e10

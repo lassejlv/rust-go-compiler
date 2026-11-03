@@ -1,0 +1,7 @@
+square processed 15
+filter_odd processed 15
+format processed 7
+<1>,<9>,<25>,<49>,<81>,<121>,<169>
+[(0, 10), (1, 10), (2, 10)]
+read x try_read again ok true
+downgraded xy

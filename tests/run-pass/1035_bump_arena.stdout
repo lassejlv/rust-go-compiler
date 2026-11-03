@@ -1,0 +1,8 @@
+2 0x1122334455667788 [1, 2, 99]
+u64 aligned true
+Neg(Mul(Add(Num(1), Num(2)), Num(5))) = -15
+sum 0..20 = 190
+[30, 20, 10]
+big 100 700
+id 5
+arena freed 26 chunks, 1259 bytes used

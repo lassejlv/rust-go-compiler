@@ -1,0 +1,27 @@
+raw holds boxed
+reboxed boxed
+drop boxed
+--
+leaked [1, 2, 3, 4]
+after forget
+md md never dropped
+took md2
+drop md2
+into_inner md3
+Holder::drop start
+drop h.a
+Holder::drop end
+drop h.b
+--
+replaced out v0
+taken tk
+a=swapC c=swapA
+drop drop_in_place
+needs_drop: true false
+end of main
+drop swapA
+drop swapC
+drop v0
+drop v0new
+drop v1
+drop md3

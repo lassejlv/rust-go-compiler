@@ -1,0 +1,14 @@
+20 msgs first (0, 0, 0) last (3, 4, 304)
+[10, 510, 1010, 1510]
+["alpha", "beta", "gamma", "delta"] producer done
+try_recv empty: Err(Empty)
+try_recv: Ok(1)
+after drop: Err(Disconnected)
+recv: Err(RecvError)
+send to closed: true
+returned 9
+rendezvous 42
+full 2
+Ok(1)
+Err(Timeout)
+["job0", "job1", "job2"]

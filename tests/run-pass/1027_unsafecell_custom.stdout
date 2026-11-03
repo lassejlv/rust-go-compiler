@@ -1,0 +1,9 @@
+10
+two borrows [1, 2] [1, 2] flag=2
+mut while shared: true
+flag after 0
+shared while mut: true flag=-1
+[1, 2, 3] flag=1
+2
+[5, 2, 3]
+7

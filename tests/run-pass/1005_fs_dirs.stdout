@@ -1,0 +1,19 @@
+create_dir existing err: Err(AlreadyExists)
+a/
+a/b/
+a/b/c/
+a/b/c/three.rs (3 bytes)
+a/b/two.txt (2 bytes)
+a/one.txt (1 bytes)
+top.md (5 bytes)
+z/
+a is_dir true is_file false
+ext Some("rs") stem Some("three") name Some("three.rs")
+parent ends with c: true
+["a", "b", "c", "three.rs"]
+x/y/z.tar.zip
+x/y abs=false
+with_file_name d/f.txt
+remove nonempty err: true
+root exists after: false
+try_exists Some(false)

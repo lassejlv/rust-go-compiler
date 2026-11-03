@@ -1,0 +1,19 @@
+CStruct 12 4
+Packed 7 1
+Aligned 16 16
+Meters 8 8
+Color 1 Big 4
+Option<Box<u8>> 8 Option<&u32> 8
+Option<std::num::NonZeroU32> 4
+(u8,u64) align 8
+[u16;5] 10
+unit 0 
+offsets: a=0 b=4 c=8
+offset_of: 0 4 8
+packed offset_of: 1 5
+packed b=0x11223344 bytes=[09, 44, 33, 22, 11, 07, 00] a=9 c=7
+header bytes [be, ba, fe, ca, 34, 12, aa, 55]
+colors 1 5 6
+Blue true
+big -3 1000
+meters as f64 3.5

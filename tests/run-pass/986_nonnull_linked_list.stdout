@@ -1,0 +1,11 @@
+[5, 10, 20, 30, 40]
+[40, 30, 20, 10, 5]
+Some(5) Some(40)
+len 3 sum 60
+popped Some(D(1))
+drop D1
+drop D2
+drop D3
+freed 2 nodes
+x=6 dangling_is_aligned=true
+freed 3 nodes

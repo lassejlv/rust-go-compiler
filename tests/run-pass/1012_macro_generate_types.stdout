@@ -1,0 +1,9 @@
+Config { name: default, retries: 3, ratio: 0.5 }
+Config { name: "default", retries: 3, ratio: 0.5 }
+["name", "retries", "ratio"]
+Config { name: default, retries: 9, ratio: 0.5 } eq=false
+DELETE GET POST 
+Ok(Post) Err("bad Method: PUT")
+[Get, Post, Delete]
+W(44)
+Meters(2.5) Count(3) Flag(true)

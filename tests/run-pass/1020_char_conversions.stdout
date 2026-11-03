@@ -1,0 +1,45 @@
+0x41 -> 'A' len_utf8=1 len_utf16=1
+0x1f600 -> '😀' len_utf8=4 len_utf16=2
+0xd800 -> invalid
+0x110000 -> invalid
+0x7f -> '\u{7f}' len_utf8=1 len_utf16=1
+0xe9 -> 'é' len_utf8=2 len_utf16=1
+'7': d10=Some(7) d16=Some(7) d36=Some(7)
+'a': d10=None d16=Some(10) d36=Some(10)
+'F': d10=None d16=Some(15) d36=Some(15)
+'z': d10=None d16=None d36=Some(35)
+'g': d10=None d16=None d36=Some(16)
+' ': d10=None d16=None d36=None
+"0123456789abcdef"
+None Some('z')
+GRÜSSE, JÜRGEN ❤ ΣΑΣ
+grüße, jürgen ❤ σας
+"SS"
+"i\u{307}"
+'a' alpha=true num=false alnum=true ws=false upper=false lower=true ascii=true punct=false ctrl=false
+'Z' alpha=true num=false alnum=true ws=false upper=true lower=false ascii=true punct=false ctrl=false
+'5' alpha=false num=true alnum=true ws=false upper=false lower=false ascii=true punct=false ctrl=false
+' ' alpha=false num=false alnum=false ws=true upper=false lower=false ascii=true punct=false ctrl=false
+'\n' alpha=false num=false alnum=false ws=true upper=false lower=false ascii=true punct=false ctrl=true
+'é' alpha=true num=false alnum=true ws=false upper=false lower=true ascii=false punct=false ctrl=false
+'_' alpha=false num=false alnum=false ws=false upper=false lower=false ascii=true punct=true ctrl=false
+'!' alpha=false num=false alnum=false ws=false upper=false lower=false ascii=true punct=true ctrl=false
+'中' alpha=true num=false alnum=true ws=false upper=false lower=false ascii=false punct=false ctrl=false
+98
+['a', 'b', 'c', 'd', 'e']
+"edcba"
+3
+€ [226, 130, 172]
+[55357, 56832]
+\u{1f600}
+\t \"
+"tab\\there \\u{7f} \\u{e9}"
+true
+Q q
+[Ok('😀'), Ok('A'), Err(56320)]
+false
+Ok('A')
+true
+1114111
+[(0, 'h'), (1, 'é'), (3, 'l'), (4, 'l'), (5, 'o')]
+["a", "b", "c"]

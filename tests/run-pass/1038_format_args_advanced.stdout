@@ -1,0 +1,51 @@
+[        rust] [****rust****] [rust----]
+[   ab] [0.14286] [   1.4142]
+deadbeef / 01:02:03
+[      hi] [hi      ] [   hi   ] [he] [   hel]
+[   -42] [+42] [-00007] [0n9] [3    ]
+[0b00000101] [1111111111111111111111111111111111111111111111111111111111111111]
+w=None p=None fill=' ' align=- plus=false zero=false alt=false
+w=Some(8) p=Some(3) fill=' ' align=R plus=true zero=true alt=true
+w=Some(5) p=None fill='_' align=L plus=false zero=false alt=false
+Node { name: "root", kids: [Leaf("a"), Node { name: "b", kids: [Leaf("c")], .. }], .. }
+Node {
+    name: "root",
+    kids: [
+        Leaf(
+            "a",
+        ),
+        Node {
+            name: "b",
+            kids: [
+                Leaf(
+                    "c",
+                ),
+            ],
+            ..
+        },
+    ],
+    ..
+}
+{3, 1} {"x": 1, "y": 2}
+{
+    "k": 0,
+}
+1-"two"!
+1 2
+{literal} {5}
+'a' "q\"uote\n" '\''
+x    |true |    s|  1  |
+"toolong"
+0xff 0o377 2.55e2  +255
+(1, "a", [Some(1.5), None], ())
+(
+    1,
+    [
+        (
+            2,
+            'c',
+        ),
+    ],
+)
+"é\0\t"
+5 0x0

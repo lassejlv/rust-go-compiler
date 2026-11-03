@@ -1,0 +1,17 @@
+"line one\nline two\n\nline four\n"
+0: line one
+1: line two
+2: 
+3: line four
+len 50
+last line Some("raw bytes")
+0,1,4,9,16,
+after seek-write 0,XX4,9,16,
+pos 8 tail "16,"
+truncated "0,XX"
+old exists false new exists true
+copy exists true
+removed true
+open missing: NotFound
+create_new ok true
+create_new again Err(AlreadyExists)

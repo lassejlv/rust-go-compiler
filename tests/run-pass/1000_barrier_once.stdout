@@ -1,0 +1,18 @@
+leaders 1
+all befores first: true
+Once ran
+once completed true
+config get before: None
+init config
+cfg-v1
+set again: Err("x")
+before TABLE
+computing TABLE
+49
+[81, 64]
+two=2
+[1, 2]
+Some([1, 2, 3])
+lazy 42
+oncecell
+Some("oncecell")

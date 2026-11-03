@@ -1,0 +1,14 @@
+1
+6
+21
+4 ["D", "E", "F"]
+9
+zoo
+Ok([1, 22, 333])
+true
+[a [b] { c }]
+[x y]
+[q]
+5 -1 16 2
+u8 says byte | bool says flag | &str says text
+123

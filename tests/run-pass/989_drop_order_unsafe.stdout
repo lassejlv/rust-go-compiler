@@ -1,0 +1,27 @@
+drop arr0
+drop arr1
+drop t1
+drop t2
+drop p1
+drop p2
+drop b
+drop a
+--
+drop v1
+drop v2
+after it
+drop v0
+--
+drop x1
+assigned
+drop underscore
+drop keep
+drop x2
+--
+peek opt
+drop raw
+drop opt
+--
+moved second
+drop m2
+drop m1

@@ -1,0 +1,14 @@
+a=2 b=1 tmp=outer tmp
+created=42
+secret=1
+1010
+n=1
+ticks 3 1
+42
+1 + 2 = 3
+v.len() = 2
+"s".repeat(3) = "sss"
+(a, b) = (2, 1)
+5 -1
+local 11
+shadowed local 61

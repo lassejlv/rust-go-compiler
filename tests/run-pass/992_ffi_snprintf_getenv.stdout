@@ -1,0 +1,8 @@
+16 [42|    7|3   |ff]
+18 [3.142 1.234568e+04]
+15 [hello world! ok]
+32 [-9000000000 18000000000 00002.50]
+14 [trunc]
+getenv = value-123
+missing null = true
+sqrt 1.4142135623730951 pow 1024 floor -3

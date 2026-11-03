@@ -1,0 +1,10 @@
+nothing: allocs=0 deallocs=0 bytes=0
+box u64: allocs=1 deallocs=1 bytes=8
+vec with_capacity 10 u32: allocs=1 deallocs=1 bytes=40
+vec reserve_exact: allocs=1 deallocs=0 bytes=100
+cap 100
+drop vec: allocs=0 deallocs=1 bytes=0
+empty vec/string: allocs=0 deallocs=0 bytes=0
+string from: allocs=1 deallocs=1 bytes=11
+box zst: allocs=0 deallocs=0 bytes=0
+array on stack: allocs=0 deallocs=0 bytes=0

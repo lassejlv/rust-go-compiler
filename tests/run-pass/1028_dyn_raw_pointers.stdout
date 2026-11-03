@@ -1,0 +1,22 @@
+Sq(2.0) area 4
+Circle { r: 1.0 } area 3
+total 7
+reboxed Sq(2.0)
+drop Sq(2)
+reboxed Circle { r: 1.0 }
+thin cast 3
+size of fat 16 thin 8
+size_of_val dyn 8
+addr_eq true
+i32 5
+String "hi"
+unknown
+a Sq
+not string, i32 = Ok(77)
+true
+false
+u8 alloc::vec::Vec<i64>
+Some([1, 2, 3])
+Some("static")
+end
+drop Sq(3)

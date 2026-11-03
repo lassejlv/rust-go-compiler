@@ -1,0 +1,5 @@
+ok 5
+ok 42
+error: cannot parse "abc"
+error: 500 out of range
+true

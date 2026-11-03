@@ -1,0 +1,18 @@
+literal 42
+literal "str"
+block -> 3
+ident foo
+expr a + b * 2
+literal -5
+true false
+true
+yes no
+[("u8", 1), ("(u16, u8)", 4), ("[u32; 3]", 12), ("&str", 16), ("Option<Box<i32>>", 8)]
+life
+9 5
+1 2
+in stmts 15
+9
+3
+Metad { v: 0 }
+["a", "(b c)", "[d]", "{e}", "+", "::", "f", "'g'", "\"h\"", "1.5"]

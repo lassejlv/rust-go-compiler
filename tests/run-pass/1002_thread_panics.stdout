@@ -1,0 +1,10 @@
+str payload: boom 42
+is &str: true
+msg: Some("static msg")
+custom payload MyErr { code: 7 }
+index panic msg: Some("index out of bounds: the len is 0 but the index is 3")
+unwrap none: Some("called `Option::unwrap()` on a `None` value")
+["ok 0", "err odd 1", "ok 20", "err odd 3", "ok 40", "err odd 5"]
+catch_unwind Ok(true)
+scoped join err true
+done

@@ -1,0 +1,15 @@
+0xab 0x11223344 0x102030405060708 0xbeef size=15
+addr_of read 0x11223344
+val now 42
+raw const 0xbeef
+u32 at 0 = 0x223344ab
+u32 at 1 = 0x11223344
+u32 at 2 = 0x08112233
+u32 at 3 = 0x07081122
+[00, 00, 00, 0d, f0, fe, ca, ee, ee, ee]
+align_offset 3
+is_aligned true
+align_to parts 3 7 0
+[12, 34, 56, 78]
+[4, 5, 6, 1, 2, 3]
+[10, 20]

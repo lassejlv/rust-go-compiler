@@ -1,0 +1,13 @@
+status ok true stdout "hello from echo\n"
+piped line 0
+piped line 1
+piped line 2
+exit code Some(3) success false
+"env-passed\n" "err\n"
+pwd "/"
+missing binary err kind Err(NotFound)
+only
+sorted "a\nb\nc\n"
+true -> exit status: 0
+false -> Some(1)
+program "ls"
