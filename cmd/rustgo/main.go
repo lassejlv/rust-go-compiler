@@ -42,6 +42,11 @@ options:
 func main() {
 	// The compiler is short-lived: trade memory for less GC time.
 	debug.SetGCPercent(800)
+	if os.Getenv("GOMEMLIMIT") == "" {
+		// but collect before the heap grows beyond a few GB (a large
+		// live heap times 9 would exhaust the machine's memory)
+		debug.SetMemoryLimit(2 << 30)
+	}
 	if p := os.Getenv("RUSTGO_CPUPROFILE"); p != "" {
 		f, err := os.Create(p)
 		if err == nil {

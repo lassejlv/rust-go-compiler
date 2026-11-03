@@ -94,6 +94,28 @@ pub mod fmt {
     }
     pub trait Display { fn fmt(&self, f: &mut Formatter) -> Result; }
     pub trait Debug { fn fmt(&self, f: &mut Formatter) -> Result; }
+    pub enum __Arg<'a> { Display(&'a dyn Display), Debug(&'a dyn Debug) }
+    impl<'a> __Arg<'a> {
+        pub fn new_display<T: Display>(x: &'a T) -> __Arg<'a> { __Arg::Display(x) }
+        pub fn new_debug<T: Debug>(x: &'a T) -> __Arg<'a> { __Arg::Debug(x) }
+    }
+    pub struct __Spec { pub fill: char, pub align: u8, pub flags: u32, pub width: Option<usize>, pub precision: Option<usize> }
+    pub fn __format(pieces: &[&'static str], specs: &[__Spec], args: &[__Arg]) -> String {
+        let mut f = Formatter::new();
+        let mut ps = pieces;
+        let mut rest_args = args;
+        loop {
+            match ps { [p, rest @ ..] => { let _ = f.write_str(p); ps = rest; } [] => {} }
+            match rest_args {
+                [a, rest @ ..] => {
+                    let _ = match a { __Arg::Display(d) => d.fmt(&mut f), __Arg::Debug(d) => d.fmt(&mut f) };
+                    rest_args = rest;
+                }
+                [] => break,
+            }
+        }
+        f.into_string()
+    }
     impl Display for str { fn fmt(&self, f: &mut Formatter) -> Result { f.write_str(self) } }
     impl<T: Display + ?Sized> Display for &T { fn fmt(&self, f: &mut Formatter) -> Result { (**self).fmt(f) } }
     impl Display for i32 {
@@ -117,6 +139,9 @@ pub mod result {
     pub enum Result<T, E> { #[lang = "Ok"] Ok(T), #[lang = "Err"] Err(E) }
 }
 pub mod io {
+    pub fn __print(pieces: &[&'static str], specs: &[crate::fmt::__Spec], args: &[crate::fmt::__Arg]) {
+        _print(crate::fmt::Arguments::new(crate::fmt::__format(pieces, specs, args)));
+    }
     pub fn _print(args: crate::fmt::Arguments) {
         let s = args.s.as_str();
         unsafe { crate::intrinsics::write_stdout(crate::intrinsics::str_ptr(s), crate::intrinsics::str_len(s)); }

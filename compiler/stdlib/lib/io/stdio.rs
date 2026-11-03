@@ -4,6 +4,21 @@ use super::{BufRead, IoSlice, Lines, Read, Result, Split, Write};
 use crate::fmt;
 use crate::intrinsics;
 
+/// Formats and prints to standard output (used by `print!`; see
+/// `fmt::__format`).
+#[doc(hidden)]
+#[inline(never)]
+pub fn __print(pieces: &[&'static str], specs: &[fmt::__Spec], args: &[fmt::__Arg<'_>]) {
+    _print(fmt::Arguments::new(fmt::__format(pieces, specs, args)));
+}
+
+/// Formats and prints to standard error (used by `eprint!`).
+#[doc(hidden)]
+#[inline(never)]
+pub fn __eprint(pieces: &[&'static str], specs: &[fmt::__Spec], args: &[fmt::__Arg<'_>]) {
+    _eprint(fmt::Arguments::new(fmt::__format(pieces, specs, args)));
+}
+
 /// Prints the formatted text to standard output (used by `print!`).
 pub fn _print(args: fmt::Arguments<'_>) {
     let s = args.as_formatted_str();

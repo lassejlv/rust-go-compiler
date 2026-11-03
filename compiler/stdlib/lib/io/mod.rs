@@ -17,7 +17,7 @@ pub use self::error::{Error, ErrorKind, Result};
 pub use self::pipe::{pipe, PipeReader, PipeWriter};
 pub(crate) use self::error::{const_io_error, decode_error_kind};
 pub use self::stdio::{
-    _eprint, _print, stderr, stdin, stdout, IsTerminal, Stderr, StderrLock, Stdin, StdinLock, Stdout, StdoutLock,
+    __eprint, __print, _eprint, _print, stderr, stdin, stdout, IsTerminal, Stderr, StderrLock, Stdin, StdinLock, Stdout, StdoutLock,
 };
 pub(crate) use self::stdio::fd_is_terminal as stdio_is_terminal;
 pub use self::util::{copy, empty, repeat, sink, Empty, Repeat, Sink};

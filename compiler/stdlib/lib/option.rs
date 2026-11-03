@@ -22,7 +22,8 @@ pub use self::Option::{None, Some};
 #[track_caller]
 #[inline(never)]
 fn expect_failed(msg: &str) -> ! {
-    crate::rt::panic_str(msg, file!(), line!(), column!())
+    // like rustc's panic_display: the payload is a formatted String
+    crate::rt::panic_fmt(format_args!("{}", msg), file!(), line!(), column!())
 }
 
 impl<T> Option<T> {

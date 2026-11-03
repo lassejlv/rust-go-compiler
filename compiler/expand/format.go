@@ -330,6 +330,118 @@ type formatInput struct {
 	args   []*fmtArg
 	byName map[string]int
 	npos   int
+	// direct, if set, names a function taking (pieces, specs, args) that
+	// consumes the formatted text directly (e.g. `::std::io::__print`),
+	// called instead of building an `Arguments` value when the string has
+	// placeholders; isDirect reports whether that call was emitted.
+	direct   string
+	isDirect bool
+}
+
+// phRes is a placeholder with its resolved argument indices (-1: none).
+type phRes struct {
+	ph               *FmtPlaceholder
+	arg, width, prec int
+}
+
+// literalText returns the text a literal argument formats to with `{}`
+// (string and integer literals, which rustc inlines into the format string).
+func literalText(tts []ast.TokenTree) (string, bool) {
+	if len(tts) != 1 || tts[0].Delim != 0 {
+		return "", false
+	}
+	t := tts[0].Tok
+	switch t.Kind {
+	case lexer.Str:
+		if t.Suffix != "" {
+			return "", false
+		}
+		return t.Text, true
+	case lexer.Int:
+		switch t.Suffix {
+		case "", "u8", "u16", "u32", "u64", "usize", "i8", "i16", "i32", "i64", "isize":
+		default:
+			return "", false
+		}
+		v, err := strconv.ParseUint(strings.ReplaceAll(t.Text, "_", ""), 0, 64)
+		if err != nil {
+			return "", false
+		}
+		return strconv.FormatUint(v, 10), true
+	}
+	return "", false
+}
+
+// inlineLiteralArgs inlines literal arguments of plain `{}` placeholders
+// into the format string, like rustc (so that `panic!("{}", "x")` has a
+// constant message and `Arguments::as_str` returns it); arguments left
+// unused are dropped.
+func inlineLiteralArgs(in *formatInput, pieces []FmtPiece, res []phRes) ([]FmtPiece, []phRes) {
+	text := make([]string, len(res))
+	inl := make([]bool, len(res))
+	uses := make([]int, len(in.args))
+	inlUses := make([]int, len(in.args))
+	any := false
+	for k, r := range res {
+		uses[r.arg]++
+		if r.width >= 0 {
+			uses[r.width]++
+		}
+		if r.prec >= 0 {
+			uses[r.prec]++
+		}
+		ph := r.ph
+		if ph.Trait != "Display" || ph.Fill != 0 || ph.Align != 0 || ph.Plus || ph.Minus || ph.Alternate || ph.ZeroPad ||
+			ph.Width.Kind != FmtCountNone || ph.Prec.Kind != FmtCountNone || in.args[r.arg].captured {
+			continue
+		}
+		if t, ok := literalText(in.args[r.arg].tts); ok {
+			text[k], inl[k] = t, true
+			inlUses[r.arg]++
+			any = true
+		}
+	}
+	if !any {
+		return pieces, res
+	}
+	var np []FmtPiece
+	var nr []phRes
+	k := 0
+	for _, pc := range pieces {
+		if pc.Ph == nil {
+			np = append(np, pc)
+			continue
+		}
+		if inl[k] {
+			np = append(np, FmtPiece{Lit: text[k]})
+		} else {
+			np = append(np, pc)
+			nr = append(nr, res[k])
+		}
+		k++
+	}
+	// drop the arguments that are no longer used
+	newIdx := make([]int, len(in.args))
+	var args []*fmtArg
+	for i, a := range in.args {
+		if uses[i] > 0 && uses[i] == inlUses[i] {
+			newIdx[i] = -1
+			continue
+		}
+		newIdx[i] = len(args)
+		args = append(args, a)
+	}
+	in.args = args
+	for i := range nr {
+		nr[i].arg = newIdx[nr[i].arg]
+		if nr[i].width >= 0 {
+			nr[i].width = newIdx[nr[i].width]
+		}
+		if nr[i].prec >= 0 {
+			nr[i].prec = newIdx[nr[i].prec]
+		}
+	}
+	return np, nr
 }
 
 // buildFormatArgs produces the token trees of the format_args! expansion.
@@ -368,10 +480,6 @@ func buildFormatArgs(sp lexer.Span, in *formatInput) ([]ast.TokenTree, error) {
 		in.byName[r.Name] = len(in.args) - 1
 		return len(in.args) - 1, nil
 	}
-	type phRes struct {
-		ph               *FmtPlaceholder
-		arg, width, prec int
-	}
 	var res []phRes
 	for _, pc := range pieces {
 		if pc.Ph == nil {
@@ -402,6 +510,7 @@ func buildFormatArgs(sp lexer.Span, in *formatInput) ([]ast.TokenTree, error) {
 			return nil, errAt(a.span, "argument never used")
 		}
 	}
+	pieces, res = inlineLiteralArgs(in, pieces, res)
 	if len(res) == 0 {
 		lit := ""
 		for _, pc := range pieces {
@@ -410,28 +519,43 @@ func buildFormatArgs(sp lexer.Span, in *formatInput) ([]ast.TokenTree, error) {
 		return tmpl(sp, "::std::fmt::Arguments::new_const("+rustStr(lit)+")")
 	}
 
+	// The formatting itself is done out of line by std's fmt::__format
+	// (like rustc's fmt::write over `Arguments`): each format macro use is
+	// a call with static pieces/specs and an array of `&dyn Trait` args,
+	// which keeps the generated code small.
 	var argTTs [][]ast.TokenTree
-	var b strings.Builder
-	b.WriteString("::std::fmt::Arguments::new({ let mut __fmt = ::std::fmt::Formatter::new(); match (")
-	for i, a := range in.args {
+	for _, a := range in.args {
 		argTTs = append(argTTs, parenWrap(a.tts))
-		fmt.Fprintf(&b, "&$%d, ", i)
 	}
-	b.WriteString(") { (")
-	for i := range in.args {
-		fmt.Fprintf(&b, "__arg%d, ", i)
+	// the arguments can be used in place when each is used once, in order
+	inline := len(res) == len(in.args)
+	for k, r := range res {
+		if r.arg != k || r.width >= 0 || r.prec >= 0 {
+			inline = false
+		}
 	}
-	b.WriteString(") => { ")
-	k := 0
+	argRef := func(i int) string {
+		if inline {
+			return fmt.Sprintf("&$%d", i)
+		}
+		return fmt.Sprintf("__arg%d", i)
+	}
+	var pcs []string
+	lit := ""
 	for _, pc := range pieces {
 		if pc.Ph == nil {
-			if pc.Lit != "" {
-				fmt.Fprintf(&b, "__fmt.write_str(%s); ", rustStr(pc.Lit))
-			}
+			lit += pc.Lit
 			continue
 		}
-		r := res[k]
-		k++
+		pcs = append(pcs, rustStr(lit))
+		lit = ""
+	}
+	if lit != "" {
+		pcs = append(pcs, rustStr(lit))
+	}
+	var specs, args []string
+	allDefault := true
+	for _, r := range res {
 		ph := r.ph
 		fill := ph.Fill
 		if fill == 0 {
@@ -470,16 +594,56 @@ func buildFormatArgs(sp lexer.Span, in *formatInput) ([]ast.TokenTree, error) {
 			case FmtCountIs:
 				return fmt.Sprintf("::std::option::Option::Some(%dusize)", c.N)
 			case FmtCountParam:
-				return fmt.Sprintf("::std::option::Option::Some(*__arg%d)", idx)
+				return fmt.Sprintf("::std::option::Option::Some(*%s)", argRef(idx))
 			}
 			return "::std::option::Option::None"
 		}
-		fmt.Fprintf(&b, "__fmt.set_spec(%s, %du8, %du32, %s, %s); ", rustChar(fill), align, flags,
-			count(ph.Width, r.width), count(ph.Prec, r.prec))
-		fmt.Fprintf(&b, "let _ = ::std::fmt::%s::fmt(__arg%d, &mut __fmt); ", ph.Trait, r.arg)
+		if fill != ' ' || align != 0 || flags != 0 || ph.Width.Kind != FmtCountNone || ph.Prec.Kind != FmtCountNone {
+			allDefault = false
+		}
+		specs = append(specs, fmt.Sprintf("::std::fmt::__Spec { fill: %s, align: %du8, flags: %du32, width: %s, precision: %s }",
+			rustChar(fill), align, flags, count(ph.Width, r.width), count(ph.Prec, r.prec)))
+		// a generic constructor (like rustc's Argument::new_display), so
+		// that the argument is not type-checked against `&dyn Trait`
+		args = append(args, fmt.Sprintf("::std::fmt::__Arg::%s(%s)", argCtor[ph.Trait], argRef(r.arg)))
 	}
-	b.WriteString("} }; __fmt.into_string() })")
+	if allDefault {
+		specs = nil
+	}
+	callee := "::std::fmt::__format"
+	wrap := "::std::fmt::Arguments::new("
+	if in.direct != "" {
+		callee, wrap = in.direct, "("
+		in.isDirect = true
+	}
+	call := fmt.Sprintf("%s(&[%s], &[%s], &[%s])", callee, strings.Join(pcs, ", "), strings.Join(specs, ", "), strings.Join(args, ", "))
+	if inline {
+		return tmpl(sp, wrap+call+")", argTTs...)
+	}
+	var b strings.Builder
+	b.WriteString(wrap + "match (")
+	for i := range in.args {
+		fmt.Fprintf(&b, "&$%d, ", i)
+	}
+	b.WriteString(") { (")
+	for i := range in.args {
+		fmt.Fprintf(&b, "__arg%d, ", i)
+	}
+	b.WriteString(") => " + call + " })")
 	return tmpl(sp, b.String(), argTTs...)
+}
+
+// argCtor names the __Arg constructor of each formatting trait.
+var argCtor = map[string]string{
+	"Display":  "new_display",
+	"Debug":    "new_debug",
+	"LowerHex": "new_lower_hex",
+	"UpperHex": "new_upper_hex",
+	"Octal":    "new_octal",
+	"Binary":   "new_binary",
+	"LowerExp": "new_lower_exp",
+	"UpperExp": "new_upper_exp",
+	"Pointer":  "new_pointer",
 }
 
 func plural(n int) string {
