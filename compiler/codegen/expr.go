@@ -49,8 +49,10 @@ func (fc *fnGen) toValue(op operand) string {
 	if op.unsized {
 		fc.g.fatalf("codegen: cannot use unsized value of type %s by value", op.ty)
 	}
-	if op.place && op.flag != "" && op.movable && !fc.g.tcx.IsCopy(op.ty) {
-		// moving out: copy first, then clear the root drop flag
+	if op.place && op.flag != "" && op.movable && !fc.g.tcx.IsCopy(op.ty) && !(op.ty != nil && op.ty.Kind == TRef) {
+		// moving out: copy first, then clear the root drop flag (a `&mut`
+		// out of a field is a reborrow, and needs no drop anyway: the
+		// rest of the root is still dropped)
 		if !isSimple(op.s) || true {
 			v := fc.spill(op.s, op.ty)
 			fc.line("%s = 0;", op.flag)

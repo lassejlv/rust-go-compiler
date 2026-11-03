@@ -1,0 +1,512 @@
+package borrowck
+
+import (
+	"fmt"
+	"os"
+	"strings"
+
+	"rustgo/compiler/ast"
+	. "rustgo/compiler/middle"
+)
+
+// slotFlow derives the precise (per region slot) loan flow of a call from
+// the callee's declared signature, for the concrete argument and result
+// types: a result slot declared with lifetime 'a receives the argument
+// slots declared with 'a (or a lifetime declared to outlive it), the slots
+// of a type parameter's instance receive those of the same parameter in
+// the arguments. Results built from what other parameters hold
+// (associated types `Self::Item`, outputs only bounds relate to the inputs
+// like `collect::<B>()` or `F: FnMut(T) -> U`) are aligned by type or by
+// reference depth. Slots the signature does not describe keep the
+// depth-based flow.
+func slotFlow(fl *Flow, d *Def, selfAst ast.Type, params map[string]bool, gens []*ast.Generics, argTys []Ty, ret Ty, elided string, mutIn []bool) {
+	decl := d.Fn.Ast.Decl
+	if ret == nil {
+		return
+	}
+	for _, t := range argTys {
+		if t == nil {
+			return
+		}
+	}
+	rl := layoutOf(ret)
+	if rl.flat {
+		return
+	}
+	selfPath := &ast.PathType{Path: &ast.Path{Segments: []*ast.PathSegment{{Ident: ast.Ident{Name: "Self"}}}}}
+	var inAst []ast.Type
+	if sp := decl.SelfParam; sp != nil {
+		switch sp.Kind {
+		case ast.SelfValue:
+			inAst = append(inAst, selfPath)
+		case ast.SelfRef, ast.SelfRefMut:
+			lt := sp.Lifetime
+			if lt == "" {
+				lt = "'self"
+			}
+			inAst = append(inAst, &ast.RefType{Lifetime: lt, Mut: sp.Kind == ast.SelfRefMut, Elem: selfPath})
+		default:
+			inAst = append(inAst, sp.Ty)
+		}
+	}
+	for _, p := range decl.Params {
+		inAst = append(inAst, p.Ty)
+	}
+	if len(inAst) != len(argTys) {
+		return
+	}
+	type argInfo struct {
+		lay    *layout
+		labels []string
+		proj   map[int]string
+		occ    map[string][]*lnode
+		full   bool
+	}
+	w := newLabeler(params, selfAst)
+	args := make([]argInfo, len(argTys))
+	for i, t := range argTys {
+		l := layoutOf(t)
+		if l.flat {
+			return
+		}
+		w.label(inAst[i], l)
+		args[i] = argInfo{lay: l, labels: w.labels, proj: w.proj, occ: w.occ, full: w.full}
+	}
+	w.out = true
+	w.label(decl.Output, rl)
+	out := argInfo{lay: rl, labels: w.labels, proj: w.proj, occ: w.occ}
+	// a type parameter must have the same instance everywhere (it does,
+	// unless the syntax and the types went out of step)
+	inst := map[string]string{}
+	bad := map[string]bool{}
+	note := func(occ map[string][]*lnode) {
+		for name, ns := range occ {
+			for _, n := range ns {
+				k := layoutOf(n.ty).key
+				if prev, ok := inst[name]; ok && prev != k {
+					bad[name] = true
+				}
+				inst[name] = k
+			}
+		}
+	}
+	for _, a := range args {
+		note(a.occ)
+	}
+	note(out.occ)
+	unlabel := func(a *argInfo) {
+		for k, lb := range a.labels {
+			if i := strings.IndexByte(lb, '#'); i > 0 && lb[0] != '\'' && bad[lb[:i]] {
+				a.labels[k] = ""
+				a.full = false
+			}
+		}
+	}
+	for i := range args {
+		unlabel(&args[i])
+	}
+	unlabel(&out)
+	inParams := map[string]bool{}
+	for _, a := range args {
+		for name := range a.occ {
+			inParams[name] = true
+		}
+	}
+	// declared outlives relations between lifetimes ('b: 'a)
+	outlive := map[string][]string{} // 'a -> lifetimes that outlive it
+	for _, g := range gens {
+		if g == nil {
+			continue
+		}
+		for _, gp := range g.Params {
+			if gp.Kind == ast.GPLifetime {
+				for _, bd := range gp.Bounds {
+					if bd.Lifetime != "" {
+						outlive[bd.Lifetime] = append(outlive[bd.Lifetime], gp.Name.Name)
+					}
+				}
+			}
+		}
+		for _, wp := range g.Where {
+			if wp.Lifetime != "" {
+				for _, bd := range wp.Bounds {
+					if bd.Lifetime != "" {
+						outlive[bd.Lifetime] = append(outlive[bd.Lifetime], wp.Lifetime)
+					}
+				}
+			}
+		}
+	}
+	bySlot := map[string][][2]int{} // label -> (arg, slot) of full arguments
+	for i, a := range args {
+		if !a.full {
+			continue
+		}
+		for k, lb := range a.labels {
+			bySlot[lb] = append(bySlot[lb], [2]int{i, k})
+		}
+	}
+	fl.RetLay = rl
+	fl.ArgLays = make([]*layout, len(args))
+	fl.ArgFull = make([]bool, len(args))
+	for i, a := range args {
+		fl.ArgLays[i] = a.lay
+		fl.ArgFull[i] = a.full
+	}
+	fl.Covered = make([]bool, rl.n())
+	seen := map[SlotEdge]bool{}
+	add := func(e SlotEdge) {
+		if !seen[e] {
+			seen[e] = true
+			fl.Slots = append(fl.Slots, e)
+		}
+	}
+	for j, lb := range out.labels {
+		switch {
+		case lb == "":
+		case lb[0] == '\'':
+			name := lb
+			if name == "'?" {
+				name = elided
+				if name == "" {
+					continue
+				}
+			}
+			fl.Covered[j] = true
+			for _, src := range bySlot[name] {
+				add(SlotEdge{Arg: src[0], From: src[1], To: j})
+			}
+			// transitively: lifetimes declared to outlive it
+			vis := map[string]bool{name: true}
+			stack := []string{name}
+			for len(stack) > 0 {
+				x := stack[len(stack)-1]
+				stack = stack[:len(stack)-1]
+				for _, y := range outlive[x] {
+					if !vis[y] {
+						vis[y] = true
+						stack = append(stack, y)
+						for _, src := range bySlot[y] {
+							add(SlotEdge{Arg: src[0], From: src[1], To: j})
+						}
+					}
+				}
+			}
+		default:
+			name := lb[:strings.IndexByte(lb, '#')]
+			if !inParams[name] {
+				continue // see below
+			}
+			fl.Covered[j] = true
+			for _, src := range bySlot[lb] {
+				add(SlotEdge{Arg: src[0], From: src[1], To: j})
+			}
+		}
+	}
+	// align: the slots of result node n hold what argument node s holds
+	// (values produced from it: an iterator's items, a closure's result
+	// from its argument). caps: also what closures in s capture.
+	align := func(i int, s, n *lnode, caps bool) {
+		al := args[i].lay
+		if m := findSame(s, n.ty); len(m) > 0 {
+			for _, x := range m {
+				for k := 0; k < n.end-n.start; k++ {
+					add(SlotEdge{Arg: i, From: x.start + k, To: n.start + k})
+				}
+			}
+			return
+		}
+		clos := map[int]bool{}
+		if !caps {
+			clos = closureSlots(s)
+		}
+		shift := refLevels(s.ty, 0) - refLevels(n.ty, 0)
+		if shift < 0 {
+			shift = 0
+		}
+		for j := n.start; j < n.end; j++ {
+			dj := rl.depth[j] - n.depth
+			for k := s.start; k < s.end; k++ {
+				if !clos[k] && al.depth[k]-s.depth == dj+shift {
+					add(SlotEdge{Arg: i, From: k, To: j})
+				}
+			}
+		}
+	}
+	cover := func(n *lnode) {
+		for j := n.start; j < n.end; j++ {
+			fl.Covered[j] = true
+		}
+	}
+	// outputs only the bounds relate to the inputs
+	for name, ns := range out.occ {
+		if inParams[name] || bad[name] || name == "Self" {
+			continue
+		}
+		srcs, producers := boundSources(name, gens, params)
+		// what the closures producing the values (F: FnMut(T) -> U) make
+		// them from: the inputs their results hold loans of
+		caps := false
+		for f, inputs := range producers {
+			used := make([]bool, len(inputs))
+			for k := range used {
+				used[k] = true
+			}
+			for _, a := range args {
+				for _, fn := range a.occ[f] {
+					if sm := closSummaries[fn.ty]; fn.ty != nil && fn.ty.Kind == TClosure && sm != nil {
+						for k := range used {
+							used[k] = false
+						}
+						for _, xs := range sm.fromArg {
+							for _, x := range xs {
+								if x[0] < len(used) {
+									used[x[0]] = true
+								}
+							}
+						}
+						if sm.fromCaps() {
+							caps = true
+						}
+					}
+				}
+			}
+			for k, in := range inputs {
+				if used[k] {
+					typeNames(in, params, srcs)
+				}
+			}
+		}
+		delete(srcs, name)
+		for _, n := range ns {
+			cover(n)
+			for x := range srcs {
+				for i, a := range args {
+					for _, s := range a.occ[x] {
+						// items of an iterator made by a closure
+						if o, c := producedBy([]*lnode{s}); !o {
+							align(i, s, n, c)
+						}
+					}
+				}
+			}
+			if caps {
+				for f := range producers {
+					for i, a := range args {
+						for _, s := range a.occ[f] {
+							align(i, s, n, true)
+						}
+					}
+				}
+			}
+		}
+	}
+	// associated types of parameters (Self::Item)
+	for _, pn := range projNodes(out.proj, rl) {
+		x := out.proj[pn.start]
+		found := false
+		for i, a := range args {
+			for y, ys := range a.occ {
+				// X itself, or what yields X's items too (Chain<A, B>
+				// with B: Iterator<Item = A::Item>)
+				if y != x && !boundMentions(y, x, gens, params) {
+					continue
+				}
+				for _, s := range ys {
+					found = true
+					owned, caps := producedBy([]*lnode{s})
+					if !owned {
+						align(i, s, pn, caps)
+					}
+				}
+			}
+		}
+		if found {
+			cover(pn)
+		}
+	}
+	if debugLoans {
+		var al [][]string
+		for _, a := range args {
+			al = append(al, a.labels)
+		}
+		fmt.Fprintf(os.Stderr, "borrowck: slotFlow %s args=%q out=%q proj=%v covered=%v full=%v edges=%v\n", d.Name, al, out.labels, out.proj, fl.Covered, fl.ArgFull, fl.Slots)
+	}
+	// stores through `&mut` arguments of what a bound relates
+	// (`extend<I: IntoIterator<Item = T>>(&mut self, iter: I)`)
+	for di, a := range args {
+		if di >= len(mutIn) || !mutIn[di] || a.lay.root.ty == nil || a.lay.root.ty.Kind != TRef {
+			continue
+		}
+		for name, ns := range a.occ {
+			for _, n := range ns {
+				if n.start < 1 {
+					continue
+				}
+				for si, sa := range args {
+					if si == di {
+						continue
+					}
+					for x, xs := range sa.occ {
+						if x == name || !boundMentions(x, name, gens, params) {
+							continue
+						}
+						for _, s := range xs {
+							alignInto(fl, si, s, sa.lay, di, n, a.lay)
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+// alignInto records stores of argument si's node s into node n of the
+// referent of `&mut` argument di, aligned by depth.
+func alignInto(fl *Flow, si int, s *lnode, sl *layout, di int, n *lnode, dl *layout) {
+	clos := closureSlots(s)
+	shift := refLevels(s.ty, 0) - refLevels(n.ty, 0)
+	if shift < 0 {
+		shift = 0
+	}
+	for j := n.start; j < n.end; j++ {
+		dj := dl.depth[j] - n.depth
+		for k := s.start; k < s.end; k++ {
+			if !clos[k] && sl.depth[k]-s.depth == dj+shift {
+				fl.IntoSlots = append(fl.IntoSlots, IntoSlot{Dst: di, DstSlot: j, Src: si, SrcSlot: k})
+			}
+		}
+	}
+}
+
+// boundMentions reports whether a bound of type parameter x mentions y
+// (`I: IntoIterator<Item = T>`).
+func boundMentions(x, y string, gens []*ast.Generics, params map[string]bool) bool {
+	m := map[string]bool{}
+	for _, g := range gens {
+		if g == nil {
+			continue
+		}
+		for _, gp := range g.Params {
+			if gp.Kind == ast.GPType && gp.Name.Name == x {
+				for _, b := range gp.Bounds {
+					if b.Path != nil {
+						for _, seg := range b.Path.Segments {
+							genericArgNames(seg.Args, params, m)
+						}
+					}
+				}
+			}
+		}
+		for _, wp := range g.Where {
+			pt, ok := wp.Ty.(*ast.PathType)
+			if !ok || pt.QSelf != nil || pt.Path == nil || len(pt.Path.Segments) != 1 || pt.Path.Segments[0].Ident.Name != x {
+				continue
+			}
+			for _, b := range wp.Bounds {
+				if b.Path != nil {
+					for _, seg := range b.Path.Segments {
+						genericArgNames(seg.Args, params, m)
+					}
+				}
+			}
+		}
+	}
+	return m[y]
+}
+
+// findSame returns the nodes of the subtree s (s included) of type t.
+func findSame(s *lnode, t Ty) []*lnode {
+	if s == nil || t == nil {
+		return nil
+	}
+	if s.ty == t {
+		return []*lnode{s}
+	}
+	var out []*lnode
+	for _, k := range s.kids {
+		out = append(out, findSame(k, t)...)
+	}
+	return out
+}
+
+// closureSlots marks the slots of closures within s: an iterator's items
+// never hold what its closures capture (closure results do not borrow from
+// the closure, see the CallClosure flow).
+func closureSlots(s *lnode) map[int]bool {
+	m := map[int]bool{}
+	var walk func(n *lnode)
+	walk = func(n *lnode) {
+		if n.wild && n.ty != nil && n.ty.Kind == TClosure {
+			for k := n.start; k < n.end; k++ {
+				m[k] = true
+			}
+			return
+		}
+		for _, k := range n.kids {
+			walk(k)
+		}
+	}
+	walk(s)
+	return m
+}
+
+// projNodes returns the maximal nodes of l whose slots are all marked in
+// proj (with the same parameter).
+func projNodes(proj map[int]string, l *layout) []*lnode {
+	if len(proj) == 0 {
+		return nil
+	}
+	var out []*lnode
+	var walk func(n *lnode)
+	walk = func(n *lnode) {
+		if n.end > n.start {
+			x, ok := proj[n.start]
+			all := ok
+			for k := n.start; all && k < n.end; k++ {
+				if proj[k] != x {
+					all = false
+				}
+			}
+			if all {
+				out = append(out, n)
+				return
+			}
+		}
+		for _, k := range n.kids {
+			walk(k)
+		}
+	}
+	walk(l.root)
+	return out
+}
+
+// producedBy reports, for values produced by the closures in nodes (their
+// results): owned when a closure's result holds nothing of its arguments
+// or captures (`|s| Cow::Owned(s.clone())`); caps when one returns what
+// it captures. Closures without a summary count as producing from their
+// arguments.
+func producedBy(nodes []*lnode) (owned, caps bool) {
+	var walk func(n *lnode)
+	walk = func(n *lnode) {
+		if n.wild && n.ty != nil && n.ty.Kind == TClosure {
+			sm := closSummaries[n.ty]
+			if sm == nil || sm.ret.n() == 0 {
+				return
+			}
+			if sm.fromCaps() {
+				caps = true
+			} else if !sm.fromArgs() {
+				owned = true
+			}
+			return
+		}
+		for _, k := range n.kids {
+			walk(k)
+		}
+	}
+	for _, n := range nodes {
+		walk(n)
+	}
+	return
+}

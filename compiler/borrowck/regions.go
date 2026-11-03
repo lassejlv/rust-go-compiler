@@ -22,6 +22,12 @@ type sigRegions struct {
 	elided  string  // the lifetime elided output lifetimes refer to
 	outlive map[string]map[string]bool
 	names   map[string]string // origin name -> parameter name (diagnostics)
+	// the declared types, for labeling slots (see sigslots.go)
+	inAst   []ast.Type
+	outAst  ast.Type
+	tparams map[string]bool
+	selfAst ast.Type
+	nElided int // elided input lifetimes ('#n)
 }
 
 func (r *sigRegions) outlives(a, b string) bool {
@@ -221,6 +227,27 @@ func fnRegions(d *Def) *sigRegions {
 		}
 	}
 	w := &regionWalker{sigWalker: sigWalker{params: params, selfTy: selfTy}, r: r}
+	r.tparams = params
+	r.selfAst = selfTy
+	r.outAst = decl.Output
+	selfPath := &ast.PathType{Path: &ast.Path{Segments: []*ast.PathSegment{{Ident: ast.Ident{Name: "Self"}}}}}
+	if sp := decl.SelfParam; sp != nil {
+		switch sp.Kind {
+		case ast.SelfRef, ast.SelfRefMut:
+			lt := sp.Lifetime
+			if lt == "" {
+				lt = "'self"
+			}
+			r.inAst = append(r.inAst, &ast.RefType{Lifetime: lt, Mut: sp.Kind == ast.SelfRefMut, Elem: selfPath})
+		case ast.SelfValue:
+			r.inAst = append(r.inAst, selfPath)
+		default:
+			r.inAst = append(r.inAst, sp.Ty)
+		}
+	}
+	for _, p := range decl.Params {
+		r.inAst = append(r.inAst, p.Ty)
+	}
 	if sp := decl.SelfParam; sp != nil {
 		w.occs = nil
 		switch sp.Kind {
@@ -284,7 +311,13 @@ func fnRegions(d *Def) *sigRegions {
 				r.elided = n
 			}
 		}
+		if sp := decl.SelfParam; sp != nil && sp.Kind == ast.SelfTyped {
+			if lt := selfRefLifetime(sp.Ty); lt != "" {
+				r.elided = lt
+			}
+		}
 	}
+	r.nElided = w.elided
 	w.occs = nil
 	w.inOut = true
 	w.walkR(decl.Output, 0)
