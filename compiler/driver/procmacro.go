@@ -211,7 +211,16 @@ func buildProcMacroServer(opts *Options, pm *crateUnit, all map[string]*crateUni
 // loadUnitAST parses a crate unit's sources.
 func loadUnitAST(u *crateUnit) (*ast.Crate, error) {
 	dir := filepath.Dir(u.src)
-	c, err := LoadCrateFS(os.DirFS(dir), filepath.Base(u.src), dir+"/")
+	prefix := dir + "/"
+	if workspaceRoot != "" {
+		if rel, err := filepath.Rel(workspaceRoot, dir); err == nil && !strings.HasPrefix(rel, "..") {
+			prefix = rel + "/"
+			if rel == "." {
+				prefix = ""
+			}
+		}
+	}
+	c, err := LoadCrateFS(os.DirFS(dir), filepath.Base(u.src), prefix)
 	if err != nil {
 		return nil, fmt.Errorf("crate %s: %v", u.name, err)
 	}

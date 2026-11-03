@@ -670,7 +670,7 @@ func (e *Expander) includePath(mac *ast.MacCall) (string, error) {
 		return "", errAt(mac.Span, "argument must be a string literal")
 	}
 	if !filepath.IsAbs(p) {
-		p = filepath.Join(filepath.Dir(lexer.FileName(mac.Span.Lo.File)), p)
+		p = filepath.Join(filepath.Dir(lexer.FilePath(mac.Span.Lo.File)), p)
 	}
 	return p, nil
 }

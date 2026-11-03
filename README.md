@@ -25,6 +25,8 @@ go build -o rustgo ./cmd/rustgo
 ./rustgo run hello.rs
 ./rustgo build                    # in a cargo project: builds the whole crate graph
 ./rustgo build --release -o app   # gcc -O2, wrapping integer arithmetic (like cargo --release)
+./rustgo test lib.rs [filter]     # rustc --test: build the #[test] harness and run it
+./rustgo test [filter] [-- args]  # in a cargo project: like `cargo test`
 ```
 
 Options: `-o <out>`, `--release`, `--emit-c <file>` (dump generated C),
@@ -36,6 +38,20 @@ must already be in the local cargo registry or be path dependencies), runs
 build scripts, compiles proc-macro crates into macro servers, and compiles
 everything into one native executable. Large programs are split into several
 C translation units compiled in parallel.
+
+`rustgo test` builds test harnesses like `rustc --test` (`--test` builds one
+without running it): `#[test]` functions (`#[ignore]`, `#[should_panic]`,
+`Result`-returning tests) are run by a libtest-compatible runner in std
+(`std::rustgo_test`) with the same output, output capture and options
+(filters, `--exact`, `--skip`, `--ignored`, `--include-ignored`,
+`--nocapture`, `--list`). In a cargo project it builds the library and
+binaries with `cfg(test)` and dev-dependencies plus every integration test
+in `tests/`, and runs them from the package root (`--lib`, `--bins`,
+`--bin N`, `--test N`, `--doc`, `--no-run`, `--no-fail-fast`), then the
+library's doc-tests (code blocks in doc comments, with hidden `# ` lines,
+`should_panic`, `no_run`, `compile_fail`, `ignore`); all doc-tests of a crate
+are merged into one program (falling back to one program per test when the
+merged one does not compile).
 
 ## What works
 
@@ -139,5 +155,8 @@ tests/run.sh 042      # tests matching a pattern
 
 `tests/compile-fail` holds programs rustc rejects (with the expected error
 code); `tests/compile-fail/run.sh -q` checks that rustgo rejects them too.
+
+`tests/cargo/run.sh` builds the Cargo projects under `tests/cargo` (path
+dependencies, proc macros, build scripts, `rustgo test`).
 
 Unit tests: `go test ./...`.

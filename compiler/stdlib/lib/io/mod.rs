@@ -20,6 +20,9 @@ pub use self::stdio::{
     __eprint, __print, _eprint, _print, stderr, stdin, stdout, IsTerminal, Stderr, StderrLock, Stdin, StdinLock, Stdout, StdoutLock,
 };
 pub(crate) use self::stdio::fd_is_terminal as stdio_is_terminal;
+pub(crate) use self::stdio::capture_active;
+#[doc(hidden)]
+pub use self::stdio::set_output_capture;
 pub use self::util::{copy, empty, repeat, sink, Empty, Repeat, Sink};
 
 const DEFAULT_BUF_SIZE: usize = 8 * 1024;

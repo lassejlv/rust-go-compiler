@@ -41,6 +41,7 @@ type Options struct {
 	Release  bool   // optimize (gcc -O2) and disable integer overflow checks
 	Edition  string // "2015", "2018", "2021" (default) or "2024"
 	Check    bool   // analysis only (like cargo check): no C compilation
+	Test     bool   // build the test harness (rustc --test)
 	LinkArgs []string
 }
 
@@ -143,6 +144,48 @@ func loadMod(fsys fs.FS, it *ast.Item, dir, prefix string) (string, error) {
 	return child, loadMods(fsys, m.Items, child, prefix)
 }
 
+// testHarnessMark is the hygiene mark of the generated test harness's
+// paths: the harness may name private test functions (like rustc's).
+const testHarnessMark = 0x7ffffff0
+
+// addTestHarness adds the generated `main` of a --test build, which runs
+// the #[test] functions through std's runner, and returns its name.
+func addTestHarness(c *ast.Crate, tests []expand.TestFn) (string, error) {
+	var b strings.Builder
+	b.WriteString("#[allow(dead_code)]\nfn __rustgo_test_main() {\n    ::std::rustgo_test::test_main_static(&[\n")
+	for _, t := range tests {
+		sp := "::std::rustgo_test::ShouldPanic::No"
+		switch t.ShouldPanic {
+		case 1:
+			sp = "::std::rustgo_test::ShouldPanic::Yes"
+		case 2:
+			sp = fmt.Sprintf("::std::rustgo_test::ShouldPanic::YesWithMessage(%q)", t.Expected)
+		}
+		im := "None"
+		if t.IgnoreMsg != "" {
+			im = fmt.Sprintf("Some(%q)", t.IgnoreMsg)
+		}
+		fmt.Fprintf(&b, "        ::std::rustgo_test::TestDesc { name: %q, ignore: %v, ignore_message: %s, should_panic: %s, file: %q, line: %d, col: %d, func: || ::std::rustgo_test::assert_test_result(crate::%s()) },\n",
+			strings.Join(t.Path, "::"), t.Ignore, im, sp, t.File, t.Line, t.Col, strings.Join(t.Path, "::"))
+	}
+	b.WriteString("    ])\n}\n")
+	src := b.String()
+	hc, err := parser.ParseCrate(lexer.AddFile("<test-harness>", src), src)
+	if err != nil {
+		return "", fmt.Errorf("test harness: %v", err)
+	}
+	ast.Walk(hc, func(n any) bool {
+		if pe, ok := n.(*ast.PathExpr); ok && pe.Path != nil && len(pe.Path.Segments) > 0 && pe.Path.Segments[0].Ident.Name == "crate" {
+			for _, seg := range pe.Path.Segments {
+				seg.Ident.Hyg = testHarnessMark
+			}
+		}
+		return true
+	})
+	c.Items = append(c.Items, hc.Items...)
+	return "__rustgo_test_main", nil
+}
+
 // crateNameOf derives the crate name rustc uses for a source file.
 func crateNameOf(input string) string {
 	n := strings.TrimSuffix(filepath.Base(input), ".rs")
@@ -170,8 +213,21 @@ func Frontend(opts *Options) (*typeck.Tcx, *Def, error) {
 		return nil, nil, fmt.Errorf("while expanding std: %v", err)
 	}
 	exp.DisplayName = crateNameOf(opts.Input)
+	if opts.Test {
+		exp.TestHarness = true
+		exp.Config = &expand.CrateConfig{Cfgs: []string{"test"}}
+	}
 	if err := exp.ExpandCrate(userCrate, "main"); err != nil {
 		return nil, nil, err
+	}
+	if opts.Test {
+		exp.TestHarness = false
+		exp.Config = nil
+		e, err := addTestHarness(userCrate, exp.Tests)
+		if err != nil {
+			return nil, nil, err
+		}
+		entry = e
 	}
 	t2 := time.Now()
 	r := resolve.New()

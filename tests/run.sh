@@ -17,6 +17,8 @@
 #   2. runs the produced binary                                    (timeout 10s)
 #   3. compares stdout with NNN_name.stdout and the exit code with
 #      NNN_name.exitcode (0 when that file does not exist).
+# Optional NNN_name.flags holds extra compiler flags (e.g. --test; harness
+# timings are then normalized) and NNN_name.args the program's arguments.
 # Results are printed in test order, followed by `passed X / Y`.
 # Exit status: 0 if every selected test passed, 1 otherwise.
 
@@ -45,7 +47,11 @@ if [ "${1:-}" = "--worker" ]; then
     stderr_f="$OUTDIR/$name.stderr"
     rm -f "$bin" "$res" "$clog" "$actual" "$stderr_f"
 
-    timeout -k 5 "$COMPILE_TIMEOUT" "$RUSTGO" "$src" -o "$bin" > "$clog" 2>&1
+    flags=()
+    if [ -f "$TESTDIR/$name.flags" ]; then
+        read -r -a flags < "$TESTDIR/$name.flags"
+    fi
+    timeout -k 5 "$COMPILE_TIMEOUT" "$RUSTGO" "${flags[@]}" "$src" -o "$bin" > "$clog" 2>&1
     rc=$?
     if [ $rc -eq 124 ] || [ $rc -eq 137 ]; then
         { echo "FAIL compile timeout (${COMPILE_TIMEOUT}s)"; head -n 5 "$clog"; } > "$res"
@@ -68,8 +74,16 @@ if [ "${1:-}" = "--worker" ]; then
         expected_code="$(tr -d '[:space:]' < "$TESTDIR/$name.exitcode")"
     fi
 
-    (cd "$OUTDIR" && timeout -k 2 "$RUN_TIMEOUT" "./$name" > "$name.actual" 2> "$name.stderr" < /dev/null)
+    rargs=()
+    if [ -f "$TESTDIR/$name.args" ]; then
+        read -r -a rargs < "$TESTDIR/$name.args"
+    fi
+    (cd "$OUTDIR" && timeout -k 2 "$RUN_TIMEOUT" "./$name" "${rargs[@]}" > "$name.actual" 2> "$name.stderr" < /dev/null)
     code=$?
+    if [ -f "$TESTDIR/$name.flags" ]; then
+        # test harness output carries wall-clock timings
+        sed -i -E -e 's/finished in [0-9]+\.[0-9]+s/finished in 0.00s/' -e "s/^(thread '[^']*') \([0-9]+\) panicked/\1 panicked/" "$actual"
+    fi
     if { [ $code -eq 124 ] || [ $code -eq 137 ]; } && [ "$expected_code" != "$code" ]; then
         {
             echo "FAIL runtime timeout (${RUN_TIMEOUT}s)"

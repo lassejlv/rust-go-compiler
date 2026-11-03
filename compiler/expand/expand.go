@@ -24,6 +24,14 @@ type Expander struct {
 	// DisplayName, if set, is the crate name shown by module_path!() for
 	// the next ExpandCrate call (the internal crate key may differ).
 	DisplayName string
+	// TestHarness keeps #[test] functions of the crate being expanded
+	// (rustc --test) and records them in Tests.
+	TestHarness bool
+	Tests       []TestFn
+	// CollectDocs records the doc comments of the crate being expanded
+	// (for doc-tests) in Docs.
+	CollectDocs bool
+	Docs        []DocBlock
 	// Config is the cfg configuration of the crate being expanded (set
 	// before each ExpandCrate call).
 	Config *CrateConfig
@@ -39,6 +47,7 @@ type Expander struct {
 	crateOrder []string
 	macros     map[string]map[string]*macroDef // crate -> name -> def
 	modPath    []string
+	docSelf    string // impl self type / trait name while collecting docs
 	// loadMod/modDir load out-of-line modules produced by macro expansion
 	// (see ast.Crate.LoadMod); modDir is where the current module's
 	// children live.
@@ -89,6 +98,11 @@ func (e *Expander) ExpandCrate(c *ast.Crate, crateName string) error {
 		e.DisplayName = ""
 	}
 	e.site = nil
+	if e.CollectDocs {
+		if ls := e.docLines(c.Attrs, true); len(ls) > 0 {
+			e.Docs = append(e.Docs, DocBlock{Lines: ls})
+		}
+	}
 	e.loadMod, e.modDir = c.LoadMod, c.Dir
 	if e.loadMod != nil {
 		if err := e.loadModules(c.Items, c.Dir); err != nil {
@@ -348,10 +362,19 @@ func (e *Expander) expandItemInList(it *ast.Item, depth int) ([]*ast.Item, error
 	if err != nil {
 		return nil, err
 	}
-	if !keep || hasAttr(attrs, "test") || hasAttr(attrs, "bench") {
+	isTest := hasAttr(attrs, "test")
+	if !keep || hasAttr(attrs, "bench") || (isTest && !e.TestHarness) {
 		return nil, nil
 	}
+	if isTest {
+		if _, ok := it.Kind.(*ast.FnItem); ok {
+			e.recordTest(it, attrs)
+		}
+	}
 	it.Attrs = attrs
+	if e.CollectDocs {
+		e.collectItemDocs(it)
+	}
 	switch k := it.Kind.(type) {
 	case *ast.MacroRulesItem:
 		def, err := parseMacroRules(it.Name.Name, k.Body, e.crate, it.Span)
@@ -454,7 +477,10 @@ func (e *Expander) expandItem(it *ast.Item, depth int) error {
 		if err = e.expandBounds(k.Supertraits, depth); err != nil {
 			return err
 		}
+		savedSelf := e.docSelf
+		e.docSelf = it.Name.Name
 		k.Items, err = e.expandAssocItems(k.Items, depth)
+		e.docSelf = savedSelf
 		return err
 	case *ast.ImplItem:
 		if err = e.expandGenerics(k.Generics, depth); err != nil {
@@ -468,7 +494,12 @@ func (e *Expander) expandItem(it *ast.Item, depth int) error {
 		if k.SelfTy, err = e.expandType(k.SelfTy, depth); err != nil {
 			return err
 		}
+		savedSelf := e.docSelf
+		if e.CollectDocs {
+			e.docSelf = ast.TypeString(k.SelfTy)
+		}
 		k.Items, err = e.expandAssocItems(k.Items, depth)
+		e.docSelf = savedSelf
 		return err
 	case *ast.TypeAliasItem:
 		if err = e.expandGenerics(k.Generics, depth); err != nil {
@@ -1264,4 +1295,120 @@ func (e *Expander) expandExpr(x ast.Expr, depth int) (ast.Expr, error) {
 		return nil, err
 	}
 	return x, nil
+}
+
+// DocLine is one line of a doc comment.
+type DocLine struct {
+	Text string
+	File int
+	Line int
+}
+
+// DocBlock is the documentation of one item (for doc-tests).
+type DocBlock struct {
+	Path  string // item path within the crate ("" for the crate root)
+	Lines []DocLine
+}
+
+// docLines returns the lines of the #[doc] attributes in attrs (outer or
+// inner ones).
+func (e *Expander) docLines(attrs []*ast.Attr, inner bool) []DocLine {
+	var out []DocLine
+	for _, a := range attrs {
+		if a.Path != "doc" || a.Inner != inner || len(a.Tokens) != 2 || a.Tokens[1].Delim != 0 || a.Tokens[1].Tok.Kind != lexer.Str {
+			continue
+		}
+		s, ok, _ := e.litString(a.Tokens[1:], nil)
+		if !ok {
+			continue
+		}
+		lo := a.Span.Lo
+		for i, l := range strings.Split(s, "\n") {
+			out = append(out, DocLine{Text: l, File: lo.File, Line: lo.Line + i})
+		}
+	}
+	return out
+}
+
+// collectItemDocs records the docs of an item (and of its variants and
+// fields, and a module's inner docs).
+func (e *Expander) collectItemDocs(it *ast.Item) {
+	base := strings.Join(e.modPath[1:], "::")
+	join := func(a, b string) string {
+		if a == "" {
+			return b
+		}
+		return a + "::" + b
+	}
+	name := it.Name.Name
+	if e.assoc && e.docSelf != "" {
+		name = e.docSelf + "::" + name
+	}
+	add := func(path string, ls []DocLine) {
+		if len(ls) > 0 {
+			e.Docs = append(e.Docs, DocBlock{Path: path, Lines: ls})
+		}
+	}
+	if name != "" {
+		add(join(base, name), e.docLines(it.Attrs, false))
+	}
+	switch k := it.Kind.(type) {
+	case *ast.ModItem:
+		add(join(base, name), e.docLines(it.Attrs, true))
+	case *ast.EnumItem:
+		for _, v := range k.Variants {
+			add(join(base, name+"::"+v.Name.Name), e.docLines(v.Attrs, false))
+		}
+	}
+}
+
+// TestFn is a #[test] function found in test-harness mode.
+type TestFn struct {
+	Path        []string // module path within the crate, then the fn name
+	Ignore      bool
+	IgnoreMsg   string
+	ShouldPanic int // 0 no, 1 yes, 2 with expected message
+	Expected    string
+	File        string
+	Line, Col   int
+}
+
+func (e *Expander) recordTest(it *ast.Item, attrs []*ast.Attr) {
+	tf := TestFn{Path: append(append([]string(nil), e.modPath[1:]...), it.Name.Name)}
+	lo := it.Name.Span.Lo
+	tf.File, tf.Line, tf.Col = lexer.FileName(lo.File), lo.Line, lo.Col
+	attrStr := func(tts []ast.TokenTree) (string, bool) {
+		if len(tts) == 1 && tts[0].Delim == 0 && tts[0].Tok.Kind == lexer.Str {
+			s, ok, _ := e.litString(tts, nil)
+			return s, ok
+		}
+		return "", false
+	}
+	for _, a := range attrs {
+		switch a.Path {
+		case "ignore":
+			tf.Ignore = true
+			if len(a.Tokens) >= 2 && a.Tokens[0].Delim == 0 && a.Tokens[0].Tok.Text == "=" {
+				tf.IgnoreMsg, _ = attrStr(a.Tokens[1:])
+			}
+		case "should_panic":
+			tf.ShouldPanic = 1
+			if len(a.Tokens) >= 2 && a.Tokens[0].Delim == 0 && a.Tokens[0].Tok.Text == "=" {
+				if m, ok := attrStr(a.Tokens[1:]); ok {
+					tf.ShouldPanic, tf.Expected = 2, m
+				}
+			}
+			if len(a.Tokens) == 1 && a.Tokens[0].Delim == '(' {
+				in := a.Tokens[0].Inner
+				for i := 0; i+2 < len(in); i++ {
+					if in[i].Delim == 0 && in[i].Tok.Text == "expected" && in[i+1].Delim == 0 && in[i+1].Tok.Text == "=" {
+						if m, ok := attrStr(in[i+2 : i+3]); ok {
+							tf.ShouldPanic, tf.Expected = 2, m
+						}
+					}
+				}
+			}
+		}
+	}
+	e.Tests = append(e.Tests, tf)
 }

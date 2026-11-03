@@ -14,4 +14,13 @@ for spec in "tests/cargo/app expected.stdout" "tests/cargo/app2 expected2.stdout
   fi
   rm -f "$out" "$out.bin" "$out.err"
 done
+# `rustgo test`: unit tests (lib + bin, cfg(test), dev-dependencies) and
+# integration tests; timings are normalized
+out=$(mktemp)
+if (cd tests/cargo/testpkg && ../../../rustgo test 2>"$out.err") | sed -E 's/finished in [0-9.]+s/finished in 0.00s/' >"$out" && diff -u tests/cargo/expected_test.stdout "$out" >/dev/null; then
+  echo "PASS tests/cargo/testpkg (rustgo test)"
+else
+  echo "FAIL tests/cargo/testpkg (rustgo test)"; diff -u tests/cargo/expected_test.stdout "$out" | head -20; head -5 "$out.err"; fail=1
+fi
+rm -f "$out" "$out.err" tests/cargo/testpkg/Cargo.lock
 exit $fail

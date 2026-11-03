@@ -22,13 +22,70 @@ pub fn __eprint(pieces: &[&'static str], specs: &[fmt::__Spec], args: &[fmt::__A
 /// Prints the formatted text to standard output (used by `print!`).
 pub fn _print(args: fmt::Arguments<'_>) {
     let s = args.as_formatted_str();
+    if try_capture(s.as_bytes()) {
+        return;
+    }
     unsafe { intrinsics::write_stdout(s.as_ptr(), s.len()) }
 }
 
 /// Prints the formatted text to standard error (used by `eprint!`).
 pub fn _eprint(args: fmt::Arguments<'_>) {
     let s = args.as_formatted_str();
+    if try_capture(s.as_bytes()) {
+        return;
+    }
     unsafe { intrinsics::write_stderr(s.as_ptr(), s.len()) }
+}
+
+// ---------------------------------------------------------------------------
+// Output capture (used by the test harness, like std's
+// `set_output_capture`): print!/eprint! and panic messages of the current
+// thread go into the sink.
+
+type LocalStream = crate::sync::Arc<crate::sync::Mutex<crate::vec::Vec<u8>>>;
+
+thread_local! {
+    static OUTPUT_CAPTURE: crate::cell::RefCell<Option<LocalStream>> = crate::cell::RefCell::new(None);
+}
+
+static OUTPUT_CAPTURE_USED: crate::sync::atomic::AtomicBool = crate::sync::atomic::AtomicBool::new(false);
+
+/// Sets the output capture sink of the current thread, returning the
+/// previous one.
+#[doc(hidden)]
+pub fn set_output_capture(sink: Option<LocalStream>) -> Option<LocalStream> {
+    if sink.is_none() && !OUTPUT_CAPTURE_USED.load(crate::sync::atomic::Ordering::Relaxed) {
+        return None;
+    }
+    OUTPUT_CAPTURE_USED.store(true, crate::sync::atomic::Ordering::Relaxed);
+    OUTPUT_CAPTURE.with(|c| c.replace(sink))
+}
+
+/// Whether the current thread captures its output.
+pub(crate) fn capture_active() -> bool {
+    if !OUTPUT_CAPTURE_USED.load(crate::sync::atomic::Ordering::Relaxed) {
+        return false;
+    }
+    OUTPUT_CAPTURE.try_with(|c| c.borrow().is_some()).unwrap_or(false)
+}
+
+fn try_capture(s: &[u8]) -> bool {
+    if !OUTPUT_CAPTURE_USED.load(crate::sync::atomic::Ordering::Relaxed) {
+        return false;
+    }
+    OUTPUT_CAPTURE
+        .try_with(|c| match &*c.borrow() {
+            Some(sink) => {
+                let mut g = match sink.lock() {
+                    Ok(g) => g,
+                    Err(e) => e.into_inner(),
+                };
+                g.extend_from_slice(s);
+                true
+            }
+            None => false,
+        })
+        .unwrap_or(false)
 }
 
 #[inline]

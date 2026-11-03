@@ -561,7 +561,7 @@ func (e *Expander) invokeMacroRules(def *macroDef, mac *ast.MacCall) ([]ast.Toke
 		}
 		if ok {
 			hygieneMarks++
-			t := &transcriber{def: def, binds: binds, call: mac.Span, mark: hygieneMarks}
+			t := &transcriber{def: def, binds: binds, call: mac.Span, mark: hygieneMarks, cur: e.crate}
 			return t.emit(r.rhs, nil)
 		}
 	}
@@ -580,6 +580,7 @@ type transcriber struct {
 	binds *bindList
 	call  lexer.Span
 	mark  uint32 // hygiene mark for identifiers from the macro body
+	cur   string // the crate being expanded
 }
 
 // hygieneMarks numbers macro_rules expansions (hygiene of local variables).
@@ -624,7 +625,9 @@ func (t *transcriber) emit(ns []*tnode, idx []int) ([]ast.TokenTree, error) {
 			out = append(out, g)
 		case tCrate:
 			sp := n.tt.Tok.Span
-			if t.def.crate == "main" {
+			if t.def.crate == "main" || t.def.crate == t.cur {
+				// (the crate's internal name may differ from the one
+				// its paths use)
 				out = append(out, identTok("crate", sp))
 			} else {
 				out = append(out, punctTok("::", sp, true), identTok(t.def.crate, sp))

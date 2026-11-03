@@ -24,6 +24,10 @@ type lx struct {
 	toks []Token
 }
 
+// KeepDocs makes Tokenize keep doc comments (as DocComment tokens, which
+// the parser turns into #[doc] attributes) instead of skipping them.
+var KeepDocs bool
+
 // Tokenize converts src into tokens. The result always ends with an EOF
 // token. Comments (including doc comments) are skipped.
 func Tokenize(file int, src string) ([]Token, error) {
@@ -135,13 +139,22 @@ func (l *lx) skipTrivia() error {
 			continue
 		}
 		if r == '/' && l.peek(1) == '/' {
+			start, from := l.pos(), l.off
 			for l.off < len(l.src) && l.src[l.off] != '\n' {
 				l.advance()
+			}
+			if KeepDocs {
+				c := strings.TrimSuffix(l.src[from:l.off], "\r")
+				if strings.HasPrefix(c, "///") && !strings.HasPrefix(c, "////") {
+					l.emit(DocComment, c[3:], start)
+				} else if strings.HasPrefix(c, "//!") {
+					l.emit(DocComment, c[3:], start).Inner = true
+				}
 			}
 			continue
 		}
 		if r == '/' && l.peek(1) == '*' {
-			start := l.pos()
+			start, from := l.pos(), l.off
 			l.advance()
 			l.advance()
 			depth := 1
@@ -160,6 +173,14 @@ func (l *lx) skipTrivia() error {
 					depth--
 				} else {
 					l.advance()
+				}
+			}
+			if KeepDocs {
+				c := l.src[from:l.off]
+				if len(c) > 5 && strings.HasPrefix(c, "/**") && !strings.HasPrefix(c, "/***") {
+					l.emit(DocComment, c[3:len(c)-2], start)
+				} else if len(c) > 4 && strings.HasPrefix(c, "/*!") {
+					l.emit(DocComment, c[3:len(c)-2], start).Inner = true
 				}
 			}
 			continue

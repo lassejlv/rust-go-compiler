@@ -1,0 +1,48 @@
+
+running 8 tests
+test tests::dev_dependency ... ok
+test tests::dollar_crate_macro ... ok
+test tests::expensive ... ignored
+test tests::fib_small ... ok
+test tests::include_relative ... ok
+test tests::overflow_panics - should panic ... ok
+test tests::private_access ... ok
+test text::tests::shouts ... ok
+
+test result: ok. 7 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+test bin_test ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 3 tests
+test cwd_is_package_root ... ok
+test public_api ... ok
+test uses_module ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+test shout_twice ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 10 tests
+test src/lib.rs - (line 3) ... ok
+test src/lib.rs - Doubler::apply (line 61) ... ok
+test src/lib.rs - fib (line 10) ... ok
+test src/lib.rs - fib (line 18) ... ok
+test src/lib.rs - fib (line 25) ... ok
+test src/lib.rs - fib (line 30) - compile ... ok
+test src/lib.rs - fib (line 34) ... ignored
+test src/lib.rs - fib (line 38) - compile fail ... ok
+test src/lib.rs - twice (line 74) ... ok
+test src/text.rs - text::shout (line 1) ... ok
+
+test result: ok. 9 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

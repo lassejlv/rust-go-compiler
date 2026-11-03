@@ -51,6 +51,8 @@ mod bool;
 pub mod error;
 pub mod hint;
 pub mod rt;
+#[doc(hidden)]
+pub mod rustgo_test;
 pub mod tuple;
 pub mod ffi;
 pub mod os;

@@ -2,7 +2,10 @@
 // the token layer of rustc_parse).
 package lexer
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // Pos identifies a location in a source file.
 type Pos struct {
@@ -36,6 +39,20 @@ var Files []*SourceFile
 func AddFile(name, src string) int {
 	Files = append(Files, &SourceFile{Name: name, Src: src})
 	return len(Files) - 1
+}
+
+// BaseDir is the directory relative display names are relative to ("" for
+// the working directory).
+var BaseDir string
+
+// FilePath returns the path of file idx on disk (its display name resolved
+// against BaseDir).
+func FilePath(idx int) string {
+	n := FileName(idx)
+	if BaseDir != "" && !strings.HasPrefix(n, "/") && !strings.HasPrefix(n, "<") {
+		return BaseDir + "/" + n
+	}
+	return n
 }
 
 // FileName returns the display name of file idx.

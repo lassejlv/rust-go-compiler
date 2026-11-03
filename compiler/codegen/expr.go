@@ -1190,11 +1190,23 @@ func (fc *fnGen) callExpr(x *ast.CallExpr, t Ty) string {
 		}
 		name := fc.g.closureFn(c.Ty)
 		all := append([]string{"&" + op.s}, args...)
-		res := fc.finishCall(fmt.Sprintf("%s(%s)", name, strings.Join(all, ", ")), t)
 		if ci.Kind == 2 && op.flag != "" && op.movable {
+			// the FnOnce body owns its environment from the call on (also
+			// when it panics)
 			fc.line("%s = 0;", op.flag)
+		} else if ci.Kind == 2 && op.flag == "" {
+			// called through a deref of a local (`f()` with f: a wrapper
+			// like AssertUnwindSafe<F>): the call consumes the local, as
+			// its FnOnce::call_once(self) would
+			if pe, ok := unparen(x.Fn).(*ast.PathExpr); ok {
+				if vr := fc.r.Paths[pe.ID]; vr != nil && vr.Kind == typeck.VLocal {
+					if _, flag := fc.localPlace(vr.Local); flag != "" {
+						fc.line("%s = 0;", flag)
+					}
+				}
+			}
 		}
-		return res
+		return fc.finishCall(fmt.Sprintf("%s(%s)", name, strings.Join(all, ", ")), t)
 	case typeck.CallDynFn:
 		op := fc.adjusted(x.Fn)
 		fat := op.s
@@ -1209,6 +1221,16 @@ func (fc *fnGen) callExpr(x *ast.CallExpr, t Ty) string {
 		}
 		fp := fmt.Sprintf("((%s(*)(%s))((void**)(%s).meta)[3])", fc.ctype(t), strings.Join(pts, ", "), fat)
 		all := append([]string{fat + ".ptr"}, args...)
+		if c.Ty.Def.LangItem == "fn_once" {
+			// the call consumes the environment, also when it panics
+			if pe, ok := unparen(x.Fn).(*ast.PathExpr); ok {
+				if vr := fc.r.Paths[pe.ID]; vr != nil && vr.Kind == typeck.VLocal {
+					if _, flag := fc.localPlace(vr.Local); flag != "" {
+						fc.line("%s = 0;", flag)
+					}
+				}
+			}
+		}
 		res := fc.finishCall(fmt.Sprintf("%s(%s)", fp, strings.Join(all, ", ")), t)
 		if c.Ty.Def.LangItem == "fn_once" {
 			// the boxed FnOnce consumed its environment; free the box

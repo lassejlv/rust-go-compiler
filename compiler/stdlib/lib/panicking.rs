@@ -135,6 +135,14 @@ pub(crate) fn default_hook(info: &PanicHookInfo<'_>) {
 /// default (runtime) reporting should be used.
 pub(crate) fn run_custom_hook(payload: &(dyn Any + Send), file: &str, line: u32, col: u32) -> bool {
     if !HOOK.custom.load(Ordering::SeqCst) {
+        if crate::io::capture_active() {
+            // captured output (test harness): the default hook's message
+            // goes into the capture
+            let loc = Location::internal_constructor(file, line, col);
+            let info = PanicHookInfo::new(payload, &loc);
+            default_hook(&info);
+            return true;
+        }
         return false;
     }
     let loc = Location::internal_constructor(file, line, col);

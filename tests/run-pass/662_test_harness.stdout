@@ -1,0 +1,34 @@
+
+running 7 tests
+test tests::adds ... ok
+test tests::fails ... FAILED
+test tests::ignored ... ignored, slow
+test tests::no_panic - should panic ... FAILED
+test tests::panics_ok - should panic ... ok
+test tests::result_err ... FAILED
+test tests::result_ok ... ok
+
+failures:
+
+---- tests::fails stdout ----
+shown on failure
+
+thread 'tests::fails' panicked at tests/run-pass/662_test_harness.rs:15:48:
+assertion `left == right` failed: math
+  left: 4
+ right: 5
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- tests::no_panic stdout ----
+note: test did not panic as expected at tests/run-pass/662_test_harness.rs:23:8
+---- tests::result_err stdout ----
+Error: "bad"
+
+
+failures:
+    tests::fails
+    tests::no_panic
+    tests::result_err
+
+test result: FAILED. 3 passed; 3 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
