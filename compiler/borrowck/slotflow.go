@@ -332,7 +332,9 @@ func slotFlow(tcx *typeck.Tcx, fl *Flow, d *Def, selfAst ast.Type, params map[st
 		}
 		// a wrapper without regions of its own around the values
 		// (Option<Self::Item>): the values themselves, if s holds them
-		for x := n; x.ty != nil && x.ty.Kind == TAdt && x.nlt == 0 && len(x.kids) == 1 && x.kids[0].start == x.start && x.kids[0].end == x.end; {
+		// (and no closure, which may make them or hold other values of
+		// their type)
+		for x := n; !hasClosure(s) && x.ty != nil && x.ty.Kind == TAdt && x.nlt == 0 && len(x.kids) == 1 && x.kids[0].start == x.start && x.kids[0].end == x.end; {
 			x = x.kids[0]
 			if m := findSame(s, x.ty); len(m) > 0 {
 				for _, y := range m {
@@ -343,13 +345,13 @@ func slotFlow(tcx *typeck.Tcx, fl *Flow, d *Def, selfAst ast.Type, params map[st
 				return
 			}
 		}
-		if caps {
-			if es, ok := capturedItems(i, s, n, al, rl); ok {
-				for _, e := range es {
-					add(e)
-				}
-				return
+		// values made by a closure: its summary (caps: also from what it
+		// captures; otherwise from the values it is applied to)
+		if es, ok := capturedItems(i, s, n, al, rl); ok && (caps || len(es) > 0) {
+			for _, e := range es {
+				add(e)
 			}
+			return
 		}
 		clos := map[int]bool{}
 		if !caps {
@@ -686,6 +688,50 @@ func capturedItems(i int, s, n *lnode, al, rl *layout) (edges []SlotEdge, ok boo
 		}
 	}
 	if sm.fromArgs() {
+		// the values the closure is applied to, where s holds them
+		// (outside closures) with the type of its one parameter
+		// (Map<vec::IntoIter<(&'s T, &'a U)>, F>): the result slots
+		// take the slots of the parameter the summary names
+		if len(sm.params) == 1 && !sm.params[0].flat && sm.params[0].root.ty != nil {
+			var ins []*lnode
+			var find func(x *lnode)
+			find = func(x *lnode) {
+				switch {
+				case x.ty == sm.params[0].root.ty:
+					ins = append(ins, x)
+				case x.ty != nil && x.ty.Kind == TClosure:
+				default:
+					for _, k := range x.kids {
+						find(k)
+					}
+				}
+			}
+			find(s)
+			good := len(ins) > 0
+			for _, x := range ins {
+				if x.end-x.start != sm.params[0].n() {
+					good = false
+				}
+			}
+			var es []SlotEdge
+			for _, pr := range pairs {
+				m, h := pr[0], pr[1]
+				for j := 0; good && j < h.end-h.start; j++ {
+					for _, a := range sm.fromArg[h.start+j] {
+						if a[0] != 0 {
+							good = false
+							break
+						}
+						for _, x := range ins {
+							es = append(es, SlotEdge{Arg: i, From: x.start + a[1], To: m.start + j})
+						}
+					}
+				}
+			}
+			if good {
+				return append(edges, es...), true
+			}
+		}
 		// the items of what the closure is applied to, by depth
 		clos := closureSlots(s)
 		shift := max(refLevels(s.ty, 0)-refLevels(n.ty, 0), 0)
@@ -811,6 +857,23 @@ func boundMentions(x, y string, gens []*ast.Generics, params map[string]bool) bo
 }
 
 // findSame returns the nodes of the subtree s (s included) of type t.
+// hasClosure reports whether the subtree s holds a closure (or a value of
+// a type whose regions are unknown, which may be one).
+func hasClosure(s *lnode) bool {
+	if s == nil {
+		return false
+	}
+	if s.wild || (s.ty != nil && s.ty.Kind == TClosure) {
+		return true
+	}
+	for _, k := range s.kids {
+		if hasClosure(k) {
+			return true
+		}
+	}
+	return false
+}
+
 func findSame(s *lnode, t Ty) []*lnode {
 	if s == nil || t == nil {
 		return nil
