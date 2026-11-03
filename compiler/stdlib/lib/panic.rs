@@ -72,12 +72,13 @@ pub fn resume_unwind(payload: Box<dyn Any + Send>) -> ! {
 pub fn panic_any<M: 'static + Any + Send>(msg: M) -> ! {
     let payload: Box<dyn Any + Send> = Box::new(msg);
     let text = String::from(crate::panicking::payload_as_str(&*payload));
-    if crate::panicking::run_custom_hook(&*payload, file!(), line!(), column!()) {
+    let loc = Location::caller();
+    if crate::panicking::run_custom_hook(&*payload, loc.file(), loc.line(), loc.column()) {
         crate::panicking::set_custom_payload(payload);
         unsafe { intrinsics::panic_resume(text.as_str(), false) }
     }
     crate::panicking::set_custom_payload(payload);
-    unsafe { intrinsics::panic_impl(text.as_str(), file!(), line!(), column!()) }
+    unsafe { intrinsics::panic_impl(text.as_str(), loc.file(), loc.line(), loc.column()) }
 }
 
 /// A struct containing information about the location of a panic.
