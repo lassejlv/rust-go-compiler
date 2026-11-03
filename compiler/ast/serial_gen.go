@@ -757,6 +757,8 @@ func (e *Encoder) encTokenTree(x *TokenTree) {
 	e.span(x.Open)
 	e.span(x.Close)
 	e.encSl_TokenTree(x.Inner)
+	e.b(x.OpenJoint)
+	e.b(x.CloseJoint)
 }
 func (d *Decoder) decTokenTree(x *TokenTree) {
 	d.tok(&x.Tok)
@@ -764,6 +766,8 @@ func (d *Decoder) decTokenTree(x *TokenTree) {
 	x.Open = d.span()
 	x.Close = d.span()
 	x.Inner = d.decSl_TokenTree()
+	x.OpenJoint = d.b()
+	x.CloseJoint = d.b()
 }
 func (e *Encoder) encAttr(x *Attr) {
 	e.b(x.Inner)
@@ -1352,8 +1356,10 @@ func (d *Decoder) decMacStmt(x *MacStmt) {
 	x.ImplicitSemi = d.b()
 }
 func (e *Encoder) encEmptyStmt(x *EmptyStmt) {
+	e.hyg(x.MacroDef)
 }
 func (d *Decoder) decEmptyStmt(x *EmptyStmt) {
+	x.MacroDef = d.hyg()
 }
 func (e *Encoder) encExprBase(x *ExprBase) {
 	e.span(x.Span)
@@ -1505,6 +1511,7 @@ func (e *Encoder) encBlockExpr(x *BlockExpr) {
 	e.encExprBase(&x.ExprBase)
 	e.encPt_Block(x.Block)
 	e.s(x.Label)
+	e.hyg(x.LabelHyg)
 	e.b(x.Const)
 	e.b(x.Async)
 	e.b(x.Move)
@@ -1513,6 +1520,7 @@ func (d *Decoder) decBlockExpr(x *BlockExpr) {
 	d.decExprBase(&x.ExprBase)
 	x.Block = d.decPt_Block()
 	x.Label = d.s()
+	x.LabelHyg = d.hyg()
 	x.Const = d.b()
 	x.Async = d.b()
 	x.Move = d.b()
@@ -1544,22 +1552,26 @@ func (e *Encoder) encWhileExpr(x *WhileExpr) {
 	e.encExpr(x.Cond)
 	e.encPt_Block(x.Body)
 	e.s(x.Label)
+	e.hyg(x.LabelHyg)
 }
 func (d *Decoder) decWhileExpr(x *WhileExpr) {
 	d.decExprBase(&x.ExprBase)
 	x.Cond = d.decExpr()
 	x.Body = d.decPt_Block()
 	x.Label = d.s()
+	x.LabelHyg = d.hyg()
 }
 func (e *Encoder) encLoopExpr(x *LoopExpr) {
 	e.encExprBase(&x.ExprBase)
 	e.encPt_Block(x.Body)
 	e.s(x.Label)
+	e.hyg(x.LabelHyg)
 }
 func (d *Decoder) decLoopExpr(x *LoopExpr) {
 	d.decExprBase(&x.ExprBase)
 	x.Body = d.decPt_Block()
 	x.Label = d.s()
+	x.LabelHyg = d.hyg()
 }
 func (e *Encoder) encForExpr(x *ForExpr) {
 	e.encExprBase(&x.ExprBase)
@@ -1567,6 +1579,7 @@ func (e *Encoder) encForExpr(x *ForExpr) {
 	e.encExpr(x.Iter)
 	e.encPt_Block(x.Body)
 	e.s(x.Label)
+	e.hyg(x.LabelHyg)
 }
 func (d *Decoder) decForExpr(x *ForExpr) {
 	d.decExprBase(&x.ExprBase)
@@ -1574,6 +1587,7 @@ func (d *Decoder) decForExpr(x *ForExpr) {
 	x.Iter = d.decExpr()
 	x.Body = d.decPt_Block()
 	x.Label = d.s()
+	x.LabelHyg = d.hyg()
 }
 func (e *Encoder) encArm(x *Arm) {
 	e.encSl_Pt_Attr(x.Attrs)
@@ -1631,20 +1645,24 @@ func (d *Decoder) decClosureExpr(x *ClosureExpr) {
 func (e *Encoder) encBreakExpr(x *BreakExpr) {
 	e.encExprBase(&x.ExprBase)
 	e.s(x.Label)
+	e.hyg(x.LabelHyg)
 	e.encExpr(x.Value)
 }
 func (d *Decoder) decBreakExpr(x *BreakExpr) {
 	d.decExprBase(&x.ExprBase)
 	x.Label = d.s()
+	x.LabelHyg = d.hyg()
 	x.Value = d.decExpr()
 }
 func (e *Encoder) encContinueExpr(x *ContinueExpr) {
 	e.encExprBase(&x.ExprBase)
 	e.s(x.Label)
+	e.hyg(x.LabelHyg)
 }
 func (d *Decoder) decContinueExpr(x *ContinueExpr) {
 	d.decExprBase(&x.ExprBase)
 	x.Label = d.s()
+	x.LabelHyg = d.hyg()
 }
 func (e *Encoder) encReturnExpr(x *ReturnExpr) {
 	e.encExprBase(&x.ExprBase)

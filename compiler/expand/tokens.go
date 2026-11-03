@@ -295,52 +295,70 @@ func tokenText(t lexer.Token) string {
 	return t.Text
 }
 
-// TokensString pretty-prints token trees the way rustc's stringify! does:
-// source spacing is kept where known (no space where the source had none),
-// otherwise tokens are separated by single spaces except in the usual
-// places (`f(x)`, `a.b`, `x,`, `#[..]`, ...).
+// TokensString pretty-prints token trees the way rustc's stringify! does
+// (rustc_ast_pretty's print_tts): a space separates two trees unless the
+// first one's spacing is joint (the next token immediately followed it in
+// the source; tokens of a macro_rules body and substituted fragments are
+// spaced `Alone`) or rustc's space_between heuristic omits it (`f(x)`,
+// `a.b`, `x,`, `#[..]`, ...). A brace group is printed `{ x }` unless its
+// first token immediately followed the `{` in the source (`{x}`). Long
+// output wraps at rustc's 78-column margin.
 func TokensString(tts []ast.TokenTree) string {
-	var b strings.Builder
-	printTTs(&b, tts)
-	return b.String()
+	p := newPP()
+	printTTs(p, tts)
+	return p.eof()
+}
+
+// tokensLine is TokensString without line wrapping (for messages).
+func tokensLine(tts []ast.TokenTree) string {
+	p := newPP()
+	p.noWrap = true
+	printTTs(p, tts)
+	return p.eof()
 }
 
 func isPunctTree(tt ast.TokenTree) bool {
-	return tt.Delim == 0 && tt.Tok.Kind == lexer.Punct
+	return tt.Delim == 0 && tt.Tok.Kind == lexer.Punct && !isUnderscore(tt)
 }
 
-func ttEnd(tt ast.TokenTree) lexer.Span {
+// jointSpacing reports whether tt's spacing is joint (no space follows).
+func jointSpacing(tt ast.TokenTree) bool {
 	if tt.Delim != 0 {
-		return tt.Close
+		return tt.CloseJoint && !isInvisibleGroup(tt)
 	}
-	return tt.Tok.Span
+	return tt.Tok.JointNext
 }
 
-func ttStart(tt ast.TokenTree) lexer.Span {
-	if tt.Delim != 0 {
-		return tt.Open
-	}
-	return tt.Tok.Span
+// identLike reports an identifier, keyword or `_` token: two of them are
+// always separated (rustc never glues `a` `b` into `ab`).
+func identLike(tt ast.TokenTree) bool {
+	return tt.Delim == 0 && (tt.Tok.Kind == lexer.Ident || isUnderscore(tt))
 }
 
-func adjacent(a, b ast.TokenTree) bool {
-	ea, sb := ttEnd(a), ttStart(b)
-	if realSpan(ea) && realSpan(sb) && ea.Lo.File == sb.Lo.File {
-		return ea.Hi.Off == sb.Lo.Off
-	}
-	if a.Delim == 0 && a.Tok.JointNext && realSpan(ea) {
-		return true
-	}
-	return false
+// plainIdent reports an identifier token written as such (not substituted
+// for an `ident` fragment), for the space_between rules that look at it.
+func plainIdent(tt ast.TokenTree) bool {
+	return tt.Delim == 0 && tt.Tok.Kind == lexer.Ident && tt.Tok.Nt&lexer.NtIdent == 0
 }
 
-// spaceBetween mirrors rustc_ast_pretty's space_between heuristic.
+// spaceBetween mirrors rustc_ast_pretty's space_between heuristic. A tree
+// ending (a) or starting (b) a substituted fragment stands for rustc's
+// invisible-delimited group: neither punctuation nor an identifier.
 func spaceBetween(a, b ast.TokenTree) bool {
+	aGroup := a.Tok.Nt&lexer.NtEnd != 0 || isInvisibleGroup(a)
+	bGroup := b.Tok.Nt&lexer.NtStart != 0 || isInvisibleGroup(b)
+	if aGroup {
+		// NON-PUNCT + `,`/`;`/`.`
+		return bGroup || !(isPunct(b, ",") || isPunct(b, ";") || isPunct(b, "."))
+	}
 	if a.Delim == 0 && a.Tok.Kind == lexer.DocComment {
 		return false
 	}
-	if isPunct(a, ".") && !isPunctTree(b) {
+	if isPunct(a, ".") && (bGroup || !isPunctTree(b)) {
 		return false
+	}
+	if bGroup {
+		return true
 	}
 	if isPunct(a, "$") && isIdentTT(b) {
 		return false
@@ -348,7 +366,10 @@ func spaceBetween(a, b ast.TokenTree) bool {
 	if !isPunctTree(a) && (isPunct(b, ",") || isPunct(b, ";") || isPunct(b, ".")) {
 		return false
 	}
-	if a.Delim == 0 && a.Tok.Kind == lexer.Ident && b.Delim == '(' {
+	if plainIdent(a) && isPunct(b, "!") && (a.Tok.Raw || !a.Tok.IsKeyword()) {
+		return false // `m!`, but `if !x`
+	}
+	if plainIdent(a) && b.Delim == '(' {
 		if a.Tok.Raw || !a.Tok.IsKeyword() || a.Tok.Text == "fn" || a.Tok.Text == "Self" || a.Tok.Text == "pub" {
 			return false
 		}
@@ -359,15 +380,32 @@ func spaceBetween(a, b ast.TokenTree) bool {
 	return true
 }
 
-func printTTs(b *strings.Builder, tts []ast.TokenTree) {
+func printTTs(p *ppPrinter, tts []ast.TokenTree) {
+	open := 0
 	for i, tt := range tts {
-		printTT(b, tt)
+		// a substituted fragment is an invisible-delimited group (an
+		// `ibox(0)` in rustc's printer)
+		if tt.Tok.Nt&lexer.NtStart != 0 {
+			p.ibox(0)
+			open++
+		}
+		printTT(p, tt)
+		if tt.Tok.Nt&lexer.NtEnd != 0 && open > 0 {
+			p.end()
+			open--
+		}
 		if i+1 < len(tts) {
 			next := tts[i+1]
-			if !adjacent(tt, next) && spaceBetween(tt, next) {
-				b.WriteByte(' ')
+			if !jointSpacing(tt) && spaceBetween(tt, next) {
+				p.space1()
+			} else if identLike(tt) && identLike(next) && tt.Tok.Nt&lexer.NtEnd == 0 && next.Tok.Nt&lexer.NtStart == 0 {
+				// rustc never glues two identifiers (`a` `b`)
+				p.space1()
 			}
 		}
+	}
+	for ; open > 0; open-- {
+		p.end()
 	}
 }
 
@@ -381,22 +419,47 @@ func isInvisibleGroup(tt ast.TokenTree) bool {
 	return realSpan(first) && first.Lo.File == tt.Open.Lo.File && first.Lo.Off == tt.Open.Lo.Off
 }
 
-func printTT(b *strings.Builder, tt ast.TokenTree) {
+func ttStart(tt ast.TokenTree) lexer.Span {
+	if tt.Delim != 0 {
+		return tt.Open
+	}
+	return tt.Tok.Span
+}
+
+// printTT prints one tree like rustc's print_tt / print_mac_common.
+func printTT(p *ppPrinter, tt ast.TokenTree) {
 	if isInvisibleGroup(tt) {
-		printTTs(b, tt.Inner)
+		p.ibox(0)
+		printTTs(p, tt.Inner)
+		p.end()
 		return
 	}
 	if tt.Delim == 0 {
-		b.WriteString(tokenText(tt.Tok))
+		p.word(tokenText(tt.Tok))
 		return
 	}
-	b.WriteByte(tt.Delim)
-	if tt.Delim == '{' && len(tt.Inner) > 0 {
-		b.WriteByte(' ')
-		printTTs(b, tt.Inner)
-		b.WriteByte(' ')
-	} else {
-		printTTs(b, tt.Inner)
+	if tt.Delim != '{' {
+		p.word(string(tt.Delim))
+		p.ibox(0)
+		printTTs(p, tt.Inner)
+		p.end()
+		p.word(closeDelim(tt.Delim))
+		return
 	}
-	b.WriteString(closeDelim(tt.Delim))
+	// a brace group's open spacing decides the space after `{` and, for
+	// symmetry, before `}`
+	space := len(tt.Inner) > 0 && !tt.OpenJoint
+	p.cbox(ppIndentUnit)
+	p.word("{")
+	if space {
+		p.space1()
+	}
+	p.ibox(0)
+	printTTs(p, tt.Inner)
+	p.end()
+	if space {
+		p.breakOffset(1, -ppIndentUnit)
+	}
+	p.word("}")
+	p.end()
 }

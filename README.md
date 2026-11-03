@@ -70,8 +70,8 @@ merged one does not compile).
 
 ## What works
 
-* Rust 2015/2018/2021/2024 syntax, `macro_rules!` (with hygiene for local
-  variables), procedural macros (derive, attribute and bang macros, served by
+* Rust 2015/2018/2021/2024 syntax, `macro_rules!` (with rustc's mixed-site
+  hygiene for local variables and labels), procedural macros (derive, attribute and bang macros, served by
   separately compiled macro servers), `#[cfg]`/`cfg_attr`, `include!`.
 * Traits, generics, associated types and consts, GATs, `impl Trait` (argument
   and return position, also in traits), `dyn Trait` with supertrait upcasting,
@@ -161,6 +161,19 @@ compilation.
   by-move, like rustc). From Rust 2021 on, closures capture disjoint places
   (`t.1`, `(*r).a.b`) with rustc's precision rules; moves out of fields of
   locals get per-field drop flags.
+* **Macro hygiene**: every token transcribed from a `macro_rules!` body gets
+  a syntax context (`Hyg`, one per expansion and per context the token had
+  in the definition, see `ast/hygiene.go`); a macro defined in a block leaves
+  a marker statement (`EmptyStmt.MacroDef`) in its place. Locals are bound
+  under (name, context); typeck's lookup walks the scopes outwards and, when
+  it passes the marker of the macro whose expansion created the
+  identifier's context, continues with the context the token had in the
+  definition, so a macro body names the variables visible where the macro
+  is defined. Labels are resolved the same way right after expansion
+  (`expand/labels.go`), renaming a loop whose hygienic jumps a lookup by
+  name would miss. `stringify!` prints tokens like rustc's `print_tts`
+  (source spacing, `Alone` macro-body tokens, fragments as invisible
+  groups, a port of rustc's pretty printer for line wrapping).
 * **Formatting**: `format_args!` lowers to a call of `fmt::__format` with
   static pieces/specs and an array of `&dyn Trait` arguments (`print!` calls
   `io::__print` directly), so each use is a few lines of C.

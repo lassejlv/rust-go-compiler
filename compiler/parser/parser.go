@@ -23,6 +23,9 @@ type Parser struct {
 	// noTypeLt disables `<...>` generic args on type paths (used when
 	// retrying `x as usize < y`).
 	noTypeLt bool
+	// stmtFrag is set while parsing a `stmt` macro fragment: the
+	// statement's trailing `;` is optional (`let x = 5` matches).
+	stmtFrag bool
 }
 
 // parseError is the panic payload used for error propagation inside the
@@ -140,9 +143,10 @@ func FlattenTokenTrees(tts []ast.TokenTree) []lexer.Token {
 				out = append(out, tt.Tok)
 				continue
 			}
-			out = append(out, lexer.Token{Kind: lexer.Punct, Text: string(tt.Delim), Span: tt.Open})
+			// (a group's fragment-boundary flags ride on its delimiters)
+			out = append(out, lexer.Token{Kind: lexer.Punct, Text: string(tt.Delim), Span: tt.Open, JointNext: tt.OpenJoint, Nt: tt.Tok.Nt & lexer.NtStart})
 			rec(tt.Inner)
-			out = append(out, lexer.Token{Kind: lexer.Punct, Text: string(closerOf(tt.Delim)), Span: tt.Close})
+			out = append(out, lexer.Token{Kind: lexer.Punct, Text: string(closerOf(tt.Delim)), Span: tt.Close, JointNext: tt.CloseJoint, Nt: tt.Tok.Nt & lexer.NtEnd})
 		}
 	}
 	rec(tts)
@@ -180,7 +184,9 @@ func TokenTrees(toks []lexer.Token) ([]ast.TokenTree, error) {
 					if err != nil {
 						return nil, cl, err
 					}
-					out = append(out, ast.TokenTree{Delim: t.Text[0], Open: t.Span, Close: cl, Inner: inner})
+					out = append(out, ast.TokenTree{Delim: t.Text[0], Open: t.Span, Close: cl, Inner: inner,
+						OpenJoint: t.JointNext, CloseJoint: toks[i-1].JointNext,
+						Tok: lexer.Token{Nt: t.Nt&lexer.NtStart | toks[i-1].Nt&lexer.NtEnd}})
 					continue
 				case ")", "]", "}":
 					if t.Text != closer {
@@ -513,6 +519,7 @@ func (p *Parser) ParseStmts() (stmts []ast.Stmt, err error) {
 // A trailing semicolon is consumed only if present.
 func (p *Parser) ParseStmt() (s ast.Stmt, err error) {
 	defer p.catch(&err)
+	p.stmtFrag = true
 	return p.parseStmt(), nil
 }
 
@@ -633,7 +640,7 @@ func (p *Parser) parseDelimGroup() ast.TokenTree {
 		p.errExpected("one of `(`, `[`, `{`")
 	}
 	p.next()
-	tt := ast.TokenTree{Delim: open.Text[0], Open: open.Span}
+	tt := ast.TokenTree{Delim: open.Text[0], Open: open.Span, OpenJoint: open.JointNext, Tok: lexer.Token{Nt: open.Nt & lexer.NtStart}}
 	want := string(closerOf(open.Text[0]))
 	for {
 		t := p.cur()
@@ -648,6 +655,8 @@ func (p *Parser) parseDelimGroup() ast.TokenTree {
 				}
 				p.next()
 				tt.Close = t.Span
+				tt.CloseJoint = t.JointNext
+				tt.Tok.Nt |= t.Nt & lexer.NtEnd
 				return tt
 			case "(", "[", "{":
 				if p.split == 0 {

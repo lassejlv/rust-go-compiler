@@ -87,13 +87,15 @@ func (p *Parser) parseBlockLikeWithPostfix(lo lexer.Pos) ast.Expr {
 }
 
 func (p *Parser) parseStmt() ast.Stmt {
+	frag := p.stmtFrag
+	p.stmtFrag = false
 	attrs := p.parseOuterAttrs()
 	lo := p.lo()
 	if len(attrs) > 0 {
 		lo = attrs[0].Span.Lo
 	}
 	if p.is("let") {
-		return p.parseLet(lo, attrs)
+		return p.parseLet(lo, attrs, frag)
 	}
 	if p.isItemStart() {
 		return &ast.ItemStmt{Item: p.parseItemAfterAttrs(lo, attrs)}
@@ -116,6 +118,9 @@ func (p *Parser) parseStmt() ast.Stmt {
 	}
 	e := p.parseExpr()
 	setExprAttrs(e, attrs)
+	if frag && !p.is(";") {
+		return &ast.ExprStmt{Expr: e, Semi: false}
+	}
 	return p.finishExprStmt(e)
 }
 
@@ -130,7 +135,7 @@ func (p *Parser) finishExprStmt(e ast.Expr) ast.Stmt {
 	return nil
 }
 
-func (p *Parser) parseLet(lo lexer.Pos, attrs []*ast.Attr) ast.Stmt {
+func (p *Parser) parseLet(lo lexer.Pos, attrs []*ast.Attr, frag bool) ast.Stmt {
 	p.expect("let")
 	ls := &ast.LetStmt{Attrs: attrs}
 	ls.Pat = p.parsePat()
@@ -143,7 +148,11 @@ func (p *Parser) parseLet(lo lexer.Pos, attrs []*ast.Attr) ast.Stmt {
 			ls.Else = p.parseBlock()
 		}
 	}
-	p.expect(";")
+	if frag {
+		p.eat(";")
+	} else {
+		p.expect(";")
+	}
 	ls.Span = p.span(lo)
 	ls.ID = ast.NewID()
 	return ls

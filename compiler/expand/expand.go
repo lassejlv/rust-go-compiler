@@ -71,6 +71,18 @@ type Expander struct {
 	// external is set when an expansion read the environment or a file
 	// (see UsedExternalInput).
 	external bool
+	// localMacDefs numbers the macro_rules! definitions in blocks (see
+	// macroDef.hygDef).
+	localMacDefs map[*ast.Item]uint32
+	// defSites lists the macro_rules! definitions of the crate being
+	// expanded by name (see checkTextualScope).
+	defSites map[string][]defSite
+}
+
+type defSite struct {
+	span     lexer.Span
+	exported bool
+	expanded bool // produced by a macro expansion
 }
 
 type macroRef struct {
@@ -93,6 +105,7 @@ func New() *Expander {
 func (e *Expander) ExpandCrate(c *ast.Crate, crateName string) error {
 	applyCrateConfig(e.Config)
 	e.crate = crateName
+	e.defSites = nil
 	if _, ok := e.macros[crateName]; !ok {
 		e.macros[crateName] = map[string]*macroDef{}
 		e.crateOrder = append(e.crateOrder, crateName)
@@ -123,6 +136,7 @@ func (e *Expander) ExpandCrate(c *ast.Crate, crateName string) error {
 		return err
 	}
 	c.Items = items
+	resolveLabelHygiene(c)
 	return desugarAsync(c)
 }
 
@@ -298,8 +312,26 @@ func (e *Expander) collectBlock(b *ast.Block) {
 	}
 }
 
+// localMacroDef returns the hygiene id of the macro_rules! definition it
+// in a block (allocated with the hygiene marks, see ast.HygInfo).
+func (e *Expander) localMacroDef(it *ast.Item) uint32 {
+	if id, ok := e.localMacDefs[it]; ok {
+		return id
+	}
+	hygieneMarks++
+	if e.localMacDefs == nil {
+		e.localMacDefs = map[*ast.Item]uint32{}
+	}
+	e.localMacDefs[it] = hygieneMarks
+	return hygieneMarks
+}
+
 func (e *Expander) defineMacro(def *macroDef) {
 	e.macros[e.crate][def.name] = def
+	if e.defSites == nil {
+		e.defSites = map[string][]defSite{}
+	}
+	e.defSites[def.name] = append(e.defSites[def.name], defSite{def.span, def.exported, def.expanded})
 }
 
 // ---------------------------------------------------------------------------
@@ -387,6 +419,7 @@ func (e *Expander) expandItemInList(it *ast.Item, depth int) ([]*ast.Item, error
 			return nil, err
 		}
 		def.exported = hasAttr(it.Attrs, "macro_export")
+		def.expanded = depth > 0
 		e.defineMacro(def)
 		return nil, nil
 	case *ast.MacCallItem:
@@ -910,6 +943,8 @@ func (e *Expander) expandStmts(stmts []ast.Stmt, depth int) ([]ast.Stmt, error) 
 			if mr, ok := is.Item.Kind.(*ast.MacroRulesItem); ok {
 				if keep, _, err := e.processAttrs(is.Item.Attrs); err == nil && keep {
 					if def, err := parseMacroRules(is.Item.Name.Name, mr.Body, e.crate, is.Item.Span); err == nil {
+						def.hygDef = e.localMacroDef(is.Item)
+						def.expanded = depth > 0
 						e.defineMacro(def)
 					}
 				}
@@ -956,6 +991,27 @@ func (e *Expander) expandStmts(stmts []ast.Stmt, depth int) ([]ast.Stmt, error) 
 			}
 			out = append(out, s)
 		case *ast.ItemStmt:
+			if mr, ok := s.Item.Kind.(*ast.MacroRulesItem); ok {
+				keep, attrs, err := e.processAttrs(s.Item.Attrs)
+				if err != nil {
+					return nil, err
+				}
+				if !keep {
+					continue
+				}
+				def, err := parseMacroRules(s.Item.Name.Name, mr.Body, e.crate, s.Item.Span)
+				if err != nil {
+					return nil, err
+				}
+				def.exported = hasAttr(attrs, "macro_export")
+				def.hygDef = e.localMacroDef(s.Item)
+				def.expanded = depth > 0
+				e.defineMacro(def)
+				// the marker of the definition's place, for the hygiene
+				// of local variables (see ast.HygInfo)
+				out = append(out, &ast.EmptyStmt{MacroDef: def.hygDef})
+				continue
+			}
 			items, err := e.expandItemInList(s.Item, depth)
 			if err != nil {
 				return nil, err

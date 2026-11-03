@@ -367,7 +367,7 @@ func (g *gen) generate() {
 				enc = append(enc, fmt.Sprintf("if x.%s != nil { e.fail(\"cannot serialize %s\") }", f.name, key))
 				continue
 			}
-			if f.name == "Hyg" {
+			if f.name == "Hyg" || f.name == "LabelHyg" || f.name == "MacroDef" {
 				enc = append(enc, fmt.Sprintf("e.hyg(x.%s)", f.name))
 				dec = append(dec, fmt.Sprintf("x.%s = d.hyg()", f.name))
 				continue

@@ -1,0 +1,98 @@
+{e}
+{ e }
+{e}
+{ e }
+{}
+{}
+()
+()
+[]
+(a)
+[a, b]
+{a + b}
+f({x})
+a{b}c
+a {b} c
+a+b
+a +b
+a+ b
+a<b>c
+x=>y
+x => y
+a::b ::c:: d
+&&a & &b
+a,b, c,d
+a;b; c
+a.b.c.d
+f(x) f(x) if(x) let(a)
+#[a] #[b] #![c]
+$a $b
+x{}y
+'a: loop {}
+-1 - 1 --1
+a=b==c!=d
+m!(x) m! (x) m!{x} m![x]
+fn f(){} fn g() {}
+struct A{x:u8}
+1.0.max(2.0)
+x.0.1
+if a {b} else {c}
+if a { b } else { c }
+a+b
+f(x,y)
+{e}
+S{x:1}
+S { x: 1 }
+|x|x+1
+a[0]
+struct A{x:u8}
+fn f(){}
+fn f() { 1 }
+Vec<u8>
+Vec< u8 >
+&'a mut[u8;3]
+{x}
+{ x }
+Some(x)|None
+let x=5
+{e}
+{ e } a+b {x}
+{a} {b}{ c } { d }
+f({x}) a + b a + b {x + 1}
+{e}
+a+b
+{e}
+{e}
+a b c
+a b
+fn f()
+{
+    let x = 1; let y = 2; let zzzzzzzzzzzzzzzzz = 3; let
+    wwwwwwwwwwwwwwwwwwwwwwww = 4; x + y
+}
+fn f()
+{let x = 1; let y = 2; let zzzzzzzzzzzzzzzzz = 3; let wwwwwwwwwwwwwwwwwwwwwwww
+    = 4; x + y}
+aaaaaaaaaa bbbbbbbbbbbbbbb
+ccccccccccccccc(dddddddddddd, eeeeeeeeeeeeeee, fffffffffffffffffff,
+ggggggggggggg, hhhhhhhhhhhhhhh)
+aaaaaaaaaa bbbbbbbbbbbbbbb ccccccccccccccc
+[dddddddddddd, eeeeeeeeeeeeeee, fffffffffffffffffff, ggggggggggggg,
+hhhhhhhhhhhhhhh] x y z
+aaaaaaaaaa bbbbbbbbbbbbbbb ccccccccccccccc dddddddddddd eeeeeeeeeeeeeee
+fffffffffffffffffff ggggggggggggg hhhhhhhhhhhhhhh iiiiiiiiiiiiiii
+jjjjjjjjjjjjjjjjjj kkkkkkkkkkkkkkkkkk llllllllllll
+aaaaaaaaaaaaaaa + bbbbbbbbbbbbbbbbbbbbbbbbbb + cccccccccccccccccccccccc +
+dddddddddddddddddddd + eeeeeeeeeeeee
+x
+{
+    aaaaaaaaaa bbbbbbbbbbbbbbb ccccccccccccccc
+    { dddddddddddd eeeeeeeeeeeeeee fffffffffffffffffff } ggggggggggggg
+    hhhhhhhhhhhhhhh iiiiiiiiiiiiiii
+} y
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+yyy
+a {} b {} c {} aaaaaaaaaa bbbbbbbbbbbbbbb ccccccccccccccc dddddddddddd
+eeeeeeeeeeeeeee {} fffffffffffffffffff
+a {x} b {y} c {z} aaaaaaaaaa bbbbbbbbbbbbbbb ccccccccccccccc dddddddddddd
+eeeeeeeeeeeeeee {w} fffffffffffffffffff

@@ -99,7 +99,21 @@ type Token struct {
 	// JointNext is true when the next token immediately follows this one with
 	// no whitespace (used for splitting/merging punctuation in macros).
 	JointNext bool
+	// Nt records how a token was substituted for a macro_rules fragment
+	// (NtIdent, NtStart, NtEnd), for stringify!'s spacing. In a token
+	// tree, a group's Tok.Nt holds the flags of the group.
+	Nt uint8
 }
+
+// Token.Nt flags. rustc substitutes an `ident` fragment as an NtIdent
+// token and most other fragments (expr, ty, path, ...) as a group with
+// invisible delimiters; stringify! spaces them accordingly (`$f($x)` with
+// `$x:ident` prints `f (x)`, `$t,` with `$t:ty` prints `Vec<u8>,`).
+const (
+	NtIdent uint8 = 1 << iota // substituted for an `ident` fragment
+	NtStart                   // first tree of an invisible-group fragment
+	NtEnd                     // last tree of an invisible-group fragment
+)
 
 func (t Token) String() string {
 	switch t.Kind {

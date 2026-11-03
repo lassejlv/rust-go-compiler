@@ -162,6 +162,9 @@ func (e *Expander) macTokens(mac *ast.MacCall) (tts []ast.TokenTree, user bool, 
 	}
 	switch {
 	case def != nil:
+		if err := e.checkTextualScope(def, mac); err != nil {
+			return nil, true, err
+		}
 		tts, err = e.invokeMacroRules(def, mac)
 		return tts, true, err
 	case bi != nil:
@@ -176,6 +179,56 @@ func (e *Expander) macTokens(mac *ast.MacCall) (tts []ast.TokenTree, user bool, 
 		return tts, true, nil
 	}
 	return nil, false, errAt(mac.Span, "cannot find macro `%s` in this scope", name)
+}
+
+// checkTextualScope rejects a call of a macro_rules! macro of the crate
+// written before every definition of the macro (macro_rules! macros are
+// textually scoped: rustc reports "cannot find macro"). Only the clear
+// case is rejected: a plain `m!` call in the source (not produced by an
+// expansion) of a macro whose definitions are all written later in the
+// same file, none exported and none produced by an expansion, with no
+// macro of that name elsewhere (std, other crates, imports).
+func (e *Expander) checkTextualScope(def *macroDef, mac *ast.MacCall) error {
+	if e.site != nil || def.crate != e.crate || e.crate == "std" || mac.Path == nil || mac.Path.Global || len(mac.Path.Segments) != 1 || !realSpan(mac.Span) {
+		return nil
+	}
+	name := def.name
+	if macName(mac) != name {
+		return nil
+	}
+	sites := e.defSites[name]
+	if len(sites) == 0 {
+		return nil
+	}
+	call := mac.Span.Lo
+	for _, s := range sites {
+		if s.exported || s.expanded || s.span.Lo.File != call.File || s.span.Lo.Off <= call.Off {
+			return nil
+		}
+	}
+	if _, ok := builtins[name]; ok {
+		return nil
+	}
+	if _, ok := e.aliases[e.crate][name]; ok {
+		return nil
+	}
+	for k := range e.macroImports[e.crate] {
+		if k == name || strings.HasSuffix(k, "::"+name) {
+			return nil
+		}
+	}
+	for _, c := range e.crateOrder {
+		if c == e.crate {
+			continue
+		}
+		if _, ok := e.macros[c][name]; ok {
+			return nil
+		}
+	}
+	if e.ProcMacros[name] != nil {
+		return nil
+	}
+	return errAt(mac.Span, "cannot find macro `%s` in this scope", name)
 }
 
 func describeTok(t lexer.Token) string {
