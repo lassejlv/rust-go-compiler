@@ -68,6 +68,71 @@ func futureOutputType(ret ast.Type, sp lexer.Span) ast.Type {
 	return &ast.ImplTraitType{TypeBase: ast.TypeBase{Span: sp, ID: ast.NewID()}, Bounds: []*ast.Bound{{Path: p, Span: sp}}}
 }
 
+// moveAsyncParams makes the future of an async fn own every parameter, like
+// rustc: the parameters are re-bound by statements at the start of the
+// future's body (`let x = x;`, or `let mut __rg_argN = __rg_argN; let <pat>
+// = __rg_argN;` for other patterns), so that unused parameters, and those
+// only read through Copy fields, live (and are dropped) with the future
+// rather than when it is created. A by-value `self` is captured whole.
+func moveAsyncParams(d *ast.FnDecl) []ast.Stmt {
+	var lets []ast.Stmt
+	if sp := d.SelfParam; sp != nil && (sp.Kind == ast.SelfValue || sp.Kind == ast.SelfTyped) {
+		// `let _ = &self;` would not capture it; a dead borrow does
+		self := ast.Ident{Name: "self", Span: sp.Span}
+		keep := ast.Ident{Name: "__rg_self", Span: sp.Span}
+		ref := &ast.RefExpr{ExprBase: ast.ExprBase{Span: sp.Span, ID: ast.NewID()}, X: singlePath(self)}
+		lets = append(lets, &ast.LetStmt{Pat: identPat(keep, false), Init: ref, Span: sp.Span, ID: ast.NewID()})
+	}
+	for i, p := range d.Params {
+		lets = append(lets, moveParam(&p.Pat, i, p.Span)...)
+	}
+	return lets
+}
+
+// moveClosureParams is moveAsyncParams for an async closure.
+func moveClosureParams(c *ast.ClosureExpr) []ast.Stmt {
+	var lets []ast.Stmt
+	for i, p := range c.Params {
+		lets = append(lets, moveParam(&p.Pat, i, p.Pat.GetSpan())...)
+	}
+	return lets
+}
+
+// moveParam replaces parameter pattern *pp by a plain binding and returns
+// the statements re-binding the original pattern.
+func moveParam(pp *ast.Pat, i int, sp lexer.Span) []ast.Stmt {
+	if ip, ok := (*pp).(*ast.IdentPat); ok && !ip.ByRef && ip.Sub == nil {
+		// `let x = x;` (the parameter itself becomes immutable)
+		*pp = identPat(ip.Name, false)
+		return []ast.Stmt{&ast.LetStmt{Pat: identPat(ip.Name, ip.Mut), Init: singlePath(ip.Name), Span: sp, ID: ast.NewID()}}
+	}
+	arg := ast.Ident{Name: fmt.Sprintf("__rg_arg%d", i), Span: (*pp).GetSpan()}
+	pat := *pp
+	*pp = identPat(arg, false)
+	return []ast.Stmt{
+		&ast.LetStmt{Pat: identPat(arg, true), Init: singlePath(arg), Span: sp, ID: ast.NewID()},
+		&ast.LetStmt{Pat: pat, Init: singlePath(arg), Span: sp, ID: ast.NewID()},
+	}
+}
+
+func singlePath(id ast.Ident) ast.Expr {
+	return &ast.PathExpr{ExprBase: ast.ExprBase{Span: id.Span, ID: ast.NewID()},
+		Path: &ast.Path{Segments: []*ast.PathSegment{{Ident: id}}, Span: id.Span, ID: ast.NewID()}}
+}
+
+func identPat(id ast.Ident, mut bool) ast.Pat {
+	return &ast.IdentPat{PatBase: ast.PatBase{Span: id.Span, ID: ast.NewID()}, Name: id, Mut: mut}
+}
+
+// prependStmts returns a block expression running stmts, then body.
+func prependStmts(stmts []ast.Stmt, body ast.Expr, sp lexer.Span) ast.Expr {
+	if len(stmts) == 0 {
+		return body
+	}
+	stmts = append(stmts, &ast.ExprStmt{Expr: body})
+	return &ast.BlockExpr{ExprBase: ast.ExprBase{Span: sp, ID: ast.NewID()}, Block: &ast.Block{Stmts: stmts, Span: sp, ID: ast.NewID()}}
+}
+
 // desugarAsync rewrites async constructs in a crate.
 func desugarAsync(c *ast.Crate) error {
 	var firstErr error
@@ -113,7 +178,8 @@ func desugarAsync(c *ast.Crate) error {
 				return x
 			}
 			e.Async = false
-			inner, err := asyncBlockCall(e.Body, true, e.Ret, e.Span)
+			body := prependStmts(moveClosureParams(e), e.Body, e.Body.GetSpan())
+			inner, err := asyncBlockCall(body, true, e.Ret, e.Span)
 			if err != nil {
 				fail(err)
 				return x
@@ -153,7 +219,8 @@ func desugarAsync(c *ast.Crate) error {
 					if ret == nil {
 						ret = &ast.TupleType{TypeBase: ast.TypeBase{Span: it.Span, ID: ast.NewID()}}
 					}
-					body := &ast.BlockExpr{ExprBase: ast.ExprBase{Span: k.Body.Span, ID: ast.NewID()}, Block: k.Body}
+					var body ast.Expr = &ast.BlockExpr{ExprBase: ast.ExprBase{Span: k.Body.Span, ID: ast.NewID()}, Block: k.Body}
+					body = prependStmts(moveAsyncParams(k.Decl), body, k.Body.Span)
 					call, err := asyncBlockCall(body, true, ret, it.Span)
 					if err != nil {
 						fail(err)

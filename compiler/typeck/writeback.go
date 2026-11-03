@@ -571,6 +571,22 @@ func (w *capWalker) isCopy(t Ty) bool {
 	if t == nil {
 		return true
 	}
+	// a closure of another body that is still being checked (e.g. the
+	// caller's closure passed to an async fn whose future type the caller
+	// needs) has no captures yet: it would look Copy. Like rustc on the
+	// generic body, treat such a value as moved.
+	unknown := false
+	Walk(t, func(x Ty) bool {
+		if x.Kind == TClosure {
+			if ci := w.fcx.t.Closures[x]; ci != nil && !ci.Sealed && ci.Results != w.fcx.r {
+				unknown = true
+			}
+		}
+		return !unknown
+	})
+	if unknown {
+		return false
+	}
 	return w.fcx.t.IsCopy(t)
 }
 
