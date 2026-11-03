@@ -27,6 +27,9 @@ type operand struct {
 	// (flag is pathFlags(tlocal, tpath))
 	tlocal *typeck.Local
 	tpath  []int
+	// fieldFlags: a temporary whose fields have their own drop flags
+	// (flag + "_<index>"), see materializeFields
+	fieldFlags bool
 }
 
 // value lowers e to a C rvalue (applying adjustments, moving out of places).
@@ -81,6 +84,29 @@ func (fc *fnGen) asPlace(op operand) operand {
 	return operand{s: p, place: true, flag: f, movable: true, ty: op.ty}
 }
 
+// materializeFields stores a value of a struct or tuple type in a temporary
+// dropped at the end of the current scope field by field, each field with
+// its own drop flag (base flag + "_<index>"): a field can be moved out of
+// it.
+func (fc *fnGen) materializeFields(op operand) operand {
+	t := op.ty
+	n := fc.newName("t")
+	fc.line("%s %s = %s;", fc.ctype(t), n, op.s)
+	flag := "d" + n
+	fts := fc.fieldTys(t)
+	for i := len(fts) - 1; i >= 0; i-- { // dropped in declaration order
+		if !fc.g.needsDrop(fts[i]) {
+			continue
+		}
+		f := fmt.Sprintf("%s_%d", flag, i)
+		pl := n + fieldSel(t, i)
+		fc.line("uint8_t %s = 1;", f)
+		fc.addDrop(pl, f, fts[i])
+		fc.line("RG_CS_PUSH(&%s, %s, &%s);", pl, fc.g.dropFn(fts[i]), f)
+	}
+	return operand{s: n, place: true, flag: flag, movable: true, ty: t, fieldFlags: true}
+}
+
 // addrOf returns a pointer (or fat pointer for unsized places) to e.
 func (fc *fnGen) addrOf(op operand) string {
 	op = fc.asPlace(op)
@@ -93,6 +119,10 @@ func (fc *fnGen) addrOf(op operand) string {
 // adjusted lowers e and applies its adjustments.
 func (fc *fnGen) adjusted(e ast.Expr) operand {
 	op := fc.operand(e)
+	if fc.ext != nil && fc.ext.set[e.GetID()] && !op.place && !op.unsized && op.ty != nil && !isZST(op.ty) {
+		// a temporary whose lifetime is extended by the enclosing let
+		op = fc.materializeExt(op)
+	}
 	for _, a := range fc.r.Adjust[e.GetID()] {
 		op = fc.applyAdjust(op, a)
 	}
@@ -226,8 +256,15 @@ func (fc *fnGen) operand(e ast.Expr) operand {
 	case *ast.MethodCallExpr:
 		return val(fc.methodCall(x, t))
 	case *ast.FieldExpr:
-		base := fc.asPlace(fc.adjusted(x.X))
+		base := fc.adjusted(x.X)
 		fr := fc.r.Fields[x.ID]
+		if !base.place && !base.unsized && fc.splittable(base.ty) && fc.g.needsDrop(base.ty) && !fc.g.tcx.IsCopy(t) {
+			// the field may be moved out of the temporary: the rest of it
+			// is still dropped at the end of its scope
+			base = fc.materializeFields(base)
+		} else {
+			base = fc.asPlace(base)
+		}
 		if base.unsized {
 			// field of an unsized-tail struct behind a fat pointer
 			fat := base.s
@@ -245,6 +282,12 @@ func (fc *fnGen) operand(e ast.Expr) operand {
 			return operand{s: fmt.Sprintf("((%s*)%s.ptr)->f%d", sn, fat, fr.Index), place: true, ty: t}
 		}
 		flag := base.flag
+		if base.fieldFlags {
+			flag = ""
+			if fc.g.needsDrop(t) {
+				flag = fmt.Sprintf("%s_%d", base.flag, fr.Index)
+			}
+		}
 		var tl *typeck.Local
 		var tp []int
 		if l, path := fc.fieldPath(x); l != nil && fc.tracked(l, path) {
@@ -256,16 +299,23 @@ func (fc *fnGen) operand(e ast.Expr) operand {
 	case *ast.IndexExpr:
 		return fc.indexOperand(x, t)
 	case *ast.RefExpr:
-		if !x.Mut && fc.promotable(x.X) && len(fc.r.Adjust[x.X.GetID()]) == 0 {
-			it := fc.ty(x.X)
+		promoted := !x.Mut && fc.promotable(x.X) && len(fc.r.Adjust[x.X.GetID()]) == 0
+		it := fc.ty(x.X)
+		promotedDyn := !promoted && !x.Mut && len(fc.r.Adjust[x.X.GetID()]) == 0 && !it.IsUnsized() && !fc.g.needsDrop(it) &&
+			((fc.inConst && !isPlaceExpr(x.X)) || fc.promotableDyn(x.X))
+		if ext := fc.ext; ext != nil && (promoted || promotedDyn) {
+			// static storage: no (extended) temporary
+			fc.ext = nil
+			defer func() { fc.ext = ext }()
+		}
+		if promoted {
 			v := fc.constC(x.X)
 			name := fc.newName("prom")
 			fc.g.defineByValue(it)
 			fmt.Fprintf(&fc.g.statics, "static %s %s = %s;\n", fc.g.ctype(it), name, v)
 			return val("(&" + name + ")")
 		}
-		if it := fc.ty(x.X); !x.Mut && len(fc.r.Adjust[x.X.GetID()]) == 0 && !it.IsUnsized() && !fc.g.needsDrop(it) &&
-			((fc.inConst && !isPlaceExpr(x.X)) || fc.promotableDyn(x.X)) {
+		if promotedDyn {
 			// constant borrow of a value computed at run time (const
 			// paths, const-fn results): static storage, (re)initialized
 			// with the same value on each evaluation
@@ -610,9 +660,12 @@ func (fc *fnGen) binary(x *ast.BinaryExpr, t Ty) string {
 	}
 	switch x.Op {
 	case ast.BinAnd, ast.BinOr:
+		// both operands are terminating scopes
+		fc.pushScope()
 		l := fc.value(x.L)
 		res := fc.newName("t")
 		fc.line("uint8_t %s = %s;", res, l)
+		fc.popScope()
 		if x.Op == ast.BinAnd {
 			fc.line("if (%s) {", res)
 		} else {

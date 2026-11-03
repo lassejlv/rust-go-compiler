@@ -48,6 +48,8 @@ type Gen struct {
 	closureQueue []Ty
 
 	dropFns        map[Ty]string
+	boxFreeFns     map[Ty]string
+	boxPartFns     map[boxPart]string
 	dropQueue      []Ty
 	needsDropCache map[Ty]bool
 	dropImplCache  map[Ty]*instance
@@ -71,6 +73,8 @@ func New(tcx *typeck.Tcx) *Gen {
 		fnNames:        map[string]string{},
 		closureFns:     map[Ty]string{},
 		dropFns:        map[Ty]string{},
+		boxFreeFns:     map[Ty]string{},
+		boxPartFns:     map[boxPart]string{},
 		needsDropCache: map[Ty]bool{},
 		dropImplCache:  map[Ty]*instance{},
 		vtables:        map[string]string{},

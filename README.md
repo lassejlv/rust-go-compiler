@@ -136,9 +136,12 @@ compilation.
   static pieces/specs and an array of `&dyn Trait` arguments (`print!` calls
   `io::__print` directly), so each use is a few lines of C.
 * **Drops** are elaborated with runtime drop flags, including partial moves
-  out of struct fields, temporaries with Rust's temporary-lifetime rules, and
-  unwinding on panic (a cleanup stack runs pending destructors before the
-  process exits with code 101).
+  out of struct fields (also through a `Box`) and enum payloads, temporaries
+  with Rust's temporary-lifetime rules (terminating scopes of conditions,
+  guards and `&&`/`||` operands; lifetime extension of the temporaries a
+  `let` initializer borrows in extending positions), and unwinding on panic
+  (a cleanup stack runs pending destructors before the process exits with
+  code 101).
 * **Type layouts** follow rustc's repr(Rust) rules: fields are reordered by
   alignment, enum tags are as small as possible and niches (null pointers,
   invalid bools/chars, unused tag values) store other variants, so

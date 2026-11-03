@@ -146,13 +146,19 @@ func (b *builder) popTemps(sp lexer.Span) {
 }
 
 // keepTemps moves the temporaries created since the matching pushTemps to
-// the enclosing scope (extended temporaries of let initializers).
-func (b *builder) keepTemps() {
+// the enclosing scope (extended temporaries of let initializers), before
+// its locals from index at on (the let's bindings: they are dropped
+// before the temporaries they may borrow from).
+func (b *builder) keepTemps(at int) {
 	m := b.tempMarks[len(b.tempMarks)-1]
 	b.tempMarks = b.tempMarks[:len(b.tempMarks)-1]
 	if len(b.scopes) > 0 {
 		sc := b.scopes[len(b.scopes)-1]
-		sc.locals = append(sc.locals, b.temps[m:]...)
+		if at < 0 || at > len(sc.locals) {
+			at = len(sc.locals)
+		}
+		rest := append([]LocalID(nil), sc.locals[at:]...)
+		sc.locals = append(append(sc.locals[:at], b.temps[m:]...), rest...)
 	}
 	b.temps = b.temps[:m]
 }
@@ -1520,23 +1526,27 @@ func (b *builder) letStmt(x *ast.LetStmt) {
 	}
 	b.pushTemps()
 	sp := x.Span
+	letMark := -1
+	if len(b.scopes) > 0 {
+		letMark = len(b.scopes[len(b.scopes)-1].locals)
+	}
 	if ip, ok := x.Pat.(*ast.IdentPat); ok && ip.Sub == nil && x.Else == nil && len(b.r.PatDerefs[ip.ID]) == 0 {
 		if l := b.r.Locals[ip.ID]; l != nil && !l.ByRef {
 			id := b.userLocal(l)
 			if x.Ty != nil && l.Ty != nil && l.Ty.Kind == TRef && l.Ty.Mut && !b.isPlaceExpr(x.Init) && len(b.r.Adjust[x.Init.GetID()]) == 0 {
 				// `let r: &mut T = { ..; x.0 };`: the block tail reborrows
 				b.exprInto(x.Init, tplace{p: Place{Local: id}, ty: l.Ty, coerce: true})
-				b.endLetTemps(x.Init, sp)
+				b.endLetTemps(x, letMark, sp)
 				return
 			}
 			if x.Ty != nil && l.Ty != nil && l.Ty.Kind == TRef && l.Ty.Mut {
 				// `let r: &mut T = v;` reborrows
 				b.assign(Place{Local: id}, Rvalue{Kind: RUse, Ops: []Operand{b.argOperand(x.Init)}}, sp)
-				b.endLetTemps(x.Init, sp)
+				b.endLetTemps(x, letMark, sp)
 				return
 			}
 			b.exprInto(x.Init, tplace{p: Place{Local: id}, ty: l.Ty})
-			b.endLetTemps(x.Init, sp)
+			b.endLetTemps(x, letMark, sp)
 			return
 		}
 	}
@@ -1561,17 +1571,32 @@ func (b *builder) letStmt(x *ast.LetStmt) {
 		b.emit(Stmt{Kind: SFakeRead, Place: src.p, Span: sp})
 	}
 	b.bindPat(x.Pat, src, false)
-	b.endLetTemps(x.Init, sp)
+	b.endLetTemps(x, letMark, sp)
 }
 
 // endLetTemps ends the temporaries of a let initializer, except those
 // whose lifetime is extended to the enclosing block (`let r = &temp();`).
-func (b *builder) endLetTemps(init ast.Expr, sp lexer.Span) {
-	if extendsTemps(init) {
-		b.keepTemps()
+func (b *builder) endLetTemps(x *ast.LetStmt, letMark int, sp lexer.Span) {
+	if extendsTemps(x.Init) || b.patBorrows(x.Pat) {
+		b.keepTemps(letMark)
 		return
 	}
 	b.popTemps(sp)
+}
+
+// patBorrows reports whether p has a by-reference binding (`let ref x =
+// temp().f;` extends the temporary).
+func (b *builder) patBorrows(p ast.Pat) bool {
+	refs := false
+	ast.Walk(p, func(n any) bool {
+		if ip, ok := n.(*ast.IdentPat); ok {
+			if l := b.r.Locals[ip.ID]; l != nil && l.ByRef {
+				refs = true
+			}
+		}
+		return !refs
+	})
+	return refs
 }
 
 func extendsTemps(e ast.Expr) bool {

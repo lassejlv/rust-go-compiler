@@ -359,6 +359,57 @@ func (g *Gen) dropFn(t Ty) string {
 	return name
 }
 
+// boxFree renders the deallocation of the heap block of box (a C place of
+// type Box<T>, T sized) without dropping its contents.
+func (g *Gen) boxFree(box string, t Ty) string {
+	g.defineByValue(t.Args[0])
+	ct := g.ctype(t.Args[0])
+	return fmt.Sprintf("if (sizeof(%s)) rg_dealloc((uint8_t*)%s.f0, sizeof(%s), _Alignof(%s));", ct, box, ct, ct)
+}
+
+// boxFreeFn returns the name of `void f(Box<T>* p)` freeing the heap block
+// of a box whose contents were moved out or dropped separately (cleanup
+// stack entry of a partially moved box).
+func (g *Gen) boxFreeFn(t Ty) string {
+	if name, ok := g.boxFreeFns[t]; ok {
+		return name
+	}
+	g.fnN++
+	name := fmt.Sprintf("boxfree%d", g.fnN)
+	g.boxFreeFns[t] = name
+	g.defineByValue(t)
+	g.defineByValue(t.Args[0])
+	pt := g.ctype(t) + "*"
+	fmt.Fprintf(&g.protos, "static void %s(%s p);\n", name, pt)
+	fmt.Fprintf(&g.fns, "static void %s(%s p) { %s }\n", name, pt, g.boxFree("(*p)", t))
+	return name
+}
+
+type boxPart struct {
+	box Ty
+	sel string
+}
+
+// boxPartFn returns the name of `void f(Box<T>* p)` dropping the part sel
+// (a C selector like ".f1.f0", of type ft) of the box's contents (cleanup
+// stack entry of a partially moved box: the box pointer is only read when
+// the entry runs).
+func (g *Gen) boxPartFn(t Ty, sel string, ft Ty) string {
+	k := boxPart{t, sel}
+	if name, ok := g.boxPartFns[k]; ok {
+		return name
+	}
+	g.fnN++
+	name := fmt.Sprintf("boxpart%d", g.fnN)
+	g.boxPartFns[k] = name
+	g.defineByValue(t)
+	g.defineByValue(t.Args[0])
+	pt := g.ctype(t) + "*"
+	fmt.Fprintf(&g.protos, "static void %s(%s p);\n", name, pt)
+	fmt.Fprintf(&g.fns, "static void %s(%s p) { %s(&(*p->f0)%s); }\n", name, pt, g.dropFn(ft), sel)
+	return name
+}
+
 func (g *Gen) emitDropGlue(t Ty) {
 	name := g.dropFns[t]
 	var b strings.Builder

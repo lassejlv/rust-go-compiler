@@ -1,0 +1,123 @@
+a=8
+h inH
+d=3
+m=4
+x=arm8
+s=some
+arr=2
+bx=boxed
+v=v1
+pr=p1
+drop recv
+me=4
+blk=inner
+q q
+drop q
+nest=nest
+r=loop0
+drop loop0
+r=loop1
+drop loop1
+e=else-ext
+end extension
+drop else-ext
+drop nest
+drop inner
+drop p0
+drop p1
+drop v0
+drop v1
+drop boxed
+drop a1
+drop a0
+drop some
+drop arm8
+drop mut
+drop dyn
+drop H(inH)
+drop inH
+drop field-of
+==
+moved q
+drop q
+drop a
+drop y
+drop p
+--
+consume b
+drop b
+reinit newx
+drop newx
+drop y
+drop p
+drop q
+--
+iter 0
+drop l0
+drop y
+drop p
+drop q
+took y
+drop y
+iter 1
+drop l1
+drop p
+drop q
+--
+5 t0
+drop t0
+drop t1
+==
+drop b
+got a
+drop sx
+got sy
+end temp fields
+drop sy
+drop a
+==
+A mid a1
+drop a1
+end iter 0
+drop a0
+drop a2
+B y by
+drop by
+end iter 1
+drop bx
+C c
+drop c
+end iter 2
+--
+first a0
+drop a0
+drop a1
+drop a2
+reassigned
+x bx
+drop bx
+end block
+drop by
+--
+got w0
+drop w1
+drop w0
+got w2
+drop w3
+drop w2
+after while
+--
+let-else y by
+drop by
+drop bx
+==
+p p0
+drop p0
+ux unwind
+drop p1
+drop unwind
+drop y
+drop p
+drop q
+drop ux
+drop uy

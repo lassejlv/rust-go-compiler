@@ -198,7 +198,9 @@ __attribute__((noreturn)) static void rg_unwind(const char* msg, uint64_t mlen, 
   while (rg_csn > base) {
     rg_csn--;
     RgCleanup c = rg_cs[rg_csn];
-    if (*c.flag) { *c.flag = 0; c.f(c.p); }
+    /* the flag is left set: several entries (the parts of a partially moved
+       value) may share it */
+    if (*c.flag) c.f(c.p);
   }
   if (rg_try_top) longjmp(rg_try_top->jb, 1);
   fflush(stdout);
