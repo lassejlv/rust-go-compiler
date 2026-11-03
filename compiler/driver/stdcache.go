@@ -134,6 +134,17 @@ var stdCacheMagic = []byte("RGSTD\x00\x01\n")
 // the base values are the global state from before std was loaded.
 // Failures are silent: the cache is an optimization.
 func writeStdCache(path string, c *ast.Crate, exp *expand.Expander, idBase ast.NodeID, fileBase int, hygBase uint32) {
+	// the temporary file first: no encoding work when the cache
+	// directory is not writable
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return
+	}
+	tmp, err := os.CreateTemp(dir, "std-*.tmp")
+	if err != nil {
+		return
+	}
+	defer os.Remove(tmp.Name()) // (fails once renamed)
 	enc := ast.NewEncoder(idBase, fileBase, hygBase)
 	enc.Uint(uint64(ast.NextID() - idBase))
 	enc.Uint(uint64(expand.HygieneMarks() - hygBase))
@@ -147,27 +158,15 @@ func writeStdCache(path string, c *ast.Crate, exp *expand.Expander, idBase ast.N
 	exp.EncodeCrateState("std", enc)
 	payload, err := enc.Bytes()
 	if err != nil {
+		tmp.Close()
 		return
 	}
-	var buf bytes.Buffer
-	buf.Write(stdCacheMagic)
 	var hdr [12]byte
 	binary.LittleEndian.PutUint64(hdr[:8], uint64(len(payload)))
 	binary.LittleEndian.PutUint32(hdr[8:], crc32.Checksum(payload, castagnoli))
-	buf.Write(hdr[:])
-	buf.Write(payload)
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return
-	}
-	tmp, err := os.CreateTemp(dir, "std-*.tmp")
-	if err != nil {
-		return
-	}
-	_, werr := tmp.Write(buf.Bytes())
+	_, werr := tmp.Write(append(append(append([]byte{}, stdCacheMagic...), hdr[:]...), payload...))
 	cerr := tmp.Close()
 	if werr != nil || cerr != nil || os.Rename(tmp.Name(), path) != nil {
-		os.Remove(tmp.Name())
 		return
 	}
 	pruneStdCache(dir, path)
