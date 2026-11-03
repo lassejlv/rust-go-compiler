@@ -63,9 +63,21 @@ static void rg_coro_yield(void) {
   swapcontext(&c->ctx, &c->caller);
 }
 
+/* Frees a coroutine. A suspended one is cancelled first: like dropping a
+   suspended future in Rust, the values live on its stack (its locals,
+   temporaries and the captures of the async block's closure) are dropped,
+   innermost first, by running its pending cleanup entries (the same
+   destructors a panic would run). Its stack stays mapped meanwhile. */
 static void rg_coro_free(uint8_t* p) {
   RgCoro* c = (RgCoro*)p;
   if (!c) return;
+  if (!c->done) {
+    while (c->cs.n > 0) {
+      c->cs.n--;
+      RgCleanup e = c->cs.cs[c->cs.n];
+      if (*e.flag) { *e.flag = 0; e.f(e.p); }
+    }
+  }
   munmap(c->stack, c->size);
   free(c->cs.cs);
   free(c);

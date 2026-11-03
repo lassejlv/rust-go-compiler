@@ -571,8 +571,11 @@ func (g *Gen) genClosure(t Ty) {
 	fg.pushScope()
 	if ci.Kind == 2 {
 		// an FnOnce closure consumes its environment: by-value captures not
-		// moved out by the body are dropped when it returns
-		for i, c := range ci.Captures {
+		// moved out by the body are dropped when it returns (or unwinds),
+		// in the order of the environment's fields like rustc: registered
+		// last-first, as drops run in reverse
+		for i := len(ci.Captures) - 1; i >= 0; i-- {
+			c := ci.Captures[i]
 			if !c.ByRef && g.needsDrop(c.Ty) && len(c.Path) == 0 && len(fg.split[c.Local]) > 0 && fg.splittable(c.Ty) {
 				// fields are moved out of it: per-field drop flags, as
 				// for a local (named after the captured variable)
