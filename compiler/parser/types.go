@@ -473,6 +473,12 @@ func (p *Parser) canBeginBound() bool {
 // parsed.
 func (p *Parser) parseBounds(plus bool) []*ast.Bound {
 	var bounds []*ast.Bound
+	if p.skipUseBound() {
+		if !plus || !p.is("+") {
+			return nil
+		}
+		return p.parseMoreBounds(nil)
+	}
 	if !p.canBeginBound() {
 		return nil
 	}
@@ -486,12 +492,33 @@ func (p *Parser) parseBounds(plus bool) []*ast.Bound {
 func (p *Parser) parseMoreBounds(bounds []*ast.Bound) []*ast.Bound {
 	for p.is("+") {
 		p.next()
+		if p.skipUseBound() {
+			continue
+		}
 		if !p.canBeginBound() {
 			break
 		}
 		bounds = append(bounds, p.parseBound())
 	}
 	return bounds
+}
+
+// skipUseBound skips a precise-capturing bound `use<'a, T, N>` (only
+// meaningful on `impl Trait`; captures are not tracked, so it is dropped).
+func (p *Parser) skipUseBound() bool {
+	if !p.is("use") || !p.peekN(1).Is("<") {
+		return false
+	}
+	p.next()
+	p.expectPrefix("<")
+	for !p.isGt() && p.cur().Kind != lexer.EOF {
+		p.next()
+		if !p.eat(",") {
+			break
+		}
+	}
+	p.expectPrefix(">")
+	return true
 }
 
 func (p *Parser) parseBound() *ast.Bound {
