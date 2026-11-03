@@ -93,7 +93,7 @@ func (fcx *FnCtxt) coerce(e ast.Expr, from, to Ty) bool {
 			fcx.ic.rollback(s)
 			ae := fcx.shallow(a.Args[0])
 			be := fcx.shallow(b.Args[0])
-			if fcx.canUnsize(ae, be) || fcx.canUnsizeNested(ae, be) {
+			if fcx.canUnsize(ae, be) || fcx.canUnsizeNested(ae, be) || fcx.canUnsizePtr(ae, be) {
 				fcx.addAdjust(e, Adjustment{Kind: AdjUnsize, Target: b})
 				return true
 			}
@@ -224,5 +224,17 @@ func (fcx *FnCtxt) canUnsizeNested(a, b Ty) bool {
 	}
 	ae := fcx.shallow(a.Args[0])
 	be := fcx.shallow(b.Args[0])
-	return fcx.canUnsize(ae, be) || fcx.canUnsizeNested(ae, be)
+	return fcx.canUnsize(ae, be) || fcx.canUnsizeNested(ae, be) || fcx.canUnsizePtr(ae, be)
+}
+
+// canUnsizePtr handles smart pointers wrapping references or raw pointers
+// (`Pin<&mut T>` -> `Pin<&mut dyn Trait>`, via `&mut T: CoerceUnsized<&mut U>`).
+func (fcx *FnCtxt) canUnsizePtr(a, b Ty) bool {
+	if a.Kind != b.Kind || (a.Kind != TRef && a.Kind != TPtr) || (b.Mut && !a.Mut) {
+		return false
+	}
+	if a.Kind == TPtr && a.Mut != b.Mut {
+		return false
+	}
+	return fcx.canUnsize(a.Elem, b.Elem)
 }
