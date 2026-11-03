@@ -12,6 +12,7 @@ its backend IR (where rustc uses LLVM IR):
 | `rustc_resolve`                     | `compiler/resolve`      | module tree, definitions, `use` imports, path resolution |
 | `rustc_middle`                      | `compiler/middle`       | interned types, definitions, generics, modules |
 | `rustc_hir_analysis` / `rustc_hir_typeck` / `rustc_trait_selection` | `compiler/typeck` | item collection, type inference, coercions, method probing (autoderef/autoref), trait selection, associated-type normalization, closures & capture analysis, pattern typing (match ergonomics) |
+| `rustc_mir_build` / `rustc_borrowck` | `compiler/borrowck` | MIR-like CFG of every body, move/initialization checking, mutability, loans with non-lexical lifetimes, two-phase borrows, universal regions of signatures |
 | `rustc_monomorphize` / `rustc_codegen_llvm` | `compiler/codegen` | monomorphization, drop glue & drop flags, vtables, pattern-match lowering, panics/unwinding, C emission |
 | `library/std` (+ `core`, `alloc`)   | `compiler/stdlib/lib`   | the standard library, written in Rust and compiled by rustgo |
 | `rustc_driver`                      | `compiler/driver`, `cmd/rustgo` | pipeline + CLI |
@@ -68,8 +69,23 @@ C translation units compiled in parallel.
   embedded std (whose visibilities and signatures do not mirror the real
   std's in every detail) are exempt from the privacy and impl checks.
 
-Not implemented: the borrow checker (programs are assumed to be valid Rust),
-targets other than x86_64-linux-gnu, incremental compilation.
+* A borrow checker (`compiler/borrowck`): use of moved or uninitialized
+  values (E0382/E0381), moves out of borrows (E0507/E0508/E0509),
+  mutability (E0596/E0594/E0384), conflicting borrows with non-lexical
+  lifetimes and two-phase borrows (E0499/E0502/E0503/E0505/E0506),
+  dangling references (E0597/E0716/E0515), closures outliving their
+  captures (E0373), and signature lifetimes (E0621, "lifetime may not live
+  long enough"). Types carry no lifetimes after type checking, so regions
+  are modeled by loan sets attached to values (by reference depth) and
+  propagated through calls by the callees' declared signatures; whenever
+  the model is unsure it drops loans, so valid programs are never rejected
+  (some invalid ones are accepted). It checks the crates being developed
+  (the input file, cargo path dependencies); `RUSTGO_BORROWCK=all` also
+  checks std and registry crates, `RUSTGO_BORROWCK=0` turns it off.
+  `--check` stops after analysis (like `cargo check`).
+
+Not implemented: targets other than x86_64-linux-gnu, incremental
+compilation.
 
 ## Design notes
 
@@ -115,5 +131,8 @@ tests/run.sh          # all tests
 tests/run.sh -q       # only failures + summary
 tests/run.sh 042      # tests matching a pattern
 ```
+
+`tests/compile-fail` holds programs rustc rejects (with the expected error
+code); `tests/compile-fail/run.sh -q` checks that rustgo rejects them too.
 
 Unit tests: `go test ./...`.
