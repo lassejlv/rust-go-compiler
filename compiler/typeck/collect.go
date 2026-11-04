@@ -942,6 +942,9 @@ func (ac *astConv) resToTy(res Res, seg *ast.PathSegment, sp lexer.Span) Ty {
 	t := ac.t
 	switch res.Kind {
 	case ResPrim:
+		if seg != nil && seg.Args != nil && (len(seg.Args.Args) > 0 || len(seg.Args.Bindings) > 0) {
+			t.ErrorCode(sp, "E0109", "type arguments are not allowed on builtin type `%s`", res.Prim)
+		}
 		return primTy(res.Prim)
 	case ResSelfTy:
 		if ac.selfTy == nil {
@@ -1189,6 +1192,9 @@ func (ac *astConv) lowerTraitSeg(d *Def, seg *ast.PathSegment, self Ty, sp lexer
 	tr := &TraitRef{Trait: d, Args: args}
 	if seg.Args != nil {
 		for _, b := range seg.Args.Bindings {
+			if ac.scope != nil && ac.scope.Crate != nil && ac.scope.Crate.Local {
+				ac.t.pendingBindings = append(ac.t.pendingBindings, pendingBinding{trait: tr, name: b.Name.Name, sp: b.Name.Span})
+			}
 			if b.Ty != nil {
 				nb := Binding{Name: b.Name.Name, Ty: ac.lowerTy(b.Ty)}
 				if b.Args != nil {
@@ -1257,4 +1263,3 @@ func paramAssocRefs(n any, g *Generics) []int {
 	})
 	return out
 }
-

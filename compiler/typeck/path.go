@@ -509,6 +509,9 @@ func (fcx *FnCtxt) checkCall(x *ast.CallExpr, expected Ty) Ty {
 			if ins, out, ok := fcx.paramFnSig(t); ok {
 				fcx.addAdjust(x.Fn, adjustmentsFor(steps, i)...)
 				fcx.checkArgs(x.Args, ins, false, x.Span)
+				// (for the borrow check of the generic body: a call
+				// through the parameter's Fn* bound)
+				fcx.r.Callees[x.ID] = &Callee{Kind: CallClosure, Ty: t}
 				return out
 			}
 		case TInfer:

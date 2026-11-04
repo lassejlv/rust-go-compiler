@@ -11,6 +11,7 @@ import (
 	"strconv"
 
 	"rustgo/compiler/ast"
+	"rustgo/compiler/lexer"
 	. "rustgo/compiler/middle"
 )
 
@@ -180,5 +181,142 @@ func (t *Tcx) checkEnumDiscs(d *Def) {
 			continue
 		}
 		seen[v.Disc] = v.Name
+	}
+}
+
+type pendingBinding struct {
+	trait *TraitRef
+	name  string
+	sp    lexer.Span
+}
+
+// checkBindingNames reports associated type bindings in trait bounds whose
+// name is not an associated type of the trait or its supertraits (E0220).
+func (t *Tcx) checkBindingNames() {
+	pend := t.pendingBindings
+	t.pendingBindings = nil
+	for _, pb := range pend {
+		if pb.trait == nil || pb.trait.Trait == nil || pb.trait.Trait.Trait == nil {
+			continue
+		}
+		found, ok := false, true
+		ok = t.quietly(func() {
+			for _, st := range t.AllSupertraits(pb.trait) {
+				if st.Trait == nil || st.Trait.Trait == nil {
+					found = true // unknown: be quiet
+					return
+				}
+				if it := st.Trait.Trait.Items[pb.name]; it != nil && it.Kind == DefAssocTy {
+					found = true
+					return
+				}
+				if t.isStd(st.Trait) && !stdAssocComplete[st.Trait.Name] {
+					// rustgo's std may not declare every associated type
+					found = true
+					return
+				}
+			}
+		})
+		if ok && !found {
+			t.ErrorCode(pb.sp, "E0220", "associated type `%s` not found for `%s`", pb.name, pb.trait.Trait.Name)
+		}
+	}
+}
+
+// stdAssocComplete lists std traits whose associated types rustgo's std
+// declares like the real std.
+var stdAssocComplete = map[string]bool{
+	"Iterator": true, "IntoIterator": true, "DoubleEndedIterator": true, "ExactSizeIterator": true,
+	"Deref": true, "DerefMut": true, "Add": true, "Sub": true, "Mul": true, "Div": true, "Rem": true,
+	"Neg": true, "Not": true, "FromStr": true, "TryFrom": true, "TryInto": true, "Future": true,
+	"Index": true, "IndexMut": true, "FnOnce": true, "FnMut": true, "Fn": true,
+	"Clone": true, "Copy": true, "Debug": true, "Display": true, "PartialEq": true, "Eq": true,
+	"PartialOrd": true, "Ord": true, "Hash": true, "Default": true, "From": true, "Into": true,
+	"AsRef": true, "AsMut": true, "Send": true, "Sync": true, "Sized": true,
+}
+
+// checkImplHeaderLifetimes reports paths in an impl header (the self type
+// and the trait) to types or traits with lifetime parameters that give no
+// lifetime arguments (E0726; `impl Trait for S` with `struct S<'a>` needs
+// `S<'_>`). Fn pointer types and `Fn(..)` sugar have their own elision
+// scopes and are not searched.
+func (t *Tcx) checkImplHeaderLifetimes(impl *Def) {
+	ia := impl.Impl.Ast
+	if ia == nil || impl.Crate == nil || !impl.Crate.Local || impl.Crate.Is2015() || impl.HasAttr("automatically_derived") {
+		return
+	}
+	ac := t.itemConv(impl)
+	check := func(p *ast.Path) {
+		if p == nil || len(p.Segments) == 0 {
+			return
+		}
+		pr, err := t.R.ResolvePath(ac.scope, pathSegs(p), p.Global, TypeNS, ac.firstLookup)
+		if err != nil || pr.Consumed != len(p.Segments) || pr.Res.Kind != ResDef || pr.Res.Def == nil {
+			return
+		}
+		g := genericsAst(pr.Res.Def)
+		if g == nil {
+			return
+		}
+		n := 0
+		for _, gp := range g.Params {
+			if gp.Kind == ast.GPLifetime {
+				n++
+			}
+		}
+		if n == 0 {
+			return
+		}
+		seg := p.Segments[len(p.Segments)-1]
+		if seg.Args != nil {
+			if seg.Args.Parenthesized {
+				return
+			}
+			for _, a := range seg.Args.Args {
+				if a.Lifetime != "" {
+					return
+				}
+			}
+		}
+		t.ErrorCode(p.Span, "E0726", "implicit elided lifetime not allowed here")
+	}
+	walk := func(n any) {
+		ast.Walk(n, func(x any) bool {
+			switch x := x.(type) {
+			case *ast.FnPtrType:
+				return false
+			case *ast.Path:
+				for _, s := range x.Segments {
+					if s.Args != nil && s.Args.Parenthesized {
+						return false
+					}
+				}
+			case *ast.PathType:
+				if x.QSelf == nil {
+					check(x.Path)
+				}
+				for _, s := range x.Path.Segments {
+					if s.Args != nil && s.Args.Parenthesized {
+						return false
+					}
+				}
+			}
+			return true
+		})
+	}
+	if ia.SelfTy != nil {
+		walk(ia.SelfTy)
+	}
+	if ia.Trait != nil {
+		check(ia.Trait)
+		for _, s := range ia.Trait.Segments {
+			if s.Args != nil && !s.Args.Parenthesized {
+				for _, a := range s.Args.Args {
+					if a.Type != nil {
+						walk(a.Type)
+					}
+				}
+			}
+		}
 	}
 }

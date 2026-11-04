@@ -44,6 +44,7 @@ func (t *Tcx) checkImpls() {
 	}
 	t.checkInherentDups()
 	t.checkAdtDefs()
+	t.checkBindingNames()
 	t.checkLifetimes()
 	t.checkGenericParams()
 	// constants and statics are checked even when unused (their
@@ -660,6 +661,90 @@ func (t *Tcx) blanketCovers(a, b *Def) bool {
 	return true
 }
 
+// checkImplObligations reports, for an impl without generic parameters,
+// supertraits of the trait (and `where Self: ..` clauses) that the self
+// type does not implement, and associated types that do not satisfy the
+// bounds the trait declares on them (E0277).
+func (t *Tcx) checkImplObligations(impl *Def) {
+	ii := impl.Impl
+	tr := ii.TraitRef.Trait
+	if tr == nil || tr.Trait == nil || t.Generics(impl).Count() != 0 || impl.Crate == nil || !impl.Crate.Local {
+		return
+	}
+	args := ii.TraitRef.Args
+	for _, a := range args {
+		if a == nil || a.HasParam() || a.HasError() || a.HasInfer() || a.HasProj() || a.HasOpaque() {
+			return
+		}
+	}
+	if len(args) != t.Generics(tr).Count() {
+		return
+	}
+	holds := func(ref *TraitRef) (bool, bool) {
+		for _, a := range ref.Args {
+			if a == nil || a.HasParam() || a.HasError() || a.HasInfer() || a.HasProj() || a.HasOpaque() {
+				return true, false
+			}
+		}
+		ic := newInferCtxt(t)
+		switch ic.evaluate(&Predicate{Trait: ref}, 0) {
+		case SelNone:
+			return false, true
+		}
+		return true, true
+	}
+	for _, st := range t.Supertraits(tr) {
+		var ref *TraitRef
+		if !t.quietly(func() {
+			ref = st.Subst(args)
+			for i, a := range ref.Args {
+				ref.Args[i] = t.Normalize(a)
+			}
+		}) || ref == nil || ref.Trait == nil || ref.Trait.Trait == nil {
+			continue
+		}
+		if ok, known := holds(ref); known && !ok {
+			t.ErrorCode(impl.Span, "E0277", "the trait bound `%s: %s` is not satisfied", ref.Args[0], ref.Trait.Name)
+			return
+		}
+	}
+	for _, it := range ii.Order {
+		if it.Kind != DefAssocTy {
+			continue
+		}
+		ti := tr.Trait.Items[it.Name]
+		if ti == nil || ti.Kind != DefAssocTy || ti.AssocTy == nil {
+			continue
+		}
+		t.Generics(ti)
+		if t.Generics(ti).Count() != len(args) {
+			continue // generic associated type
+		}
+		for _, b := range ti.AssocTy.Bounds {
+			if b.Maybe || b.Trait == nil || len(b.Bindings) > 0 {
+				continue
+			}
+			var ref *TraitRef
+			if !t.quietly(func() {
+				ref = b.Trait.Subst(args)
+				for i, a := range ref.Args {
+					ref.Args[i] = t.Normalize(a)
+				}
+			}) || ref == nil {
+				continue
+			}
+			if ok, known := holds(ref); known && !ok {
+				sp := it.Span
+				if it.Item != nil {
+					sp = it.Item.Span
+				}
+				t.ErrorCode(sp, "E0277", "the trait bound `%s: %s` is not satisfied", ref.Args[0], ref.Trait.Name)
+				return
+			}
+		}
+	}
+}
+
 // genericImplsOverlap reports whether two generic impls of a trait
 // certainly overlap: their trait refs unify (each impl's parameters taken
 // as unknowns) and every where-clause then still constrains a parameter
@@ -920,6 +1005,7 @@ func (t *Tcx) checkImplRules(impl *Def) {
 		return
 	}
 	t.checkUnconstrained(impl)
+	t.checkImplHeaderLifetimes(impl)
 	if ii.TraitRef == nil || ii.Negative {
 		return
 	}
@@ -945,6 +1031,7 @@ func (t *Tcx) checkImplRules(impl *Def) {
 	if self == nil {
 		return
 	}
+	t.checkImplObligations(impl)
 	switch tr {
 	case t.LangOpt("drop"):
 		if self.Kind != TAdt && self.Kind != TError && self.Kind != TParam {

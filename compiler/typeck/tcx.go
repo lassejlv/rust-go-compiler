@@ -22,11 +22,17 @@ import (
 
 // Tcx is the global typing context.
 type Tcx struct {
+	// PolyClean: the generic functions of local crates whose polymorphic
+	// check found no error (see CheckGenericBodies)
+	PolyClean []PolyBody
+	// pendingBindings: associated type bindings of trait bounds
+	// (`T: Trait<Name = X>`) in local crates, checked by checkBindingNames
+	pendingBindings []pendingBinding
 	// polyResults: the results of the last polymorphic body check, when
 	// it found no error (see CheckGenericBodies)
 	polyResults *Results
-	autoTraits map[string]*Def // std's Send and Sync (see autotrait.go)
-	R *resolve.Resolver
+	autoTraits  map[string]*Def // std's Send and Sync (see autotrait.go)
+	R           *resolve.Resolver
 
 	layouts *layoutCaches // layout.go
 

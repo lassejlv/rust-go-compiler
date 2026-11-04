@@ -30,6 +30,15 @@ func CheckFn(tcx *typeck.Tcx, d *Def, r *typeck.Results) (msgs []string) {
 			msgs = nil
 		}
 	}()
+	if r.PolyCopy != nil {
+		polyBodyParams = map[Ty]bool{}
+		for _, p := range tcx.Generics(d).Identity() {
+			if p.Kind == TParam && p.Sub == 0 {
+				polyBodyParams[p] = true
+			}
+		}
+		defer func() { polyBodyParams = nil }()
+	}
 	b := buildFn(tcx, d, r)
 	bodies := append([]*Body{b.body}, b.closures...)
 	dump := os.Getenv("RUSTGO_MIR_DUMP")

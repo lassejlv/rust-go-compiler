@@ -130,6 +130,33 @@ func (t *Tcx) CheckGenericBodies() {
 					}
 					return true
 				})
+				// (`impl Trait` values of generic callees are not revealed
+				// in a polymorphic check: their regions are not known well
+				// enough to borrow-check the body)
+				opaque := false
+				for _, ty := range r.NodeTypes {
+					if ty != nil && ty.HasOpaque() {
+						opaque = true
+						break
+					}
+				}
+				for _, c := range r.Callees {
+					if opaque {
+						break
+					}
+					if c != nil && c.Def != nil && c.Def.Kind == DefFn && c.Def.Fn != nil {
+						if sig := t.FnSig(c.Def); sig != nil && sig.Output != nil && sig.Output.HasOpaque() {
+							opaque = true
+						}
+					}
+				}
+				if sig := t.FnSig(d); sig == nil || (sig.Output != nil && sig.Output.HasOpaque()) {
+					opaque = true
+				}
+				if !opaque {
+					r.PolyCopy = t.copyParams(d)
+					t.PolyClean = append(t.PolyClean, PolyBody{Def: d, Results: r})
+				}
 			}
 			continue
 		}
@@ -153,6 +180,37 @@ func (t *Tcx) CheckGenericBodies() {
 			}
 		}
 	}
+}
+
+// PolyBody is a generic function whose polymorphic check found no error,
+// with its results (borrow-checked when no instance was).
+type PolyBody struct {
+	Def     *Def
+	Results *Results
+}
+
+// copyParams returns the type parameters of def with a Copy bound (or a
+// bound with a Copy supertrait).
+func (t *Tcx) copyParams(def *Def) map[int]bool {
+	out := map[int]bool{}
+	copyTr := t.LangOpt("copy")
+	t.quietly(func() {
+		for _, p := range t.Generics(def).Predicates {
+			if p.Trait == nil || len(p.Trait.Args) == 0 || p.Maybe {
+				continue
+			}
+			a := p.Trait.Args[0]
+			if a.Kind != TParam {
+				continue
+			}
+			for _, st := range t.AllSupertraits(p.Trait) {
+				if st.Trait == copyTr {
+					out[a.Index] = true
+				}
+			}
+		}
+	})
+	return out
 }
 
 // polyCheck type checks def with its own parameters as types and returns

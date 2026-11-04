@@ -739,6 +739,24 @@ func (w *capWalker) expr(e ast.Expr, ctx useCtx) {
 			case CallClosure:
 				if ci := w.fcx.t.Closures[c.Ty]; ci != nil {
 					fc = []useCtx{usePlace, usePlaceMut, useValue}[ci.Kind]
+				} else if c.Ty != nil && c.Ty.Kind == TParam {
+					// a call through a type parameter's Fn* bound
+					// (polymorphic check of a generic body)
+					kind := 2
+					for _, e := range w.fcx.ic.env {
+						if len(e.Args) == 0 || e.Args[0] != c.Ty {
+							continue
+						}
+						switch e.Trait.LangItem {
+						case "fn":
+							kind = 0
+						case "fn_mut":
+							if kind > 1 {
+								kind = 1
+							}
+						}
+					}
+					fc = []useCtx{usePlace, usePlaceMut, useValue}[kind]
 				}
 			case CallDynFn:
 				switch c.Ty.Def.LangItem {
