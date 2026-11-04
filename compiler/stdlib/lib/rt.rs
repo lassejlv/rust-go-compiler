@@ -5,16 +5,18 @@ use crate::intrinsics;
 
 /// The panic location: when called (via `panic!`) from a #[track_caller]
 /// function such as `Option::unwrap`, its caller's location, as in rustc;
-/// otherwise the `panic!` site passed explicitly.
-#[inline(always)]
-#[track_caller]
-fn caller_or<'a>(file: &'a str, line: u32, col: u32) -> (&'a str, u32, u32) {
-    if unsafe { intrinsics::caller_location_tracked() } {
-        let l = unsafe { intrinsics::caller_location() };
-        (l.file(), l.line(), l.column())
-    } else {
-        (file, line, col)
-    }
+/// otherwise the `panic!` site passed explicitly (the outermost macro call
+/// site for a `panic!` in a macro_rules! body). A macro, not a function:
+/// the check is about the caller of the panicking entry point itself.
+macro_rules! caller_or {
+    ($file:expr, $line:expr, $col:expr) => {
+        if unsafe { intrinsics::caller_location_tracked() } {
+            let l = unsafe { intrinsics::caller_location() };
+            (l.file(), l.line(), l.column())
+        } else {
+            ($file, $line, $col)
+        }
+    };
 }
 
 /// Panics with a plain message (`panic!()` without format arguments, `assert!`).
@@ -24,7 +26,7 @@ fn caller_or<'a>(file: &'a str, line: u32, col: u32) -> (&'a str, u32, u32) {
 pub fn panic_str(msg: &str, file: &str, line: u32, col: u32) -> ! {
     // `msg` is always a string literal here (its payload is `&'static str`).
     let msg: &'static str = unsafe { &*(msg as *const str) };
-    let (file, line, col) = caller_or(file, line, col);
+    let (file, line, col) = caller_or!(file, line, col);
     crate::panicking::begin_panic_static(msg, file, line, col)
 }
 
@@ -33,7 +35,7 @@ pub fn panic_str(msg: &str, file: &str, line: u32, col: u32) -> ! {
 #[cold]
 #[track_caller]
 pub fn panic_fmt(args: fmt::Arguments<'_>, file: &str, line: u32, col: u32) -> ! {
-    let (file, line, col) = caller_or(file, line, col);
+    let (file, line, col) = caller_or!(file, line, col);
     if let Some(s) = args.as_str() {
         crate::panicking::begin_panic_static(s, file, line, col)
     }
@@ -45,7 +47,7 @@ pub fn panic_fmt(args: fmt::Arguments<'_>, file: &str, line: u32, col: u32) -> !
 #[cold]
 #[track_caller]
 pub fn begin_panic<M: crate::any::Any + Send>(msg: M, file: &str, line: u32, col: u32) -> ! {
-    let (file, line, col) = caller_or(file, line, col);
+    let (file, line, col) = caller_or!(file, line, col);
     let payload: Box<dyn crate::any::Any + Send> = Box::new(msg);
     if let Some(s) = payload.downcast_ref::<&'static str>() {
         crate::panicking::begin_panic_static(*s, file, line, col)

@@ -266,11 +266,12 @@ func serializeTTs(tts []ast.TokenTree) string {
 				put(')', "")
 				continue
 			}
-			if tt.Tok.Nt&lexer.NtStart != 0 {
+			nt := tt.Tok.Nt&lexer.NtStart != 0 || tt.Delim == 0 && tt.Tok.Kind == lexer.Lifetime && tt.Tok.Nt&lexer.NtLifetime != 0
+			if nt {
 				put('N', "")
 			}
 			one(i, tt)
-			if tt.Tok.Nt&lexer.NtEnd != 0 {
+			if tt.Tok.Nt&lexer.NtEnd != 0 || nt && tt.Tok.Nt&lexer.NtStart == 0 {
 				put(')', "")
 			}
 		}

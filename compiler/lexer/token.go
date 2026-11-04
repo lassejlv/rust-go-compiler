@@ -149,6 +149,9 @@ const (
 	// substituted `path` fragment (`a::B<T>` used as `a::B::<T>`); it is
 	// not part of the fragment's text (stringify!).
 	NtTurbofish
+	// NtLifetime marks a token substituted for a `lifetime` fragment (a
+	// none-delimited group for proc macros)
+	NtLifetime
 )
 
 func (t Token) String() string {

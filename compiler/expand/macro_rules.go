@@ -774,6 +774,8 @@ func emitFragment(f *fragment) []ast.TokenTree {
 			out[i].Tok.JointNext = false
 			if f.kind == "ident" {
 				out[i].Tok.Nt |= lexer.NtIdent
+			} else {
+				out[i].Tok.Nt |= lexer.NtLifetime
 			}
 		}
 		return out

@@ -239,6 +239,51 @@ func macroCallPath(tts []ast.TokenTree) *ast.Path {
 	return p
 }
 
+// literalMacArg expands a format argument that is a call of a macro_rules!
+// macro or of a literal-producing builtin (`line!()`, `concat!(..)`) when
+// it expands to a literal: rustc inlines such arguments into the format
+// string (they are literals after expansion). Other arguments are
+// returned unchanged.
+func (e *Expander) literalMacArg(tts []ast.TokenTree) []ast.TokenTree {
+	n := len(tts)
+	if n < 3 || tts[n-1].Delim == 0 || !isPunct(tts[n-2], "!") || !isIdentTT(tts[n-3]) || e.litDepth >= e.RecursionLimit {
+		return tts
+	}
+	path := macroCallPath(tts[:n-2])
+	if path == nil {
+		return tts
+	}
+	g := tts[n-1]
+	mac := &ast.MacCall{Path: path, Delim: g.Delim, Args: g.Inner, Span: ttsSpan(tts, lexer.Span{})}
+	def, bi := e.lookupMacroCall(mac)
+	if def == nil {
+		switch macName(mac) {
+		case "line", "column", "concat", "stringify", "file", "module_path", "env":
+		default:
+			return tts
+		}
+		if bi == nil || e.procMacroOverride(mac, macName(mac)) != nil {
+			return tts
+		}
+	}
+	e.litDepth++
+	res, _, err := e.macTokens(mac)
+	if err == nil {
+		res = e.literalMacArg(res)
+	}
+	e.litDepth--
+	for len(res) == 1 && isInvisibleGroup(res[0]) {
+		res = res[0].Inner
+	}
+	if err != nil || len(res) != 1 {
+		return tts
+	}
+	if _, ok := literalText(res); !ok {
+		return tts
+	}
+	return res
+}
+
 // strLitHyg returns the hygiene context of a string literal argument.
 func strLitHyg(tts []ast.TokenTree) uint32 {
 	if len(tts) == 1 && isInvisibleGroup(tts[0]) {
@@ -285,7 +330,7 @@ func (e *Expander) formatArgsMacDirect(mac *ast.MacCall, tts []ast.TokenTree, pr
 		in.strHyg = strLitHyg(args[0].tts)
 		seenNamed := false
 		for _, a := range args[1:] {
-			fa := &fmtArg{name: a.name, tts: a.tts, span: a.span(mac.Span)}
+			fa := &fmtArg{name: a.name, tts: e.literalMacArg(a.tts), span: a.span(mac.Span)}
 			if a.name != "" {
 				if _, dup := in.byName[a.name]; dup {
 					return nil, false, errAt(a.nameSp, "duplicate argument named `%s`", a.name)
