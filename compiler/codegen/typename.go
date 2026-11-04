@@ -118,6 +118,20 @@ func writeTypeNameList(b *strings.Builder, ts []Ty) {
 	}
 }
 
+// writeBoundTypeName writes a type under a fn pointer's binder, where
+// rustc names the (late-bound, anonymous) lifetimes of references `'_`.
+func writeBoundTypeName(b *strings.Builder, t Ty) {
+	if t.Kind != TRef {
+		writeTypeName(b, t)
+		return
+	}
+	b.WriteString("&'_ ")
+	if t.Mut {
+		b.WriteString("mut ")
+	}
+	writeBoundTypeName(b, t.Elem)
+}
+
 func writeTypeName(b *strings.Builder, t Ty) {
 	switch t.Kind {
 	case TTuple:
@@ -197,12 +211,24 @@ func writeTypeName(b *strings.Builder, t Ty) {
 			b.WriteByte('>')
 		}
 	case TFnPtr:
+		b.WriteString(t.FnPtrHeader())
 		b.WriteString("fn(")
-		writeTypeNameList(b, t.Elems)
+		for i, x := range t.Elems {
+			if i > 0 {
+				b.WriteString(", ")
+			}
+			writeBoundTypeName(b, x)
+		}
+		if t.FnVariadic() {
+			if len(t.Elems) > 0 {
+				b.WriteString(", ")
+			}
+			b.WriteString("...")
+		}
 		b.WriteByte(')')
 		if !t.Ret.IsUnit() {
 			b.WriteString(" -> ")
-			writeTypeName(b, t.Ret)
+			writeBoundTypeName(b, t.Ret)
 		}
 	case TClosure:
 		if t.Def != nil {

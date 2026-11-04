@@ -657,7 +657,7 @@ func (ac *astConv) lowerTy(at ast.Type) Ty {
 		if x.Output != nil {
 			out = ac.lowerTy(x.Output)
 		}
-		return FnPtr(ins, out, x.Variadic)
+		return FnPtrSig(ins, out, x.Variadic, x.Unsafe, NormalizeAbi(x.Abi))
 	case *ast.ImplTraitType:
 		if idx, ok := t.synthetic[x.ID]; ok {
 			return ac.paramTy(ac.gen.Params[idx])

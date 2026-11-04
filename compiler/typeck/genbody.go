@@ -702,7 +702,7 @@ func (fcx *FnCtxt) polyUnsatisfied(o *Obligation, tr *TraitRef) {
 		}
 	}
 	for _, impl := range fcx.t.traitImpls[trait] {
-		if impl.Impl.TraitRef.Args[0].Kind == TParam {
+		if impl.Impl.TraitRef.Args[0].Kind == TParam && !fcx.t.fnPtrBlanket(impl) {
 			return // a blanket impl
 		}
 	}
@@ -757,7 +757,7 @@ func (fcx *FnCtxt) polyParamLacks(p Ty, tr *Def) bool {
 		}
 	}
 	for _, impl := range fcx.t.traitImpls[tr] {
-		if a := impl.Impl.TraitRef.Args; len(a) == 0 || a[0].Kind == TParam {
+		if a := impl.Impl.TraitRef.Args; len(a) == 0 || a[0].Kind == TParam && !fcx.t.fnPtrBlanket(impl) {
 			return false // a blanket impl
 		}
 	}

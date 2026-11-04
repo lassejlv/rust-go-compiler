@@ -296,6 +296,7 @@ func (r *Resolver) collectItem(it *ast.Item, m *Module, parent *Def) *Def {
 			sd := r.collectItem(sub, m, parent)
 			if sd != nil && sd.Fn != nil {
 				sd.Fn.Extern = true
+				sd.Fn.Abi = k.Abi
 				if k.Abi == "rust-intrinsic" {
 					sd.Intrinsic = sd.Name
 				}

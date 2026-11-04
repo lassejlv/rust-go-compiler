@@ -26,6 +26,52 @@ pub auto trait Unpin {}
 #[lang = "tuple_trait"]
 pub trait Tuple {}
 
+/// Function pointer types, of any safety and ABI (implemented by the
+/// compiler for every fn pointer type; core's unstable `FnPtr`).
+#[lang = "fn_ptr_trait"]
+pub trait FnPtr: Copy + Clone {
+    /// The address of the function.
+    fn addr(self) -> *const ();
+}
+
+impl<F: FnPtr> PartialEq for F {
+    fn eq(&self, other: &Self) -> bool {
+        self.addr() == other.addr()
+    }
+}
+
+impl<F: FnPtr> Eq for F {}
+
+impl<F: FnPtr> PartialOrd for F {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.addr().partial_cmp(&other.addr())
+    }
+}
+
+impl<F: FnPtr> Ord for F {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.addr().cmp(&other.addr())
+    }
+}
+
+impl<F: FnPtr> Hash for F {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        state.write_usize(self.addr() as usize);
+    }
+}
+
+impl<F: FnPtr> fmt::Pointer for F {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::pointer_fmt_inner(self.addr() as usize, f)
+    }
+}
+
+impl<F: FnPtr> fmt::Debug for F {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::pointer_fmt_inner(self.addr() as usize, f)
+    }
+}
+
 /// Zero-sized type used to mark things that "act like" they own a `T`.
 #[lang = "phantom_data"]
 pub struct PhantomData<T: ?Sized>;

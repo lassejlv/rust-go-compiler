@@ -1,0 +1,27 @@
+fn                     144
+unsafe fn              6
+extern "C" fn          -12
+unsafe extern "C" fn   24
+unsafe fn              144
+unsafe extern "C" fn   -12
+arity 1 0 2 101
+compose 26
+unsafe [4, 81, 8, 10]
++ -> 10
+- -> 4
+* -> 21
+? -> 0
+choose_unsafe 0 5
+choose_unsafe 1 100
+choose_unsafe 2 11
+a -3 9
+b 1 0
+c -3 -300
+["half again", "sq"]
+-8
+true
+true
+true true
+true
+8
+core::option::Option<unsafe fn(i64) -> i64>

@@ -26,7 +26,7 @@ const (
 	TPtr        // Mut, Elem
 	TAdt        // Def, Args
 	TFnDef      // Def, Args (a zero-sized function item type)
-	TFnPtr      // Elems = inputs, Ret
+	TFnPtr      // Elems = inputs, Ret; Sub = FnPtr* flags; Name = ABI ("" = Rust)
 	TClosure    // Def (closure def), Args (enclosing instance args), Index = unique closure id
 	TDyn        // Def = principal trait, Args = trait args (without Self), Bindings
 	TParam      // Index, Name; Sub = 1 for const params
@@ -300,9 +300,17 @@ func (t *TyS) writeKey(b *strings.Builder) {
 		writeKeyList(b, t.Args)
 		b.WriteByte('>')
 	case TFnPtr:
+		if t.Sub&FnPtrUnsafe != 0 {
+			b.WriteString("unsafe ")
+		}
+		if t.Name != "" {
+			b.WriteString("extern \"")
+			b.WriteString(t.Name)
+			b.WriteString("\" ")
+		}
 		b.WriteString("fn(")
 		writeKeyList(b, t.Elems)
-		if t.Sub == 1 {
+		if t.Sub&FnPtrVariadic != 0 {
 			b.WriteString(",...")
 		}
 		b.WriteString(")->")
@@ -413,11 +421,70 @@ func FnDefTy(d *Def, args []Ty) Ty {
 	return intern(&TyS{Kind: TFnDef, Def: d, Args: args})
 }
 func FnPtr(inputs []Ty, ret Ty, variadic bool) Ty {
+	return FnPtrSig(inputs, ret, variadic, false, "")
+}
+
+// Flags of a fn pointer type (TyS.Sub of a TFnPtr).
+const (
+	FnPtrVariadic uint8 = 1 << iota
+	FnPtrUnsafe
+)
+
+// FnPtrSig makes a fn pointer type with its safety and ABI ("" is the
+// Rust ABI; see NormalizeAbi).
+func FnPtrSig(inputs []Ty, ret Ty, variadic, unsafe bool, abi string) Ty {
 	var sub uint8
 	if variadic {
-		sub = 1
+		sub |= FnPtrVariadic
 	}
-	return intern(&TyS{Kind: TFnPtr, Elems: inputs, Ret: ret, Sub: sub})
+	if unsafe {
+		sub |= FnPtrUnsafe
+	}
+	return intern(&TyS{Kind: TFnPtr, Elems: inputs, Ret: ret, Sub: sub, Name: abi})
+}
+
+// NormalizeAbi maps an ABI string as written (`extern "Rust"`, the
+// intrinsic ABIs) to its canonical form: "" for the Rust ABI.
+func NormalizeAbi(abi string) string {
+	switch abi {
+	case "Rust", "rust-intrinsic", "rust-call":
+		return ""
+	}
+	return abi
+}
+
+// FnVariadic, FnUnsafe and FnAbi describe a fn pointer type.
+func (t *TyS) FnVariadic() bool { return t.Kind == TFnPtr && t.Sub&FnPtrVariadic != 0 }
+func (t *TyS) FnUnsafe() bool   { return t.Kind == TFnPtr && t.Sub&FnPtrUnsafe != 0 }
+func (t *TyS) FnAbi() string {
+	if t.Kind != TFnPtr {
+		return ""
+	}
+	return t.Name
+}
+
+// WithFnSafety returns fn pointer type t made unsafe (or safe).
+func (t *TyS) WithFnSafety(unsafe bool) Ty {
+	return FnPtrSig(t.Elems, t.Ret, t.FnVariadic(), unsafe, t.Name)
+}
+
+// writeFnPtrHeader writes the `unsafe extern "C" ` prefix of a fn pointer.
+func writeFnPtrHeader(b *strings.Builder, t *TyS) {
+	if t.FnUnsafe() {
+		b.WriteString("unsafe ")
+	}
+	if t.Name != "" {
+		b.WriteString("extern ")
+		b.WriteString(strconv.Quote(t.Name))
+		b.WriteByte(' ')
+	}
+}
+
+// FnPtrHeader returns the `unsafe extern "C" ` prefix of a fn pointer type.
+func (t *TyS) FnPtrHeader() string {
+	var b strings.Builder
+	writeFnPtrHeader(&b, t)
+	return b.String()
 }
 func Closure(d *Def, id int, args []Ty) Ty {
 	return intern(&TyS{Kind: TClosure, Def: d, Index: id, Args: args})
@@ -722,8 +789,15 @@ func (t *TyS) write(b *strings.Builder) {
 	case TOpaque:
 		fmt.Fprintf(b, "impl Trait#%d of %s", t.Index, t.Def.Path())
 	case TFnPtr:
+		writeFnPtrHeader(b, t)
 		b.WriteString("fn(")
 		writeList(b, t.Elems)
+		if t.FnVariadic() {
+			if len(t.Elems) > 0 {
+				b.WriteString(", ")
+			}
+			b.WriteString("...")
+		}
 		b.WriteByte(')')
 		if !t.Ret.IsUnit() {
 			b.WriteString(" -> ")

@@ -213,7 +213,8 @@ type FnInfo struct {
 	Ast     *ast.FnItem
 	Sig     *FnSig // lowered lazily
 	HasSelf bool
-	Extern  bool // extern "C" foreign fn
+	Extern  bool   // extern "C" foreign fn
+	Abi     string // ABI of a foreign fn (its extern block's)
 	// Opaque types (impl Trait in return position) declared by the signature:
 	// OpaqueBounds[i] are the bounds of Opaque(def, args, i).
 	OpaqueBounds [][]*Predicate

@@ -203,7 +203,7 @@ func (ic *InferCtxt) unify(a, b Ty) bool {
 	case TAdt, TFnDef, TOpaque:
 		return a.Def == b.Def && a.Index == b.Index && ic.unifyList(a.Args, b.Args)
 	case TFnPtr:
-		return a.Sub == b.Sub && ic.unifyList(a.Elems, b.Elems) && ic.unify(a.Ret, b.Ret)
+		return a.Sub == b.Sub && a.Name == b.Name && ic.unifyList(a.Elems, b.Elems) && ic.unify(a.Ret, b.Ret)
 	case TClosure:
 		return a.Index == b.Index && ic.unifyList(a.Args, b.Args)
 	case TDyn:

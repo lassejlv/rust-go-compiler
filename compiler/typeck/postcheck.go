@@ -83,6 +83,7 @@ func (t *Tcx) checkBodyMisc(r *Results, def *Def) {
 	// deny-by-default lints; cargo caps lints of registry dependencies
 	if !std && def != nil && def.Crate != nil && def.Crate.Local {
 		t.checkKnownPanics(r, def, root)
+		t.checkImplicitAutorefs(r, def, root)
 	}
 	// locals must have a statically known size, and well-formed types
 	if !std {
@@ -131,7 +132,10 @@ func (t *Tcx) checkCast(r *Results, x *ast.CastExpr) {
 		from.Kind == TFloat && to.Kind == TPtr:
 		t.ErrorCode(x.Span, "E0606", "casting `%s` as `%s` is invalid", from, to)
 	case from.Kind == TAdt && from.Def.Adt != nil && from.Def.Adt.Kind == AdtEnum && !fieldlessEnum(from.Def) && (isNum(to) || to.Kind == TBool || to.Kind == TChar),
-		from.Kind == TClosure && (isNum(to) || to.Kind == TBool || to.Kind == TChar || to.Kind == TPtr):
+		from.Kind == TClosure && (isNum(to) || to.Kind == TBool || to.Kind == TChar || to.Kind == TPtr),
+		// fn items, closures and fn pointers cast to a fn pointer type
+		// only by coercion (same ABI, safe -> unsafe)
+		(from.Kind == TFnDef || from.Kind == TFnPtr || from.Kind == TClosure) && to.Kind == TFnPtr:
 		t.ErrorCode(x.Span, "E0605", "non-primitive cast: `%s` as `%s`", from, to)
 	case (isNum(to) || to.Kind == TBool || to.Kind == TChar) &&
 		((from.Kind == TAdt && from.Def.Adt != nil && from.Def.Adt.Kind != AdtEnum) || from.Kind == TStr || from.Kind == TTuple || from.Kind == TArray || from.Kind == TSlice):

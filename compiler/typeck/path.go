@@ -474,7 +474,7 @@ func (fcx *FnCtxt) checkCall(x *ast.CallExpr, expected Ty) Ty {
 			return out
 		case TFnPtr:
 			fcx.addAdjust(x.Fn, adjustmentsFor(steps, i)...)
-			fcx.checkArgs(x.Args, t.Elems, t.Sub == 1, x.Span)
+			fcx.checkArgs(x.Args, t.Elems, t.FnVariadic(), x.Span)
 			fcx.r.Callees[x.ID] = &Callee{Kind: CallFnPtr, Ty: t}
 			return t.Ret
 		case TClosure:
