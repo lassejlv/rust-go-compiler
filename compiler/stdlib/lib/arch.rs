@@ -2,9 +2,10 @@
 //!
 //! rustgo has no SIMD backend: the x86_64 vector types and intrinsics are
 //! emulated lane by lane in portable Rust (with the same results as the real
-//! instructions). No `target_feature` cfg is set, so crates normally select
-//! their scalar fallbacks; these definitions exist so that code which merely
-//! mentions the intrinsics compiles (and works if it is called).
+//! instructions). Only the x86_64 baseline (`fxsr`, `sse`, `sse2`) is set as
+//! `target_feature` cfg and reported by `is_x86_feature_detected!`, so crates
+//! select their SSE2 or scalar paths; the other intrinsics exist so that code
+//! which merely mentions them compiles (and works if it is called).
 
 /// Platform-specific intrinsics for the `x86_64` platform.
 pub mod x86_64 {
@@ -805,6 +806,104 @@ pub mod x86_64 {
         wr64(&mut r, 0, lo);
         wr64(&mut r, 1, hi);
         __m128i::from_bytes(r)
+    }
+
+    /// Loads 512 bits of integer data from unaligned memory.
+    #[inline]
+    pub unsafe fn _mm512_loadu_si512(mem_addr: *const __m512i) -> __m512i {
+        let mut b = [0u8; 64];
+        intrinsics::copy_nonoverlapping(mem_addr as *const u8, b.as_mut_ptr(), 64);
+        __m512i::from_bytes(b)
+    }
+
+    /// Stores 512 bits of integer data into unaligned memory.
+    #[inline]
+    pub unsafe fn _mm512_storeu_si512(mem_addr: *mut __m512i, a: __m512i) {
+        intrinsics::copy_nonoverlapping(a.bytes.as_ptr(), mem_addr as *mut u8, 64);
+    }
+
+    /// Bitwise XOR of 512 bits.
+    #[inline]
+    pub unsafe fn _mm512_xor_si512(a: __m512i, b: __m512i) -> __m512i {
+        let mut r = [0u8; 64];
+        let mut i = 0;
+        while i < 64 {
+            r[i] = a.bytes[i] ^ b.bytes[i];
+            i += 1;
+        }
+        __m512i::from_bytes(r)
+    }
+
+    /// Sets packed 64-bit integers (`e0` is the lowest lane).
+    #[inline]
+    pub unsafe fn _mm512_set_epi64(e7: i64, e6: i64, e5: i64, e4: i64, e3: i64, e2: i64, e1: i64, e0: i64) -> __m512i {
+        let mut r = [0u8; 64];
+        let v = [e0, e1, e2, e3, e4, e5, e6, e7];
+        let mut i = 0;
+        while i < 8 {
+            wr64(&mut r, i, v[i] as u64);
+            i += 1;
+        }
+        __m512i::from_bytes(r)
+    }
+
+    /// Casts a 128-bit vector to 512 bits (upper bits zero here).
+    #[inline]
+    pub unsafe fn _mm512_castsi128_si512(a: __m128i) -> __m512i {
+        let mut r = [0u8; 64];
+        r[..16].copy_from_slice(&a.bytes);
+        __m512i::from_bytes(r)
+    }
+
+    /// Returns the lowest 128 bits of `a`.
+    #[inline]
+    pub unsafe fn _mm512_castsi512_si128(a: __m512i) -> __m128i {
+        let mut b = [0u8; 16];
+        b.copy_from_slice(&a.bytes[..16]);
+        __m128i::from_bytes(b)
+    }
+
+    /// Extracts the 128-bit lane selected by `imm8` from `a`.
+    #[inline]
+    pub unsafe fn _mm512_extracti32x4_epi32(a: __m512i, imm8: i32) -> __m128i {
+        let o = ((imm8 & 3) as usize) * 16;
+        let mut b = [0u8; 16];
+        b.copy_from_slice(&a.bytes[o..o + 16]);
+        __m128i::from_bytes(b)
+    }
+
+    /// Carry-less multiplication in each 128-bit lane (see `_mm_clmulepi64_si128`).
+    #[inline]
+    pub unsafe fn _mm256_clmulepi64_epi128(a: __m256i, b: __m256i, imm8: i32) -> __m256i {
+        let mut r = [0u8; 32];
+        let mut l = 0;
+        while l < 2 {
+            let mut x = [0u8; 16];
+            let mut y = [0u8; 16];
+            x.copy_from_slice(&a.bytes[l * 16..l * 16 + 16]);
+            y.copy_from_slice(&b.bytes[l * 16..l * 16 + 16]);
+            let z = _mm_clmulepi64_si128(__m128i::from_bytes(x), __m128i::from_bytes(y), imm8);
+            r[l * 16..l * 16 + 16].copy_from_slice(&z.bytes);
+            l += 1;
+        }
+        __m256i::from_bytes(r)
+    }
+
+    /// Carry-less multiplication in each 128-bit lane (see `_mm_clmulepi64_si128`).
+    #[inline]
+    pub unsafe fn _mm512_clmulepi64_epi128(a: __m512i, b: __m512i, imm8: i32) -> __m512i {
+        let mut r = [0u8; 64];
+        let mut l = 0;
+        while l < 4 {
+            let mut x = [0u8; 16];
+            let mut y = [0u8; 16];
+            x.copy_from_slice(&a.bytes[l * 16..l * 16 + 16]);
+            y.copy_from_slice(&b.bytes[l * 16..l * 16 + 16]);
+            let z = _mm_clmulepi64_si128(__m128i::from_bytes(x), __m128i::from_bytes(y), imm8);
+            r[l * 16..l * 16 + 16].copy_from_slice(&z.bytes);
+            l += 1;
+        }
+        __m512i::from_bytes(r)
     }
 
     /// Permutes packed 32-bit integers in `a` using the corresponding index in `idx`.
