@@ -132,25 +132,26 @@ impl<T> SliceIndex<[T]> for usize {
     unsafe fn get_unchecked_mut(self, slice: *mut [T]) -> *mut T {
         intrinsics::ptr_add_mut(intrinsics::slice_ptr(slice as *const [T]) as *mut T, self)
     }
+    // (intrinsics only: small enough to be inlined in debug builds too)
     #[inline]
     #[track_caller]
     fn index(self, slice: &[T]) -> &T {
-        let len = slice.len();
-        if self < len {
-            unsafe { &*self.get_unchecked(slice as *const [T]) }
-        } else {
+        let p = slice as *const [T];
+        let len = unsafe { intrinsics::slice_len(p) };
+        if self >= len {
             index_out_of_bounds(self, len)
         }
+        unsafe { &*intrinsics::ptr_add(intrinsics::slice_ptr(p), self) }
     }
     #[inline]
     #[track_caller]
     fn index_mut(self, slice: &mut [T]) -> &mut T {
-        let len = slice.len();
-        if self < len {
-            unsafe { &mut *self.get_unchecked_mut(slice as *mut [T]) }
-        } else {
+        let p = slice as *mut [T];
+        let len = unsafe { intrinsics::slice_len(p as *const [T]) };
+        if self >= len {
             index_out_of_bounds(self, len)
         }
+        unsafe { &mut *(intrinsics::ptr_add(intrinsics::slice_ptr(p as *const [T]), self) as *mut T) }
     }
 }
 

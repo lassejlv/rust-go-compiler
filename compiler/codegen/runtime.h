@@ -8,6 +8,14 @@
 #include <strings.h>
 
 typedef struct {} Unit;
+
+/* #[inline] functions too large to be worth inlining in debug builds
+   (see inlineSmallBytes in codegen/gen.go) */
+#ifdef RG_NO_OVERFLOW_CHECKS
+#define RG_INLINE_BIG inline
+#else
+#define RG_INLINE_BIG
+#endif
 typedef struct { void* ptr; uint64_t meta; } Fat;
 
 #define RG_I128_MAX ((__int128)(((unsigned __int128)1 << 127) - 1))

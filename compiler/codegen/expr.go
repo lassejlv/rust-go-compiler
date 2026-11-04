@@ -1438,11 +1438,10 @@ func (fc *fnGen) callResolvedSpan(d *Def, args []Ty, vals []string, ret Ty, sp a
 	if d.Intrinsic != "" {
 		return fc.intrinsic(d, args, vals, ret, sp)
 	}
-	name := fc.g.fnName(d, args)
 	if hasTrackCaller(d) {
-		// pass our location (or the one we were given) after evaluating
-		// the arguments, which may make tracked calls themselves
-		// (to NAME_tc, see genFunction)
+		// pass our location (or the one we were given) to NAME_tc (see
+		// genFunction)
+		name := fc.g.fnNameDirect(d, args)
 		if fc.trackCaller {
 			vals = append(vals, "__loc", "1")
 		} else {
@@ -1450,7 +1449,7 @@ func (fc *fnGen) callResolvedSpan(d *Def, args []Ty, vals []string, ret Ty, sp a
 		}
 		return fmt.Sprintf("%s_tc(%s)", name, strings.Join(vals, ", "))
 	}
-	return fmt.Sprintf("%s(%s)", name, strings.Join(vals, ", "))
+	return fmt.Sprintf("%s(%s)", fc.g.fnName(d, args), strings.Join(vals, ", "))
 }
 
 // trackedIndirectCall calls a #[track_caller] method through a vtable: the

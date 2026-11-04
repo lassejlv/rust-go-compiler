@@ -185,6 +185,42 @@ fn min_run_len(mut n: usize) -> usize {
     n + r
 }
 
+/// The pending runs of the merge sort (TimSort's run stack): (start, len).
+struct Runs {
+    runs: [(usize, usize); 80],
+    n: usize,
+}
+
+impl Runs {
+    /// The runs to merge next, `r` and `r + 1` (TimSort's rules, which
+    /// keep the stack short), if any; `at_end`: no run is left to add.
+    fn to_merge(&self, at_end: bool) -> Option<usize> {
+        let n = self.n;
+        let l = |i: usize| self.runs[i].1;
+        if n >= 2
+            && (at_end
+                || l(n - 2) <= l(n - 1)
+                || (n >= 3 && l(n - 3) <= l(n - 2) + l(n - 1))
+                || (n >= 4 && l(n - 4) <= l(n - 3) + l(n - 2)))
+        {
+            Some(if n >= 3 && l(n - 3) < l(n - 1) { n - 3 } else { n - 2 })
+        } else {
+            None
+        }
+    }
+
+    /// Records that runs `r` and `r + 1` were merged.
+    fn merged(&mut self, r: usize) {
+        self.runs[r].1 += self.runs[r + 1].1;
+        let mut k = r + 1;
+        while k + 1 < self.n {
+            self.runs[k] = self.runs[k + 1];
+            k += 1;
+        }
+        self.n -= 1;
+    }
+}
+
 /// Sorts the slice stably with the strict-weak-order predicate `is_less`.
 pub(crate) fn merge_sort<T, F: FnMut(&T, &T) -> bool>(v: &mut [T], is_less: &mut F) {
     let len = v.len();
@@ -204,9 +240,7 @@ pub(crate) fn merge_sort<T, F: FnMut(&T, &T) -> bool>(v: &mut [T], is_less: &mut
         }
         let buf = Buffer { ptr: crate::alloc::alloc_array::<T>(len / 2), len: len / 2 };
         let min_run = min_run_len(len);
-        // the pending runs (start, len), merged TimSort-style
-        let mut runs: [(usize, usize); 80] = [(0, 0); 80];
-        let mut n = 0;
+        let mut runs = Runs { runs: [(0, 0); 80], n: 0 };
         let mut start = 0;
         while start < len {
             let mut rl = if start == 0 { first } else { find_run(at(p, start), len - start, is_less) };
@@ -215,32 +249,17 @@ pub(crate) fn merge_sort<T, F: FnMut(&T, &T) -> bool>(v: &mut [T], is_less: &mut
                 insertion_sort(at(p, start), end - start, rl, is_less);
                 rl = end - start;
             }
-            runs[n] = (start, rl);
-            n += 1;
+            runs.runs[runs.n] = (start, rl);
+            runs.n += 1;
             start += rl;
-            loop {
-                let ok = n >= 2
-                    && (start == len
-                        || runs[n - 2].1 <= runs[n - 1].1
-                        || (n >= 3 && runs[n - 3].1 <= runs[n - 2].1 + runs[n - 1].1)
-                        || (n >= 4 && runs[n - 4].1 <= runs[n - 3].1 + runs[n - 2].1));
-                if !ok {
-                    break;
-                }
-                let r = if n >= 3 && runs[n - 3].1 < runs[n - 1].1 { n - 3 } else { n - 2 };
-                let (ls, ll) = runs[r];
-                let (_, rl2) = runs[r + 1];
-                // skip the merge when the runs are already in order
+            while let Some(r) = runs.to_merge(start == len) {
+                let (ls, ll) = runs.runs[r];
+                let rl2 = runs.runs[r + 1].1;
+                // (skipped when the runs are already in order)
                 if is_less(&*at(p, ls + ll), &*at(p, ls + ll - 1)) {
                     merge(at(p, ls), ll + rl2, ll, buf.ptr, is_less);
                 }
-                runs[r] = (ls, ll + rl2);
-                let mut k = r + 1;
-                while k + 1 < n {
-                    runs[k] = runs[k + 1];
-                    k += 1;
-                }
-                n -= 1;
+                runs.merged(r);
             }
         }
         drop(buf);
