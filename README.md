@@ -117,7 +117,10 @@ merged one does not compile).
   live long enough", including default object lifetime bounds:
   `Box<dyn Trait>` in a signature is `'static`). Two-phase borrows are
   reserved before the call's arguments are evaluated (`v.push(v.pop())` is
-  E0499), and loans flowing into the return value stay live at every point
+  E0499; deref-coerced `&mut` arguments are two-phase too), a Copy place
+  operand is read at its position in evaluation order (`(l.e, W(l))`), a
+  value whose `Drop` holds borrows is dropped only where it may still be
+  initialized (not after it was moved out), and loans flowing into the return value stay live at every point
   reachable from where they are taken (NLL problem case #3). Types carry no lifetimes after type checking, so regions
   are modeled by loan sets attached to values (by reference depth) and
   propagated through calls by the callees' declared signatures; whenever

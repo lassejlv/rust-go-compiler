@@ -299,9 +299,11 @@ func fnRegions(d *Def) *sigRegions {
 		}
 	} else {
 		lts := map[string]bool{}
+		// lifetimes inside `Self` (a by-value `self`, `Box<Self>`) are
+		// not input lifetime positions
 		for _, os := range r.params {
 			for _, o := range os {
-				if o.name[0] == '\'' {
+				if o.name[0] == '\'' && !o.inSelf {
 					lts[o.name] = true
 				}
 			}
@@ -344,6 +346,12 @@ func (r *sigRegions) allowed(os []occ, d int) (map[string]bool, bool) {
 		n := o.name
 		if n == "'?" {
 			n = r.elided
+			if n == "" {
+				// no lifetime to elide to (a signature rustc would
+				// reject, or one we do not model): unsure
+				any = true
+				continue
+			}
 		}
 		if n != "" {
 			set[n] = true
