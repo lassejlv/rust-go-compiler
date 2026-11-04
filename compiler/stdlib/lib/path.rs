@@ -1297,14 +1297,16 @@ impl Hash for Path {
     fn hash<H: Hasher>(&self, h: &mut H) {
         let bytes = &self.inner;
         let mut component_start = 0;
-        let mut bytes_hashed: usize = 0;
+        // like std: extra state so that ["foo", "bar"] and ["foobar"] differ
+        let mut chunk_bits: usize = 0;
         let mut i = 0;
         while i < bytes.len() {
             if is_sep_byte(bytes[i]) {
                 if i > component_start {
                     let to_hash = &bytes[component_start..i];
+                    chunk_bits = chunk_bits.wrapping_add(to_hash.len());
+                    chunk_bits = chunk_bits.rotate_right(2);
                     h.write(to_hash);
-                    bytes_hashed += to_hash.len();
                 }
                 // skip over separator and optionally a following CurDir item
                 // since components() would normalize these away.
@@ -1320,10 +1322,11 @@ impl Hash for Path {
         }
         if component_start < bytes.len() {
             let to_hash = &bytes[component_start..];
+            chunk_bits = chunk_bits.wrapping_add(to_hash.len());
+            chunk_bits = chunk_bits.rotate_right(2);
             h.write(to_hash);
-            bytes_hashed += to_hash.len();
         }
-        h.write_usize(bytes_hashed);
+        h.write_usize(chunk_bits);
     }
 }
 

@@ -13,15 +13,28 @@ pub enum IpAddr {
 }
 
 /// An IPv4 address.
-#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 pub struct Ipv4Addr {
     octets: [u8; 4],
 }
 
 /// An IPv6 address.
-#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 pub struct Ipv6Addr {
     octets: [u8; 16],
+}
+
+// Like std: hashed as one fixed-width integer (not as a byte slice).
+impl crate::hash::Hash for Ipv4Addr {
+    fn hash<H: crate::hash::Hasher>(&self, state: &mut H) {
+        u32::from_ne_bytes(self.octets).hash(state);
+    }
+}
+
+impl crate::hash::Hash for Ipv6Addr {
+    fn hash<H: crate::hash::Hasher>(&self, state: &mut H) {
+        u128::from_ne_bytes(self.octets).hash(state);
+    }
 }
 
 /// Scope of an IPv6 multicast address.

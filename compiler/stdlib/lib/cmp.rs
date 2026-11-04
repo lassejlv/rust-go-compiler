@@ -21,6 +21,7 @@ pub trait Eq: PartialEq<Self> {
 
 /// The result of a comparison between two values.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
+#[repr(i8)]
 pub enum Ordering {
     /// An ordering where a compared value is less than another.
     Less = -1,

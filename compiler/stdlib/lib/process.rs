@@ -658,6 +658,15 @@ fn setup_stdio(s: &Stdio, readable: bool) -> io::Result<StdioPair> {
     })
 }
 
+/// A NUL-terminated copy of a program / argument / directory of a `Command`
+/// (std reports interior NULs with this message when spawning).
+fn cmd_cstr(bytes: &[u8]) -> io::Result<Vec<u8>> {
+    if bytes.contains(&0) {
+        return Err(io::const_io_error(io::ErrorKind::InvalidInput, "nul byte found in provided data"));
+    }
+    sys::cstr(bytes)
+}
+
 fn is_executable_file(path: &[u8]) -> bool {
     let c = match sys::cstr(path) {
         Ok(c) => c,
@@ -886,10 +895,10 @@ impl Command {
 
     fn prepare(&self) -> io::Result<Prepared> {
         let env = self.capture_env();
-        let path = sys::cstr(&self.resolve_program(&env))?;
+        let path = cmd_cstr(&self.resolve_program(&env))?;
         let mut argv_store = Vec::with_capacity(self.args.len());
         for a in self.args.iter() {
-            argv_store.push(sys::cstr(a.as_encoded_bytes())?);
+            argv_store.push(cmd_cstr(a.as_encoded_bytes())?);
         }
         let mut argv: Vec<*const u8> = Vec::with_capacity(argv_store.len() + 1);
         for a in argv_store.iter() {
@@ -917,7 +926,7 @@ impl Command {
         }
         envp.push(crate::ptr::null());
         let cwd = match self.cwd {
-            Some(ref c) => Some(sys::cstr(c.as_encoded_bytes())?),
+            Some(ref c) => Some(cmd_cstr(c.as_encoded_bytes())?),
             None => None,
         };
         Ok(Prepared { path, argv_store, argv, envp_store, envp, cwd })
