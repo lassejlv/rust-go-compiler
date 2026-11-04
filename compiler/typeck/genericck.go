@@ -34,6 +34,7 @@ func (t *Tcx) checkGenericParams() {
 		}
 		t.checkSigLifetimes(d)
 		t.checkNeverType(d)
+		t.checkGenericConstPatterns(d)
 		for _, a := range d.Item.Attrs {
 			if a.Path != "repr" || len(a.Tokens) == 0 || a.Tokens[0].Delim != '(' {
 				continue
@@ -243,4 +244,55 @@ func (t *Tcx) checkNeverType(d *Def) {
 			ast.Walk(k.Ty, visit)
 		}
 	}
+}
+
+// checkGenericConstPatterns reports patterns naming an associated constant
+// of a generic type (`Self::MAX` in a trait's default method, `T::MIN`):
+// their value is not known when the body is checked (E0158).
+func (t *Tcx) checkGenericConstPatterns(d *Def) {
+	fi, ok := d.Item.Kind.(*ast.FnItem)
+	if !ok || fi.Body == nil {
+		return
+	}
+	params := map[string]bool{}
+	inTrait := d.Parent != nil && d.Parent.Kind == DefTrait
+	if inTrait {
+		params["Self"] = true
+	}
+	for g := d; g != nil; g = genericParent(g) {
+		if ga := genericsAst(g); ga != nil {
+			for _, p := range ga.Params {
+				if p.Kind == ast.GPType {
+					params[p.Name.Name] = true
+				}
+			}
+		}
+	}
+	if len(params) == 0 {
+		return
+	}
+	check := func(p *ast.Path, sp ast.Span) {
+		if p == nil || len(p.Segments) != 2 || p.Global || !params[p.Segments[0].Ident.Name] || p.Segments[0].Ident.Hyg != 0 {
+			return
+		}
+		// (an enum variant through `Self::V` in an impl is fine: only
+		// trait bodies and plain type parameters are generic here)
+		if p.Segments[0].Ident.Name == "Self" && !inTrait {
+			return
+		}
+		t.ErrorCode(sp, "E0158", "constant pattern cannot depend on generic parameters")
+	}
+	ast.Walk(fi.Body, func(n any) bool {
+		switch x := n.(type) {
+		case *ast.ItemStmt, *ast.ClosureExpr:
+			if _, ok := x.(*ast.ItemStmt); ok {
+				return false
+			}
+		case *ast.PathPat:
+			if x.QSelf == nil {
+				check(x.Path, x.Span)
+			}
+		}
+		return true
+	})
 }

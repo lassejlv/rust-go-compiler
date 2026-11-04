@@ -688,7 +688,22 @@ func (r *Resolver) tryImport(imp *Import, report bool) bool {
 			}
 		default:
 			lookup = func(ns Namespace) (Res, bool, bool) {
-				return r.lookupUseFirst(m, last, ns, imp)
+				res, ok, det := r.lookupUseFirst(m, last, ns, imp)
+				if ok && det {
+					// `pub use item;` of an item declared private in this
+					// module (E0364/E0365)
+					tbl := m.Types
+					if ns == ValueNS {
+						tbl = m.Values
+					}
+					if b := tbl[last]; b != nil && b.Res == res && !b.Import && res.Kind == ResDef && res.Def != nil && res.Def.Item != nil &&
+						res.Def.Item.Vis == ast.VisPrivate && res.Def.Item.Name.Hyg == 0 && (imp.Vis == ast.VisPub || (imp.Vis == ast.VisCrate && m != m.Crate.Root)) {
+						tooPrivate = res.Def
+					} else {
+						reexportOK = true
+					}
+				}
+				return res, ok, det
 			}
 		}
 	} else {
