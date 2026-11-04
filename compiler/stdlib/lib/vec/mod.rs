@@ -598,14 +598,18 @@ impl<T: Clone> Vec<T> {
     pub fn extend_from_slice(&mut self, other: &[T]) {
         let n = other.len();
         self.reserve(n);
+        // (a plain copy loop for Copy elements, which C compilers turn into
+        // memcpy; a panicking clone leaks the elements cloned so far)
+        let src = other.as_ptr();
+        let len = self.len;
         let mut i = 0;
         while i < n {
             unsafe {
-                intrinsics::write(self.ptr.add(self.len), other[i].clone());
+                intrinsics::write(self.ptr.add(len + i), (*src.add(i)).clone());
             }
-            self.len += 1;
             i += 1;
         }
+        self.len = len + n;
     }
 
     /// Copies elements from `src` range to the end of the vector.
