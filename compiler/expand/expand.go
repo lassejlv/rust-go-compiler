@@ -22,6 +22,10 @@ const DefaultRecursionLimit = 128
 // visible to crates expanded later with the same Expander (e.g. std's
 // macros are visible in the user crate).
 type Expander struct {
+	// Foreign: the crate being expanded is a registry dependency (derives
+	// leave out checks that only report errors, which cargo would not
+	// see in a dependency rustc accepted).
+	Foreign bool
 	// RecursionLimit bounds nested macro expansion.
 	RecursionLimit int
 	// DisplayName, if set, is the crate name shown by module_path!() for

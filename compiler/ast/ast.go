@@ -349,6 +349,7 @@ type UnionItem struct {
 
 type Variant struct {
 	Attrs  []*Attr
+	Vis    Visibility // a (rejected) visibility qualifier
 	Name   Ident
 	Shape  VariantShape
 	Fields []*FieldDef

@@ -87,8 +87,13 @@ func (fcx *FnCtxt) checkExprKind(e ast.Expr, expected Ty) Ty {
 	case *ast.CastExpr:
 		target := fcx.lowerTy(x.Ty)
 		var hint Ty
-		if lit, ok := x.X.(*ast.LitExpr); ok && lit.Suffix == "" && (lit.Kind == ast.LitInt) {
-			if tt := fcx.shallow(target); tt.Kind == TInt {
+		// rustc checks the operand with a "castable to" expectation that
+		// reaches an unsuffixed literal through parentheses, negation and
+		// tail-only blocks: `300 as u8`, `-1 as u32` and `1e40 as f32`
+		// type the literal as the cast target.
+		if lit := castOperandLit(x.X); lit != nil && lit.Suffix == "" {
+			tt := fcx.shallow(target)
+			if (lit.Kind == ast.LitInt && tt.Kind == TInt) || (lit.Kind == ast.LitFloat && tt.Kind == TFloat) {
 				hint = tt
 			}
 		}
@@ -333,6 +338,10 @@ func (fcx *FnCtxt) checkLit(x *ast.LitExpr, expected Ty) Ty {
 		}
 		if x.Suffix == "f64" {
 			return TyF64
+		}
+		if x.Suffix != "" {
+			fcx.errorf(x.Span, "invalid suffix `%s` for float literal", x.Suffix)
+			return TyErr
 		}
 		if expected != nil {
 			et := fcx.shallow(expected)
@@ -962,10 +971,13 @@ func (fcx *FnCtxt) checkField(x *ast.FieldExpr) Ty {
 // body being checked. Private fields are visible in the ADT's (normal)
 // module and its descendants; pub(crate)/pub(in ..) fields within the crate.
 func (fcx *FnCtxt) fieldAccessible(adt *Def, f *FieldDef) bool {
+	if f.Vis.Restricted() {
+		return fcx.def == nil || adt.Scope == nil || (adt.Crate == fcx.def.Crate && resolve.VisibleFrom(f.Vis, adt.Scope, fcx.curMod()))
+	}
 	switch f.Vis {
 	case ast.VisPub:
 		return true
-	case ast.VisCrate, ast.VisRestricted:
+	case ast.VisCrate:
 		return fcx.def == nil || adt.Crate == fcx.def.Crate
 	case ast.VisSuper:
 		return fcx.def == nil || adt.Scope == nil || resolve.VisibleFrom(f.Vis, adt.Scope, fcx.curMod())
@@ -1411,4 +1423,24 @@ func (fcx *FnCtxt) checkAsm(x *ast.AsmExpr) Ty {
 		}
 	}
 	return TyUnit
+}
+
+// castOperandLit returns the literal a cast operand consists of, looking
+// through parentheses and unary negation (nil if it is anything else).
+func castOperandLit(e ast.Expr) *ast.LitExpr {
+	for {
+		switch x := e.(type) {
+		case *ast.ParenExpr:
+			e = x.X
+		case *ast.UnaryExpr:
+			if x.Op != ast.UnNeg {
+				return nil
+			}
+			e = x.X
+		case *ast.LitExpr:
+			return x
+		default:
+			return nil
+		}
+	}
 }

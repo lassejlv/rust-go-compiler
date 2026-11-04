@@ -389,7 +389,7 @@ func (p *Parser) parseEnum(it *ast.Item) *ast.EnumItem {
 			lo = attrs[0].Span.Lo
 		}
 		v := &ast.Variant{Attrs: attrs}
-		p.parseVis()
+		v.Vis = p.parseVis()
 		v.Name = p.parseIdentTok()
 		switch {
 		case p.is("{"):

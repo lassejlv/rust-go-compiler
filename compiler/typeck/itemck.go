@@ -112,9 +112,15 @@ func (t *Tcx) checkFieldNames(d *Def) {
 // checkUnsizedFields reports dynamically sized field types anywhere but in
 // the last field of a struct (E0277).
 func (t *Tcx) checkUnsizedFields(d *Def) {
+	g := t.Generics(d)
 	for _, v := range d.Adt.Variants {
 		for i, f := range v.Fields {
-			if f.Ty == nil || !f.Ty.IsUnsized() || f.Ast == nil {
+			if f.Ty == nil || f.Ast == nil {
+				continue
+			}
+			// a `?Sized` type parameter may be unsized too
+			unsized := f.Ty.IsUnsized() || (f.Ty.Kind == TParam && f.Ty.Sub == 0 && g != nil && f.Ty.Index < len(g.Params) && g.Params[f.Ty.Index].MaybeUnsized && d.Crate != nil && d.Crate.Local)
+			if !unsized {
 				continue
 			}
 			if d.Kind == DefStruct && i == len(v.Fields)-1 {
@@ -169,6 +175,9 @@ func (t *Tcx) checkEnumDiscs(d *Def) {
 	}
 	if explicit && nonUnit && !intRepr {
 		t.ErrorCode(d.Item.Name.Span, "E0732", "`#[repr(inttype)]` must be specified for enums with explicit discriminants and non-unit variants")
+		return
+	}
+	if d.Crate != nil && d.Crate.Local && !t.checkDiscRange(d, k) {
 		return
 	}
 	seen := map[int64]string{}

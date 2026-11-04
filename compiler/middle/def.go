@@ -541,7 +541,7 @@ func GlobVisible(b *NameBinding, g, m *Module) bool {
 	if g.Crate != m.Crate {
 		return false
 	}
-	if b.Vis == ast.VisCrate || b.Vis == ast.VisRestricted {
+	if b.Vis == ast.VisCrate || b.Vis.Restricted() {
 		return true
 	}
 	anc := g.Normal

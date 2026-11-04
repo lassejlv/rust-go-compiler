@@ -21,10 +21,41 @@ func (t *Tcx) checkBodyMisc(r *Results, def *Def) {
 	}
 	std := t.isStd(def)
 	t.checkLints(r, def, root)
+	if def.Kind == DefFn && def.Fn != nil && def.Fn.Ast != nil && !std {
+		var pats []ast.Pat
+		for _, p := range def.Fn.Ast.Decl.Params {
+			pats = append(pats, p.Pat)
+		}
+		t.checkParamList(r, pats)
+	}
 	ast.Walk(root, func(n any) bool {
+		if e, ok := n.(ast.Expr); ok && !std {
+			// only non-capturing closures coerce to fn pointers (the
+			// captures are known after type checking)
+			for _, a := range r.Adjust[e.GetID()] {
+				if a.Kind != AdjClosureFnPtr {
+					continue
+				}
+				if ct := r.NodeTypes[e.GetID()]; ct != nil && ct.Kind == TClosure {
+					if ci := t.Closures[ct]; ci != nil && len(ci.Captures) > 0 {
+						t.ErrorCode(e.GetSpan(), "E0308", "mismatched types: closures can only be coerced to `fn` types if they do not capture any variables")
+					}
+				}
+			}
+		}
 		switch x := n.(type) {
 		case *ast.ItemStmt:
 			return false
+		case *ast.BoxPat:
+			if !std && def.Crate != nil && def.Crate.Local {
+				t.ErrorCode(x.Span, "E0658", "box pattern syntax is experimental")
+			}
+		case *ast.RefExpr:
+			if !std && !x.Raw {
+				if def.Parent == nil || !def.Parent.HasAttr("automatically_derived") {
+					t.checkPackedRef(r, x.X, x.Span)
+				}
+			}
 		case *ast.UnaryExpr:
 			if !std {
 				t.checkNegUnsigned(r, x)
@@ -54,12 +85,15 @@ func (t *Tcx) checkBodyMisc(r *Results, def *Def) {
 		case *ast.ForExpr:
 			t.checkPatBindings(r, x.Pat)
 		case *ast.ClosureExpr:
+			var pats []ast.Pat
 			for _, p := range x.Params {
-				t.checkPatBindings(r, p.Pat)
+				pats = append(pats, p.Pat)
 			}
+			t.checkParamList(r, pats)
 		case *ast.MethodCallExpr:
 			if !std {
 				t.checkCallBounds(r, r.Callees[x.ID], x.Span, def.Crate != nil && def.Crate.Local)
+				t.checkDynSizedMethod(r.Callees[x.ID], x.Method.Span)
 			}
 			if !std && x.Method.Hyg == 0 {
 				if c := r.Callees[x.ID]; c != nil && isDropMethod(c.Def) {
@@ -69,6 +103,7 @@ func (t *Tcx) checkBodyMisc(r *Results, def *Def) {
 		case *ast.CallExpr:
 			if !std {
 				t.checkCallBounds(r, r.Callees[x.ID], x.Span, def.Crate != nil && def.Crate.Local)
+				t.checkDynSizedMethod(r.Callees[x.ID], x.Span)
 			}
 			if !std {
 				if c := r.Callees[x.ID]; c != nil && isDropMethod(c.Def) {
@@ -84,6 +119,8 @@ func (t *Tcx) checkBodyMisc(r *Results, def *Def) {
 	if !std && def != nil && def.Crate != nil && def.Crate.Local {
 		t.checkKnownPanics(r, def, root)
 		t.checkImplicitAutorefs(r, def, root)
+		t.checkCallLints(r, def, root)
+		t.checkParamStatic(r, def)
 	}
 	// locals must have a statically known size, and well-formed types
 	if !std {
@@ -140,7 +177,8 @@ func (t *Tcx) checkCast(r *Results, x *ast.CastExpr) {
 	case (isNum(to) || to.Kind == TBool || to.Kind == TChar) &&
 		((from.Kind == TAdt && from.Def.Adt != nil && from.Def.Adt.Kind != AdtEnum) || from.Kind == TStr || from.Kind == TTuple || from.Kind == TArray || from.Kind == TSlice):
 		t.ErrorCode(x.Span, "E0605", "non-primitive cast: `%s` as `%s`", from, to)
-	case to.Kind == TAdt || to.Kind == TTuple || to.Kind == TArray || to.Kind == TStr || to.Kind == TSlice:
+	case to.Kind == TAdt || to.Kind == TTuple || to.Kind == TArray || to.Kind == TStr || to.Kind == TSlice,
+		to.Kind == TRef && (isNum(from) || from.Kind == TBool || from.Kind == TChar || from.Kind == TPtr || from.Kind == TFnPtr || from.Kind == TFnDef):
 		t.ErrorCode(x.Span, "E0605", "non-primitive cast: `%s` as `%s`", from, to)
 	case from.Kind == TInt && to.Kind == TPtr && (fatPointee(to.Elem) || to.Elem.IsUnsized()):
 		t.ErrorCode(x.Span, "E0606", "cannot cast `%s` to a pointer that is wide", from)
@@ -188,6 +226,42 @@ func (t *Tcx) checkPatBindings(r *Results, p ast.Pat) {
 	t.patBinds(r, p)
 }
 
+// checkParamList checks the parameter patterns of a fn or closure: each
+// on its own (E0416, E0408) and no name bound by two parameters (E0415).
+func (t *Tcx) checkParamList(r *Results, pats []ast.Pat) {
+	var seen []patBinding
+	for _, p := range pats {
+		if p == nil {
+			continue
+		}
+		bs := t.patBinds(r, p)
+		for _, b := range bs {
+			for _, o := range seen {
+				if o.name == b.name {
+					t.ErrorCode(b.sp, "E0415", "identifier `%s` is bound more than once in this parameter list", displayName(b.name))
+				}
+			}
+		}
+		seen = append(seen, bs...)
+	}
+}
+
+// checkOneRest reports a second `..` in a tuple or slice pattern.
+func (t *Tcx) checkOneRest(elems []ast.Pat, what string) {
+	n := 0
+	for _, e := range elems {
+		if ip, ok := e.(*ast.IdentPat); ok && ip.Sub != nil {
+			e = ip.Sub // `rest @ ..`
+		}
+		if _, ok := e.(*ast.RestPat); ok {
+			if n++; n == 2 {
+				t.Errorf(e.GetSpan(), "`..` can only be used once per %s pattern", what)
+				return
+			}
+		}
+	}
+}
+
 type patBinding struct {
 	name  string // hygiene-aware key (E0416)
 	plain string // plain name (E0408)
@@ -221,14 +295,17 @@ func (t *Tcx) patBinds(r *Results, p ast.Pat) []patBinding {
 	case *ast.BoxPat:
 		merge(t.patBinds(r, x.Pat))
 	case *ast.TuplePat:
+		t.checkOneRest(x.Elems, "tuple")
 		for _, e := range x.Elems {
 			merge(t.patBinds(r, e))
 		}
 	case *ast.TupleStructPat:
+		t.checkOneRest(x.Elems, "tuple struct")
 		for _, e := range x.Elems {
 			merge(t.patBinds(r, e))
 		}
 	case *ast.SlicePat:
+		t.checkOneRest(x.Elems, "slice")
 		for _, e := range x.Elems {
 			merge(t.patBinds(r, e))
 		}
@@ -326,7 +403,7 @@ func (t *Tcx) checkCallBounds(r *Results, c *Callee, sp ast.Span, local bool) {
 			if tr.LangItem == "fn_mut" {
 				need = 1
 			}
-			if ci.Kind == 2 && ci.MovesValue {
+			if (ci.Kind == 2 && ci.MovesValue) || (ci.Kind == 1 && need == 0 && local) {
 				kinds := []string{"Fn", "FnMut", "FnOnce"}
 				t.ErrorCode(ci.Expr.Span, "E0525", "expected a closure that implements the `%s` trait, but this closure only implements `%s`", kinds[need], kinds[ci.Kind])
 			}

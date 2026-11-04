@@ -187,6 +187,7 @@ func (t *Tcx) checkTraitImplItems(impl *Def) {
 	}
 	if t.isStd(tr) {
 		t.checkStdTraitItems(impl, tr)
+		t.checkStdExtraItems(impl, tr)
 		if names, ok := stdCompared[tr.Name]; ok && tr.Parent != nil && tr.Parent.Name == names[0] {
 			for _, it := range impl.Impl.Order {
 				for _, n := range names[1:] {
@@ -368,6 +369,88 @@ func (t *Tcx) compareImplMethod(impl, im, tm *Def) {
 	}
 	if eq, cmp := same(tsig.Output, isig.Output); cmp && !eq {
 		t.ErrorCode(im.Item.Name.Span, "E0053", "method `%s` has an incompatible type for trait", im.Name)
+		return
+	}
+	t.checkStricterBounds(im, tm, ig, tg, args)
+}
+
+// checkStricterBounds reports a bound of an impl method's own type
+// parameter that the trait method's declaration does not imply (E0276).
+// Only bounds `P: Trait<..>` on the method's own parameters are compared.
+func (t *Tcx) checkStricterBounds(im, tm *Def, ig, tg *Generics, args []Ty) {
+	// (std's trait declarations in rustgo's library may carry fewer bounds
+	// than the real ones)
+	if im.Crate == nil || !im.Crate.Local || t.isStd(tm) {
+		return
+	}
+	var tpreds []*TraitRef
+	for _, q := range tg.Predicates {
+		if q.Maybe || q.Trait == nil {
+			continue
+		}
+		var s *TraitRef
+		if !t.quietly(func() {
+			s = q.Trait.Subst(args)
+			na := make([]Ty, len(s.Args))
+			for i, a := range s.Args {
+				na[i] = t.Normalize(a)
+			}
+			s = &TraitRef{Trait: s.Trait, Args: na}
+		}) || s == nil {
+			return
+		}
+		for _, a := range s.Args {
+			if a == nil || a.HasProj() || a.HasOpaque() || a.HasError() {
+				return // not comparable
+			}
+		}
+		tpreds = append(tpreds, s)
+	}
+	implied := func(p *TraitRef) bool {
+		for _, q := range tpreds {
+			var sups []*TraitRef
+			if !t.quietly(func() { sups = t.AllSupertraits(q) }) {
+				return true
+			}
+			for _, s := range append([]*TraitRef{q}, sups...) {
+				if s.Trait != p.Trait || len(s.Args) != len(p.Args) {
+					continue
+				}
+				eq := true
+				for i := range s.Args {
+					if s.Args[i] != p.Args[i] {
+						eq = false
+					}
+				}
+				if eq {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	for _, p := range ig.Predicates {
+		if p.Maybe || p.Trait == nil || len(p.Trait.Args) == 0 || p.Trait.Trait == nil {
+			continue
+		}
+		self := p.Trait.Args[0]
+		if self == nil || self.Kind != TParam || self.Sub != 0 || self.Index < ig.OwnStart || self.Index >= len(ig.Params) {
+			continue
+		}
+		if p.Trait.Trait.LangItem == "sized" {
+			continue
+		}
+		ok := true
+		for _, a := range p.Trait.Args {
+			if a == nil || a.HasInfer() || a.HasError() || a.HasProj() || a.HasOpaque() {
+				ok = false
+			}
+		}
+		if !ok || implied(p.Trait) {
+			continue
+		}
+		t.ErrorCode(im.Item.Name.Span, "E0276", "impl has stricter requirements than trait: `%s: %s`", self, p.Trait.Trait.Name)
+		return
 	}
 }
 
@@ -600,6 +683,24 @@ func (t *Tcx) isLocalTy(ty Ty, c *Crate) bool {
 	return false
 }
 
+// strictlyLocalTy is isLocalTy where type parameters are not local.
+func (t *Tcx) strictlyLocalTy(ty Ty, c *Crate) bool {
+	switch ty.Kind {
+	case TAdt:
+		if ty.Def.Crate == c {
+			return true
+		}
+		if (ty.Def.LangItem == "owned_box" || ty.Def.Name == "Pin") && len(ty.Args) > 0 {
+			return t.strictlyLocalTy(ty.Args[0], c)
+		}
+	case TRef:
+		return t.strictlyLocalTy(ty.Elem, c)
+	case TDyn:
+		return ty.Def != nil && ty.Def.Crate == c
+	}
+	return false
+}
+
 func (t *Tcx) checkOrphan(impl *Def) {
 	tr := impl.Impl.TraitRef
 	if tr.Trait.Crate == impl.Crate {
@@ -609,6 +710,27 @@ func (t *Tcx) checkOrphan(impl *Def) {
 		// a foreign trait implemented for an uncovered type parameter
 		if len(tr.Args) > 0 && tr.Args[0].Kind == TParam && tr.Args[0].Sub == 0 {
 			t.ErrorCode(impl.Span, "E0210", "type parameter `%s` must be used as the type parameter for some local type", tr.Args[0].Name)
+			return
+		}
+		// no local type among the trait's arguments (`impl<T> Display
+		// for Vec<T>`)
+		if impl.Crate != nil && impl.Crate.Local {
+			for _, a := range tr.Args {
+				if a == nil || a.HasError() || a.HasProj() || a.HasOpaque() || a.HasInfer() || t.strictlyLocalTy(a, impl.Crate) {
+					return
+				}
+				unmodeled := false
+				Walk(a, func(x Ty) bool {
+					if x.Kind == TClosure || (x.Kind == TParam && x.Sub != 0) {
+						unmodeled = true
+					}
+					return !unmodeled
+				})
+				if unmodeled {
+					return
+				}
+			}
+			t.ErrorCode(impl.Span, "E0117", "only traits defined in the current crate can be implemented for types defined outside of the crate")
 		}
 		return
 	}
@@ -1045,7 +1167,7 @@ var stdCompared = map[string][]string{
 	"Display":    {"fmt", "fmt"},
 	"Debug":      {"fmt", "fmt"},
 	"Iterator":   {"traits", "next"},
-	"Clone":      {"clone", "clone"},
+	"Clone":      {"clone", "clone", "clone_from"},
 	"PartialEq":  {"cmp", "eq"},
 	"PartialOrd": {"cmp", "partial_cmp"},
 	"Ord":        {"cmp", "cmp"},
@@ -1056,6 +1178,66 @@ var stdCompared = map[string][]string{
 	"Deref":      {"deref", "deref"},
 	"DerefMut":   {"deref", "deref_mut"},
 	"FromStr":    {"traits", "from_str"},
+	"Into":       {"convert", "into"},
+	"AsRef":      {"convert", "as_ref"},
+	"AsMut":      {"convert", "as_mut"},
+	"Index":      {"index", "index"},
+	"IndexMut":   {"index", "index_mut"},
+	"Add":        {"arith", "add"},
+	"Sub":        {"arith", "sub"},
+	"Mul":        {"arith", "mul"},
+	"Div":        {"arith", "div"},
+	"Rem":        {"arith", "rem"},
+	"Neg":        {"arith", "neg"},
+	"AddAssign":  {"arith", "add_assign"},
+	"SubAssign":  {"arith", "sub_assign"},
+	"MulAssign":  {"arith", "mul_assign"},
+	"DivAssign":  {"arith", "div_assign"},
+	"RemAssign":  {"arith", "rem_assign"},
+	"Not":        {"bit", "not"},
+}
+
+// stdExactItems lists std traits with all their items (rustc's): when
+// rustgo's declaration has exactly these items, an impl item of another
+// name is not a member of the trait (E0407, E0437, E0438).
+var stdExactItems = map[string][]string{
+	"Drop": {"drop"}, "Display": {"fmt"}, "Debug": {"fmt"}, "Default": {"default"},
+	"Deref": {"Target", "deref"}, "DerefMut": {"deref_mut"},
+	"AsRef": {"as_ref"}, "AsMut": {"as_mut"}, "From": {"from"}, "Into": {"into"},
+	"Index": {"Output", "index"}, "IndexMut": {"index_mut"},
+	"Neg": {"Output", "neg"}, "Not": {"Output", "not"},
+	"Add": {"Output", "add"}, "Sub": {"Output", "sub"}, "Mul": {"Output", "mul"},
+	"Div": {"Output", "div"}, "Rem": {"Output", "rem"},
+	"AddAssign": {"add_assign"}, "SubAssign": {"sub_assign"}, "MulAssign": {"mul_assign"},
+	"DivAssign": {"div_assign"}, "RemAssign": {"rem_assign"},
+	"FromStr": {"Err", "from_str"},
+}
+
+// checkStdExtraItems reports impl items that are not members of a std trait
+// whose items rustgo's std mirrors exactly.
+func (t *Tcx) checkStdExtraItems(impl *Def, tr *Def) {
+	want, ok := stdExactItems[tr.Name]
+	if !ok || len(tr.Trait.Items) != len(want) || impl.Crate == nil || !impl.Crate.Local {
+		return
+	}
+	for _, n := range want {
+		if tr.Trait.Items[n] == nil {
+			return
+		}
+	}
+	for _, it := range impl.Impl.Order {
+		if tr.Trait.Items[it.Name] != nil || it.Item == nil {
+			continue
+		}
+		code := "E0407"
+		switch it.Kind {
+		case DefAssocTy:
+			code = "E0437"
+		case DefConst:
+			code = "E0438"
+		}
+		t.ErrorCode(it.Item.Name.Span, code, "%s `%s` is not a member of trait `%s`", itemKindWord(it), it.Name, tr.Name)
+	}
 }
 
 // checkStdTraitItems reports required items of well-known std traits
@@ -1111,6 +1293,27 @@ func (t *Tcx) checkImplRules(impl *Def) {
 			t.ErrorCode(impl.Span, "E0118", "no nominal type found for inherent implementation")
 		case TBool, TChar, TInt, TFloat, TStr, TSlice, TArray, TRef, TPtr, TTuple, TFnPtr, TNever:
 			t.ErrorCode(impl.Span, "E0390", "cannot define inherent `impl` for primitive types")
+		}
+	}
+	if ii.TraitRef != nil && impl.Crate != nil && impl.Crate.Local {
+		tr := ii.TraitRef.Trait
+		switch {
+		case ii.Negative:
+			t.ErrorCode(impl.Span, "E0658", "negative trait bounds are not supported")
+		case tr != nil && tr.LangItem == "sized":
+			t.ErrorCode(impl.Span, "E0322", "explicit impls for the `Sized` trait are not permitted")
+		case tr != nil && ii.SelfTy != nil && ii.SelfTy.Kind == TDyn && ii.SelfTy.Def != nil && t.autoKind(tr) == "":
+			// `impl Trait for dyn Trait` (or for a subtrait object)
+			obj := &TraitRef{Trait: ii.SelfTy.Def, Args: append([]Ty{ii.SelfTy}, ii.SelfTy.Args...)}
+			var sups []*TraitRef
+			if t.quietly(func() { sups = t.AllSupertraits(obj) }) {
+				for _, s := range append([]*TraitRef{obj}, sups...) {
+					if s.Trait == tr {
+						t.ErrorCode(impl.Span, "E0371", "the object type `%s` automatically implements the trait `%s`", ii.SelfTy, tr.Name)
+						break
+					}
+				}
+			}
 		}
 	}
 	if ii.TraitRef == nil || ii.Negative {

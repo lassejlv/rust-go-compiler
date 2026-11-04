@@ -9,6 +9,7 @@ package typeck
 import (
 	"rustgo/compiler/ast"
 	"rustgo/compiler/lexer"
+	"rustgo/compiler/resolve"
 	. "rustgo/compiler/middle"
 )
 
@@ -31,6 +32,156 @@ func (t *Tcx) checkGenericParams() {
 				}
 				seen[n] = true
 			}
+			// An associated item's parameters may not shadow the
+			// enclosing impl's or trait's (E0403 / E0496).
+			if d.Kind == DefFn && d.Parent != nil && (d.Parent.Kind == DefImpl || d.Parent.Kind == DefTrait) && d.Crate != nil && d.Crate.Local {
+				if pg := genericsAst(d.Parent); pg != nil {
+					outer := map[string]bool{}
+					for _, p := range pg.Params {
+						outer[p.Name.Name] = true
+					}
+					for _, p := range ga.Params {
+						n := p.Name.Name
+						if !outer[n] {
+							continue
+						}
+						if p.Kind == ast.GPLifetime {
+							if n != "'_" && n != "'static" {
+								t.ErrorCode(p.Name.Span, "E0496", "lifetime name `%s` shadows a lifetime name that is already in scope", n)
+							}
+						} else {
+							t.ErrorCode(p.Name.Span, "E0403", "the name `%s` is already used for a generic parameter in this item's generic parameters", n)
+						}
+					}
+				}
+			}
+		}
+		if d.Item.Vis.RestrictedPath() != nil && d.Scope != nil && d.Crate != nil && d.Crate.Local {
+			// `pub(in path)`: path must name an ancestor module (E0742)
+			if m := resolve.RestrictedModule(d.Item.Vis, d.Scope); m != nil {
+				anc := false
+				for x := d.Scope; x != nil; x = x.Parent {
+					if x == m || x.Normal == m {
+						anc = true
+						break
+					}
+				}
+				if !anc {
+					t.ErrorCode(d.Item.Vis.RestrictedPath().Span, "E0742", "visibilities can only be restricted to ancestor modules")
+				}
+			}
+		}
+		if ga != nil && d.Crate != nil && d.Crate.Local {
+			// const parameters are integers, `bool` or `char` (on stable)
+			for _, p := range ga.Params {
+				if p.Kind != ast.GPConst || p.ConstTy == nil {
+					continue
+				}
+				var ct Ty
+				if g := t.Generics(d); g != nil {
+					for _, gp := range g.Own() {
+						if gp.Const && gp.Ast == p {
+							ct = gp.ConstTy
+						}
+					}
+				}
+				if ct == nil || ct.Kind == TInt || ct.Kind == TBool || ct.Kind == TChar || ct.HasError() {
+					continue
+				}
+				what := "is forbidden as the type of a const generic parameter"
+				if ct.HasParam() {
+					t.ErrorCode(p.Name.Span, "E0770", "the type of const parameters must not depend on other generic parameters")
+					continue
+				}
+				t.Errorf(p.Name.Span, "`%s` %s", ct, what)
+			}
+		}
+		if d.Kind == DefFn && d.Fn != nil && d.Fn.Ast != nil && d.Fn.Ast.Body != nil && d.Crate != nil && d.Crate.Local && t.Generics(d).Count() > 0 {
+			// repeat counts and array lengths in a generic body (checked
+			// per instance otherwise)
+			t.Generics(d)
+			ac := t.itemConv(d)
+			ast.Walk(d.Fn.Ast.Body, func(n any) bool {
+				var e ast.Expr
+				switch x := n.(type) {
+				case *ast.ItemStmt:
+					return false
+				case *ast.RepeatExpr:
+					e = x.Count
+				case *ast.ArrayType:
+					e = x.Len
+				}
+				if e == nil || ac.gen == nil {
+					return true
+				}
+				inner := unparen(e)
+				if b, ok := inner.(*ast.BlockExpr); ok && b.Block != nil && len(b.Block.Stmts) == 1 {
+					if es, ok := b.Block.Stmts[0].(*ast.ExprStmt); ok && !es.Semi {
+						inner = unparen(es.Expr)
+					}
+				}
+				if pe, ok := inner.(*ast.PathExpr); ok && pe.QSelf == nil && len(pe.Path.Segments) == 1 {
+					return true // the parameter itself
+				}
+				if sp, found := ac.mentionsGenericParam(e); found {
+					t.Errorf(sp, "generic parameters may not be used in const operations")
+				}
+				return true
+			})
+		}
+		if (d.Kind == DefFn || d.Kind == DefImpl) && ga != nil && d.Crate != nil && d.Crate.Local {
+			for _, p := range ga.Params {
+				if (p.Kind == ast.GPType && p.Default != nil) || (p.Kind == ast.GPConst && p.ConstDefault != nil) {
+					t.Errorf(p.Name.Span, "defaults for generic parameters are not allowed here")
+				}
+			}
+		}
+		if fa, ok := d.Item.Kind.(*ast.FnItem); ok && fa.Body == nil && d.Kind == DefFn && d.Crate != nil && d.Crate.Local {
+			// patterns in parameters of functions without bodies
+			for _, p := range fa.Decl.Params {
+				switch x := p.Pat.(type) {
+				case *ast.IdentPat:
+					if x.Mut || x.ByRef || x.Sub != nil {
+						t.Errorf(p.Pat.GetSpan(), "patterns aren't allowed in functions without bodies")
+					}
+				case *ast.WildPat, nil:
+				default:
+					t.ErrorCode(p.Pat.GetSpan(), "E0642", "patterns aren't allowed in methods without bodies")
+				}
+			}
+		}
+		if (d.Kind == DefFn || d.Kind == DefImpl) && d.Crate != nil && d.Crate.Local && t.Generics(d).Count() > 0 {
+			t.checkSigAdtBounds(d)
+		}
+		if ti, ok := d.Item.Kind.(*ast.TraitItem); ok && ti.Auto && d.Crate != nil && d.Crate.Local {
+			t.ErrorCode(d.Item.Span, "E0658", "auto traits are experimental and possibly buggy")
+		}
+		if d.Kind == DefUnion && d.Crate != nil && d.Crate.Local && d.Adt != nil {
+			// union fields are Copy, references or ManuallyDrop (E0740)
+			t.AdtFields(d)
+			for _, v := range d.Adt.Variants {
+				for _, f := range v.Fields {
+					if f.Ty != nil && !t.unionFieldOk(f.Ty) && f.Ast != nil {
+						t.ErrorCode(f.Ast.Span, "E0740", "field must implement `Copy` or be wrapped in `ManuallyDrop<...>` to be used in a union")
+					}
+				}
+			}
+		}
+		if en, ok := d.Item.Kind.(*ast.EnumItem); ok && d.Kind == DefEnum && d.Crate != nil && d.Crate.Local {
+			// enum variants and their fields are as visible as the enum
+			for _, v := range en.Variants {
+				if v.Vis != ast.VisPrivate {
+					t.ErrorCode(v.Name.Span, "E0449", "visibility qualifiers are not permitted here")
+				}
+				for _, f := range v.Fields {
+					if f.Vis != ast.VisPrivate {
+						t.ErrorCode(f.Span, "E0449", "visibility qualifiers are not permitted here")
+					}
+				}
+			}
+		}
+		if d.Kind == DefImpl && d.Item.Vis != ast.VisPrivate && d.Crate != nil && d.Crate.Local {
+			t.ErrorCode(d.Item.Span, "E0449", "visibility qualifiers are not permitted here")
 		}
 		t.checkSigLifetimes(d)
 		t.checkBinderOutputs(ga)
@@ -455,4 +606,32 @@ func (t *Tcx) checkAttrTargets(d *Def) {
 			}
 		}
 	}
+	t.checkItemAttrs(d, isFn, isAdt, what)
+}
+
+// unionFieldOk reports whether a type may be a union field: Copy types,
+// references, ManuallyDrop, and tuples and arrays of those. Types with
+// parameters are not judged.
+func (t *Tcx) unionFieldOk(ty Ty) bool {
+	if ty.HasParam() || ty.HasError() || ty.HasProj() || ty.HasInfer() || ty.HasOpaque() {
+		return true
+	}
+	switch ty.Kind {
+	case TRef:
+		return true
+	case TTuple:
+		for _, e := range ty.Elems {
+			if !t.unionFieldOk(e) {
+				return false
+			}
+		}
+		return true
+	case TArray:
+		return t.unionFieldOk(ty.Elem)
+	case TAdt:
+		if ty.Def != nil && ty.Def.Name == "ManuallyDrop" && t.isStd(ty.Def) {
+			return true
+		}
+	}
+	return t.IsCopy(ty)
 }

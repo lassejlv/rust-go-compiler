@@ -1145,6 +1145,7 @@ func (d *Decoder) decUnionItem(x *UnionItem) {
 }
 func (e *Encoder) encVariant(x *Variant) {
 	e.encSl_Pt_Attr(x.Attrs)
+	e.i(int64(x.Vis))
 	e.encIdent(&x.Name)
 	e.i(int64(x.Shape))
 	e.encSl_Pt_FieldDef(x.Fields)
@@ -1154,6 +1155,7 @@ func (e *Encoder) encVariant(x *Variant) {
 }
 func (d *Decoder) decVariant(x *Variant) {
 	x.Attrs = d.decSl_Pt_Attr()
+	x.Vis = Visibility(d.i())
 	d.decIdent(&x.Name)
 	x.Shape = VariantShape(d.i())
 	x.Fields = d.decSl_Pt_FieldDef()

@@ -797,7 +797,7 @@ func (p *Parser) parseVis() ast.Visibility {
 			if len(path.Segments) == 1 && path.Segments[0].Ident.Name == "super" {
 				return ast.VisSuper
 			}
-			return ast.VisRestricted
+			return ast.RestrictedVis(path)
 		}
 	}
 	return ast.VisPub

@@ -768,12 +768,47 @@ func (ac *astConv) lowerConstArg(e ast.Expr) Ty {
 	if _, ok := e.(*ast.UnderscoreExpr); ok {
 		return ac.newInfer(e.GetSpan())
 	}
+	if ac.gen != nil && ac.owner != nil && ac.owner.Crate != nil && ac.owner.Crate.Local {
+		if sp, ok := ac.mentionsGenericParam(e); ok {
+			ac.t.Errorf(sp, "generic parameters may not be used in const operations")
+			return TyErr
+		}
+	}
 	v, ok := ac.t.evalConstInt(ac, e)
 	if !ok {
 		ac.t.ErrorCode(e.GetSpan(), "E0080", "evaluation of constant value failed")
 		return TyErr
 	}
 	return ConstVal(uint64(v))
+}
+
+// mentionsGenericParam finds a generic parameter of the item named inside
+// a const expression that is not just that parameter (`N + 1`,
+// `size_of::<T>()`): not allowed on stable.
+func (ac *astConv) mentionsGenericParam(e ast.Expr) (sp lexer.Span, found bool) {
+	isParam := func(name string, konst bool) bool {
+		i := ac.t.paramIndex(ac.gen, name)
+		return i >= 0 && ac.gen.Params[i].Const == konst && ac.gen.Params[i].Name != "Self"
+	}
+	ast.Walk(e, func(n any) bool {
+		if found {
+			return false
+		}
+		switch x := n.(type) {
+		case *ast.ItemStmt, *ast.ClosureExpr, *ast.MacCallExpr:
+			return false
+		case *ast.PathExpr:
+			if x.QSelf == nil && len(x.Path.Segments) == 1 && x.Path.Segments[0].Ident.Hyg == 0 && isParam(x.Path.Segments[0].Ident.Name, true) {
+				sp, found = x.Span, true
+			}
+		case *ast.PathType:
+			if x.QSelf == nil && x.Path != nil && len(x.Path.Segments) >= 1 && x.Path.Segments[0].Ident.Hyg == 0 && isParam(x.Path.Segments[0].Ident.Name, false) {
+				sp, found = x.Span, true
+			}
+		}
+		return !found
+	})
+	return
 }
 
 // genericArgsFor lowers the generic args of a path segment for def d (whose
@@ -817,6 +852,11 @@ func (ac *astConv) genericArgsFor(d *Def, seg *ast.PathSegment, prefix []Ty, sp 
 		if nlt > declared && (d.Kind == DefStruct || d.Kind == DefEnum || d.Kind == DefUnion || d.Kind == DefTrait || d.Kind == DefTyAlias) {
 			t.ErrorCode(sp, "E0107", "%s takes %d lifetime argument%s but %d lifetime arguments were supplied", d.Kind, declared, plural(declared), nlt)
 		}
+		if d.Kind == DefFn && d.Fn != nil && d.Fn.Ast != nil && ac.owner != nil && ac.owner.Crate != nil && ac.owner.Crate.Local && (seg == nil || seg.Ident.Hyg == 0) {
+			if early, ok := earlyBoundLifetimes(d.Fn.Ast); ok && early < declared {
+				t.ErrorCode(sp, "E0794", "cannot specify lifetime arguments explicitly if late bound lifetime parameters are present")
+			}
+		}
 	}
 	gi := 0
 	for _, p := range own {
@@ -829,6 +869,9 @@ func (ac *astConv) genericArgsFor(d *Def, seg *ast.PathSegment, prefix []Ty, sp 
 			gi++
 			if p.Const {
 				if a.Const != nil {
+					if ac.owner != nil && ac.owner.Crate != nil && ac.owner.Crate.Local {
+						t.checkConstArgLit(a.Const, p.ConstTy)
+					}
 					args = append(args, ac.lowerConstArg(a.Const))
 				} else if a.Type != nil {
 					// N passed as a path type
@@ -913,6 +956,20 @@ func (ac *astConv) lowerPathType(x *ast.PathType) Ty {
 		if len(rest) == 0 {
 			t.Errorf(x.Span, "expected associated type")
 			return TyErr
+		}
+		// `<u8 as Trait>::A` with no `impl Trait for u8` (a local trait
+		// and fully known types)
+		if t.implsIndexed && ac.owner != nil && ac.owner.Crate != nil && ac.owner.Crate.Local && !t.isStd(tr.Trait) && !fromMacro(x.Path) {
+			known := true
+			for _, a := range tr.Args {
+				if a == nil || a.HasParam() || a.HasInfer() || a.HasProj() || a.HasOpaque() || a.HasError() {
+					known = false
+				}
+			}
+			if known && newInferCtxt(t).evaluate(&Predicate{Trait: tr}, 0) == SelNone {
+				t.ErrorCode(x.Span, "E0277", "the trait bound `%s: %s` is not satisfied", tr.Args[0], tr.Trait.Name)
+				return TyErr
+			}
 		}
 		ty := ac.projectionFor(tr, rest[0].Ident.Name, x.Span)
 		if ty.Kind == TProjection {
