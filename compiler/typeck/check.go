@@ -22,12 +22,18 @@ type FnCtxt struct {
 	// (recording the last one skipped in privMethod).
 	checkPriv  bool
 	privMethod *Def
-	t          *Tcx
-	ic         *InferCtxt
-	r          *Results
-	inst       Instance
-	def        *Def
-	ac         *astConv
+	// intoIterSkip is the edition of the method call being probed (its
+	// name's span) when it is before Rust 2024: IntoIterator's methods are
+	// skipped for by-value receivers that are boxed slices before 2024
+	// and arrays before 2021 (rustc_skip_during_method_dispatch), so
+	// `array.into_iter()` autorefs to the slice iterator there.
+	intoIterSkip string
+	t            *Tcx
+	ic           *InferCtxt
+	r            *Results
+	inst         Instance
+	def          *Def
+	ac           *astConv
 
 	scopes   []scope
 	modStack []*Module

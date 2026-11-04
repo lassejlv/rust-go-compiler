@@ -74,6 +74,7 @@ func loadProcMacroCrate() (*ast.Crate, error) {
 // buildProcMacroServer compiles the macro server for proc-macro crate pm
 // and returns the macros it provides.
 func buildProcMacroServer(opts *Options, pm *crateUnit, all map[string]*crateUnit, order []*crateUnit, _ map[string]map[string]*expand.ProcMacro) (map[string]*expand.ProcMacro, error) {
+	defer func() { lexer.CurEdition = "" }()
 	// dependency closure of pm, in build order
 	need := map[string]bool{}
 	var mark func(u *crateUnit)
@@ -116,6 +117,7 @@ func buildProcMacroServer(opts *Options, pm *crateUnit, all map[string]*crateUni
 		if u.procMac && u != pm {
 			continue
 		}
+		lexer.CurEdition = u.edition
 		c, err := loadUnitAST(u)
 		if err != nil {
 			return nil, err
@@ -140,6 +142,7 @@ func buildProcMacroServer(opts *Options, pm *crateUnit, all map[string]*crateUni
 		}
 		crates[u.key] = cr
 	}
+	lexer.CurEdition = ""
 	// generated server main
 	var b strings.Builder
 	b.WriteString("fn main() { ::proc_macro::__server::run(&[\n")

@@ -667,6 +667,7 @@ func (bs *buildState) closeServers() {
 // compileProgram compiles units[binIdx] with its dependencies (taken from
 // units, which are in dependency order) and returns C source.
 func (bs *buildState) compileProgram(units []*crateUnit, binIdx int) (*codegen.Program, error) {
+	defer func() { lexer.CurEdition = "" }()
 	need := map[string]bool{}
 	var mark func(u *crateUnit)
 	mark = func(u *crateUnit) {
@@ -713,6 +714,8 @@ func (bs *buildState) compileProgram(units []*crateUnit, binIdx int) (*codegen.P
 			continue
 		}
 		lexer.KeepDocs = u.collectDocs
+		// the unit's files (and the code its macros create) get its edition
+		lexer.CurEdition = u.edition
 		var c *ast.Crate
 		if u.genAST != nil {
 			c, err = u.genAST()
@@ -804,6 +807,7 @@ func (bs *buildState) compileProgram(units []*crateUnit, binIdx int) (*codegen.P
 			binCrate = cr
 		}
 	}
+	lexer.CurEdition = ""
 	r.ResolveImports()
 	if err := r.Err(); err != nil {
 		return nil, err

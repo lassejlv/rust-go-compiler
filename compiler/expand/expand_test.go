@@ -1212,6 +1212,29 @@ func TestErrorFormat(t *testing.T) {
 
 // TestCorpus expands every run-pass test program (files the parser rejects
 // are skipped) and checks that no macro invocation is left.
+// testEdition returns the edition a run-pass test is compiled with: an
+// `--edition N` in its .flags file, or a first-line `// edition:N` comment.
+func testEdition(file, src string) string {
+	if b, err := os.ReadFile(strings.TrimSuffix(file, ".rs") + ".flags"); err == nil {
+		fs := strings.Fields(string(b))
+		for i, f := range fs {
+			if f == "--edition" && i+1 < len(fs) {
+				return fs[i+1]
+			}
+			if strings.HasPrefix(f, "--edition=") {
+				return strings.TrimPrefix(f, "--edition=")
+			}
+		}
+	}
+	first, _, _ := strings.Cut(src, "\n")
+	if rest, ok := strings.CutPrefix(strings.TrimSpace(first), "// edition:"); ok {
+		if fs := strings.Fields(rest); len(fs) > 0 {
+			return fs[0]
+		}
+	}
+	return ""
+}
+
 func TestCorpus(t *testing.T) {
 	files, _ := filepath.Glob("../../tests/run-pass/*.rs")
 	more, _ := filepath.Glob("../../tests/run-pass/*/*.rs")
@@ -1233,7 +1256,9 @@ func TestCorpus(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		lexer.CurEdition = testEdition(f, string(src))
 		id := lexer.AddFile(f, string(src))
+		lexer.CurEdition = ""
 		c, err := parser.ParseCrate(id, string(src))
 		if err != nil {
 			continue

@@ -287,7 +287,7 @@ func (fcx *FnCtxt) typeRelativeValue(base Ty, seg *ast.PathSegment, sp lexer.Spa
 	}
 	var best *TraitRef
 	var bestKind SelKind
-	inScope := fcx.curMod().TraitsInScope(fcx.t.R.Prelude)
+	inScope := fcx.curMod().TraitsInScope(fcx.t.R.PreludeOf(fcx.curMod().Crate))
 	for _, tr := range fcx.t.traitsByItem[name] {
 		it := tr.Trait.Items[name]
 		if it.Kind != DefFn && it.Kind != DefConst {

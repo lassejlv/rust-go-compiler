@@ -13,6 +13,20 @@ const (
 	styleMod                   // no generic args (use paths, visibility)
 )
 
+// dyn2015 reports whether the Rust 2015 identifier `dyn` at the current
+// token begins a trait object type (rustc's is_explicit_dyn_type): it is
+// followed by something that can begin a bound, other than `::` or `<`.
+func (p *Parser) dyn2015() bool {
+	n := p.peekN(1)
+	switch {
+	case n.Kind == lexer.Lifetime:
+		return true
+	case n.Kind == lexer.Ident:
+		return isPathSegStart(n) || n.Is("for")
+	}
+	return n.Is("?") || n.Is("(") || n.Is("*")
+}
+
 // isPathSegStart reports whether t can start a path segment.
 func isPathSegStart(t lexer.Token) bool {
 	if t.Kind == lexer.Ident {
@@ -342,7 +356,7 @@ func (p *Parser) parseTypeX(plus bool) ast.Type {
 	case t.Is("impl"):
 		p.next()
 		return &ast.ImplTraitType{Bounds: p.parseBounds(plus), TypeBase: p.tb(lo)}
-	case t.Is("dyn"):
+	case t.Is("dyn") || (t.Weak && t.Text == "dyn" && p.dyn2015()):
 		p.next()
 		return &ast.DynTraitType{Bounds: p.parseBounds(plus), TypeBase: p.tb(lo)}
 	case t.Is("?"):

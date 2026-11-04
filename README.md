@@ -166,6 +166,21 @@ compilation.
   by-move, like rustc). From Rust 2021 on, closures capture disjoint places
   (`t.1`, `(*r).a.b`) with rustc's precision rules; moves out of fields of
   locals get per-field drop flags.
+* **Editions** (`--edition`, or per crate from Cargo): as in rustc, where a
+  token's span decides which edition's rules apply, every source file
+  records its crate's edition (`lexer.SourceFile.Edition`), so code a macro
+  of a 2015 crate expands elsewhere keeps 2015 rules. Per file: `async`,
+  `await`, `dyn` (contextual in types) and `try` are identifiers in 2015
+  (the parser sees them as raw identifiers; `try!` is std's `r#try`),
+  anonymous trait method parameters (2015), `c".."` literals (2021+),
+  `$p:pat` matching or-patterns (2021+, then not followable by `|`),
+  `$e:expr` matching `_`/`const {}` (2024), single-argument `panic!`,
+  `assert!` and `unreachable!` messages that are not format strings
+  (before 2021), and `array.into_iter()` / `boxed_slice.into_iter()`
+  method calls skipping the by-value impls (before 2021 / 2024). Per
+  crate: the std prelude (`TryFrom`/`TryInto`/`FromIterator` from 2021,
+  `Future`/`IntoFuture` from 2024), 2015 paths, 2021 disjoint closure
+  captures and 2024 tail-expression temporaries.
 * **Macro hygiene**: every token transcribed from a `macro_rules!` body gets
   a syntax context (`Hyg`, one per expansion and per context the token had
   in the definition, see `ast/hygiene.go`); a macro defined in a block leaves

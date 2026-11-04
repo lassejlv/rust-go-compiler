@@ -257,6 +257,9 @@ func (p *Parser) parseSelfParam() *ast.SelfParam {
 }
 
 func (p *Parser) parseFnDecl() *ast.FnDecl {
+	// Rust 2015 trait methods may have anonymous parameters (`fn f(u8);`)
+	anon := p.traitFn
+	p.traitFn = false
 	p.expect("(")
 	decl := &ast.FnDecl{}
 	first := true
@@ -272,6 +275,10 @@ func (p *Parser) parseFnDecl() *ast.FnDecl {
 		case p.is("..."):
 			p.next()
 			decl.Variadic = true
+		case anon && p.cur().Span.Before2018() && !p.isNamedParam():
+			ty := p.parseType()
+			pat := &ast.WildPat{PatBase: ast.PatBase{ID: ast.NewID(), Span: ty.GetSpan()}}
+			decl.Params = append(decl.Params, &ast.Param{Attrs: attrs, Pat: pat, Ty: ty, Span: p.span(lo)})
 		default:
 			pat := p.parsePatNoTopAlt()
 			p.expect(":")
@@ -430,7 +437,9 @@ func (p *Parser) parseTrait(it *ast.Item, unsafe, auto bool) *ast.TraitItem {
 		if p.eat(";") {
 			continue
 		}
+		p.traitFn = true
 		tr.Items = append(tr.Items, p.parseAssocItem())
+		p.traitFn = false
 	}
 	p.expect("}")
 	return tr

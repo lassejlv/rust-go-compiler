@@ -144,6 +144,14 @@ func parseMatchers(tts []ast.TokenTree) ([]*matcher, error) {
 					if !fragKinds[frag] {
 						return nil, errAt(ttSpan(tts[i+3]), "invalid fragment specifier `%s`", frag)
 					}
+					if frag == "pat" && tts[i+3].Tok.Span.Before2021() {
+						// before Rust 2021, `pat` does not match
+						// top-level or-patterns
+						frag = "pat_param"
+					}
+					if frag == "expr" && tts[i+3].Tok.Span.Since2024() {
+						frag = "expr_2024"
+					}
 					out = append(out, &matcher{kind: mVar, name: next.Tok.Text, frag: frag, span: tt.Tok.Span})
 					i += 3
 					continue
@@ -160,6 +168,21 @@ func parseMatchers(tts []ast.TokenTree) ([]*matcher, error) {
 			continue
 		}
 		out = append(out, &matcher{kind: mTok, tok: tt.Tok, span: tt.Tok.Span})
+	}
+	// a `pat` fragment (which matches or-patterns) may not be followed by
+	// `|` (directly or as the separator of its repetition)
+	for i, m := range out {
+		var pv *matcher
+		var bar lexer.Span
+		switch {
+		case m.kind == mVar && i+1 < len(out) && out[i+1].kind == mTok && out[i+1].tok.Is("|"):
+			pv, bar = m, out[i+1].span
+		case m.kind == mRep && m.sep != nil && m.sep.Is("|") && len(m.sub) > 0:
+			pv, bar = m.sub[len(m.sub)-1], m.sep.Span
+		}
+		if pv != nil && pv.kind == mVar && pv.frag == "pat" {
+			return nil, errAt(bar, "`$%s:pat` is followed by `|`, which is not allowed for `pat` fragments", pv.name)
+		}
 	}
 	return out, nil
 }
@@ -479,8 +502,9 @@ func matchFragment(frag string, in []ast.TokenTree, pos int) (int, bool) {
 	var n int
 	var err error
 	switch frag {
-	case "expr", "expr_2021":
-		if isUnderscore(rest[0]) {
+	case "expr", "expr_2021", "expr_2024":
+		// `_` and `const {}` are expressions only from Rust 2024 on
+		if frag != "expr_2024" && (isUnderscore(rest[0]) || isKw(rest[0], "const")) || isKw(rest[0], "let") {
 			return 0, false
 		}
 		n, err = parsePrefix(rest, func(p *parser.Parser) error { _, err := p.ParseExpr(); return err })
@@ -754,7 +778,7 @@ func emitFragment(f *fragment) []ast.TokenTree {
 		f = &fragment{kind: f.kind, tts: tts}
 	}
 	switch f.kind {
-	case "expr", "expr_2021":
+	case "expr", "expr_2021", "expr_2024":
 		if len(f.tts) > 1 {
 			return parenWrap(f.tts)
 		}
