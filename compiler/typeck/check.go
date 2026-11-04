@@ -314,8 +314,26 @@ func (fcx *FnCtxt) structurally(t Ty) Ty {
 		if t.Kind == TInfer && t.Sub == 0 && fcx.keepOpaque == 0 && fcx.revealNumericOpaque(t) {
 			t = fcx.shallow(t)
 		}
+		if t.Kind == TInfer && t.Sub == 0 && fcx.applyTryErrFallback(t) {
+			t = fcx.shallow(t)
+		}
 	}
 	return t
+}
+
+// applyTryErrFallback decides the still-open error type v of a `?`
+// conversion (see checkTry) as the identity when its structure is needed
+// before anything else decided it.
+func (fcx *FnCtxt) applyTryErrFallback(v Ty) bool {
+	for _, p := range fcx.tryErrFallback {
+		if fcx.ic.shallow(p[0]) == v {
+			if fcx.ic.unify(v, p[1]) {
+				fcx.selectWherePossible()
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // unifyPendingOpaques equates the generic args of pending `impl Trait`

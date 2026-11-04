@@ -1,0 +1,25 @@
+6 "hello\n" pos 6
+"rld\nthird line"
+eof read_line 0
+["hello", "world", "third line"]
+chain+take "abcdef"
+"0123456789"
+exact "3456"
+read_exact eof UnexpectedEof
+fill_buf [48] [49] buffer [49]
+tail "123456789"
+copied 14 -> "COPY ME PLEASE"
+"FMT 1    X"
+overflow err WriteZero pos 8
+[49, 50, 51, 52, 53, 54, 55, 56]
+[97, 98, 88, 89, 101, 102, 0, 0, 0, 33]
+sink 1000
+empty ""
+buffered len 8 inner 0
+"buffered and more than sixteen"
+linewriter before nl 0
+after nl "partial line\n"
+[k1=v1;][k2=v2;][;][k3]
+locked stdout 1
+custom bad InvalidData
+other err Other entity not found

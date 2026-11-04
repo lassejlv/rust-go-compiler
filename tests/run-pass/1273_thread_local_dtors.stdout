@@ -1,0 +1,8 @@
+[(0, 1, ["n0"]), (1, 2, ["n1"]), (2, 3, ["n2"])]
+main counter 2
+main counter 100
+replace -> 100
+take -> 7
+names ["x"]
+dropped ["t0:10", "t1:20", "t2:30"]
+dropped count 3

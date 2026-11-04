@@ -1,0 +1,10 @@
+touch first
+touch second
+body done
+deferred a
+deferred b
+drop second (LATE Ok(8))
+drop first (LATE Ok(8))
+drop Marker
+drop second (LATE Ok(1))
+main zst access ok

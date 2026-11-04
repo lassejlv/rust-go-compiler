@@ -1,0 +1,16 @@
+max 999
+spin total 4000
+Ok(250)
+Err(253)
+wrapping add 253 -> 7
+sub 5 and -3 or 125 xor 381 nand 386
+b now -3
+min -3 max -1000
+b now 42
+swap 7 cx Ok(9) Err(11)
+bool ops true false true false
+flag true
+isize -12
+x=11 y=22
+data 1234
+[0, 5, 0]

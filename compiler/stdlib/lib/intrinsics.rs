@@ -103,10 +103,13 @@ extern "rust-intrinsic" {
     pub fn futex_wake(p: *const u32) -> bool;
     pub fn futex_wake_all(p: *const u32);
 
-    // ---- thread-local storage (a destroyed slot reads as the address 1)
+    // ---- thread-local storage (a destroyed slot reads as usize::MAX)
     pub fn tls_new_key() -> usize;
     pub fn tls_get(key: usize) -> *mut u8;
     pub fn tls_set(key: usize, p: *mut u8, dtor: fn(*mut u8));
+    // like tls_set, for a value without drop glue: it stays accessible while
+    // the other destructors run and is freed (by dtor) after them
+    pub fn tls_set_late(key: usize, p: *mut u8, dtor: fn(*mut u8));
 
     // ---- atomics (sequentially consistent; T = integer, bool or thin pointer)
     pub fn atomic_load<T>(p: *const T) -> T;

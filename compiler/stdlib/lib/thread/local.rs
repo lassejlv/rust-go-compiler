@@ -77,7 +77,7 @@ impl<T: 'static> LocalKey<T> {
         unsafe {
             let k = self.key();
             let p = intrinsics::tls_get(k);
-            if (p as usize) == 1 {
+            if (p as usize) == usize::MAX {
                 return (0usize as *const T, value);
             }
             if !(p as usize == 0) {
@@ -89,8 +89,12 @@ impl<T: 'static> LocalKey<T> {
             };
             let old = intrinsics::tls_get(k);
             let b = Box::into_raw(Box::new(v));
-            intrinsics::tls_set(k, b as *mut u8, tls_dtor::<T>);
-            if !(old as usize == 0) && (old as usize) != 1 {
+            if crate::mem::needs_drop::<T>() {
+                intrinsics::tls_set(k, b as *mut u8, tls_dtor::<T>);
+            } else {
+                intrinsics::tls_set_late(k, b as *mut u8, tls_dtor::<T>);
+            }
+            if !(old as usize == 0) && (old as usize) != usize::MAX {
                 // the initializer recursively initialized this key
                 drop(Box::from_raw(old as *mut T));
             }

@@ -1,0 +1,8 @@
+Ok(42)
+Err("app: utf8 1")
+Err("app: invalid digit found in string")
+app: number too large to fit in target type
+Err("number too large to fit in target type")
+Ok(10)
+Ok(20)
+Err("app: invalid digit found in string")

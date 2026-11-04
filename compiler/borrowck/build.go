@@ -40,6 +40,8 @@ type upvar struct {
 }
 
 type builder struct {
+	// mutBorrowed: the place unadjPlace computes next is borrowed mutably
+	mutBorrowed bool
 	// retCoerce: the return place is a coercion site (declared return
 	// type)
 	retCoerce bool
@@ -304,8 +306,14 @@ func (b *builder) isPlaceExpr(e ast.Expr) bool {
 // placeOf evaluates e (with its adjustments) as a place; non-place
 // expressions are evaluated into a temporary.
 func (b *builder) placeOf(e ast.Expr) tplace {
+	adjs := b.r.Adjust[e.GetID()]
+	if len(adjs) > 0 {
+		// whether a temporary holding e's value is borrowed mutably
+		// (an autoref), which keeps it from being promoted
+		b.mutBorrowed = adjs[0].Kind == typeck.AdjBorrow && adjs[0].Mut
+	}
 	tp := b.unadjPlace(e)
-	return b.applyAdjusts(e, tp, b.r.Adjust[e.GetID()])
+	return b.applyAdjusts(e, tp, adjs)
 }
 
 func (b *builder) applyAdjusts(e ast.Expr, tp tplace, adjs []typeck.Adjustment) tplace {
@@ -444,8 +452,11 @@ func (b *builder) unadjPlace(e ast.Expr) tplace {
 			return b.upvarPlace(b.capUpvars[i], b.nodeTy(e))
 		}
 	}
+	mutBorrowed := b.mutBorrowed
+	b.mutBorrowed = false
 	switch x := e.(type) {
 	case *ast.ParenExpr:
+		b.mutBorrowed = mutBorrowed
 		return b.placeOf(x.X)
 	case *ast.PathExpr:
 		vr := b.r.Paths[x.ID]
@@ -460,11 +471,13 @@ func (b *builder) unadjPlace(e ast.Expr) tplace {
 		if !ok {
 			break
 		}
+		b.mutBorrowed = mutBorrowed
 		base := b.placeOf(x.X)
 		variant := 0
 		return tplace{p: base.p.project(Proj{Kind: PField, Field: fr.Index, Variant: variant, Name: x.Name.Name, DropTy: b.dropTy(base.ty)}), ty: b.nodeTy(e)}
 	case *ast.IndexExpr:
 		if b.r.IndexBuiltin[x.ID] {
+			b.mutBorrowed = mutBorrowed
 			base := b.placeOf(x.X)
 			idx := b.operandToLocal(x.Index)
 			return tplace{p: base.p.project(Proj{Kind: PIndex, Index: idx}), ty: b.nodeTy(e)}
@@ -474,6 +487,7 @@ func (b *builder) unadjPlace(e ast.Expr) tplace {
 			// the base is borrowed before the index is evaluated (an
 			// autoref without two-phase borrows: `v[v.len() - 1] = 0` is
 			// E0502 with IndexMut)
+			b.mutBorrowed = mut
 			base := b.placeOf(x.X)
 			ref := b.temp(Ref(base.ty, mut), e.GetSpan())
 			b.assign(ref.p, Rvalue{Kind: RRef, Place: base.p, Mut: mut}, e.GetSpan())
@@ -503,7 +517,7 @@ func (b *builder) unadjPlace(e ast.Expr) tplace {
 			return t
 		}
 	}
-	return b.valueTempUnadj(e)
+	return b.valueTempBorrowed(e, mutBorrowed)
 }
 
 // dropTy returns t if it is an ADT implementing Drop.
@@ -621,6 +635,17 @@ func (b *builder) valueTemp(e ast.Expr) tplace {
 }
 
 func (b *builder) valueTempUnadj(e ast.Expr) tplace {
+	return b.valueTempBorrowed(e, false)
+}
+
+// valueTempBorrowed is valueTempUnadj for a value that is borrowed mutably
+// if mutBorrowed: rustc promotes only `&mut []` of those to a static.
+func (b *builder) valueTempBorrowed(e ast.Expr, mutBorrowed bool) tplace {
+	if ae, ok := unparen(e).(*ast.ArrayExpr); mutBorrowed && !(ok && len(ae.Elems) == 0) {
+		t := b.temp(b.nodeTy(e), e.GetSpan())
+		b.lowerValue(e, t)
+		return t
+	}
 	if b.promotable(e) {
 		// a constant expression borrowed here is promoted to a static
 		id := b.newLocal(&LocalDecl{Kind: LStatic, Ty: b.nodeTy(e), Span: e.GetSpan(), Mut: true})
@@ -931,6 +956,7 @@ func (b *builder) lowerValue(e ast.Expr, dest tplace) {
 		op := b.operand(x.X)
 		b.assign(dest.p, Rvalue{Kind: ROther, Ops: []Operand{op}}, sp)
 	case *ast.RefExpr:
+		b.mutBorrowed = x.Mut
 		tp := b.placeOf(x.X)
 		kind := RRef
 		if x.Raw {
@@ -1361,6 +1387,8 @@ func (b *builder) methodCall(x *ast.MethodCallExpr, dest tplace) {
 	// two-phase borrows: an autoref of the receiver is taken after the
 	// arguments are evaluated
 	var last *typeck.Adjustment
+	// a temporary receiver borrowed mutably by the autoref is not promoted
+	b.mutBorrowed = len(adjs) > 0 && adjs[0].Kind == typeck.AdjBorrow && adjs[0].Mut
 	if n := len(adjs); n > 0 && adjs[n-1].Kind == typeck.AdjBorrow {
 		last = &adjs[n-1]
 		adjs = adjs[:n-1]

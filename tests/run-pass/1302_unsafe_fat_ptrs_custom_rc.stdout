@@ -1,0 +1,18 @@
+woof x3
+woof x9
+drop Dog 9
+len 3
+[1, 2, 30]
+BOXED STR
+shared 6 count 3
+count after 2
+still shared 1
+dog alive: woof x1
+drop Dog 1
+Some("s9") Some("s8") cap 16
+zst len 1000 pop Some(Unit)
+drop Dog 51
+drop Dog 50
+align_to lens 3 2 3 sum 14
+from raw parts
+treiber 1000 unique 1000 first Some(0) last Some(3249)

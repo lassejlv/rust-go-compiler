@@ -1,0 +1,11 @@
+(12, Point { x: 3, y: 16 }, [5, 6], ("t", 7))
+Ok(42)
+Err("zz: invalid digit found in string")
+Some(2) None
+None -> none
+Some(3) -> fizz
+Some(4) -> one
+Some(13) -> big-one
+Some(5) -> two
+([1, 4, 9, 16], 4, "yes", [6], 8)
+Ok(15)

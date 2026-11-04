@@ -1,0 +1,18 @@
+woken
+finished 5
+ids differ true same true
+would block
+try_lock ok Some(1)
+into_inner 11
+rethrowing
+outer caught: Some("inner")
+v [1, 2, 3] err Some("len 3")
+lines differ by 1 col 20
+Some(true)
+3
+from_ptr 8
+as_ptr 77
+fetch_not false true
+parallelism>0 true
+deep 1000
+Some(24)

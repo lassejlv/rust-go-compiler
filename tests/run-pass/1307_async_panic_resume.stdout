@@ -1,0 +1,19 @@
+round 0 -> Pending
+drop step0
+round 1 -> Pending
+drop step1
+drop guard
+round 2 panicked: failed at step 1
+round 3 panicked: `async fn` resumed after panicking
+--
+pending
+drop step0
+pending
+drop step1
+pending
+drop step2
+drop guard
+ready 99
+poll after completion: `async fn` resumed after completion
+block after completion: `async fn` resumed after completion
+end

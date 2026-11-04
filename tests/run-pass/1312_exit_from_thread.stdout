@@ -1,0 +1,2 @@
+main: spawning
+worker: sum 12 exceeded, exiting with 12

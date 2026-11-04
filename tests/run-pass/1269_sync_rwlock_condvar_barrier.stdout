@@ -1,0 +1,9 @@
+two readers: 3 1
+try_write while read: true
+after writers: [1, 2, 3, 10, 11, 12, 13]
+try_read while write: true
+consumed [1, 4, 9, 16, 25]
+timed out: true flag false
+timeout_while timed out: true flag false
+leaders=1 all a before b: true
+total entries 10

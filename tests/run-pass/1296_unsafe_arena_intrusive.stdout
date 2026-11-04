@@ -1,0 +1,18 @@
+chunks 3
+n6! n4! n2! n0! 
+short true | this one is definitely longer than fifteen false
+sso size 24
+square 9
+triangle 10
+square 2.25
+drop Sq 3
+drop Sq 1.5
+xy
+arena dropping
+drop n0!
+drop n1
+drop n2!
+drop n3
+drop n4!
+drop n5
+drop n6!

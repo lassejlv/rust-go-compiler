@@ -136,6 +136,11 @@ func (g *Gen) enumLiteral(t Ty, v *VariantDef, fields []string) string {
 func (g *Gen) enumDef(b *strings.Builder, t Ty, name string) {
 	d := t.Def
 	el := g.enumLayout(t)
+	// the end of the enum's struct: `#[repr(align(N))]` raises its alignment
+	end := " };\n"
+	if n := d.ReprAlign(); n > 0 {
+		end = fmt.Sprintf(" } __attribute__((aligned(%d)));\n", n)
+	}
 	fieldsIn := func(vi int) string {
 		var sb strings.Builder
 		fts := g.fieldTypes(t, vi)
@@ -147,7 +152,7 @@ func (g *Gen) enumDef(b *strings.Builder, t Ty, name string) {
 	switch el.Kind {
 	case typeck.EnumNiche:
 		if !el.Union {
-			fmt.Fprintf(b, "struct %s {%s };\n", name, fieldsIn(el.Data))
+			fmt.Fprintf(b, "struct %s {%s%s", name, fieldsIn(el.Data), end)
 			return
 		}
 		// union of variant structs; the others replicate the niche scalar
@@ -168,26 +173,26 @@ func (g *Gen) enumDef(b *strings.Builder, t Ty, name string) {
 				fmt.Fprintf(b, " struct { uint8_t __p0[%d]; %s __n; uint8_t __p1[%d];%s } v%d;", no, nt, off-min(off, no+nb), fieldsIn(vi), vi)
 			}
 		}
-		b.WriteString(" }; };\n")
+		b.WriteString(" };" + end)
 	case typeck.EnumSingle:
 		if el.Data < 0 {
-			fmt.Fprintf(b, "struct %s { };\n", name)
+			fmt.Fprintf(b, "struct %s {%s", name, end)
 			return
 		}
-		fmt.Fprintf(b, "struct %s {%s };\n", name, fieldsIn(el.Data))
+		fmt.Fprintf(b, "struct %s {%s%s", name, fieldsIn(el.Data), end)
 	case typeck.EnumTaggedC:
 		fmt.Fprintf(b, "struct %s { %s tag; union {", name, g.ctype(IntT(el.Tag)))
 		for vi := range d.Adt.Variants {
 			fmt.Fprintf(b, " struct {%s } v%d;", fieldsIn(vi), vi)
 		}
-		b.WriteString(" } u; };\n")
+		b.WriteString(" } u;" + end)
 	default:
 		tag := g.ctype(IntT(el.Tag))
 		fmt.Fprintf(b, "struct %s { union { %s tag;", name, tag)
 		for vi := range d.Adt.Variants {
 			fmt.Fprintf(b, " struct { %s tag;%s } v%d;", tag, fieldsIn(vi), vi)
 		}
-		b.WriteString(" }; };\n")
+		b.WriteString(" };" + end)
 	}
 }
 

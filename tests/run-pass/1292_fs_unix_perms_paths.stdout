@@ -1,0 +1,19 @@
+readonly false
+mode 750
+"from-script arg1\n" Some(5)
+signal None
+read_link "a/b/c/file.sh"
+is_symlink true meta follows true
+canon ends true
+strip "a/b/c/file.sh"
+["/", "usr", "local", "..", "lib", "libfoo.so.1"]
+["x/y/z", "x/y", "x", ""]
+Some("1") Some("libfoo.so") Some("/usr/./local/../lib")
+/tmp/base/sub.tar.gz "/tmp/base/other.txt"
+"/tmp/base" abs true rel true
+"/abs"
+"bytes\xFFname" "bytes�name" 10
+starts_with true false
+["a/", "a/b/", "a/b/c/", "a/b/c/file.sh", "link@"]
+term signal Some(15) code None
+removed true

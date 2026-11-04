@@ -1,0 +1,13 @@
+status true stdout "hello world\n" stderr []
+code Some(3) success false out "out\n" err "err\n"
+status ok true
+env: value-h
+env_remove: unset
+pwd: /
+sorted ["apple", "banana", "mango", "pear"] true
+wwo Some(7) "a\nb\nc"
+null ok true
+missing: NotFound
+signal code None success false
+program "sh" args ["-c", "echo $0 $1 $2", "zero", "one", "two"]
+zero one two

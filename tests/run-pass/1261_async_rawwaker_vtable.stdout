@@ -1,0 +1,6 @@
+will_wake same: true
+will_wake same: true
+block_on: 5 polls, flag=2
+v=60
+clones=4 wakes=2 wake_by_ref=2 drops=5
+Ready(11)

@@ -1,0 +1,25 @@
+Header size 24 align 8
+offsets 0 4 8 16
+Packed size 7 align 1 b@1 c@5
+packed vals 1 1020304 506
+Aligned size 16 align 16
+aligned addr diff 16
+al x 3
+Color size 1 as u8 4 200
+from Some(Green) None Some(Custom)
+Signed -5 0 1 size 2
+Next
+Meters size 8 Meters(2.5)
+3.25 Meters(1.5)
+rgba as u32 0x44332211
+[68, 51, 34, 17]
+f32 bits 0x3f800000 0x3f800000
+[2, 1]
+Option<&u8> 8 Option<Box<u8>> 8 Option<NonZeroU32> 4
+Tagged size 8
+tag 3 payload 5
+tag 7 payload 6
+tag 9 payload 0
+tuple 8 8
+unit 0 empty arr 0 fnptr 8
+&[u8] 16 &str 16 &dyn Fn 16

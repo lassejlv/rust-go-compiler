@@ -116,18 +116,16 @@ impl Waker {
     }
     /// A waker that does nothing when woken.
     pub fn noop() -> &'static Waker {
-        unsafe {
-            let p = &raw mut NOOP_WAKER;
-            if (*p).is_none() {
-                let vt: &'static RawWakerVTable = crate::boxed::Box::leak(crate::boxed::Box::new(RawWakerVTable::new(noop_clone, noop_fn, noop_fn, noop_fn)));
-                *p = Some(Waker { waker: RawWaker::new(0 as *const (), vt) });
-            }
-            (*p).as_ref().unwrap()
-        }
+        // (one static waker, like std's `const WAKER: &Waker`)
+        &NOOP_WAKER.0
     }
 }
 
-static mut NOOP_WAKER: Option<Waker> = None;
+struct NoopWaker(Waker);
+// the noop waker's data is null and its functions do nothing
+unsafe impl Sync for NoopWaker {}
+static NOOP_WAKER: NoopWaker = NoopWaker(Waker { waker: RawWaker::new(0 as *const (), &NOOP_VTABLE) });
+static NOOP_VTABLE: RawWakerVTable = RawWakerVTable::new(noop_clone, noop_fn, noop_fn, noop_fn);
 
 unsafe fn noop_clone(_p: *const ()) -> RawWaker {
     Waker::noop().waker.clone_raw()
@@ -209,13 +207,10 @@ unsafe fn arc_drop<W: Wake + Send + Sync + 'static>(p: *const ()) {
     drop(a);
 }
 
+// (a promoted static per waker type: wakers of one type share their vtable,
+// and creating or cloning one allocates nothing)
 fn arc_vtable<W: Wake + Send + Sync + 'static>() -> &'static RawWakerVTable {
-    crate::boxed::Box::leak(crate::boxed::Box::new(RawWakerVTable::new(
-        arc_clone::<W>,
-        arc_wake::<W>,
-        arc_wake_by_ref::<W>,
-        arc_drop::<W>,
-    )))
+    &RawWakerVTable::new(arc_clone::<W>, arc_wake::<W>, arc_wake_by_ref::<W>, arc_drop::<W>)
 }
 
 impl<W: Wake + Send + Sync + 'static> From<Arc<W>> for Waker {

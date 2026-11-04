@@ -1,0 +1,19 @@
+ret same true
+2001-09-09 01:46:40 wday 0 yday 251
+24 "2001/09/09 01:46 Sun Sep"
+timegm 1003456000
+normalized mon 10 mday 19
+sizeof Tm 56
+strtol -1234 consumed 7 rest "xyz"
+hex 255
+strtod 375 rest " tail"
+sscanf 3 -> 42 2.5 "hello"
+memchr at 9
+memchr none true
+strerror(2) "No such file or directory"
+getenv missing null true
+2 -1 def
+4 0 jkl
+1 2.5 abc
+3 10.25 ghi
+Sample size 24 align 8

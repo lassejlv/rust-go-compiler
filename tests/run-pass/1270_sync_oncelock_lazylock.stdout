@@ -1,0 +1,15 @@
+before: false
+[4, 5, 8, 13, 20, 29, 40, 53]
+init count 101
+once done true value 1
+retries 3
+sum squares 285
+set1 Ok(())
+set2 Err("second")
+get Some("first")
+take Some("first-mut") then None
+into_inner Some(5)
+cell [1, 2, 3] again [1, 2, 3]
+lazy 8 9 calls=1
+lazylock deref len 3
+force abc

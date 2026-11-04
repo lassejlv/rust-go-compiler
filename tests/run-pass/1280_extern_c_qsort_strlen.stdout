@@ -1,0 +1,18 @@
+strlen 12
+strlen lit 13 "literal c str"
+[-100, -7, 0, 3, 3, 8, 19, 42]
+found 19 at 6
+5 found: false
+["banana", "apple", "date", "kiwi", "pear", "fig"]
+memcmp sign -1
+abs 17 atoi -345
+5 -2147483648
+add 13
+mul 42
+max 7
+fn ptr eq true
+magic 0xc0ffee
+"Xbc" Xbc
+[98, 121, 116, 101, 115] 5 "bytes"
+nul err true
+Ok("ptr")

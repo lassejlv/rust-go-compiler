@@ -64,6 +64,89 @@ func asyncBlockCall(body ast.Expr, move bool, ret ast.Type, sp, loc lexer.Span) 
 	return &ast.CallExpr{ExprBase: ast.ExprBase{Span: loc, ID: ast.NewID()}, Fn: fn, Args: []ast.Expr{clo}}, nil
 }
 
+// implTraitToInfer returns t with every `impl Trait` replaced by `_`: the
+// return type annotation of the closure an async fn's body becomes (its
+// declared type keeps the opaque types, which the body's type defines).
+func implTraitToInfer(t ast.Type) ast.Type {
+	base := func(b ast.TypeBase) ast.TypeBase { return ast.TypeBase{Span: b.Span, ID: ast.NewID()} }
+	list := func(ts []ast.Type) ([]ast.Type, bool) {
+		var out []ast.Type
+		for i, e := range ts {
+			if n := implTraitToInfer(e); n != e {
+				if out == nil {
+					out = append([]ast.Type(nil), ts...)
+				}
+				out[i] = n
+			}
+		}
+		return out, out != nil
+	}
+	switch x := t.(type) {
+	case *ast.ImplTraitType:
+		return &ast.InferType{TypeBase: base(x.TypeBase)}
+	case *ast.ParenType:
+		if e := implTraitToInfer(x.Elem); e != x.Elem {
+			return &ast.ParenType{TypeBase: base(x.TypeBase), Elem: e}
+		}
+	case *ast.RefType:
+		if e := implTraitToInfer(x.Elem); e != x.Elem {
+			return &ast.RefType{TypeBase: base(x.TypeBase), Lifetime: x.Lifetime, Mut: x.Mut, Elem: e}
+		}
+	case *ast.PtrType:
+		if e := implTraitToInfer(x.Elem); e != x.Elem {
+			return &ast.PtrType{TypeBase: base(x.TypeBase), Mut: x.Mut, Elem: e}
+		}
+	case *ast.SliceType:
+		if e := implTraitToInfer(x.Elem); e != x.Elem {
+			return &ast.SliceType{TypeBase: base(x.TypeBase), Elem: e}
+		}
+	case *ast.ArrayType:
+		if e := implTraitToInfer(x.Elem); e != x.Elem {
+			return &ast.ArrayType{TypeBase: base(x.TypeBase), Elem: e, Len: x.Len}
+		}
+	case *ast.TupleType:
+		if es, ok := list(x.Elems); ok {
+			return &ast.TupleType{TypeBase: base(x.TypeBase), Elems: es}
+		}
+	case *ast.PathType:
+		if x.QSelf != nil || x.Path == nil {
+			return t
+		}
+		var segs []*ast.PathSegment
+		for i, sg := range x.Path.Segments {
+			if sg.Args == nil || sg.Args.Parenthesized {
+				continue
+			}
+			var args []ast.GenericArg
+			for j, a := range sg.Args.Args {
+				if a.Type == nil {
+					continue
+				}
+				if n := implTraitToInfer(a.Type); n != a.Type {
+					if args == nil {
+						args = append([]ast.GenericArg(nil), sg.Args.Args...)
+					}
+					args[j].Type = n
+				}
+			}
+			if args == nil {
+				continue
+			}
+			if segs == nil {
+				segs = append([]*ast.PathSegment(nil), x.Path.Segments...)
+			}
+			ga := *sg.Args
+			ga.Args = args
+			segs[i] = &ast.PathSegment{Ident: sg.Ident, Args: &ga}
+		}
+		if segs != nil {
+			p := &ast.Path{Global: x.Path.Global, Segments: segs, Span: x.Path.Span, ID: ast.NewID()}
+			return &ast.PathType{TypeBase: base(x.TypeBase), Path: p}
+		}
+	}
+	return t
+}
+
 func futureOutputType(ret ast.Type, sp lexer.Span) ast.Type {
 	seg := func(n string) *ast.PathSegment { return &ast.PathSegment{Ident: ast.Ident{Name: n, Span: sp}} }
 	fut := seg("Future")
@@ -225,7 +308,7 @@ func desugarAsync(c *ast.Crate) error {
 					}
 					var body ast.Expr = &ast.BlockExpr{ExprBase: ast.ExprBase{Span: k.Body.Span, ID: ast.NewID()}, Block: k.Body}
 					body = prependStmts(moveAsyncParams(k.Decl), body, k.Body.Span)
-					call, err := asyncBlockCall(body, true, ret, it.Span, k.Body.Span)
+					call, err := asyncBlockCall(body, true, implTraitToInfer(ret), it.Span, k.Body.Span)
 					if err != nil {
 						fail(err)
 						continue

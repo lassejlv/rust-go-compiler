@@ -1,0 +1,25 @@
+bool 1 Option<bool> 1 Option<Option<bool>> 1
+char 4 Option<char> 4
+Option<NonZeroU8> 1 Option<NonZeroU16> 2
+Option<NonNull<u8>> 8 Option<&[u8]> 16 Option<Box<[u8]>> 16
+Option<Vec<u8>> 24 Option<String> 24
+Three 1 Option<Three> 1
+WithData 8 Option<WithData> 8
+Pair 4 [Pair;3] 12
+Result<u32,()> 8 Result<(),Box<u8>> 8
+Option<u64> 16 Option<(u8,bool)> 2
+Option<fn()> 8 Option<Option<&u8>> 16
+[1.0, -2.0, 0.5]
+Vec3 { x: 3.0, y: 4.0, z: 5.0 }
+[8, 7, 6, 5, 4, 3, 2, 1]
+0x102030405060708
+[708, 506, 304, 102]
+addr matches true
+4294967295
+3.141592653589793
+None Some(9)
+true
+A
+(1, 2)
+len 4 first 1
+42

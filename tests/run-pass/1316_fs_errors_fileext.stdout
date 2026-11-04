@@ -1,0 +1,18 @@
+create existing dir: AlreadyExists os=Some(17) msg=File exists (os error 17)
+open missing: NotFound os=Some(2) msg=No such file or directory (os error 2)
+read_dir missing: NotFound os=Some(2) msg=No such file or directory (os error 2)
+remove non-empty dir: DirectoryNotEmpty os=Some(39) msg=Directory not empty (os error 39)
+read dir as file: IsADirectory os=Some(21) msg=Is a directory (os error 21)
+file as dir: NotADirectory os=Some(20) msg=Not a directory (os error 20)
+remove_file on dir: IsADirectory os=Some(21) msg=Is a directory (os error 21)
+utf8 error: InvalidData os=None msg=stream did not contain valid UTF-8
+read_at 3: "3456"
+read_exact_at 7: "7AB"
+clone shares cursor: "23" pos 4
+content "01234567AB\0\0ZZ!"
+len 15
+write to read-only handle: Uncategorized os=Some(9) msg=Bad file descriptor (os error 9)
+read_exact past end: UnexpectedEof os=None msg=failed to fill whole buffer
+PermissionDenied Permission denied (os error 13)
+took too long TimedOut inner=Some("took too long")
+remove again: NotFound os=Some(2) msg=No such file or directory (os error 2)

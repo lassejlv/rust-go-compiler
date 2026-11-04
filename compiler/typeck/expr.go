@@ -1288,7 +1288,11 @@ func (fcx *FnCtxt) checkTry(x *ast.TryExpr) Ty {
 		info.ErrTy = resT.Args[1]
 		rs := fcx.structurally(ret)
 		if rs.Kind == TInfer {
-			fcx.ic.unify(rs, Adt(resD, []Ty{fcx.ic.newVar(), resT.Args[1]}))
+			// the error type stays open (converted with From below) so a
+			// later use, e.g. the type annotation of a closure's call
+			// result, can still decide it; tryErrFallback makes it the
+			// identity otherwise
+			fcx.ic.unify(rs, Adt(resD, []Ty{fcx.ic.newVar(), fcx.ic.newVar()}))
 			rs = fcx.shallow(ret)
 		}
 		info.Out = TryResult
