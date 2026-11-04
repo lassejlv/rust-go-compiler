@@ -1874,6 +1874,9 @@ func (lc *loanChecker) transferTerm(st *lstate, t Term) {
 			src := lc.depthView(args[e.Src])
 			// the places the `&mut` argument borrows receive the loans
 			for _, p := range lc.borrowedPlaces(args[e.Dst]) {
+				if precise && lc.intoSlotsCover(fl, e, p) {
+					continue // stored slot by slot below
+				}
 				pl := lc.localLayout(p.Local)
 				for k, d := range pl.depth {
 					if d >= e.DstDepth && d-e.DstDepth+e.SrcDepth < maxDepth {
@@ -1905,6 +1908,30 @@ func (lc *loanChecker) transferTerm(st *lstate, t Term) {
 		lc.killDerefLoans(st, t.Dest.Local, v)
 	}
 	lc.store(st, t.Dest, v)
+}
+
+// intoSlotsCover reports whether the store e of a type parameter's value
+// into place p (borrowed by the `&mut` argument) is described slot by slot
+// by fl.IntoSlots, which apply to p.
+func (lc *loanChecker) intoSlotsCover(fl *Flow, e IntoEdge, p Place) bool {
+	if e.Name == "" || e.Name[0] == '\'' || len(p.Proj) != 0 {
+		return false
+	}
+	dl := fl.ArgLays[e.Dst]
+	if dl == nil || dl.flat || dl.root.ty == nil || dl.root.ty.Kind != TRef {
+		return false
+	}
+	rl := layoutOf(dl.root.ty.Elem)
+	pi := lc.placeInfo(p)
+	if pi.raw || pi.lay.key != rl.key || pi.lay.n() != rl.n() {
+		return false
+	}
+	for _, is := range fl.IntoSlots {
+		if is.Dst == e.Dst && is.Src == e.Src && is.Name == e.Name {
+			return true
+		}
+	}
+	return false
 }
 
 // borrowedPlaces returns the places (not behind references) a reference

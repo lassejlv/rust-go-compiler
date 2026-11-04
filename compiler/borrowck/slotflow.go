@@ -514,7 +514,15 @@ func slotFlow(tcx *typeck.Tcx, fl *Flow, d *Def, selfAst ast.Type, params map[st
 						continue
 					}
 					for x, xs := range sa.occ {
-						if x == name || !boundMentions(x, name, gens, params) {
+						if x == name {
+							// the same type parameter (`push(&mut self,
+							// value: T)`): slot by slot
+							for _, s := range xs {
+								alignSame(fl, si, s, di, n, name)
+							}
+							continue
+						}
+						if !boundMentions(x, name, gens, params) {
 							continue
 						}
 						for _, s := range xs {
@@ -804,8 +812,47 @@ func slotKeyPrefix(refs int) string {
 
 // alignInto records stores of argument si's node s into node n of the
 // referent of `&mut` argument di, aligned by depth.
+// alignSame stores the slots of node s (argument si) into the same slots
+// of node n (in the referent of `&mut` argument di), both instances of type
+// parameter name.
+func alignSame(fl *Flow, si int, s *lnode, di int, n *lnode, name string) {
+	if s.ty != n.ty || s.end-s.start != n.end-n.start || len(closureSlots(s)) > 0 && hasTrue(closureSlots(s)) {
+		return
+	}
+	for k := 0; k < s.end-s.start; k++ {
+		fl.IntoSlots = append(fl.IntoSlots, IntoSlot{Dst: di, DstSlot: n.start + k, Src: si, SrcSlot: s.start + k, Name: name})
+	}
+}
+
+func hasTrue(m map[int]bool) bool {
+	for _, v := range m {
+		if v {
+			return true
+		}
+	}
+	return false
+}
+
 func alignInto(fl *Flow, si int, s *lnode, sl *layout, di int, n *lnode, dl *layout) {
 	clos := closureSlots(s)
+	// the item type itself inside s (`[(&'a str, &'b str); 1]` extending
+	// a Vec<(&'a str, &'b str)>): slot by slot
+	if hits := findSame(s, n.ty); len(hits) > 0 && len(clos) == 0 {
+		ok := true
+		for _, h := range hits {
+			if h.end-h.start != n.end-n.start {
+				ok = false
+			}
+		}
+		if ok {
+			for _, h := range hits {
+				for k := 0; k < n.end-n.start; k++ {
+					fl.IntoSlots = append(fl.IntoSlots, IntoSlot{Dst: di, DstSlot: n.start + k, Src: si, SrcSlot: h.start + k})
+				}
+			}
+			return
+		}
+	}
 	shift := refLevels(s.ty, 0) - refLevels(n.ty, 0)
 	if shift < 0 {
 		shift = 0
