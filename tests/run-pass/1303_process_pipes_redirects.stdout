@@ -1,0 +1,15 @@
+["DELTA", "CHARLIE", "BRAVO", "ALPHA"]
+status true file "line1\nline2\n"
+wc -l: 2
+out lines 3000 err lines 3000 last out Some("out2999")
+lens [3, 3, 5] exit Some(0)
+running: true
+has id: true
+killed: success=false code=None
+cat rows 2000 bytes 16890
+Ok("set-value") true
+child sees set-value
+after remove gone
+PATH present true
+cwd child read "rel"
+cleaned true

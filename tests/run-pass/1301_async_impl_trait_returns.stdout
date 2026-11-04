@@ -1,0 +1,9 @@
+10
+[0, 2, 4, 6, 8]
+<1|2|3>
+42 closure
+ok 8
+err negative -1
+12 30
+["a", "bb", "ccc"] count=3
+[] count=0

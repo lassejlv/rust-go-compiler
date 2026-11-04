@@ -1,0 +1,25 @@
+b@4 y@16 offset_of nested 16
+a=1 x=3
+m.b=99 m.inner.x=7 y=0
+first byte 1
+same true
+with_addr 3
+map_addr 2
+align_offset 3 0
+aligned true false
+range len 4
+contains true
+from_ref 2
+nonnull read 25
+slice len 3 [10, 25, 30]
+byte 10
+[100, 8, 7, 6] volatile 6
+disc eq true false
+B { s: "x" } C
+needs_drop false true true false
+size_of_val dyn 24 align 8
+sv slice 12
+1 true
+fnptr roundtrip 42
+without_provenance addr 0x1000
+dangling true

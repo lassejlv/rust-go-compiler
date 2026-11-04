@@ -1,0 +1,14 @@
+str payload: static message
+is String: true -> Some("formatted 42")
+u64 payload Some(7)
+thread failed: true
+poisoned: true
+recovered data [1, 2, 3, 4]
+after clear: false Ok(4)
+rw poisoned true
+rw value cfg-partial
+rw3 poisoned false
+catch_unwind err true
+ok 5
+scope panic caught true
+done

@@ -1,0 +1,18 @@
+counter 12
+[0, 1, 4, 9, 16, 25, 36, 255]
+global 42
+cell 15
+[1, 2, 3]
+105
+rc string count 2
+count 3
+back rc string count 2
+count after 1
+drop s1
+drop s0
+drop s1-new
+drop s2
+after drop_in_place
+drop boxed
+black_box 42
+3

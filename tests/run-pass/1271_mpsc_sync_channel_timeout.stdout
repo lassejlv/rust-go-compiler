@@ -1,0 +1,14 @@
+12 msgs: [(0, 0), (0, 0), (0, 0), (1, 0), (1, 1), (1, 2), (2, 0), (2, 2), (2, 4), (3, 0), (3, 3), (3, 6)]
+["one", "two", "three"] producer done
+Ok(())
+Ok(())
+full, got back 3
+Ok(1) Ok(2)
+Err(Empty)
+true
+Err(RecvError)
+Err(Timeout)
+Ok(9)
+true
+send error returned [1, 2]: sending on a closed channel
+pipeline [0, 3, 6, 9, 12, 15, 18, 21, 24, 27]

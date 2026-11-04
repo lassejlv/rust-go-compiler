@@ -1,0 +1,7 @@
+[1, 4, 9, 16, 25]
+ABC
+(Some(10), Some(20), None)
+/echo ping -> 200 ping
+/len abcdef -> 200 6
+/greet world -> 201 hello, world
+/nope  -> 404 no route /nope

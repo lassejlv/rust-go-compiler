@@ -1,0 +1,22 @@
+Line size 64 align 64
+box aligned true
+vec aligned true stride 64
+v2 sum 190
+rc aligned true arc aligned true
+local aligned true
+boxed slice aligned true
+Big size 32 align 32
+bigs aligned true [A(1), B("x"), A(3)]
+align 8 ok true realloc ok true
+align 128 ok true realloc ok true
+align 4096 ok true realloc ok true
+raw Line aligned true v 9
+bits 0x80000000
+bytes [2, 1]
+Either<u8,u64> size 8
+packed 1 0xaabbccdd 0x1234 size 7
+written 7
+zero
+low half one
+top bit
+other 42

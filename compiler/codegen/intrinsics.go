@@ -335,7 +335,9 @@ func (fc *fnGen) intrinsic(d *Def, args []Ty, v []string, ret Ty, sp ast.Span) s
 	case "tls_get":
 		return fmt.Sprintf("rg_tls_get(%s)", v[0])
 	case "tls_set":
-		return fmt.Sprintf("(rg_tls_set(%s, %s, (Unit (*)(uint8_t*))(%s)), (Unit){})", v[0], v[1], v[2])
+		return fmt.Sprintf("(rg_tls_set(%s, %s, (Unit (*)(uint8_t*))(%s), 0), (Unit){})", v[0], v[1], v[2])
+	case "tls_set_late":
+		return fmt.Sprintf("(rg_tls_set(%s, %s, (Unit (*)(uint8_t*))(%s), 1), (Unit){})", v[0], v[1], v[2])
 	// ---- atomics (all sequentially consistent)
 	case "atomic_load":
 		return fmt.Sprintf("((%s)__atomic_load_n(%s, __ATOMIC_SEQ_CST))", ct(arg(0)), v[0])

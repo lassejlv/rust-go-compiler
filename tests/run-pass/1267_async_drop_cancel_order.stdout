@@ -1,0 +1,54 @@
+== n=0
+cancelling after 0 polls
+result None
+== n=1
+cancelling after 1 polls
+drop i1
+drop a
+result None
+== n=2
+inner i1 resumed
+drop i1
+cancelling after 2 polls
+drop scoped
+drop b
+drop a
+result None
+== n=3
+inner i1 resumed
+drop i1
+drop scoped
+cancelling after 3 polls
+drop i2
+drop b
+drop a
+result None
+== n=4
+inner i1 resumed
+drop i1
+drop scoped
+inner i2 resumed
+drop i2
+drop c
+drop b
+drop a
+ready after 4 polls
+result Some(14)
+== n=5
+inner i1 resumed
+drop i1
+drop scoped
+inner i2 resumed
+drop i2
+drop c
+drop b
+drop a
+ready after 4 polls
+result Some(14)
+== never polled with captured value
+drop captured
+== async block captured by ref
+cancelling after 1 polls
+drop temp-in-block
+end main
+drop local

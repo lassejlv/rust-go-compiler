@@ -1,0 +1,24 @@
+is_file true len 67
+chars 67 lines 6
+0: "line 0 "
+1: "line 1 x"
+2: "line 2 xx"
+3: "line 3 xxx"
+4: "line 4 xxxx"
+5: "no newline at end"
+at 5: "0 \nlin"
+pos 61 tail "at end"
+stream_position 64
+first "line 0 \n"
+starts "LINE 0 \nli" ends "appended"
+["a", "bb", "", "ccc"]
+create_new exists err kind AlreadyExists
+missing kind NotFound
+copied 76 bytes
+["copy.txt", "moved.csv"]
+exists false true
+after remove 1
+sub is_dir true
+Some("moved.csv") Some("csv") Some("moved")
+truncated "LINE"
+cleaned true

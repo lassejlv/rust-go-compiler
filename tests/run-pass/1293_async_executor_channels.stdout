@@ -1,0 +1,13 @@
+task 0 acquired (free 1)
+task 1 acquired (free 0)
+task 0 releasing
+task 1 releasing
+task 2 acquired (free 1)
+task 3 acquired (free 0)
+task 2 releasing
+task 3 releasing
+task 4 acquired (free 1)
+task 4 releasing
+collector total 110 nested
+polls 25 permits 2 tasks 7
+Ready(110)

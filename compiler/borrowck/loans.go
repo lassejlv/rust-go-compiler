@@ -972,9 +972,13 @@ func (lc *loanChecker) refVal(st *lstate, p Place, li int, mut bool) lval {
 	}
 	// a reborrow through references keeps their loans alive (rustc's
 	// reborrow constraints: from the last deref outwards, stopping after
-	// the first shared reference)
+	// the first shared reference, or at a raw pointer, whose referent is
+	// not borrowed from anything the borrow checker knows of)
 	for i := len(p.Proj) - 1; i >= 0; i-- {
 		pr := p.Proj[i]
+		if pr.Kind == PDeref && (pr.Deref == DRaw || pr.Deref == DRawMut) {
+			break
+		}
 		if pr.Kind != PDeref || (pr.Deref != DRef && pr.Deref != DRefMut) {
 			continue
 		}

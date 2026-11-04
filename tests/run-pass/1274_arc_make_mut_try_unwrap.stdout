@@ -1,0 +1,19 @@
+unique edit ["a", "b"]
+a=["a", "b", "c"] b=["a", "b"] ptr_eq=false
+get_mut on unique a: true
+get_mut on shared b2: true
+strong=1 weak=1
+unwrapped ["a", "b"]
+weak upgrade after unwrap: true
+try_unwrap shared is_err true
+drop Doc(2)
+into_inner results: None Some(2)
+shared str [1, 2, 3] 2
+rc [1, 2, 3] weak alive false
+rc [1, 2, 3, 4] r2 [1, 2, 3]
+rc unwrap_or_clone [1, 2, 3]
+in new_cyclic, upgrade none: true
+cyc 3
+end
+drop Doc(3)
+drop Doc(3)

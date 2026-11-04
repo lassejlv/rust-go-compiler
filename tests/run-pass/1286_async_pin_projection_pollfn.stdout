@@ -1,0 +1,13 @@
+(7, 4)
+9
+poll_fn 400
+GET /index -> 200
+GET /a -> 200!
+5
+pending: Pending Pending
+left before set 4
+Ready(7)
+unpin get_mut 11
+into_inner 9
+pinned ref 5 5
+13 pinned string

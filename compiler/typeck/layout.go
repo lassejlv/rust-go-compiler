@@ -229,13 +229,21 @@ func (t *Tcx) cLayoutUncached(ty Ty, depth int) (size, align uint64, ok bool) {
 				}
 				sz, al = max(sz, s), max(al, a)
 			}
+			if n := d.ReprAlign(); n > al {
+				al = n
+			}
 			return alignUp(sz, al), al, true
 		case AdtEnum:
 			el := t.EnumLayoutOf(ty)
 			if el == nil {
 				return 0, 0, false
 			}
-			return t.enumSize(ty, el, depth)
+			sz, al, ok := t.enumSize(ty, el, depth)
+			if n := d.ReprAlign(); ok && n > al {
+				al = n
+				sz = alignUp(sz, al)
+			}
+			return sz, al, ok
 		}
 	}
 	return 0, 0, false

@@ -1,0 +1,12 @@
+id 7 len 4 total 10
+size_of_val 20 20
+boxed total 30
+Labeled { tag: 'x', val: [1, 2] }
+1 -> int 5
+2 -> string "hi"
+Labeled { tag: 'z', val: ['a', 'b', 'c'] } 3
+Some("gz") None
+bits 4 [9, 2, 0, 128]
+[2.5, 3.5] [1.5, 2.5]
+6 5
+[3, 1, 2] 5

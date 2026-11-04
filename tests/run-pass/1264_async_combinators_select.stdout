@@ -1,0 +1,24 @@
+map:
+  m ready
+  drop m (left 0)
+(100, 3)
+join:
+  jb ready
+  drop jb (left 0)
+  ja ready
+  drop ja (left 0)
+joined ja jb in 4
+select:
+  fast ready
+  drop fast (left 0)
+right won fast after 3 polls; continuing loser
+  slow ready
+  drop slow (left 0)
+loser finished slow in 3
+select cancel:
+  c1 ready
+  drop c1 (left 0)
+won c1
+  drop c2 (left 3)
+after drop
+end

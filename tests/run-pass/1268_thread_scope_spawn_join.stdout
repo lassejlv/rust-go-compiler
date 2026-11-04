@@ -1,0 +1,12 @@
+sum=500500
+lens=[5, 6, 6, 4]
+grid=[0, 1, 2, 3, 10, 11, 12, 13, 20, 21, 22, 23]
+(0, "worker-0")
+(1, "worker-1")
+(4, "worker-2")
+(9, "worker-3")
+(16, "worker-4")
+log=[0, 1, 10, 11, 20, 21] count=6
+unnamed: None
+main name: Some("main")
+r=42

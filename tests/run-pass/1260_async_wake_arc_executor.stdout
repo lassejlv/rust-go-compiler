@@ -1,0 +1,16 @@
+alpha start
+be start
+be mid be
+gamma start
+be end inner
+task 1 done -> 20
+alpha mid alpha
+alpha end inner
+task 0 done -> 52
+gamma mid gamma
+gamma end inner
+task 2 done -> 53
+results [52, 20, 53] polls 11
+waker 0 wakes=3 strong=1
+waker 1 wakes=1 strong=1
+waker 2 wakes=4 strong=1

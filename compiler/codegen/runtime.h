@@ -305,7 +305,7 @@ static uint8_t rg_futex_wake(uint32_t* p) { return syscall(SYS_futex, p, FUTEX_W
 static void rg_futex_wake_all(uint32_t* p) { syscall(SYS_futex, p, FUTEX_WAKE_PRIVATE, 0x7fffffff, NULL, NULL, 0); }
 
 /* ---- thread-local storage (thread_local!) ---- */
-typedef struct { uint8_t* p; Unit (*dtor)(uint8_t*); } RgTlsSlot;
+typedef struct { uint8_t* p; Unit (*dtor)(uint8_t*); uint8_t late; } RgTlsSlot;
 RG_GLOBAL __thread RgTlsSlot* rg_tls;
 RG_GLOBAL __thread size_t rg_tls_cap;
 RG_GLOBAL __thread uint64_t* rg_tls_order;
@@ -313,7 +313,7 @@ RG_GLOBAL __thread size_t rg_tls_n, rg_tls_ocap;
 RG_GLOBAL uint64_t rg_tls_next_key RG_INIT(1);
 static uint64_t rg_tls_new_key(void) { return __atomic_fetch_add(&rg_tls_next_key, 1, __ATOMIC_SEQ_CST); }
 static uint8_t* rg_tls_get(uint64_t key) { return key < rg_tls_cap ? rg_tls[key].p : NULL; }
-static void rg_tls_set(uint64_t key, uint8_t* p, Unit (*dtor)(uint8_t*)) {
+static void rg_tls_set(uint64_t key, uint8_t* p, Unit (*dtor)(uint8_t*), uint8_t late) {
   if (key >= rg_tls_cap) {
     size_t n = rg_tls_cap ? rg_tls_cap : 16;
     while (n <= key) n *= 2;
@@ -331,18 +331,39 @@ static void rg_tls_set(uint64_t key, uint8_t* p, Unit (*dtor)(uint8_t*)) {
     rg_tls_order[rg_tls_n++] = key;
   }
   rg_tls[key].p = p;
-  if (dtor) rg_tls[key].dtor = dtor;
+  if (dtor) { rg_tls[key].dtor = dtor; rg_tls[key].late = late; }
 }
 /* Runs the destructors of this thread's thread-locals (most recently
-   registered first); a destroyed slot holds the sentinel pointer 1. */
+   registered first); a destroyed slot holds the sentinel pointer
+   UINTPTR_MAX (1 is the address of a boxed zero-sized value). Values
+   without drop glue ("late" slots) stay accessible, like in rustc, until
+   every other destructor has run; then their storage is freed. */
 static void rg_tls_run_dtors(void) {
+  size_t nlate = 0;
+  while (rg_tls_n > nlate) {
+    uint64_t key = rg_tls_order[--rg_tls_n];
+    RgTlsSlot* s = &rg_tls[key];
+    if (s->late) {
+      /* keep it: move it below the slots still to be destroyed */
+      memmove(rg_tls_order + 1, rg_tls_order, rg_tls_n * sizeof(uint64_t));
+      rg_tls_order[0] = key;
+      rg_tls_n++;
+      nlate++;
+      continue;
+    }
+    uint8_t* p = s->p;
+    Unit (*d)(uint8_t*) = s->dtor;
+    s->dtor = NULL;
+    if (p && p != (uint8_t*)UINTPTR_MAX && d) { s->p = (uint8_t*)UINTPTR_MAX; d(p); }
+  }
   while (rg_tls_n > 0) {
     uint64_t key = rg_tls_order[--rg_tls_n];
     RgTlsSlot* s = &rg_tls[key];
     uint8_t* p = s->p;
     Unit (*d)(uint8_t*) = s->dtor;
     s->dtor = NULL;
-    if (p && p != (uint8_t*)1 && d) { s->p = (uint8_t*)1; d(p); }
+    s->late = 0;
+    if (p && p != (uint8_t*)UINTPTR_MAX && d) { s->p = (uint8_t*)UINTPTR_MAX; d(p); }
   }
 }
 

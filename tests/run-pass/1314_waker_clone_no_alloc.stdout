@@ -1,0 +1,4 @@
+allocations while cloning/waking: 0
+same-type wakers will_wake: true
+polls 501 out 7 wakes 1500
+strong count back to 2

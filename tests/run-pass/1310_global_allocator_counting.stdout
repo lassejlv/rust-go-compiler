@@ -1,0 +1,11 @@
+box: allocs +1 live +128; after drop frees +1 live delta 0
+with_capacity(10): allocs +1 bytes +40; pushes within: +0; growth allocs +0 (realloc) grown true
+shrunk (11, 11)
+empty vec/string/zst vec allocs +0 (len 0 0 1000)
+page aligned true max_align>=256 true byte 7
+for_value 6 2
+array overflow err true
+align_to 1 16
+pad_to_align 16
+strings total len 340 no leak true
+allocs>=frees true

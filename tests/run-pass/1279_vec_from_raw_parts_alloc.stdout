@@ -1,0 +1,22 @@
+[10, 20, 30, 40]
+[5, 8, 7, 6, 9]
+layout size 32 align 4
+extend size 26 off 24 padded 32
+bad align true
+zeroed true [0, 2, 8, 24, 64, 160, 384, 896]
+grew to 2
+grew to 4
+grew to 8
+[L0, L1, L2, L3, L4]
+drop Loud(0)
+drop Loud(1)
+drop Loud(2)
+drop Loud(3)
+drop Loud(4)
+["a", "b"] cap>=12 true
+forgot 100
+[1, 2]
+2 1
+empty []
+le bytes [4, 3, 2, 1]
+drop Loud(101)

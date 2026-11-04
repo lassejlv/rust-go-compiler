@@ -1,0 +1,16 @@
+will_wake clone true
+will_wake other false
+data is arc ptr true
+same vtable true
+strong count with 2 wakers 3
+wakes 3 strong now 1
+wakes via RawWaker 4 strong 1
+noop will_wake noop true
+after forget try_lock is_err true
+manually drop guard holds lock: true
+after drop [1, 2]
+scope payload: Some("a scoped thread panicked")
+[true, true, true, true]
+[true, true, true, true]
+[true, true, true, true]
+leaders total 4 counter 12

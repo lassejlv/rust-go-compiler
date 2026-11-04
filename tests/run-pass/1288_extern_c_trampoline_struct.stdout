@@ -1,0 +1,10 @@
+DivT { quot: 3, rem: 2 }
+DivT { quot: -3, rem: -2 }
+LDivT { quot: 10000000, rem: 7 }
+17 "42-str-3.14-ff--5"
+[(3, "c"), (2, "b"), (1, "a"), (1, "z")] called=true
+["a", "bb", "ccc"]
+[0, 1, 4, 9, 16]
+sum 4950
+true
+[171, 171, 171, 1, 171, 171]

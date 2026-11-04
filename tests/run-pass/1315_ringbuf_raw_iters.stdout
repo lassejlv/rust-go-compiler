@@ -1,0 +1,25 @@
+evicted Tracked(1)
+drop Tracked(1)
+evicted Tracked(2)
+drop Tracked(2)
+get0 Some(Tracked(3)) get2 Some(Tracked(5)) get3 None
+pop Some(Tracked(3))
+drop Tracked(3)
+dropping ring with 3
+drop Tracked(4)
+drop Tracked(5)
+drop Tracked(6)
+Some("a") None
+len 5
+[50, 40, 30, 20, 10]
+Some(10) Some(50) Some(20) rem 2
+zst len 3 count 3
+[7, 14, 21]
+drop Tracked(100)
+took Some(100)
+drop Tracked(101)
+took Some(101)
+dropping iterator
+drop Tracked(102)
+drop Tracked(103)
+x+y
