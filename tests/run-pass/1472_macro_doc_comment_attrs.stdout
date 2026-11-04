@@ -1,0 +1,11 @@
+Point { x: 1, y: 2 }
+doc = r" A point in space."
+doc = r#" Second line with "quotes"."#
+derive(Clone)
+help:  Shows help.
+ More help.
+quit:  Quits.
+11
+3 Blue
+9
+[1, 2]

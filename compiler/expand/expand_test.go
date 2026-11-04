@@ -1013,7 +1013,7 @@ enum Units { X, Y }
 		`if __self_discr != __arg1_discr { return ::std::cmp::PartialOrd::partial_cmp(&__self_discr, &__arg1_discr); }; match (self, other) { (Self::B(__self_0, __self_1), Self::B(__arg1_0, __arg1_1)) => match ::std::cmp::PartialOrd::partial_cmp(__self_0, __arg1_0) {`,
 		`_ => ::std::option::Option::Some(::std::cmp::Ordering::Equal), }`,
 		`if __self_discr != __arg1_discr { return ::std::cmp::Ord::cmp(&__self_discr, &__arg1_discr); }`,
-		`::std::hash::Hash::hash(&::std::intrinsics::discriminant_value(self), state); match self { Self::B(__self_0, __self_1) => { ::std::hash::Hash::hash(__self_0, state); ::std::hash::Hash::hash(__self_1, state); }, Self::C { x: __self_0, f: __self_1 } => { ::std::hash::Hash::hash(__self_0, state); ::std::hash::Hash::hash(__self_1, state); }, _ => {}, }`,
+		`::std::hash::Hash::hash(&(::std::intrinsics::discriminant_value(self) as isize), state); match self { Self::B(__self_0, __self_1) => { ::std::hash::Hash::hash(__self_0, state); ::std::hash::Hash::hash(__self_1, state); }, Self::C { x: __self_0, f: __self_1 } => { ::std::hash::Hash::hash(__self_0, state); ::std::hash::Hash::hash(__self_1, state); }, _ => {}, }`,
 		`fn default() -> Self { Self::A }`,
 		// empty enum
 		`::std::fmt::Debug for Empty { fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result { match *self { } } }`,

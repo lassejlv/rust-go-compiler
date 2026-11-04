@@ -25,6 +25,10 @@ type macroDef struct {
 	// hygDef identifies a macro defined in a block (the EmptyStmt
 	// marker left in its place, see ast.HygInfo); 0 at module level.
 	hygDef uint32
+	// scope is the module (path below the crate root) at whose end the
+	// macro's textual scope ends: its defining module, or an ancestor
+	// through #[macro_use] modules (see Expander.textualScope)
+	scope []string
 }
 
 type macroRule struct {
@@ -334,12 +338,14 @@ func (st *matchState) matchSeq(ms []*matcher, mi int, in []ast.TokenTree, pos in
 	m := ms[mi]
 	switch m.kind {
 	case mTok:
-		if pos < len(in) && in[pos].Delim == 0 && tokEq(in[pos].Tok, m.tok) {
+		// a forwarded fragment (other than ident, lifetime and tt) is
+		// opaque: literal tokens of a matcher do not match it
+		if pos < len(in) && in[pos].Delim == 0 && in[pos].Tok.Nt&lexer.NtStart == 0 && tokEq(in[pos].Tok, m.tok) {
 			return st.matchSeq(ms, mi+1, in, pos+1, b, k)
 		}
 		return false
 	case mGroup:
-		if pos < len(in) && in[pos].Delim == m.delim {
+		if pos < len(in) && in[pos].Delim == m.delim && in[pos].Tok.Nt&lexer.NtStart == 0 {
 			inner := in[pos].Inner
 			return st.matchSeq(m.sub, 0, inner, 0, b, func(p int, b2 *bindList) bool {
 				if p != len(inner) {
@@ -693,6 +699,11 @@ func (t *transcriber) emit(ns []*tnode, idx []int) ([]ast.TokenTree, error) {
 			}
 			g := n.tt
 			g.Inner = inner
+			if g.Delim == '[' {
+				// rustc transcribes a bracketed group of the body with
+				// `Alone` closing spacing (`[a]x` prints as `[a] x`)
+				g.CloseJoint = false
+			}
 			out = append(out, g)
 		case tCrate:
 			sp := n.tt.Tok.Span
@@ -763,6 +774,8 @@ func emitFragment(f *fragment) []ast.TokenTree {
 			out[i].Tok.JointNext = false
 			if f.kind == "ident" {
 				out[i].Tok.Nt |= lexer.NtIdent
+			} else {
+				out[i].Tok.Nt |= lexer.NtLifetime
 			}
 		}
 		return out
@@ -805,7 +818,9 @@ func turbofish(tts []ast.TokenTree) []ast.TokenTree {
 	for i, tt := range tts {
 		if i > 0 && (isPunct(tt, "<") || isPunct(tt, "<<")) && isIdentTT(tts[i-1]) {
 			sp := tt.Tok.Span
-			out = append(out, punctTok("::", lexer.Span{Lo: sp.Lo, Hi: sp.Lo}, true))
+			sep := punctTok("::", lexer.Span{Lo: sp.Lo, Hi: sp.Lo}, true)
+			sep.Tok.Nt = lexer.NtTurbofish
+			out = append(out, sep)
 		}
 		out = append(out, tt)
 	}

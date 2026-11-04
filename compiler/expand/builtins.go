@@ -190,22 +190,109 @@ func (e *Expander) litString(tts []ast.TokenTree, mac *ast.MacCall) (string, boo
 		s, _, err := e.litString(tts[1:], mac)
 		return "-" + s, false, err
 	}
-	// nested macro: name ! (...)
+	// nested macro call, expanded eagerly: `path::name!(...)`
 	if len(tts) >= 3 && tts[len(tts)-1].Delim != 0 && isPunct(tts[len(tts)-2], "!") && isIdentTT(tts[len(tts)-3]) {
-		name := tts[len(tts)-3].Tok.Text
-		switch name {
-		case "concat", "stringify", "file", "line", "column", "module_path", "env":
+		if path := macroCallPath(tts[:len(tts)-2]); path != nil && e.litDepth < e.RecursionLimit {
 			g := tts[len(tts)-1]
-			inner := &ast.MacCall{Path: &ast.Path{Segments: []*ast.PathSegment{{Ident: ast.Ident{Name: name, Span: tts[0].Tok.Span}}}},
-				Delim: g.Delim, Args: g.Inner, Span: ttsSpan(tts, mac.Span)}
-			res, err := builtins[name](e, inner)
-			if err != nil {
-				return "", false, err
-			}
-			return e.litString(res, inner)
+			inner := &ast.MacCall{Path: path, Delim: g.Delim, Args: g.Inner, Span: ttsSpan(tts, mac.Span)}
+			var s string
+			var isStr bool
+			err := e.eager(inner, func(res []ast.TokenTree) (err error) {
+				s, isStr, err = e.litString(res, inner)
+				return err
+			})
+			return s, isStr, err
 		}
 	}
 	return "", false, errAt(ttsSpan(tts, mac.Span), "expected a literal")
+}
+
+// eager expands the macro call mac (an argument of a builtin) and passes
+// its tokens to f; a macro_rules! call is the call site of line!() and
+// the like in its expansion (as for any user macro call).
+func (e *Expander) eager(mac *ast.MacCall, f func([]ast.TokenTree) error) error {
+	e.litDepth++
+	defer func() { e.litDepth-- }()
+	res, user, err := e.macTokens(mac)
+	if err != nil {
+		return err
+	}
+	if user && realSpan(mac.Span) {
+		return e.withSite(mac.Span, func() error { return f(res) })
+	}
+	return f(res)
+}
+
+// macroCallPath parses the path of a macro call (`a::b`, `::a`, `$crate`
+// expanded to `crate`); nil if tts is not a path.
+func macroCallPath(tts []ast.TokenTree) *ast.Path {
+	p := &ast.Path{}
+	i := 0
+	if len(tts) > 0 && isPunct(tts[0], "::") {
+		p.Global = true
+		i++
+	}
+	for ; i < len(tts); i++ {
+		if !isIdentTT(tts[i]) {
+			return nil
+		}
+		p.Segments = append(p.Segments, &ast.PathSegment{Ident: ast.Ident{Name: tts[i].Tok.Text, Span: tts[i].Tok.Span}})
+		if i+1 < len(tts) {
+			i++
+			if !isPunct(tts[i], "::") {
+				return nil
+			}
+		}
+	}
+	if len(p.Segments) == 0 {
+		return nil
+	}
+	p.Span = p.Segments[0].Ident.Span
+	return p
+}
+
+// literalMacArg expands a format argument that is a call of a macro_rules!
+// macro or of a literal-producing builtin (`line!()`, `concat!(..)`) when
+// it expands to a literal: rustc inlines such arguments into the format
+// string (they are literals after expansion). Other arguments are
+// returned unchanged.
+func (e *Expander) literalMacArg(tts []ast.TokenTree) []ast.TokenTree {
+	n := len(tts)
+	if n < 3 || tts[n-1].Delim == 0 || !isPunct(tts[n-2], "!") || !isIdentTT(tts[n-3]) || e.litDepth >= e.RecursionLimit {
+		return tts
+	}
+	path := macroCallPath(tts[:n-2])
+	if path == nil {
+		return tts
+	}
+	g := tts[n-1]
+	mac := &ast.MacCall{Path: path, Delim: g.Delim, Args: g.Inner, Span: ttsSpan(tts, lexer.Span{})}
+	def, bi := e.lookupMacroCall(mac)
+	if def == nil {
+		switch macName(mac) {
+		case "line", "column", "concat", "stringify", "file", "module_path", "env":
+		default:
+			return tts
+		}
+		if bi == nil || e.procMacroOverride(mac, macName(mac)) != nil {
+			return tts
+		}
+	}
+	var res []ast.TokenTree
+	err := e.eager(mac, func(r []ast.TokenTree) error {
+		res = e.literalMacArg(r)
+		return nil
+	})
+	for len(res) == 1 && isInvisibleGroup(res[0]) {
+		res = res[0].Inner
+	}
+	if err != nil || len(res) != 1 {
+		return tts
+	}
+	if _, ok := literalText(res); !ok {
+		return tts
+	}
+	return res
 }
 
 // strLitHyg returns the hygiene context of a string literal argument.
@@ -254,7 +341,7 @@ func (e *Expander) formatArgsMacDirect(mac *ast.MacCall, tts []ast.TokenTree, pr
 		in.strHyg = strLitHyg(args[0].tts)
 		seenNamed := false
 		for _, a := range args[1:] {
-			fa := &fmtArg{name: a.name, tts: a.tts, span: a.span(mac.Span)}
+			fa := &fmtArg{name: a.name, tts: e.literalMacArg(a.tts), span: a.span(mac.Span)}
 			if a.name != "" {
 				if _, dup := in.byName[a.name]; dup {
 					return nil, false, errAt(a.nameSp, "duplicate argument named `%s`", a.name)

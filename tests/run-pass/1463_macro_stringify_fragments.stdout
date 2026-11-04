@@ -1,0 +1,35 @@
+a+b*c
+f(x,y)[0].z
+|a,b|a+b
+Foo{a:1,..Default::default()}
+&mut *x
+a as u8 as i32
+if a {b} else {c}
+match x { Some(v) => v, None => 0 }
+-x..=y
+&'a mut Vec<Option<(u8,i8)>>
+dyn Fn(i32)->i32+Send
+impl Iterator<Item=u8>
+[u8;4]
+<T as Trait>::Assoc
+Some(x@1..=5)|None
+Point{x,y:0,..}
+&[first,..,last]
+pub fn f<T:Clone>(t:&T)->T where T:Copy{t.clone()}
+struct S<'a>{x:&'a str}
+a+b*c
+x::<u8>().await ?
+#[derive(Debug)] enum E{A,B(i32)}
+a=>b, c<=d, e>>=f, g::h, i..j, k..=l, m->n
+'a: loop { break 'a; }
+std::collections::HashMap<K,V>
+::core::mem::swap
+x : Vec<u8> = vec![1,2];
+-12
+r#"raw"#
+{let a=1;a}
+pub(crate) struct X;
+#[cfg(all(unix,not(test)))]
+#[path="a.rs"]
+& 'static str
+let x:i32=5

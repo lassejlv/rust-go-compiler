@@ -23,6 +23,45 @@ type lx struct {
 	col    int
 	toks   []Token
 	noCStr bool // Rust 2015/2018: `c".."` is an identifier and a string
+	// groups: for each open delimiter, whether it starts the arguments of
+	// a macro invocation (`m!(..)`) or a macro_rules! body; inMac counts
+	// the open groups inside such arguments, whose doc comments are kept
+	// (rustc passes them to the macro as `#[doc = r".."]` attributes)
+	groups []bool
+	inMac  int
+}
+
+// trackGroups updates l.groups/l.inMac for the token l.toks[n-1].
+func (l *lx) trackGroups(n int) {
+	t := l.toks[n-1]
+	if t.Kind != Punct {
+		return
+	}
+	switch t.Text {
+	case "(", "[", "{":
+		mac := l.inMac > 0
+		if !mac && n >= 3 {
+			a, b := l.toks[n-3], l.toks[n-2]
+			// `name!(`, but not `return !(x)`
+			mac = b.Kind == Punct && b.Text == "!" && a.Kind == Ident && !a.IsKeyword()
+			// `macro_rules! name {`
+			if !mac && n >= 4 && b.Kind == Ident && a.Kind == Punct && a.Text == "!" {
+				p := l.toks[n-4]
+				mac = p.Kind == Ident && p.Text == "macro_rules"
+			}
+		}
+		l.groups = append(l.groups, mac)
+		if mac {
+			l.inMac++
+		}
+	case ")", "]", "}":
+		if k := len(l.groups); k > 0 {
+			if l.groups[k-1] {
+				l.inMac--
+			}
+			l.groups = l.groups[:k-1]
+		}
+	}
 }
 
 // KeepDocs makes Tokenize keep doc comments (as DocComment tokens, which
@@ -52,8 +91,12 @@ func Tokenize(file int, src string) ([]Token, error) {
 			l.toks = append(l.toks, Token{Kind: EOF, Span: Span{p, p}})
 			break
 		}
+		before := len(l.toks)
 		if err := l.lexToken(); err != nil {
 			return nil, err
+		}
+		for n := before + 1; n <= len(l.toks); n++ {
+			l.trackGroups(n)
 		}
 	}
 	for i := 0; i+1 < len(l.toks); i++ {
@@ -150,7 +193,7 @@ func (l *lx) skipTrivia() error {
 			for l.off < len(l.src) && l.src[l.off] != '\n' {
 				l.advance()
 			}
-			if KeepDocs {
+			if KeepDocs || l.inMac > 0 {
 				c := strings.TrimSuffix(l.src[from:l.off], "\r")
 				if strings.HasPrefix(c, "///") && !strings.HasPrefix(c, "////") {
 					l.emit(DocComment, c[3:], start)
@@ -182,7 +225,7 @@ func (l *lx) skipTrivia() error {
 					l.advance()
 				}
 			}
-			if KeepDocs {
+			if KeepDocs || l.inMac > 0 {
 				c := l.src[from:l.off]
 				if len(c) > 5 && strings.HasPrefix(c, "/**") && !strings.HasPrefix(c, "/***") {
 					l.emit(DocComment, c[3:len(c)-2], start)

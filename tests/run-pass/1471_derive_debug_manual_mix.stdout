@@ -1,0 +1,67 @@
+User { name: "amy", pw: Secret(***7), pos: Pair(1, -2), meta: {"k": 1, "j": 2}, p: Partial { a: 5, .. }, tags: [], nested: Some(User { name: "kid", pw: Secret(***0), pos: Pair(0, 0), meta: {}, p: Partial { a: 0, .. }, tags: ["t"], nested: None }) }
+User {
+    name: "amy",
+    pw: Secret(***7),
+    pos: Pair(
+        1,
+        -2,
+    ),
+    meta: {
+        "k": 1,
+        "j": 2,
+    },
+    p: Partial {
+        a: 5,
+        ..
+    },
+    tags: [],
+    nested: Some(
+        User {
+            name: "kid",
+            pw: Secret(***0),
+            pos: Pair(
+                0,
+                0,
+            ),
+            meta: {},
+            p: Partial {
+                a: 0,
+                ..
+            },
+            tags: [
+                "t",
+            ],
+            nested: None,
+        },
+    ),
+}
+Batch([Click { x: 1, y: 2 }, Key('\n'), Nothing, Batch([])])
+Batch(
+    [
+        Click {
+            x: 1,
+            y: 2,
+        },
+        Key(
+            '\n',
+        ),
+        Nothing,
+        Batch(
+            [],
+        ),
+    ],
+)
+Pair(         1,          2)|Nothing|
+{}
+(
+    Partial {
+        a: 1,
+        ..
+    },
+    [
+        Pair(
+            3,
+            4,
+        ),
+    ],
+)

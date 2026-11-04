@@ -18,6 +18,7 @@ type deriveInfo struct {
 	enum     *ast.EnumItem
 	union    *ast.UnionItem
 	span     lexer.Span
+	attrs    []*ast.Attr
 }
 
 type deriveFn func(d *deriveInfo) (string, error)
@@ -71,7 +72,7 @@ func (e *Expander) deriveItem(it *ast.Item) ([]*ast.Item, error) {
 	if !hasAttr(it.Attrs, "derive") {
 		return nil, nil
 	}
-	d := &deriveInfo{name: it.Name.Name, span: it.Span}
+	d := &deriveInfo{name: it.Name.Name, span: it.Span, attrs: it.Attrs}
 	switch k := it.Kind.(type) {
 	case *ast.StructItem:
 		d.strct, d.generics = k, k.Generics
@@ -442,7 +443,11 @@ func deriveHash(d *deriveInfo) (string, error) {
 	} else if len(d.enum.Variants) == 0 {
 		b.WriteString("match *self {}")
 	} else {
-		b.WriteString("::std::hash::Hash::hash(&::std::intrinsics::discriminant_value(self), state); ")
+		// the discriminant is hashed as the enum's discriminant type
+		// (isize unless #[repr(inttype)]), except for a single variant
+		if len(d.enum.Variants) > 1 {
+			b.WriteString("::std::hash::Hash::hash(&(::std::intrinsics::discriminant_value(self) as " + reprIntType(d.attrs) + "), state); ")
+		}
 		var arms []string
 		hasUnit := false
 		for _, v := range d.enum.Variants {
@@ -464,6 +469,29 @@ func deriveHash(d *deriveInfo) (string, error) {
 		}
 	}
 	return "fn hash<__H: ::std::hash::Hasher>(&self, state: &mut __H) { " + b.String() + " }", nil
+}
+
+// reprIntType returns the integer type named by a #[repr(..)] attribute,
+// or isize.
+func reprIntType(attrs []*ast.Attr) string {
+	for _, a := range attrs {
+		if a.Path != "repr" {
+			continue
+		}
+		args, ok := attrArgs(a)
+		if !ok {
+			continue
+		}
+		for _, t := range args {
+			if t.Delim == 0 && t.Tok.Kind == lexer.Ident {
+				switch t.Tok.Text {
+				case "u8", "u16", "u32", "u64", "u128", "usize", "i8", "i16", "i32", "i64", "i128", "isize":
+					return t.Tok.Text
+				}
+			}
+		}
+	}
+	return "isize"
 }
 
 // ---------------------------------------------------------------------------

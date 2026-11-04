@@ -1,0 +1,28 @@
+a + b * c
+Vec<Option<i32>>
+fn foo(x: &mut i32) -> bool { x > 0 }
+a::b::<c>::d
+#[attr] struct S;
+x => y, 'a: loop {}
+-1 .. =2
+1+1 == 2 && !false
+&&x || &mut y
+a.b().c[0]?
+"str" 'c' b"bytes" r"raw" 1_000u32 0x1F
+|x| x + 1
+$crate
+a12.5truec-3
+
+line 34
+35 18
+20
+24
+39
+true
+1443_macro_stringify_concat_line
+1443_macro_stringify_concat_line::outer::inner
+1443_macro_stringify_concat_line::outer::inner
+x=5
+const-str
+
+[() [] {}]

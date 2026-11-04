@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 
 	"rustgo/compiler/ast"
@@ -81,6 +82,62 @@ type Expander struct {
 	// (a `use m;` of a macro_rules! macro makes it usable before its
 	// definition)
 	usedNames map[string]bool
+	// macroUndo logs the definitions replaced by macro_rules! items in
+	// blocks, so that a block's macros go out of scope at its end
+	// (textual scoping); blockDepth counts the blocks being expanded.
+	macroUndo  []macroUndo
+	blockDepth int
+	// litDepth counts the macro calls being expanded eagerly in the
+	// arguments of concat!-like builtins (see litString)
+	litDepth int
+	// macroUse records the modules (paths below the crate root, joined
+	// with "::") declared with #[macro_use]
+	macroUse map[string]bool
+}
+
+// textualScope returns the module whose end ends the textual scope of a
+// macro_rules! defined in module mod: mod itself, or its parent if mod is
+// #[macro_use], and so on.
+func (e *Expander) textualScope(mod []string) []string {
+	for len(mod) > 0 && e.macroUse[strings.Join(mod, "::")] {
+		mod = mod[:len(mod)-1]
+	}
+	return append([]string(nil), mod...)
+}
+
+// markMacroUse records whether module it (in parent module path) is
+// #[macro_use].
+func (e *Expander) markMacroUse(parent []string, it *ast.Item, attrs []*ast.Attr) {
+	if !hasAttr(attrs, "macro_use") {
+		return
+	}
+	if e.macroUse == nil {
+		e.macroUse = map[string]bool{}
+	}
+	e.macroUse[strings.Join(append(append([]string(nil), parent...), it.Name.Name), "::")] = true
+}
+
+// inTextualScope reports whether a macro_rules! macro of the crate being
+// expanded is in (module-level) textual scope in the current module.
+func (e *Expander) inTextualScope(d *macroDef) bool {
+	if d.exported || d.crate != e.crate || len(d.scope) == 0 {
+		return true
+	}
+	cur := e.modPath[1:]
+	if len(cur) < len(d.scope) {
+		return false
+	}
+	for i, s := range d.scope {
+		if cur[i] != s {
+			return false
+		}
+	}
+	return true
+}
+
+type macroUndo struct {
+	name string
+	prev *macroDef // nil: the name was not defined
 }
 
 type defSite struct {
@@ -127,6 +184,19 @@ func (e *Expander) ExpandCrate(c *ast.Crate, crateName string) error {
 			c.Items = nil
 		}
 		c.Attrs = attrs
+	}
+	// `#![recursion_limit = "N"]` applies to this crate only
+	defer func(limit int) { e.RecursionLimit = limit }(e.RecursionLimit)
+	for _, a := range c.Attrs {
+		if a.Inner && a.Path == "recursion_limit" {
+			for _, t := range a.Tokens {
+				if t.Delim == 0 && t.Tok.Kind == lexer.Str {
+					if n, err := strconv.Atoi(strings.Trim(t.Tok.Text, `"`)); err == nil && n >= 0 {
+						e.RecursionLimit = n
+					}
+				}
+			}
+		}
 	}
 	if e.CollectDocs {
 		if ls := e.docLines(c.Attrs, true); len(ls) > 0 {
@@ -202,6 +272,7 @@ func (e *Expander) collectItems(items []*ast.Item) {
 		case *ast.MacroRulesItem:
 			if def, err := parseMacroRules(it.Name.Name, k.Body, e.crate, it.Span); err == nil {
 				def.exported = hasAttr(attrs, "macro_export")
+				def.scope = e.textualScope(e.collectMod)
 				e.defineMacro(def)
 			}
 		case *ast.UseItem:
@@ -209,6 +280,7 @@ func (e *Expander) collectItems(items []*ast.Item) {
 			e.collectMacroImports(k.Tree, nil)
 			e.collectUsedNames(k.Tree)
 		case *ast.ModItem:
+			e.markMacroUse(e.collectMod, it, attrs)
 			e.collectMod = append(e.collectMod, it.Name.Name)
 			e.collectItems(k.Items)
 			e.collectMod = e.collectMod[:len(e.collectMod)-1]
@@ -312,10 +384,17 @@ func (e *Expander) isExternCrate(name string) bool {
 	return ok
 }
 
+// collectBlock collects the definitions of a block that are visible
+// outside it: #[macro_export]ed macros (path-scoped at the crate root) and
+// those of nested items; the block's own macro_rules! macros are textually
+// scoped and defined while the block is expanded (see expandBlock).
 func (e *Expander) collectBlock(b *ast.Block) {
 	for _, s := range b.Stmts {
 		switch s := s.(type) {
 		case *ast.ItemStmt:
+			if _, ok := s.Item.Kind.(*ast.MacroRulesItem); ok && !hasAttr(s.Item.Attrs, "macro_export") {
+				continue
+			}
 			e.collectItems([]*ast.Item{s.Item})
 		case *ast.ExprStmt:
 			if be, ok := s.Expr.(*ast.BlockExpr); ok {
@@ -340,6 +419,9 @@ func (e *Expander) localMacroDef(it *ast.Item) uint32 {
 }
 
 func (e *Expander) defineMacro(def *macroDef) {
+	if e.blockDepth > 0 && !def.exported {
+		e.macroUndo = append(e.macroUndo, macroUndo{def.name, e.macros[e.crate][def.name]})
+	}
 	e.macros[e.crate][def.name] = def
 	if e.defSites == nil {
 		e.defSites = map[string][]defSite{}
@@ -433,6 +515,7 @@ func (e *Expander) expandItemInList(it *ast.Item, depth int) ([]*ast.Item, error
 		}
 		def.exported = hasAttr(it.Attrs, "macro_export")
 		def.expanded = depth > 0
+		def.scope = e.textualScope(e.modPath[1:])
 		e.defineMacro(def)
 		return nil, nil
 	case *ast.MacCallItem:
@@ -600,6 +683,7 @@ func (e *Expander) expandItem(it *ast.Item, depth int) error {
 				e.collectMod = saved
 			}
 		}
+		e.markMacroUse(e.modPath[1:], it, it.Attrs)
 		e.modPath = append(e.modPath, it.Name.Name)
 		k.Items, err = e.expandItems(k.Items, depth)
 		e.modPath = e.modPath[:len(e.modPath)-1]
@@ -940,6 +1024,21 @@ func (e *Expander) expandBlock(b *ast.Block, depth int) error {
 	if b == nil {
 		return nil
 	}
+	// the block's macro_rules! macros go out of scope at its end
+	mark := len(e.macroUndo)
+	e.blockDepth++
+	defer func() {
+		for i := len(e.macroUndo) - 1; i >= mark; i-- {
+			u := e.macroUndo[i]
+			if u.prev == nil {
+				delete(e.macros[e.crate], u.name)
+			} else {
+				e.macros[e.crate][u.name] = u.prev
+			}
+		}
+		e.macroUndo = e.macroUndo[:mark]
+		e.blockDepth--
+	}()
 	stmts, err := e.expandStmts(b.Stmts, depth)
 	if err != nil {
 		return err
@@ -950,10 +1049,15 @@ func (e *Expander) expandBlock(b *ast.Block, depth int) error {
 
 func (e *Expander) expandStmts(stmts []ast.Stmt, depth int) ([]ast.Stmt, error) {
 	// Register macro_rules! defined in this block up front so that uses
-	// earlier in the block (or in nested blocks) work.
+	// earlier in the block (or in nested blocks) work, unless that would
+	// shadow a macro of the same name defined outside the block (textual
+	// scoping: the outer one is used until the block's definition).
 	for _, s := range stmts {
 		if is, ok := s.(*ast.ItemStmt); ok {
 			if mr, ok := is.Item.Kind.(*ast.MacroRulesItem); ok {
+				if _, outer := e.macros[e.crate][is.Item.Name.Name]; outer {
+					continue
+				}
 				if keep, _, err := e.processAttrs(is.Item.Attrs); err == nil && keep {
 					if def, err := parseMacroRules(is.Item.Name.Name, mr.Body, e.crate, is.Item.Span); err == nil {
 						def.hygDef = e.localMacroDef(is.Item)

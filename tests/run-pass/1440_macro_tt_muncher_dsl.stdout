@@ -1,0 +1,8 @@
+9
+10
+7
+8
+[5, 4, 3, 2, 1]
+Config { width: 80, height: 24, title: "term" } ["width", "height", "title"]
+('x', "two", 1)
+3

@@ -145,6 +145,13 @@ const (
 	NtIdent uint8 = 1 << iota // substituted for an `ident` fragment
 	NtStart                   // first tree of an invisible-group fragment
 	NtEnd                     // last tree of an invisible-group fragment
+	// NtTurbofish marks a `::` inserted before the generic arguments of a
+	// substituted `path` fragment (`a::B<T>` used as `a::B::<T>`); it is
+	// not part of the fragment's text (stringify!).
+	NtTurbofish
+	// NtLifetime marks a token substituted for a `lifetime` fragment (a
+	// none-delimited group for proc macros)
+	NtLifetime
 )
 
 func (t Token) String() string {

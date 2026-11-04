@@ -1,0 +1,6 @@
+0.005 1478_macro_module_generation::cm km
+[("mm", 0.001), ("cm", 0.01), ("km", 1000.0)]
+one => 1
+two => 10
+three => 3
+{1: "a", 2: "b"}

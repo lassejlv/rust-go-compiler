@@ -1,0 +1,15 @@
+call 1
+def 7
+2 9 11
+[info] user ann logged in 3 times
+[warn] ann (3, 6)
+[debug]    ann|003|42
+<1>
+   ab|ab   |
+  3.14|     r|+1.23e3
+"q" q (
+    1,
+)
+Some("1")
+Some("static")
+x "x"   x 0x0

@@ -1,0 +1,26 @@
+Config { items: [], label: "", map: {}, count: None, _p: PhantomData<fn() -> i32> }
+[4] "lbl"
+Mid Empty
+Full(3)
+2 off
+Pt(1, 2) Pt(1, 2) true
+Nested { lv: Mid, pts: [Pt(0, 0), Pt(0, 0)], t: (false, '\0', 0.0), s: "" }
+Nested {
+    lv: High,
+    pts: [
+        Pt(
+            0,
+            0,
+        ),
+        Pt(
+            0,
+            0,
+        ),
+    ],
+    t: (
+        false,
+        '\0',
+        0.0,
+    ),
+    s: "",
+}

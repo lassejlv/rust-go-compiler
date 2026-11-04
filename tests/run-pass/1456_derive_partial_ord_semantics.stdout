@@ -1,0 +1,18 @@
+[Point, Circle(1), Circle(3), Rect { w: 1, h: 5 }, Rect { w: 2, h: 1 }, Poly([]), Poly([(1, 2)])]
+Less
+Some(Less)
+None
+false true
+true
+Version { major: 0, minor: 9, patch: 0, pre: None }
+Version { major: 1, minor: 2, patch: 3, pre: None }
+Version { major: 1, minor: 2, patch: 3, pre: Some("alpha") }
+Version { major: 1, minor: 10, patch: 0, pre: None }
+[High, Mid, Low]
+Greater Low
+Some(Greater) true
+Greater
+Some(Tup("b", 0))
+Less
+true
+Some(Less)

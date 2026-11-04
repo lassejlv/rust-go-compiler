@@ -1,0 +1,36 @@
+str: assertion failed: x == 4
+String: x was 3
+String: x was 3
+str: static msg
+String: assertion `left == right` failed
+  left: 3
+ right: 4
+String: assertion `left == right` failed: fine
+  left: 4
+ right: 5
+String: assertion `left == right` failed: vecs (1, 2)
+  left: [1, 2]
+ right: [1]
+String: assertion `left != right` failed
+  left: "a"
+ right: "a"
+str: assertion failed: x > 10
+String: too small: 3
+ok
+str: explicit panic
+str: plain
+String: fmt 1 3
+String: index out of bounds: the len is 0 but the index is 3
+str: called `Option::unwrap()` on a `None` value
+String: needed
+String: called `Result::unwrap()` on an `Err` value: "bad"
+str: internal error: entered unreachable code
+str: internal error: entered unreachable code: state 7
+str: not yet implemented
+str: not implemented: feature x
+other
+String: assertion `left == right` failed
+  left: 1
+ right: 2
+String: Some(1)
+String: idx 5

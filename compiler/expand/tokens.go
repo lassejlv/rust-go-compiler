@@ -250,10 +250,24 @@ func sourceText(sp lexer.Span) string {
 	return lexer.Files[sp.Lo.File].Src[sp.Lo.Off:sp.Hi.Off]
 }
 
+// rawStr renders s as a raw string literal (`r"..."`, `r#"..."#` if s
+// contains a quote, ...).
+func rawStr(s string) string {
+	h := ""
+	for strings.Contains(s, "\""+h) {
+		h += "#"
+	}
+	return "r" + h + "\"" + s + "\"" + h
+}
+
 // tokenText renders one token as Rust source.
 func tokenText(t lexer.Token) string {
 	if realSpan(t.Span) && t.Kind != lexer.EOF {
 		src := sourceText(t.Span)
+		if t.Kind == lexer.Str && t.Raw && (strings.HasPrefix(src, "//") || strings.HasPrefix(src, "/*")) {
+			// the value of a doc comment's `#[doc = r".."]`
+			return rawStr(t.Text)
+		}
 		// Sanity check: identifiers/puncts must match their text.
 		switch t.Kind {
 		case lexer.Ident, lexer.Punct, lexer.Lifetime:
@@ -381,6 +395,19 @@ func spaceBetween(a, b ast.TokenTree) bool {
 }
 
 func printTTs(p *ppPrinter, tts []ast.TokenTree) {
+	for i, tt := range tts {
+		if tt.Delim == 0 && tt.Tok.Nt&lexer.NtTurbofish != 0 {
+			// not part of the source text: drop it (copying)
+			kept := append([]ast.TokenTree(nil), tts[:i]...)
+			for _, t := range tts[i+1:] {
+				if t.Delim != 0 || t.Tok.Nt&lexer.NtTurbofish == 0 {
+					kept = append(kept, t)
+				}
+			}
+			tts = kept
+			break
+		}
+	}
 	open := 0
 	for i, tt := range tts {
 		// a substituted fragment is an invisible-delimited group (an

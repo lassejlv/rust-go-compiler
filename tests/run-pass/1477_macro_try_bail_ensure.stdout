@@ -1,0 +1,7 @@
+ok 14
+err parse error: invalid digit found in string / Parse(ParseIntError { kind: InvalidDigit })
+err negative value: -3 / Msg("negative value: -3")
+err 500 out of range (max 100) / Range { v: 500, max: 100 }
+ok -1
+err unlucky 13 / Msg("unlucky 13")
+ok 84

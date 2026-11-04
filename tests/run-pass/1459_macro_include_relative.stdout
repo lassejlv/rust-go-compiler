@@ -1,0 +1,7 @@
+// include_str!/include_bytes!/include! with relative paths; line!/file! inside included code
+true
+// include_str!/include_bytes!/include! with relative paths; line!/file! inside included code
+4
+8
+true
+18

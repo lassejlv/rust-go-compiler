@@ -1,0 +1,17 @@
+1
+true
+false
+42
+1 two
+1-2!
+Ident("x")
+[0, 0, 0] [1, 2, 3]
+// std macros: matches!, assert!, dbg!, write!, vec!, path-qualified macros, include_str!
+/
+None
+true
+true true
+true
+Ok(10)
+5
+true
