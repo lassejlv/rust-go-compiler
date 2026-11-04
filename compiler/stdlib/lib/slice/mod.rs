@@ -1357,7 +1357,11 @@ impl<T> [T] {
         T: Copy,
     {
         let len = self.len();
-        let mut v = Vec::with_capacity(len * n);
+        let total = match len.checked_mul(n) {
+            Some(t) => t,
+            None => crate::rt::panic_str("capacity overflow", file!(), line!(), column!()),
+        };
+        let mut v = Vec::with_capacity(total);
         let mut i = 0;
         while i < n {
             v.extend_from_slice(self);

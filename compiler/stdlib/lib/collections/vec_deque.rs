@@ -113,10 +113,10 @@ impl<T> VecDeque<T> {
     #[track_caller]
     pub fn swap(&mut self, i: usize, j: usize) {
         if i >= self.len {
-            index_oob(i, self.len);
+            crate::rt::panic_str("assertion failed: i < self.len()", file!(), line!(), column!());
         }
         if j >= self.len {
-            index_oob(j, self.len);
+            crate::rt::panic_str("assertion failed: j < self.len()", file!(), line!(), column!());
         }
         if i != j {
             unsafe { crate::ptr::swap(self.ptr_at(self.to_physical_idx(i)), self.ptr_at(self.to_physical_idx(j))) }

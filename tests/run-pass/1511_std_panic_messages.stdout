@@ -1,0 +1,48 @@
+panic: attempt to negate with overflow
+panic: attempt to exponentiate with overflow
+panic: argument of integer square root cannot be negative
+panic: argument of integer logarithm must be positive
+panic: argument of integer logarithm must be positive
+panic: base of integer logarithm must be at least 2
+panic: attempt to divide by zero
+panic: attempt to calculate the remainder with a divisor of zero
+panic: attempt to add with overflow
+panic: attempt to divide by zero
+panic: attempt to calculate the remainder with a divisor of zero
+panic: attempt to divide with overflow
+panic: attempt to calculate the remainder with overflow
+panic: attempt to negate with overflow
+panic: attempt to shift left with overflow
+panic: attempt to add with overflow
+panic: attempt to subtract with overflow
+panic: attempt to multiply with overflow
+panic: min > max, or either was NaN. min = 3.0, max = 1.0
+panic: min > max. min = 3, max = 1
+panic: from_digit: radix is too high (maximum 36)
+panic: to_digit: invalid radix -- radix must be in the range 2 to 36 inclusive
+panic: from_ascii_bytes_radix: radix must lie in the range `[2, 36]` - found 1
+panic: overflow when adding durations
+panic: overflow when subtracting durations
+panic: divide by zero error when dividing duration by scalar
+panic: cannot convert float seconds to Duration: value is negative
+panic: cannot convert float seconds to Duration: value is either too big or NaN
+panic: overflow in Duration::new
+panic: mid > len
+panic: end byte index 5 is out of bounds for string of length 3
+panic: chunk size must be non-zero
+panic: window size must be non-zero
+panic: swap_remove index (is 3) should be < len (is 1)
+panic: insertion index (is 3) should be <= len (is 1)
+panic: range start index 2 out of range for slice of length 1
+panic: assertion failed: self.is_char_boundary(new_len)
+panic: assertion failed: self.is_char_boundary(idx)
+panic: assertion failed: mid <= self.len()
+panic: range end index 5 out of range for slice of length 3
+panic: capacity overflow
+panic: capacity overflow
+panic: assertion failed: step != 0
+panic: assertion failed: step != 0
+panic: assertion failed: i < self.len()
+panic: called `Option::unwrap()` on a `None` value
+panic: ctx: "e"
+panic: called `Result::unwrap_err()` on an `Ok` value: 1

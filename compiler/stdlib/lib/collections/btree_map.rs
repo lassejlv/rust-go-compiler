@@ -461,7 +461,8 @@ impl<K: Ord, V> BTreeMap<K, V> {
             Bound::Excluded(e) => Some((e, true)),
             Bound::Unbounded => None,
         };
-        if let (Some((s, s_excl)), Some((e, e_excl))) = (sb, eb) {
+        // (std only validates the bounds when the map has a root node)
+        if let (Some((s, s_excl)), Some((e, e_excl)), true) = (sb, eb, self.len != 0) {
             if s > e {
                 crate::rt::panic_str("range start is greater than range end in BTreeMap", file!(), line!(), column!());
             }

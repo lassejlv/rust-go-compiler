@@ -500,7 +500,12 @@ macro_rules! __std_int_common {
             pub fn ilog(self, base: $t) -> u32 {
                 match self.checked_ilog(base) {
                     Some(v) => v,
-                    None => overflow_panic("argument of integer logarithm must be positive"),
+                    None => {
+                        if base < (2 as $t) {
+                            overflow_panic("base of integer logarithm must be at least 2")
+                        }
+                        overflow_panic("argument of integer logarithm must be positive")
+                    }
                 }
             }
 
