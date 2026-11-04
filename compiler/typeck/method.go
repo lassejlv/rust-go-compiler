@@ -204,6 +204,9 @@ func (fcx *FnCtxt) lookupMethod(recv Ty, name string, sp lexer.Span) *pick {
 		if !inScope[tr] && tr != implTrait {
 			continue
 		}
+		if fcx.unstableFnMethod(tr) {
+			continue
+		}
 		item := tr.Trait.Items[name]
 		if item.Kind != DefFn || !item.Fn.HasSelf {
 			continue
@@ -386,6 +389,9 @@ func (fcx *FnCtxt) envMethod(steps []autoderefStep, name string, sp lexer.Span) 
 	var envs []*TraitRef
 	for _, e := range fcx.ic.env {
 		for _, st := range fcx.t.AllSupertraits(e) {
+			if fcx.unstableFnMethod(st.Trait) {
+				continue
+			}
 			if it, ok := st.Trait.Trait.Items[name]; ok && it.Kind == DefFn && it.Fn.HasSelf {
 				envs = append(envs, st)
 			}
@@ -405,10 +411,18 @@ func (fcx *FnCtxt) envMethod(steps []autoderefStep, name string, sp lexer.Span) 
 				adjusted = Ref(u, mode == 2)
 			}
 			for _, e := range envs {
-				if e.Args[0] != u && !(mode == 0 && u.Kind == TRef) {
-					continue
-				}
 				item := e.Trait.Trait.Items[name]
+				if e.Args[0] != u && !(mode == 0 && u.Kind == TRef) {
+					// a smart-pointer receiver (`self: Pin<&mut Self>`,
+					// `Box<Self>`, `Rc<Self>`) wrapping the bound type:
+					// the step is the declared self type itself
+					if mode != 0 || u.Kind != TAdt {
+						continue
+					}
+					if st := fcx.shallow(fcx.methodSelfTy(item, e.Args)); st.Kind != TAdt || st.Def != u.Def {
+						continue
+					}
+				}
 				// an earlier autoderef step that itself implements the
 				// trait wins (`it: &mut I` → `<&mut I as Iterator>::take`,
 				// not a move out of `*it`)
@@ -452,6 +466,17 @@ func (fcx *FnCtxt) envMethod(steps []autoderefStep, name string, sp lexer.Span) 
 		}
 	}
 	return nil
+}
+
+// unstableFnMethod reports whether tr is one of the Fn traits, whose
+// methods (`call`, `call_mut`, `call_once`) are unstable: outside std they
+// are not method candidates (`f.call(x)` finds a user trait's `call`).
+func (fcx *FnCtxt) unstableFnMethod(tr *Def) bool {
+	switch tr.LangItem {
+	case "fn", "fn_mut", "fn_once":
+		return !fcx.t.isStd(fcx.def)
+	}
+	return false
 }
 
 // envContradictsHint reports whether the where-clause e is one of several

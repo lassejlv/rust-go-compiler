@@ -75,6 +75,10 @@ func (t *Tcx) checkBodyMisc(r *Results, def *Def) {
 		}
 		return true
 	})
+	if !std {
+		t.checkOverflowingLiterals(r, def, root)
+		t.checkKnownPanics(r, def, root)
+	}
 	// locals must have a statically known size
 	if !std {
 		for id, l := range r.Locals {

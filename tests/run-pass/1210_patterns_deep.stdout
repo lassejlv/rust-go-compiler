@@ -1,0 +1,50 @@
+[] -> empty
+[1] -> one(1)
+[3, 4, 3] -> bookends(3)
+[1, 2] -> two(1,2)
+[1, 2, 3] -> three(1 [2] 3)
+[0, 5, 6, 7] -> zero-led rest=[5, 6, 7]
+[1, 2, 9, 4] -> nine second-to-last
+[5, 6, 7, 8] -> second=6
+bit 1
+digit 7
+neg -3
+big 100
+additive -
+op /
+private
+ident y
+empty group
+binop 2 3
+nested group of 1
+single [ident z]
+group of 3
+Point3 { x: 0, y: 0, z: 0 } origin
+Point3 { x: 0, y: 1, z: 0 } on a plane-ish
+Point3 { x: 2, y: 2, z: 3 } low odd z
+Point3 { x: 4, y: 4, z: 4 } diagonal
+Point3 { x: 4, y: 5, z: 6 } elsewhere
+none
+ok-none
+special 6
+plain 4
+empty err
+err bad
+1=one 2=two 
+[(10, "one!"), (20, "two!")]
+borrowed hi
+short 2
+Some(6)
+1 2 3 1 2 3
+1 [2, 3, 4] 5
+p.z=3
+[10, 20, 30] [20, 30]
+[false, true, false, true, true, false, false, false, false, false, false, false, false]
+alpha alpha digit under other 
+even
+8
+3
+at limit
+negative i128
+greeting
+x!

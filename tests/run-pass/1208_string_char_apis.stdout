@@ -1,0 +1,87 @@
+STRASSE GROSS Ǆ FFI İSTANBUL
+straße groß ǆ ﬃ i̇stanbul
+ß -> up "SS" (2) lo "ß" (1)
+ﬃ -> up "FFI" (3) lo "ﬃ" (1)
+İ -> up "İ" (1) lo "i\u{307}" (2)
+ǅ -> up "Ǆ" (1) lo "ǆ" (1)
+a -> up "A" (1) lo "a" (1)
+Σ -> up "Σ" (1) lo "σ" (1)
+1 -> up "1" (1) lo "1" (1)
+ὀδυσσεύς
+1 é 2
+8 ö 2
+13 11
+true false true
+None Some("hé")
+Some(("héllo", "wörld"))
+Some(("héllo wör", "d"))
+Some(("k", "v=w"))
+None
+Some(("a", "b::c"))
+abc
+abc
+abc456
+abab__
+pad
+Some("rest") None
+["1", "2", "3"]
+[(2, "ca"), (5, "ca")]
+[(6, "a"), (3, "a"), (0, "a")]
+Some(2) Some(3)
+Some(3) Some(2)
+Some(1)
+["a", "b", "c", "d"]
+["a", "b", "c"]
+bbbbbb
+cca
+HelloHello
+¡hello world 13
+Some('d') '¡'
+hello
+heo
+bcd aef
+XYZef
+XY Zef
+["line1", "line2", "line3"]
+["a", "", "b"]
+[98, 97]
+Ok("€")
+true
+A�B
+Ok("λ")
+[226, 130, 172]
+[1, 2, 3, 4]
+[1, 1, 1, 2]
+[55357, 56832]
+Ok("😀a")
+[195, 177]
+25 c B
+Some('b') Some(15)
+None
+true true true false
+A mixed
+true true
+HW
+cba
+Some((2, 'c'))
+true true
+Greater
+true
+The Quick Brown Fox
+true
+Ok('x')
+true
+Ok(true)
+true
+["a", "b", "c"]
+Ok([1, 2, 3])
+abcd
+xyzw!? true
+"abc"
+["ab", "cd"]
+abc
+a\tb́
+\u{e9}\u{a}
+Some('e')
+Some((4, 'γ'))
+β

@@ -1,0 +1,91 @@
+[+001.235e3]
+[-1.23e3     ]
+[     1.2E3     ]
+[0e0] [1E-7] [1.23456e5]
+[+0] [-0] [+2]
+[-0003.14] [+0003.14] [-0000042]
+[0x000000ff] [0b0101] [0o10] [0xABCDEF]
+[ff] [FFFE] [11111111]
+[abc       ] [ab        ] [    ab    ] [        ab]
+[***mid***] [-----42] [c____]
+[true ] [1.5  ] [  x  ] [    é]
+[    3.14] [      7] [2.718] [   v    ]
+[1-1-2] [xyx]
+{literal} {5}
+Scene { name: "main", shapes: [Circle { r: 1.5 }, Rect(2, 3), Empty], tags: {1: Some("one"), 2: None}, origin: (-1, 2), unit: (), nested: Some(Scene { name: "child", shapes: [], tags: {}, origin: (0, 0), unit: (), nested: None }) }
+Scene {
+    name: "main",
+    shapes: [
+        Circle {
+            r: 1.5,
+        },
+        Rect(
+            2,
+            3,
+        ),
+        Empty,
+    ],
+    tags: {
+        1: Some(
+            "one",
+        ),
+        2: None,
+    },
+    origin: (
+        -1,
+        2,
+    ),
+    unit: (),
+    nested: Some(
+        Scene {
+            name: "child",
+            shapes: [],
+            tags: {},
+            origin: (
+                0,
+                0,
+            ),
+            unit: (),
+            nested: None,
+        },
+    ),
+}
+[a, ff] (AB, BB8) Some(
+    0x1f,
+)
+    1|Some(2       )|  +3.0
+"q\"uote\n\t\\" 'X' '\''
+"\u{7f}\0é\u{200b}" '\u{301}'
+(1, "a", [1.0, 2.5], ((),))
+(
+    1,
+    "a",
+)
+[]
+Some(
+    Rect(
+        1,
+        1,
+    ),
+)
+[1.23, 2.00]
+1.0 0.1 1e21
+2.2250738585072014e-308 1e-7
+[H255] [Hexy[0xff]] [H3.000] [      H7] [H7      ]
+[      ff] [000000ff] [+1] [0x2]
+   r|4
+a-007!
+1 2
+inline   3.00 "inline" 3e0
+-9223372036854775808 18446744073709551615
+1e0 1.2345e3 1.2E-4
+2e1 2.5e-1     1.00e5|
+Less
+5 "rc"
+RefCell { value: [1] }
+Cell { value: 3 }
+"s" "r"
+[Some(1), None]
+Ok(1)
+'a'..='z'
+..3 2.. StepBy { iter: 1..4, step_minus_one: 1, first_take: true }

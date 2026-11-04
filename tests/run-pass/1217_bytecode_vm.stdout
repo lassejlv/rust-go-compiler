@@ -1,0 +1,11 @@
+Ok(Some(2432902008176640000)) ["2432902008176640000"] steps=230
+Ok(None) 0,1,1,2,3,5,8,13,21,34,55,89,144,233,377,49
+error: division by zero at pc=2 (DivByZero { pc: 2 })
+error: stack underflow at pc=1 (StackUnderflow(1))
+error: overflow in add (Overflow("add"))
+error: overflow in neg (Overflow("neg"))
+error: bad jump target 0x0063 (BadJump(99))
+error: step limit (StepLimit)
+error: overflow in shl (Overflow("shl"))
+ok Some(-1) stack=[2, -3, -1]
+ok Some(0) stack=[8, 0]

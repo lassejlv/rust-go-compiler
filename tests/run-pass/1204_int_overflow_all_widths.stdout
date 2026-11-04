@@ -1,0 +1,68 @@
+u8: wrap_add=0 wrap_sub=255 wrap_mul=254 wrap_neg=0 chk_add=None chk_sub=None chk_mul=Some(254) sat_add=255 sat_sub=0 sat_mul=255
+  ovf_add=(254, true) ovf_sub=(255, true) ovf_mul=(1, true) ovf_neg=(0, false) shl=(64, true) shr=(31, false) chk_div=None chk_rem=Some(0) pow=None wpow=0 cnt=8 8 1 255
+  swap=8 rev=128 be=255 le=0 min/max=0/255 div_euclid=0 rem_euclid=0 abs_diff=255 ilog2=7 isqrt-ish=100
+u16: wrap_add=0 wrap_sub=65535 wrap_mul=65534 wrap_neg=0 chk_add=None chk_sub=None chk_mul=Some(65534) sat_add=65535 sat_sub=0 sat_mul=65535
+  ovf_add=(65534, true) ovf_sub=(65535, true) ovf_mul=(1, true) ovf_neg=(0, false) shl=(64, true) shr=(8191, false) chk_div=None chk_rem=Some(0) pow=None wpow=512 cnt=16 16 1 65535
+  swap=2048 rev=32768 be=65535 le=0 min/max=0/65535 div_euclid=0 rem_euclid=0 abs_diff=65535 ilog2=15 isqrt-ish=100
+u32: wrap_add=0 wrap_sub=4294967295 wrap_mul=4294967294 wrap_neg=0 chk_add=None chk_sub=None chk_mul=Some(4294967294) sat_add=4294967295 sat_sub=0 sat_mul=4294967295
+  ovf_add=(4294967294, true) ovf_sub=(4294967295, true) ovf_mul=(1, true) ovf_neg=(0, false) shl=(64, true) shr=(536870911, false) chk_div=None chk_rem=Some(0) pow=None wpow=512 cnt=32 32 1 4294967295
+  swap=134217728 rev=2147483648 be=4294967295 le=0 min/max=0/4294967295 div_euclid=0 rem_euclid=0 abs_diff=4294967295 ilog2=31 isqrt-ish=100
+u64: wrap_add=0 wrap_sub=18446744073709551615 wrap_mul=18446744073709551614 wrap_neg=0 chk_add=None chk_sub=None chk_mul=Some(18446744073709551614) sat_add=18446744073709551615 sat_sub=0 sat_mul=18446744073709551615
+  ovf_add=(18446744073709551614, true) ovf_sub=(18446744073709551615, true) ovf_mul=(1, true) ovf_neg=(0, false) shl=(64, true) shr=(2305843009213693951, false) chk_div=None chk_rem=Some(0) pow=None wpow=512 cnt=64 64 1 18446744073709551615
+  swap=576460752303423488 rev=9223372036854775808 be=18446744073709551615 le=0 min/max=0/18446744073709551615 div_euclid=0 rem_euclid=0 abs_diff=18446744073709551615 ilog2=63 isqrt-ish=100
+u128: wrap_add=0 wrap_sub=340282366920938463463374607431768211455 wrap_mul=340282366920938463463374607431768211454 wrap_neg=0 chk_add=None chk_sub=None chk_mul=Some(340282366920938463463374607431768211454) sat_add=340282366920938463463374607431768211455 sat_sub=0 sat_mul=340282366920938463463374607431768211455
+  ovf_add=(340282366920938463463374607431768211454, true) ovf_sub=(340282366920938463463374607431768211455, true) ovf_mul=(1, true) ovf_neg=(0, false) shl=(1180591620717411303424, false) shr=(42535295865117307932921825928971026431, false) chk_div=None chk_rem=Some(0) pow=None wpow=512 cnt=128 128 1 340282366920938463463374607431768211455
+  swap=10633823966279326983230456482242756608 rev=170141183460469231731687303715884105728 be=340282366920938463463374607431768211455 le=0 min/max=0/340282366920938463463374607431768211455 div_euclid=0 rem_euclid=0 abs_diff=340282366920938463463374607431768211455 ilog2=127 isqrt-ish=100
+usize: wrap_add=0 wrap_sub=18446744073709551615 wrap_mul=18446744073709551614 wrap_neg=0 chk_add=None chk_sub=None chk_mul=Some(18446744073709551614) sat_add=18446744073709551615 sat_sub=0 sat_mul=18446744073709551615
+  ovf_add=(18446744073709551614, true) ovf_sub=(18446744073709551615, true) ovf_mul=(1, true) ovf_neg=(0, false) shl=(64, true) shr=(2305843009213693951, false) chk_div=None chk_rem=Some(0) pow=None wpow=512 cnt=64 64 1 18446744073709551615
+  swap=576460752303423488 rev=9223372036854775808 be=18446744073709551615 le=0 min/max=0/18446744073709551615 div_euclid=0 rem_euclid=0 abs_diff=18446744073709551615 ilog2=63 isqrt-ish=100
+i8: wrap_add=-128 wrap_sub=127 wrap_mul=-2 wrap_neg=-128 chk_add=None chk_sub=None chk_mul=Some(126) sat_add=127 sat_sub=-128 sat_mul=127
+  ovf_add=(-2, true) ovf_sub=(127, true) ovf_mul=(1, true) ovf_neg=(-128, true) shl=(64, true) shr=(15, false) chk_div=None chk_rem=Some(0) pow=None wpow=0 cnt=7 0 1 -17
+  swap=8 rev=-128 be=127 le=-128 min/max=-128/127 div_euclid=-6 rem_euclid=0 abs_diff=255 ilog2=6 isqrt-ish=100
+  i8: abs=Some(7) wabs=-128 uabs=128 signum=-1 0 chk_neg=None sat_neg=127 sat_abs=127 is_neg=true div_euclid=-4 rem_euclid=1 ovf_div=(-128, true) wdiv=-128 chk_abs=None
+  m/2=-3 m%2=-1 m>>1=-4 m.pow(2)=49
+i16: wrap_add=-32768 wrap_sub=32767 wrap_mul=-2 wrap_neg=-32768 chk_add=None chk_sub=None chk_mul=Some(32766) sat_add=32767 sat_sub=-32768 sat_mul=32767
+  ovf_add=(-2, true) ovf_sub=(32767, true) ovf_mul=(1, true) ovf_neg=(-32768, true) shl=(64, true) shr=(4095, false) chk_div=None chk_rem=Some(0) pow=None wpow=512 cnt=15 0 1 -17
+  swap=2048 rev=-32768 be=-129 le=-32768 min/max=-32768/32767 div_euclid=-1561 rem_euclid=5 abs_diff=65535 ilog2=14 isqrt-ish=100
+  i16: abs=Some(7) wabs=-32768 uabs=32768 signum=-1 0 chk_neg=None sat_neg=32767 sat_abs=32767 is_neg=true div_euclid=-4 rem_euclid=1 ovf_div=(-32768, true) wdiv=-32768 chk_abs=None
+  m/2=-3 m%2=-1 m>>1=-4 m.pow(2)=49
+i32: wrap_add=-2147483648 wrap_sub=2147483647 wrap_mul=-2 wrap_neg=-2147483648 chk_add=None chk_sub=None chk_mul=Some(2147483646) sat_add=2147483647 sat_sub=-2147483648 sat_mul=2147483647
+  ovf_add=(-2, true) ovf_sub=(2147483647, true) ovf_mul=(1, true) ovf_neg=(-2147483648, true) shl=(64, true) shr=(268435455, false) chk_div=None chk_rem=Some(0) pow=None wpow=512 cnt=31 0 1 -17
+  swap=134217728 rev=-2147483648 be=-129 le=-2147483648 min/max=-2147483648/2147483647 div_euclid=-102261126 rem_euclid=0 abs_diff=4294967295 ilog2=30 isqrt-ish=100
+  i32: abs=Some(7) wabs=-2147483648 uabs=2147483648 signum=-1 0 chk_neg=None sat_neg=2147483647 sat_abs=2147483647 is_neg=true div_euclid=-4 rem_euclid=1 ovf_div=(-2147483648, true) wdiv=-2147483648 chk_abs=None
+  m/2=-3 m%2=-1 m>>1=-4 m.pow(2)=49
+i64: wrap_add=-9223372036854775808 wrap_sub=9223372036854775807 wrap_mul=-2 wrap_neg=-9223372036854775808 chk_add=None chk_sub=None chk_mul=Some(9223372036854775806) sat_add=9223372036854775807 sat_sub=-9223372036854775808 sat_mul=9223372036854775807
+  ovf_add=(-2, true) ovf_sub=(9223372036854775807, true) ovf_mul=(1, true) ovf_neg=(-9223372036854775808, true) shl=(64, true) shr=(1152921504606846975, false) chk_div=None chk_rem=Some(0) pow=None wpow=512 cnt=63 0 1 -17
+  swap=576460752303423488 rev=-9223372036854775808 be=-129 le=-9223372036854775808 min/max=-9223372036854775808/9223372036854775807 div_euclid=-439208192231179801 rem_euclid=5 abs_diff=18446744073709551615 ilog2=62 isqrt-ish=100
+  i64: abs=Some(7) wabs=-9223372036854775808 uabs=9223372036854775808 signum=-1 0 chk_neg=None sat_neg=9223372036854775807 sat_abs=9223372036854775807 is_neg=true div_euclid=-4 rem_euclid=1 ovf_div=(-9223372036854775808, true) wdiv=-9223372036854775808 chk_abs=None
+  m/2=-3 m%2=-1 m>>1=-4 m.pow(2)=49
+i128: wrap_add=-170141183460469231731687303715884105728 wrap_sub=170141183460469231731687303715884105727 wrap_mul=-2 wrap_neg=-170141183460469231731687303715884105728 chk_add=None chk_sub=None chk_mul=Some(170141183460469231731687303715884105726) sat_add=170141183460469231731687303715884105727 sat_sub=-170141183460469231731687303715884105728 sat_mul=170141183460469231731687303715884105727
+  ovf_add=(-2, true) ovf_sub=(170141183460469231731687303715884105727, true) ovf_mul=(1, true) ovf_neg=(-170141183460469231731687303715884105728, true) shl=(1180591620717411303424, false) shr=(21267647932558653966460912964485513215, false) chk_div=None chk_rem=Some(0) pow=None wpow=512 cnt=127 0 1 -17
+  swap=10633823966279326983230456482242756608 rev=-170141183460469231731687303715884105728 be=-129 le=-170141183460469231731687303715884105728 min/max=-170141183460469231731687303715884105728/170141183460469231731687303715884105727 div_euclid=-8101961117165201511032728748375433606 rem_euclid=0 abs_diff=340282366920938463463374607431768211455 ilog2=126 isqrt-ish=100
+  i128: abs=Some(7) wabs=-170141183460469231731687303715884105728 uabs=170141183460469231731687303715884105728 signum=-1 0 chk_neg=None sat_neg=170141183460469231731687303715884105727 sat_abs=170141183460469231731687303715884105727 is_neg=true div_euclid=-4 rem_euclid=1 ovf_div=(-170141183460469231731687303715884105728, true) wdiv=-170141183460469231731687303715884105728 chk_abs=None
+  m/2=-3 m%2=-1 m>>1=-4 m.pow(2)=49
+isize: wrap_add=-9223372036854775808 wrap_sub=9223372036854775807 wrap_mul=-2 wrap_neg=-9223372036854775808 chk_add=None chk_sub=None chk_mul=Some(9223372036854775806) sat_add=9223372036854775807 sat_sub=-9223372036854775808 sat_mul=9223372036854775807
+  ovf_add=(-2, true) ovf_sub=(9223372036854775807, true) ovf_mul=(1, true) ovf_neg=(-9223372036854775808, true) shl=(64, true) shr=(1152921504606846975, false) chk_div=None chk_rem=Some(0) pow=None wpow=512 cnt=63 0 1 -17
+  swap=576460752303423488 rev=-9223372036854775808 be=-129 le=-9223372036854775808 min/max=-9223372036854775808/9223372036854775807 div_euclid=-439208192231179801 rem_euclid=5 abs_diff=18446744073709551615 ilog2=62 isqrt-ish=100
+295990755076957304699390954001009532656 deadbeefcafebabe123456789abcdef0 1572555756771277535276 11110000
+287261987624311628569180063106261655808
+289193005
+-170141183460469231731687303715884105728 -170141183460469231731687303715884105727 170141183460469231731687303715884105727
+Ok(340282366920938463463374607431768211455)
+true
+Ok(-170141183460469231731687303715884105728)
+128
+29
+     -170141183460469231731687303715884105728|
++1.234567e6
+Ok(-255) Err(ParseIntError { kind: PosOverflow }) Ok(1295)
+true
+Ok(12) Ok(0)
+Err("number too large to fit in target type")
+Err("number too small to fit in target type")
+Err("cannot parse integer from empty string")
+Err("invalid digit found in string")
+true Ok(-128) true
+Err("number too large to fit in target type") true
+Ok(5)
+208
