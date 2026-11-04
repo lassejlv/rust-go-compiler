@@ -304,6 +304,7 @@ impl<T: Eq + Hash, S: BuildHasher> Extend<T> for HashSet<T, S> {
     #[inline]
     fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
         let mut it = iter.into_iter();
+        self.map.reserve_for_extend(it.size_hint().0);
         while let Some(k) = it.next() {
             self.insert(k);
         }
@@ -318,6 +319,7 @@ impl<'a, T: 'a + Eq + Hash + Copy, S: BuildHasher> Extend<&'a T> for HashSet<T, 
     #[inline]
     fn extend<I: IntoIterator<Item = &'a T>>(&mut self, iter: I) {
         let mut it = iter.into_iter();
+        self.map.reserve_for_extend(it.size_hint().0);
         while let Some(k) = it.next() {
             self.insert(*k);
         }

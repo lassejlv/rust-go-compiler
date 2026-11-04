@@ -957,9 +957,21 @@ impl<K: Eq + Hash, V, S: BuildHasher + Default> FromIterator<(K, V)> for HashMap
     }
 }
 
+impl<K: Eq + Hash, V, S: BuildHasher> HashMap<K, V, S> {
+    /// Makes room for an extension by an iterator with this lower size
+    /// bound, like the real library: all of it when the map is empty, else
+    /// half (the keys may be present already).
+    #[inline]
+    pub(crate) fn reserve_for_extend(&mut self, hint: usize) {
+        let n = if self.is_empty() { hint } else { (hint + 1) / 2 };
+        self.reserve(n);
+    }
+}
+
 impl<K: Eq + Hash, V, S: BuildHasher> Extend<(K, V)> for HashMap<K, V, S> {
     fn extend<T: IntoIterator<Item = (K, V)>>(&mut self, iter: T) {
         let mut it = iter.into_iter();
+        self.reserve_for_extend(it.size_hint().0);
         while let Some((k, v)) = it.next() {
             self.insert(k, v);
         }
@@ -973,6 +985,7 @@ impl<K: Eq + Hash, V, S: BuildHasher> Extend<(K, V)> for HashMap<K, V, S> {
 impl<'a, K: Eq + Hash + Copy, V: Copy, S: BuildHasher> Extend<(&'a K, &'a V)> for HashMap<K, V, S> {
     fn extend<T: IntoIterator<Item = (&'a K, &'a V)>>(&mut self, iter: T) {
         let mut it = iter.into_iter();
+        self.reserve_for_extend(it.size_hint().0);
         while let Some((k, v)) = it.next() {
             self.insert(*k, *v);
         }
