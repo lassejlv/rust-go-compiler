@@ -1,0 +1,40 @@
+=== arith ===
+11.5
+-> 23 (calls=0, lines=1)
+=== fib ===
+[0, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377]
+-> 6765 (calls=25083, lines=1)
+=== closures ===
+a: 3 b: 2
+15 3
+-> done (calls=11, lines=2)
+=== higher-order ===
+squares of evens: [4, 16, 36, 64, 100, 144, 196, 256, 324, 400]
+sum: 1540
+["pear!", "fig!", "banana!", "kiwi!"] [4, 3, 6, 4]
+-> 6 (calls=209, lines=3)
+=== strings ===
+5 é ababab str num list fn
+0:1:2:3:4: true true
+3 3.5 -1 0.3333333333333333
+-> nil (calls=11, lines=3)
+=== sieve ===
+[2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59] 17 59
+-> nil (calls=7148, lines=1)
+=== err-undefined ===
+1
+runtime error: undefined variable 'b' (after 0 calls)
+=== err-type ===
+runtime error: type error: Sub on list and num (after 0 calls)
+=== err-divzero ===
+runtime error: division by zero (after 2 calls)
+=== err-arity ===
+runtime error: arity mismatch: expected 2, got 1 (after 1 calls)
+=== err-parse ===
+parse error: expected identifier, got Assign
+=== err-lex ===
+lex error: line 1: lone '&'
+=== err-index ===
+runtime error: index 7 out of range (len 3) (after 0 calls)
+=== comments ===
+-> 16 (calls=0, lines=0)
