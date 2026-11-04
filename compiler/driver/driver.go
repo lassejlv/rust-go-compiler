@@ -685,8 +685,20 @@ func checkMainSig(c *Crate) error {
 			}
 		}
 	}
-	if len(fn.Decl.Params) > 0 || fn.Decl.SelfParam != nil {
+	if len(fn.Decl.Params) > 0 || fn.Decl.SelfParam != nil || fn.Unsafe || (fn.Abi != "" && fn.Abi != "Rust") {
 		return fmt.Errorf("%s: error[E0580]: `main` function has wrong type", sp.Lo)
+	}
+	if fn.Generics != nil && len(fn.Generics.Where) > 0 {
+		return fmt.Errorf("%s: error[E0646]: `main` function is not allowed to have a `where` clause", sp.Lo)
+	}
+	if it, ok := fn.Decl.Output.(*ast.ImplTraitType); ok {
+		// (an `async fn main` returns `impl Future` after desugaring)
+		for _, b := range it.Bounds {
+			if b.Path != nil && len(b.Path.Segments) > 0 && b.Path.Segments[len(b.Path.Segments)-1].Ident.Name == "Future" {
+				return fmt.Errorf("%s: error[E0752]: `main` function is not allowed to be `async`", sp.Lo)
+			}
+		}
+		return fmt.Errorf("%s: error[E0277]: `main` has invalid return type", sp.Lo)
 	}
 	return nil
 }

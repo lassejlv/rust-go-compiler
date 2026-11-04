@@ -177,7 +177,8 @@ func (t *Tcx) checkCast(r *Results, x *ast.CastExpr) {
 	case (isNum(to) || to.Kind == TBool || to.Kind == TChar) &&
 		((from.Kind == TAdt && from.Def.Adt != nil && from.Def.Adt.Kind != AdtEnum) || from.Kind == TStr || from.Kind == TTuple || from.Kind == TArray || from.Kind == TSlice):
 		t.ErrorCode(x.Span, "E0605", "non-primitive cast: `%s` as `%s`", from, to)
-	case to.Kind == TAdt || to.Kind == TTuple || to.Kind == TArray || to.Kind == TStr || to.Kind == TSlice:
+	case to.Kind == TAdt || to.Kind == TTuple || to.Kind == TArray || to.Kind == TStr || to.Kind == TSlice,
+		to.Kind == TRef && (isNum(from) || from.Kind == TBool || from.Kind == TChar || from.Kind == TPtr || from.Kind == TFnPtr || from.Kind == TFnDef):
 		t.ErrorCode(x.Span, "E0605", "non-primitive cast: `%s` as `%s`", from, to)
 	case from.Kind == TInt && to.Kind == TPtr && (fatPointee(to.Elem) || to.Elem.IsUnsized()):
 		t.ErrorCode(x.Span, "E0606", "cannot cast `%s` to a pointer that is wide", from)

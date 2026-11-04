@@ -81,6 +81,7 @@ func (t *Tcx) checkCallLints(r *Results, def *Def, root any) {
 			}
 		case *ast.CallExpr:
 			t.checkDropManuallyDrop(r, def, x)
+			t.checkMemIntrinsicLints(r, def, x)
 			c := r.Callees[x.ID]
 			if atomicAllowed || c == nil || c.Def == nil || c.Def.Crate == nil || c.Def.Crate.Name != "std" || c.Def.Parent == nil || c.Def.Parent.Name != "atomic" {
 				return true
@@ -129,5 +130,36 @@ func (t *Tcx) checkDropManuallyDrop(r *Results, def *Def, x *ast.CallExpr) {
 	ty := r.AdjustedType(x.Args[0])
 	if ty != nil && ty.Kind == TAdt && ty.Def != nil && ty.Def.Name == "ManuallyDrop" && t.isStd(ty.Def) && !lintAllowedAt(def, "undropped_manually_drops") {
 		t.Errorf(x.Span, "calls to `std::mem::drop` with `std::mem::ManuallyDrop` instead of the inner value does nothing")
+	}
+}
+
+// checkMemIntrinsicLints reports `mem::discriminant` of a non-enum
+// (enum_intrinsics_non_enums) and transmutes of `&T` into `&mut U`
+// (mutable_transmutes).
+func (t *Tcx) checkMemIntrinsicLints(r *Results, def *Def, x *ast.CallExpr) {
+	c := r.Callees[x.ID]
+	if c == nil || c.Kind != CallFn || c.Def == nil || c.Def.Crate == nil || c.Def.Crate.Name != "std" {
+		return
+	}
+	known := func(ty Ty) bool {
+		return ty != nil && !ty.HasParam() && !ty.HasInfer() && !ty.HasError() && !ty.HasProj() && !ty.HasOpaque()
+	}
+	switch c.Def.Name {
+	case "discriminant":
+		if c.Def.Parent == nil || c.Def.Parent.Name != "mem" || len(c.Args) != 1 || lintAllowedAt(def, "enum_intrinsics_non_enums") {
+			return
+		}
+		a := c.Args[0]
+		if known(a) && !(a.Kind == TAdt && a.Def != nil && a.Def.Adt != nil && a.Def.Adt.Kind == AdtEnum) {
+			t.Errorf(x.Span, "the return value of `mem::discriminant` is unspecified when called with a non-enum type")
+		}
+	case "transmute":
+		if len(c.Args) != 2 || lintAllowedAt(def, "mutable_transmutes") {
+			return
+		}
+		src, dst := c.Args[0], c.Args[1]
+		if known(src) && known(dst) && src.Kind == TRef && !src.Mut && dst.Kind == TRef && dst.Mut {
+			t.Errorf(x.Span, "transmuting &T to &mut T is undefined behavior, even if the reference is unused, consider instead using an UnsafeCell")
+		}
 	}
 }

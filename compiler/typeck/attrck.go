@@ -46,6 +46,9 @@ func (t *Tcx) checkItemAttrs(d *Def, isFn, isAdt bool, what string) {
 				t.Errorf(a.Span, "valid forms for the attribute are `inline`, `inline(always)`, and `inline(never)`")
 			}
 		case "cold", "track_caller", "no_mangle":
+			if a.Path == "no_mangle" && what == "constant" && !lintAllowedAt(d, "no_mangle_const_items") {
+				t.Errorf(a.Span, "const items should never be `#[no_mangle]`")
+			}
 			if isFn && !attrIsWord(a) {
 				t.ErrorCode(a.Span, "E0565", "malformed `%s` attribute input", a.Path)
 			}

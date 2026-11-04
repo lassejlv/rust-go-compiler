@@ -150,6 +150,9 @@ func (t *Tcx) checkGenericParams() {
 				}
 			}
 		}
+		if ti, ok := d.Item.Kind.(*ast.TraitItem); ok && ti.Auto && d.Crate != nil && d.Crate.Local {
+			t.ErrorCode(d.Item.Span, "E0658", "auto traits are experimental and possibly buggy")
+		}
 		if d.Kind == DefUnion && d.Crate != nil && d.Crate.Local && d.Adt != nil {
 			// union fields are Copy, references or ManuallyDrop (E0740)
 			t.AdtFields(d)
