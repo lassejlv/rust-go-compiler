@@ -1,0 +1,14 @@
+6 6 15
+12157665459056928801 1024 343
+Some(250) None
+[Ok(255), Ok(-16), Err(ParseIntError { kind: InvalidDigit })]
+[Ok(1.5), Err("bad float")]
+[Err("radix 2 unsupported")]
+bits=8 min=0 max=255 ones(max)=8
+bits=16 min=-32768 max=32767 ones(max)=15
+bits=128 min=0 max=340282366920938463463374607431768211455 ones(max)=128
+Complex { re: -1, im: 0 }
+Complex { re: 16, im: 0 }
+Complex { re: 2.2, im: -0.4 }
+[Ok(Complex { re: 1, im: 2 }), Err(None), Err(Some(ParseIntError { kind: InvalidDigit }))]
+Complex { re: Complex { re: 1, im: 0 }, im: Complex { re: 0, im: 0 } }

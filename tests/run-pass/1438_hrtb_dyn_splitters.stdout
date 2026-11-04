@@ -1,0 +1,7 @@
+chars2 ["a,", " b", "b ", ",c", "cc"]
+comma ["a", "bb", "ccc"]
+ws ["a,", "bb", ",ccc"]
+"he" "a"
+[3, 2]
+['a', 'b']
+["[upper]", "HEY", "[suffix]", "hey!"]

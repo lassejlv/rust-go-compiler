@@ -1,0 +1,24 @@
+inherent 1
+trait 1
+mut 2
+mut 3
+inherent 3
+ByVal for &u8
+ByRef for u8
+3 999
+3
+Smart::get Plain::get 7
+Smart::get Plain::get 7
+default hi
+str hi abc
+default hi
+str hi boxed
+slice of 3
+default hi
+s3 3.5
+s9
+2.5m Meters(2.5) meters
+vec meters opt
+opt
+2 ["a!", "b"] 2
+Some(2)

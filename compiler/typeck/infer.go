@@ -22,6 +22,8 @@ type InferCtxt struct {
 	// queryCache memoizes selection/normalization over unsealed closures
 	// by canonical query (see canon.go).
 	queryCache map[string]*canonResp
+	// paramNormActive guards normalizeParamByImpl against re-entry.
+	paramNormActive map[string]bool
 	// normNest counts nested tryNormalize calls (recursion bound).
 	normNest int
 	// envBindings: associated-type bindings of where-clauses

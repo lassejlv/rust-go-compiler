@@ -1,0 +1,12 @@
+6
+[0, 2, 4, 6, 0, 2, 4, 6]
+("ab", 3)
+Some(7)
+(0, None)
+[('a', ["apple", "avocado"]), ('b', ["banana", "blueberry"]), ('c', ["cherry"])]
+[(0, [3, 6, 9]), (1, [1, 4, 7, 10]), (2, [2, 5, 8])]
+17 9.5
+Some("b")
+120 3628800 120 misses=2
+12 abababababababab
+["a", "bb"]

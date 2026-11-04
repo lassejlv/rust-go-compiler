@@ -928,7 +928,11 @@ func (ic *InferCtxt) normalizeProjectionUncached(trait *Def, args []Ty, name str
 			}
 		}
 		if self.Kind == TParam {
-			return nil
+			// no where-clause binding: an impl that applies to the
+			// parameter itself (`impl<I: Iterator> IntoIterator for I`)
+			// gives the type, as in rustc; when a where-clause provides
+			// the trait the projection stays rigid
+			return ic.normalizeParamByImpl(trait, args, name, depth)
 		}
 	}
 	// Fn-family Output.
@@ -1013,6 +1017,45 @@ func (ic *InferCtxt) normalizeProjectionUncached(trait *Def, args []Ty, name str
 				return b.Ty
 			}
 		}
+	}
+	return nil
+}
+
+// normalizeParamByImpl normalizes `<T as trait>::name` for a type parameter
+// T through the impl selected for it (nil if the selection is not an impl).
+func (ic *InferCtxt) normalizeParamByImpl(trait *Def, args []Ty, name string, depth int) Ty {
+	t := ic.t
+	var gat []Ty
+	if n := len(t.Generics(trait).Params); len(args) > n {
+		gat = args[n:]
+		args = args[:n]
+	}
+	// a where-clause providing the trait for the parameter (directly or
+	// through a supertrait) keeps the projection rigid, as in rustc; it is
+	// also what keeps this from re-entering selection on `T: Trait`
+	self := ic.shallow(args[0])
+	for _, e := range ic.env {
+		for _, st := range t.AllSupertraits(e) {
+			if st.Trait == trait && len(st.Args) > 0 && ic.shallow(st.Args[0]) == self {
+				return nil
+			}
+		}
+	}
+	key := fmt.Sprintf("%p:%d", trait, self.ID())
+	if ic.paramNormActive[key] {
+		return nil
+	}
+	if ic.paramNormActive == nil {
+		ic.paramNormActive = map[string]bool{}
+	}
+	ic.paramNormActive[key] = true
+	defer delete(ic.paramNormActive, key)
+	sel := ic.selectTrait(&TraitRef{Trait: trait, Args: args}, depth+1)
+	if sel.Kind != SelImpl {
+		return nil
+	}
+	if it, ok := sel.Impl.Impl.Items[name]; ok && it.Kind == DefAssocTy {
+		return ic.tryNormalize(Subst(t.ImplAssocTy(it), append(append([]Ty{}, sel.Args...), gat...)))
 	}
 	return nil
 }

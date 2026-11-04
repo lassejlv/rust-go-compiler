@@ -1,0 +1,10 @@
+Some(9) Some(3) Some(2)
+None
+["Alice", "Bob"] ["Alice Smith", "Bob"]
+["a", "bb", "ccc"]
+[(1, 'y'), (2, 'x')]
+[1] 4
+Some([1, 7]) None Some(("the", 3))
+["dog", "the"]
+"inter" ""
+hello [2, 3]

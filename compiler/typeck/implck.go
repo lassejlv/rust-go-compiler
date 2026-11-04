@@ -338,6 +338,10 @@ func (t *Tcx) compareImplMethod(impl, im, tm *Def) {
 	args := append([]Ty{}, trArgs...)
 	ident := ig.Identity()
 	args = append(args, ident[ig.OwnStart:]...)
+	if t.extraMethodBound(ig, tg, args) {
+		t.ErrorCode(im.Item.Name.Span, "E0276", "impl has stricter requirements than trait: method `%s` has a bound its trait declaration does not have", im.Name)
+		return
+	}
 	same := func(a, b Ty) (equal, comparable bool) {
 		var x, y Ty
 		if !t.quietly(func() {
@@ -365,6 +369,41 @@ func (t *Tcx) compareImplMethod(impl, im, tm *Def) {
 	if eq, cmp := same(tsig.Output, isig.Output); cmp && !eq {
 		t.ErrorCode(im.Item.Name.Span, "E0053", "method `%s` has an incompatible type for trait", im.Name)
 	}
+}
+
+// extraMethodBound reports whether an impl method bounds one of its own
+// type parameters by a trait that the trait's declaration of the method
+// does not require of it, directly or through a supertrait (E0276). Only
+// bounds on a bare own parameter are compared (bindings are ignored).
+// args maps the trait method's generics to the impl method's.
+func (t *Tcx) extraMethodBound(ig, tg *Generics, args []Ty) bool {
+	for _, p := range ig.Predicates {
+		if p.Maybe || p.Trait == nil || p.Trait.Trait == nil || len(p.Trait.Args) == 0 || p.Trait.Trait.LangItem == "sized" {
+			continue
+		}
+		subj := p.Trait.Args[0]
+		if subj.Kind != TParam || subj.Index < ig.OwnStart || subj.Index >= len(ig.Params) {
+			continue
+		}
+		if gp := ig.Params[subj.Index]; gp.Const || gp.Name != subj.Name {
+			continue
+		}
+		implied := false
+		for _, q := range tg.Predicates {
+			if q.Maybe || q.Trait == nil || q.Trait.Trait == nil {
+				continue
+			}
+			for _, st := range t.AllSupertraits(q.Trait.Subst(args)) {
+				if st.Trait == p.Trait.Trait && len(st.Args) > 0 && st.Args[0] == subj {
+					implied = true
+				}
+			}
+		}
+		if !implied {
+			return true
+		}
+	}
+	return false
 }
 
 // compareImplConst compares the type of an impl's associated const with
@@ -680,11 +719,36 @@ func (t *Tcx) blanketCovers(a, b *Def) bool {
 	}
 	for _, p := range preds {
 		self, ok := binds[p.Trait.Args[0].Index]
-		if !ok || self.HasParam() || self.HasInfer() || !t.Implements(self, p.Trait.Trait) {
+		if !ok {
+			return false
+		}
+		if t.upstreamMayImpl(self, p.Trait.Trait, b.Crate) {
+			continue
+		}
+		if self.HasParam() || self.HasInfer() || !t.Implements(self, p.Trait.Trait) {
 			return false
 		}
 	}
 	return true
+}
+
+// upstreamMayImpl reports whether coherence must assume `self: tr` may hold
+// in the future although no impl says so today: tr comes from another crate
+// than c and self is not local to c (rustc: "upstream crates may add a new
+// impl of trait `Display` for type `Vec<u8>`"). Auto traits and Sized are
+// structural and never assumed.
+func (t *Tcx) upstreamMayImpl(self Ty, tr *Def, c *Crate) bool {
+	if tr == nil || c == nil || tr.Crate == c || tr.Trait == nil || tr.Trait.Auto || tr.LangItem == "sized" {
+		return false
+	}
+	if self.HasInfer() || self.HasError() || self.HasProj() || self.HasOpaque() {
+		return false
+	}
+	switch self.Kind {
+	case TParam, TClosure, TNever, TFnDef:
+		return false
+	}
+	return !t.isLocalTy(self, c)
 }
 
 // checkImplObligations reports, for an impl without generic parameters,

@@ -1,0 +1,13 @@
+Some(3)
+Some('a')
+Some(1)
+[(0, "a"), (1, "b")]
+square with 4 sides, area 4.00
+triangle with 3 sides, area 6.00
+7
+6
+3,2,1 first=Some(3)
+[1, 2, 3, 4]
+Ok([1, 22, 3])
+Err("invalid digit found in string")
+""

@@ -1,0 +1,8 @@
+Err("unbound y")
+Ok(8.5) nodes=7
+Err("div by zero")
+Err("bad op %")
+Num(1.5) Num(1.5)
+<1> <two> <3.5> <c>
+[3, 2, 1] ["a"]
+[Ok(2.0), Err("unbound q"), Ok(2.0)]

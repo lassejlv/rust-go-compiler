@@ -1,0 +1,18 @@
+Stats { n: 3, total: 12 }
+Ok(Stats { n: 3, total: 6 })
+true
+Some(Stats { n: 2, total: 3 })
+Stats { n: 3, total: 12 } [20, 40, 60]
+Stats { n: 5, total: 15 } MultiMap { m: {false: [1, 2], true: [3, 4, 5]} }
+Stats { n: 8, total: 27 }
+a -> [1, 1, 1]
+bb -> [2, 2]
+ccc -> [3]
+false 3
+true 5
+Config { name: "x", level: 3 }
+[1, 2, 3] [1, 2, 3, 1]
+Some(1) Some(1) Some("v12")
+true false
+Some(3) None
+Ok(3) Err("boom")

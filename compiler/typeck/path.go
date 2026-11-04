@@ -56,6 +56,14 @@ func (fcx *FnCtxt) resolveValuePath(qself *ast.QSelf, p *ast.Path, sp lexer.Span
 	}
 	if qself != nil {
 		fcx.ac.scope = fcx.curMod()
+		if len(segs) > qself.Position+1 || (qself.Position == 0 && len(segs) > 1) {
+			// `<T as Trait>::Assoc::item` / `<T>::Assoc::item`: lower the
+			// type prefix, then resolve the last segment relative to it
+			prefix := &ast.PathType{QSelf: qself, Path: &ast.Path{Global: p.Global, Segments: segs[:len(segs)-1], Span: p.Span}}
+			prefix.Span = p.Span
+			base := fcx.lowerTy(prefix)
+			return fcx.typeRelativeValue(base, segs[len(segs)-1], sp, expected)
+		}
 		self := fcx.lowerTy(qself.Ty)
 		if qself.Position == 0 {
 			if len(segs) != 1 {
@@ -639,6 +647,15 @@ func unparen(e ast.Expr) ast.Expr {
 // ---------------------------------------------------------------------------
 // Struct literals
 
+func hasVariant(d *Def, name string) bool {
+	for _, v := range d.Adt.Variants {
+		if v.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
 // resolveStructPath resolves the path of a struct literal / struct pattern
 // to a variant and the ADT type.
 func (fcx *FnCtxt) resolveStructPath(qself *ast.QSelf, p *ast.Path, sp lexer.Span) (*VariantDef, Ty) {
@@ -678,13 +695,24 @@ func (fcx *FnCtxt) resolveStructPath(qself *ast.QSelf, p *ast.Path, sp lexer.Spa
 			bt := fcx.ac.resToTy(res, segs[len(segs)-1], sp)
 			fcx.ac.exprCtx = false
 			base = fcx.normalizeInBody(bt, sp)
-		} else if len(segs)-pr.Consumed == 1 {
-			fcx.ac.scope = fcx.curMod()
-			base = fcx.normalizeInBody(fcx.ac.resToTy(pr.Res, segs[pr.Consumed-1], sp), sp)
-			variantName = segs[len(segs)-1]
 		} else {
-			fcx.errorf(sp, "unsupported struct path")
-			return nil, TyErr
+			// `Enum::Variant` through an alias or `Self`, or an
+			// associated type (`Self::Out { .. }`, `T::Assoc::Variant`)
+			fcx.ac.scope = fcx.curMod()
+			raw := fcx.ac.resToTy(pr.Res, segs[pr.Consumed-1], sp)
+			if mid := segs[pr.Consumed : len(segs)-1]; len(mid) > 0 {
+				raw = fcx.ac.assocTypeOn(raw, mid, sp)
+			}
+			base = fcx.normalizeInBody(raw, sp)
+			variantName = segs[len(segs)-1]
+			if bb := fcx.structurally(base); !(bb.Kind == TAdt && bb.Def.Adt.Kind == AdtEnum && hasVariant(bb.Def, variantName.Ident.Name)) {
+				fcx.ac.scope = fcx.curMod()
+				if at := fcx.ac.findAssocType(raw, variantName.Ident.Name, sp); at != nil {
+					at = fcx.ac.applyGatArgs(at, raw, variantName.Ident.Name, variantName)
+					base = fcx.normalizeInBody(at, sp)
+					variantName = nil
+				}
+			}
 		}
 	}
 	b := fcx.structurally(base)

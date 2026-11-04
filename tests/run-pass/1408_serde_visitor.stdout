@@ -1,0 +1,9 @@
+Ok("{\"name\":\"Bob\",\"age\":30,\"tags\":[\"a\",\"b\"],\"boss\":{\"name\":\"Ann\",\"age\":50,\"tags\":[],\"boss\":null}}")
+Ok(14)
+Ok("{\"k1\":[1,null],\"k2\":[]}")
+Ok("[[true,\"x\"],[false,\"y\"]]")
+Err(JsonErr("quote in \"bad\\\"quote\""))
+Ok("[1,2,3]")
+Ok(3)
+[Ok(12), Err("unexpected str, expected an integer"), Ok(-4)]
+[Err("unexpected int, expected a borrowed string"), Ok("abc"), Err("unexpected int, expected a borrowed string")]

@@ -1,0 +1,11 @@
+i32 u8 string vec
+-1 1
+1 2
+Foo(3.5) Foo([Some(1)])
+["x"]
+32.81ft 10.30m
+Rgb(1, 2, 3) Rgb(1, 2, 3) Rgb(255, 128, 0)
+65793
+Ok(Rgb(9, 8, 7)) Err("need 3, got 1")
+([0, 0, 0], ((), [None, None]))
+[("", false), ("", false)]

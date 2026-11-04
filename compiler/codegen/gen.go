@@ -63,6 +63,11 @@ type Gen struct {
 	// bcSeen dedupes borrow checker diagnostics across instances.
 	bcSeen    map[string]bool
 	bcChecked map[*Def]bool
+
+	// instLimit bounds the nesting depth of instance arguments and defined
+	// types (see instlimit.go); 0 until GenerateProgram sets it.
+	instLimit  int
+	depthCache map[Ty]int
 }
 
 // New creates a generator.
@@ -80,6 +85,7 @@ func New(tcx *typeck.Tcx) *Gen {
 		vtables:        map[string]string{},
 		statics_:       map[*Def]string{},
 		scalarConsts:   map[string]string{},
+		depthCache:     map[Ty]int{},
 	}
 }
 
@@ -101,6 +107,7 @@ func (g *Gen) fnName(d *Def, args []Ty) string {
 		name = fmt.Sprintf("rgx%d_%s", g.fnN, cIdent(d.Name))
 	}
 	g.fnNames[key] = name
+	g.checkInstDepth(d, args)
 	g.fnQueue = append(g.fnQueue, instance{def: d, args: args})
 	return name
 }
@@ -141,6 +148,7 @@ func (g *Gen) GenerateProgram(mainDef *Def) (prog *Program, err error) {
 			panic(r)
 		}
 	}()
+	g.instLimit = g.instDepthLimit(mainDef)
 	mainName := g.fnName(mainDef, nil)
 	if d := g.tcx.R.StdPath("rt::runtime_panic"); d != nil && d.Kind == DefFn {
 		rp := g.fnName(d, nil)
