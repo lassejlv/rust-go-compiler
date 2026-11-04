@@ -1,0 +1,5 @@
+{"a": "long-word", "b": "", "c": "long-word"} 3 Err("long-word") Some("long-word")
+["a", "b", "c"] ["a", "c"] ["x", "y", "z"] ["x", "y", "z"]
+Some("x") Some("y") Some("x") Some("b")
+["y", "z"] ["x", "y", "z", "x"] ["y", "z"] ["a", "b", "c"]
+{"a": 9, "b": 0, "c": 9} Some(["a", "b"]) ["x", "y", "z"] ["key"]

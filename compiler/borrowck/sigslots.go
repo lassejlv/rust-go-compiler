@@ -25,6 +25,8 @@ type labeler struct {
 	out        bool
 	labels     []string
 	proj       map[int]string      // slot -> X of an `X::Assoc` there
+	projAssoc  map[int]string      // slot -> Assoc of an `X::Assoc` there
+	projAt     []*lnode            // the nodes of `X::Assoc` projections
 	occ        map[string][]*lnode // type parameter (or "Self") -> its nodes
 	full       bool                // every slot is labeled
 	// assoc: the associated types the impl defines (`Self::Item` is
@@ -47,6 +49,8 @@ func newLabeler(params map[string]bool, selfAst ast.Type) *labeler {
 func (w *labeler) label(a ast.Type, l *layout) {
 	w.labels = make([]string, l.n())
 	w.proj = map[int]string{}
+	w.projAssoc = map[int]string{}
+	w.projAt = nil
 	w.occ = map[string][]*lnode{}
 	if !l.flat {
 		w.walk(a, l.root, 0)
@@ -135,6 +139,18 @@ func (w *labeler) walk(a ast.Type, n *lnode, nest int) {
 		}
 		return
 	case *ast.PathType:
+		if x.QSelf != nil && w.projAssoc != nil && x.Path != nil && x.QSelf.Position >= 1 && len(x.Path.Segments) == x.QSelf.Position+1 {
+			// <I::Item as IntoIterator>::Item (recorded for items.go)
+			tseg, aseg := x.Path.Segments[x.QSelf.Position-1], x.Path.Segments[x.QSelf.Position]
+			if k := projKeyOf(x.QSelf.Ty, w.params); k != "" && aseg.Args == nil && isIterTraitName(tseg.Ident.Name) {
+				w.projAt = append(w.projAt, n)
+				for j := n.start; j < n.end; j++ {
+					w.proj[j] = k
+					w.projAssoc[j] = aseg.Ident.Name
+				}
+			}
+			return
+		}
 		if x.QSelf != nil || x.Path == nil || len(x.Path.Segments) == 0 {
 			return
 		}
@@ -161,8 +177,14 @@ func (w *labeler) walk(a ast.Type, n *lnode, nest int) {
 		}
 		if len(segs) >= 2 && (w.params[first] || first == "Self") {
 			// X::Assoc: built from what X holds
+			if w.projAssoc != nil && len(segs) == 2 && segs[1].Args == nil {
+				w.projAt = append(w.projAt, n)
+			}
 			for k := n.start; k < n.end; k++ {
 				w.proj[k] = first
+				if w.projAssoc != nil && len(segs) == 2 && segs[1].Args == nil {
+					w.projAssoc[k] = segs[1].Ident.Name
+				}
 			}
 			return
 		}

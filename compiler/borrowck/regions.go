@@ -187,7 +187,7 @@ func fnRegions(d *Def) *sigRegions {
 	if d == nil || d.Fn == nil || d.Fn.Ast == nil || d.Fn.Ast.Decl == nil {
 		return nil
 	}
-	decl := d.Fn.Ast.Decl
+	decl := sigDecl(d)
 	r := &sigRegions{outlive: map[string]map[string]bool{}, names: map[string]string{}}
 	params := map[string]bool{"Self": true}
 	genericNames(d.Fn.Ast.Generics, params)

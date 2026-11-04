@@ -247,7 +247,7 @@ func (b *builder) sigFlow(c *typeck.Callee, nargs int, ret Ty, argTys []Ty) *Flo
 	if d == nil || d.Fn == nil || d.Fn.Ast == nil || d.Fn.Ast.Decl == nil {
 		return &Flow{All: true}
 	}
-	decl := d.Fn.Ast.Decl
+	decl := sigDecl(d)
 	params := map[string]bool{"Self": true}
 	genericNames(d.Fn.Ast.Generics, params)
 	var selfTy ast.Type
@@ -635,6 +635,9 @@ type loanChecker struct {
 	retLoans   bitset
 	retLive    []bitset
 	onRetStore func(st *lstate)
+	// onCapStore (closure summaries): a value stored into a place behind
+	// the capture (upvar local) up: the loans it holds
+	onCapStore func(up LocalID, v bitset)
 	// originOf: the pseudo-loan of each universal region by name
 	originOf map[string]int
 }
@@ -839,7 +842,14 @@ func (lc *loanChecker) placeInfo(p Place) *placeInfo {
 	ty := lc.body.Locals[p.Local].Ty
 	cur := lc.localLayout(p.Local)
 	m := rangeMap(0, cur.n())
-	for _, pr := range p.Proj {
+	projs := p.Proj
+	if ld := lc.body.Locals[p.Local]; ld.Kind == LUpvar && !ld.UpvarByRef && (lc.body.ClosureKind == 0 || lc.body.ClosureKind == 1) && projs[0].Kind == PDeref {
+		// a by-value capture of an Fn/FnMut closure is reached through
+		// the closure's self (see upvarPlace): that deref is the
+		// captured value itself
+		projs = projs[1:]
+	}
+	for _, pr := range projs {
 		if pr.Kind == PDeref && (pr.Deref == DRaw || pr.Deref == DRawMut) {
 			pi := &placeInfo{raw: true, lay: flatLayout}
 			lc.placeInfos[k] = pi
@@ -1295,6 +1305,11 @@ type closSummary struct {
 	// tracked), or the closure declares its return type (which may
 	// shorten lifetimes)
 	imprecise bool
+	// capStores: {i, j, k}: the body stores into what capture i mutably
+	// borrows (or a reference it captured points to) values holding the
+	// loans of slot k of capture j's operand (k = -1: any of its slots):
+	// `|| o = Some(&s)`
+	capStores [][3]int
 }
 
 // fromArgs reports whether any result slot holds parameter regions.
@@ -1436,6 +1451,70 @@ func summarizeClosure(tcx *typeck.Tcx, t Ty, body *Body) {
 	rl := lc.localLayout(0)
 	sm := &closSummary{ret: rl, fromArg: make([][][2]int, rl.n()), caps: make([]bool, rl.n()), capSlots: make([][]int, rl.n()), capVague: make([]bool, rl.n()), params: params}
 	sm.imprecise = writesThroughCaptures(body)
+	if mutCaptures(body) {
+		// which captures the stored values come from
+		upIdx := map[LocalID]int{}
+		for i, ld := range body.Locals {
+			if ld.Kind == LUpvar {
+				upIdx[LocalID(i)] = len(upIdx)
+			}
+		}
+		kidOf := func(slot int) int {
+			if !structured {
+				return -1
+			}
+			for j, k := range cl.root.kids {
+				if slot >= k.start && slot < k.end {
+					return j
+				}
+			}
+			return -1
+		}
+		seen := map[[3]int]bool{}
+		addStore := func(i, j, k int) {
+			if x := [3]int{i, j, k}; i != j && !seen[x] {
+				seen[x] = true
+				sm.capStores = append(sm.capStores, x)
+			}
+		}
+		lc.onCapStore = func(up LocalID, v bitset) {
+			if debugLoans {
+				fmt.Fprintf(os.Stderr, "borrowck: capture store into _%d: %v\n", up, v)
+			}
+			i, ok := upIdx[up]
+			if !ok {
+				return
+			}
+			for li := 0; li < lc.nLoans; li++ {
+				if !v.has(li) {
+					continue
+				}
+				ln := lc.loans[li]
+				if d, ok := capAt[li]; ok {
+					// what the capture's operand holds in that slot
+					if j := kidOf(d); j >= 0 {
+						addStore(i, j, d-cl.root.kids[j].start)
+						continue
+					}
+				}
+				switch {
+				case ln.origin == "" && ln.place.Local >= 0 && body.Locals[ln.place.Local].Kind == LUpvar:
+					// a borrow of (in) the captured place
+					addStore(i, upIdx[ln.place.Local], -1)
+				case ln.origin == "'cap":
+					for j := 0; j < nUp; j++ {
+						addStore(i, j, -1)
+					}
+				}
+			}
+		}
+		for bi := range body.Blocks {
+			if in[bi] != nil {
+				lc.runBlock(bi, in[bi], false)
+			}
+		}
+		lc.onCapStore = nil
+	}
 	for bi, bl := range body.Blocks {
 		if bl.Term.Kind != TReturn || in[bi] == nil {
 			continue
@@ -1469,35 +1548,14 @@ func summarizeClosure(tcx *typeck.Tcx, t Ty, body *Body) {
 	}
 	closSummaries[t] = sm
 	if debugLoans {
-		fmt.Fprintf(os.Stderr, "borrowck: closure %s summary fromArg=%v caps=%v capSlots=%v vague=%v\n", t, sm.fromArg, sm.caps, sm.capSlots, sm.capVague)
+		fmt.Fprintf(os.Stderr, "borrowck: closure %s summary fromArg=%v caps=%v capSlots=%v vague=%v capStores=%v\n", t, sm.fromArg, sm.caps, sm.capSlots, sm.capVague, sm.capStores)
 	}
 }
 
 // writesThroughCaptures reports whether a closure body assigns to or
 // mutably borrows a place behind a reference it captured.
 func writesThroughCaptures(body *Body) bool {
-	behind := func(p Place) bool {
-		if p.Local < 0 || int(p.Local) >= len(body.Locals) || body.Locals[p.Local].Kind != LUpvar {
-			return false
-		}
-		ld := body.Locals[p.Local]
-		n := 0
-		for _, pr := range p.Proj {
-			if pr.Kind == PDeref {
-				n++
-			}
-		}
-		// the first deref of a by-value capture in an Fn/FnMut body
-		// reaches the captured value itself (see upvarPlace)
-		if !ld.UpvarByRef && (body.ClosureKind == 0 || body.ClosureKind == 1) {
-			n--
-		}
-		// a by-ref capture: its first deref reaches the captured place
-		if ld.UpvarByRef {
-			n--
-		}
-		return n > 0
-	}
+	behind := func(p Place) bool { return captureBehind(body, p) }
 	for _, bl := range body.Blocks {
 		for _, s := range bl.Stmts {
 			if s.Kind != SAssign {
@@ -1752,6 +1810,11 @@ func (lc *loanChecker) transferStmt(st *lstate, bi, si int, s Stmt) {
 			}
 		case RAggregate:
 			v = lc.aggVal(st, s)
+			if t := lc.body.Locals[s.Place.Local].Ty; len(s.Place.Proj) == 0 && t != nil && t.Kind == TClosure {
+				if sm := closSummaries[t]; sm != nil && len(sm.capStores) > 0 {
+					lc.applyCapStores(st, s.Rv.Ops, sm.capStores, t)
+				}
+			}
 		case RRef:
 			li := -1
 			if x, ok := lc.loanAt[[2]int{bi, si}]; ok {
@@ -1763,6 +1826,13 @@ func (lc *loanChecker) transferStmt(st *lstate, bi, si int, s Stmt) {
 		}
 		if len(s.Place.Proj) == 0 {
 			lc.killDerefLoans(st, s.Place.Local, v)
+		}
+		if lc.onCapStore != nil && captureOuter(lc.body, s.Place) {
+			all := newBitset(lc.nLoans)
+			for _, x := range v.s {
+				all.union(x)
+			}
+			lc.onCapStore(s.Place.Local, all)
 		}
 		lc.store(st, s.Place, v)
 	case SStorageDead:
@@ -1940,6 +2010,21 @@ func (lc *loanChecker) transferTerm(st *lstate, t Term) {
 				continue
 			}
 			src := lc.depthView(args[e.Src])
+			if lc.onCapStore != nil {
+				// a store through a reborrow of a capture's referent
+				all := newBitset(lc.nLoans)
+				for d := e.SrcDepth; d < len(src); d++ {
+					all.union(src[d])
+				}
+				dv := lc.depthView(args[e.Dst])
+				for li := 0; li < lc.nLoans; li++ {
+					if len(dv) > 0 && dv[0].has(li) && lc.loans[li].origin == "" {
+						if p := lc.loans[li].place; captureOuter(lc.body, p) {
+							lc.onCapStore(p.Local, all)
+						}
+					}
+				}
+			}
 			// the places the `&mut` argument borrows receive the loans
 			// (through a map entry, the map it borrows too)
 			places := lc.borrowedPlaces(args[e.Dst])
@@ -2289,6 +2374,9 @@ func (lc *loanChecker) checkParamStores(st *lstate, t Term) {
 				if any {
 					break
 				}
+				if lc.localLoanStored(src[e.SrcDepth+kk]) {
+					return
+				}
 				for oi := 0; oi < lc.nLoans; oi++ {
 					if src[e.SrcDepth+kk].has(oi) && lc.loans[oi].origin != "" && !lc.regions.originOK(lc.loans[oi].origin, set) {
 						lc.regionError(lc.loans[oi].origin, t.Span)
@@ -2374,12 +2462,42 @@ func (lc *loanChecker) checkParamStoreSlots(p Place, pi, k int, e IntoEdge, fl *
 		if any || !found {
 			continue
 		}
+		if lc.localLoanStored(src[e.SrcDepth+kk]) {
+			return true
+		}
 		for oi := 0; oi < lc.nLoans; oi++ {
 			if src[e.SrcDepth+kk].has(oi) && lc.loans[oi].origin != "" && !lc.regions.originOK(lc.loans[oi].origin, set) {
 				lc.regionError(lc.loans[oi].origin, sp)
 				return true
 			}
 		}
+	}
+	return false
+}
+
+// localLoanStored reports (E0597, E0716 for temporaries) a loan of a
+// local of the body in src, stored into the referent of a parameter
+// where the signature declares a lifetime: those outlive the body
+// (`v.push(&s)` with v: &mut Vec<&'a str>). Loans of places behind
+// references (reborrows) and of captures are left to the regions.
+func (lc *loanChecker) localLoanStored(src bitset) bool {
+	for li := 0; li < lc.nLoans; li++ {
+		if !src.has(li) {
+			continue
+		}
+		ln := lc.loans[li]
+		if ln.origin != "" || ln.place.Local < 0 || int(ln.place.Local) >= len(lc.body.Locals) || placeThroughRef(ln.place) {
+			continue
+		}
+		switch lc.body.Locals[ln.place.Local].Kind {
+		case LVar, LArg:
+			lc.errorf(ln.span, "E0597", "`%s` does not live long enough", lc.describe(Place{Local: ln.place.Local}))
+		case LTemp:
+			lc.errorf(ln.span, "E0716", "temporary value dropped while borrowed")
+		default:
+			continue
+		}
+		return true
 	}
 	return false
 }
@@ -2594,4 +2712,96 @@ func isInteriorMut(t ast.Type) bool {
 		return true
 	}
 	return false
+}
+
+// applyCapStores: the places captures borrow mutably receive what the
+// closure stores into them from its other captures (at the closure's
+// creation: rustc relates the regions in the closure's type).
+func (lc *loanChecker) applyCapStores(st *lstate, ops []Operand, stores [][3]int, t Ty) {
+	cl := layoutOf(t)
+	for _, cs := range stores {
+		i, j, k := cs[0], cs[1], cs[2]
+		if i >= len(ops) || j >= len(ops) || ops[j].Kind == OConst {
+			continue
+		}
+		src := newBitset(lc.nLoans)
+		ov := lc.opVal(st, ops[j])
+		if k >= 0 && !ov.lay.flat && !cl.flat && j < len(cl.root.kids) && cl.root.kids[j].end-cl.root.kids[j].start == len(ov.s) && k < len(ov.s) {
+			src.union(ov.s[k])
+		} else {
+			for _, x := range ov.s {
+				src.union(x)
+			}
+		}
+		for _, p := range lc.borrowedPlaces(lc.opVal(st, ops[i])) {
+			if !carriesBorrows(lc.body.Locals[p.Local].Ty) {
+				continue
+			}
+			pi := lc.placeInfo(p)
+			if pi.raw {
+				continue
+			}
+			for _, rs := range pi.m {
+				for _, r := range rs {
+					lc.or(st, skey(p.Local, r), src)
+				}
+			}
+		}
+	}
+}
+
+// captureOuter reports whether place p of a closure body is outside the
+// closure: in a place a capture borrows (or behind a reference captured
+// by value).
+func captureOuter(body *Body, p Place) bool {
+	if p.Local < 0 || int(p.Local) >= len(body.Locals) || body.Locals[p.Local].Kind != LUpvar {
+		return false
+	}
+	ld := body.Locals[p.Local]
+	n := 0
+	for _, pr := range p.Proj {
+		if pr.Kind == PDeref {
+			n++
+		}
+	}
+	if !ld.UpvarByRef && (body.ClosureKind == 0 || body.ClosureKind == 1) {
+		n--
+	}
+	return n > 0
+}
+
+// mutCaptures reports whether a closure body has a capture through which
+// it may write outside (a `&mut`).
+func mutCaptures(body *Body) bool {
+	for _, ld := range body.Locals {
+		if ld.Kind == LUpvar && ld.Ty != nil && ld.Ty.Kind == TRef && ld.Ty.Mut {
+			return true
+		}
+	}
+	return false
+}
+
+// captureBehind reports whether place p of a closure body is behind a
+// reference the closure captured (in what the capture borrows).
+func captureBehind(body *Body, p Place) bool {
+	if p.Local < 0 || int(p.Local) >= len(body.Locals) || body.Locals[p.Local].Kind != LUpvar {
+		return false
+	}
+	ld := body.Locals[p.Local]
+	n := 0
+	for _, pr := range p.Proj {
+		if pr.Kind == PDeref {
+			n++
+		}
+	}
+	// the first deref of a by-value capture in an Fn/FnMut body
+	// reaches the captured value itself (see upvarPlace)
+	if !ld.UpvarByRef && (body.ClosureKind == 0 || body.ClosureKind == 1) {
+		n--
+	}
+	// a by-ref capture: its first deref reaches the captured place
+	if ld.UpvarByRef {
+		n--
+	}
+	return n > 0
 }

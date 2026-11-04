@@ -19,7 +19,7 @@ func (b *builder) declaredFnSig(p Place) (inputs []ast.Type, output ast.Type, hr
 	if ld.Kind != LArg || d == nil || d.Fn == nil || d.Fn.Ast == nil || d.Fn.Ast.Decl == nil || pi >= len(b.r.Params) || ld.User != b.r.Params[pi] {
 		return
 	}
-	decl := d.Fn.Ast.Decl
+	decl := sigDecl(d)
 	var selfAst ast.Type
 	if par := d.Parent; par != nil && par.Item != nil {
 		if im, isImpl := par.Item.Kind.(*ast.ImplItem); isImpl {
