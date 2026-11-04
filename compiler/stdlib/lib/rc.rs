@@ -104,19 +104,6 @@ impl<T> Rc<T> {
         Rc::try_unwrap(this).ok()
     }
 
-    /// Consumes the `Rc`, returning the wrapped pointer.
-    pub fn into_raw(this: Self) -> *const T {
-        let p = Rc::as_ptr(&this);
-        mem::forget(this);
-        p
-    }
-
-    /// Constructs an `Rc<T>` from a raw pointer obtained from `Rc::into_raw`.
-    pub unsafe fn from_raw(ptr: *const T) -> Self {
-        let base = mem::align_of::<RcBox<T>>() as *const RcBox<T>;
-        let offset = (&(*base).value as *const T as usize) - (base as usize);
-        Rc { ptr: ((ptr as usize) - offset) as *mut RcBox<T> }
-    }
 }
 
 impl<T: Clone> Rc<T> {
@@ -146,6 +133,21 @@ impl<T: Clone> Rc<T> {
 }
 
 impl<T: ?Sized> Rc<T> {
+    /// Consumes the `Rc`, returning the wrapped pointer.
+    pub fn into_raw(this: Self) -> *const T {
+        let p = Rc::as_ptr(&this);
+        mem::forget(this);
+        p
+    }
+
+    /// Constructs an `Rc<T>` from a raw pointer obtained from `Rc::into_raw`.
+    pub unsafe fn from_raw(ptr: *const T) -> Self {
+        // same address and metadata as `ptr`: only used to find the
+        // offset of `value` (which depends on T's alignment)
+        let fake = ptr as *const RcBox<T>;
+        let offset = (&raw const (*fake).value as *const u8 as usize) - (fake as *const u8 as usize);
+        Rc { ptr: fake.byte_sub(offset) as *mut RcBox<T> }
+    }
     #[inline]
     fn inner(&self) -> &RcBox<T> {
         unsafe { &*self.ptr }
@@ -177,10 +179,7 @@ impl<T: ?Sized> Rc<T> {
     }
 
     /// Increments the strong reference count on the `Rc<T>` associated with the provided pointer by one.
-    pub unsafe fn increment_strong_count(ptr: *const T)
-    where
-        T: Sized,
-    {
+    pub unsafe fn increment_strong_count(ptr: *const T) {
         let rc = mem::ManuallyDrop::new(Rc::<T>::from_raw(ptr));
         let s = rc.inner().strong.get();
         rc.inner().strong.set(s + 1);
@@ -550,7 +549,7 @@ impl Rc<dyn crate::any::Any> {
     }
 }
 
-impl<T> Rc<T> {
+impl<T: ?Sized> Rc<T> {
     /// Decrements the strong reference count on the `Rc<T>` associated with the provided pointer by one.
     pub unsafe fn decrement_strong_count(ptr: *const T) {
         drop(Rc::<T>::from_raw(ptr));

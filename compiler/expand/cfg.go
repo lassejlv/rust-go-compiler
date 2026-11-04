@@ -30,6 +30,8 @@ var cfgValues = map[string]map[string]bool{
 	"target_vendor":        {"unknown": true},
 	"panic":                {"abort": true},
 	"target_has_atomic":    {"8": true, "16": true, "32": true, "64": true, "ptr": true},
+	// the x86_64 baseline
+	"target_feature": {"fxsr": true, "sse": true, "sse2": true},
 }
 
 // Per-crate configuration (set by Expander.ExpandCrate from the crate

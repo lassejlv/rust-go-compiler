@@ -219,6 +219,54 @@ pub fn hash<T: ?Sized, S: Hasher>(hashee: *const T, into: &mut S) {
 // Inherent methods on raw pointers
 
 impl<T: ?Sized> *const T {
+
+    /// Adds a signed offset in bytes using wrapping arithmetic.
+    #[inline]
+    pub fn wrapping_byte_offset(self, count: isize) -> *const T {
+        self.with_addr((self as *const u8 as usize).wrapping_add(count as usize))
+    }
+
+    /// Adds an unsigned offset in bytes using wrapping arithmetic.
+    #[inline]
+    pub fn wrapping_byte_add(self, count: usize) -> *const T {
+        self.with_addr((self as *const u8 as usize).wrapping_add(count))
+    }
+
+    /// Subtracts an unsigned offset in bytes using wrapping arithmetic.
+    #[inline]
+    pub fn wrapping_byte_sub(self, count: usize) -> *const T {
+        self.with_addr((self as *const u8 as usize).wrapping_sub(count))
+    }
+
+    /// Adds an unsigned offset in bytes to a pointer.
+    #[inline]
+    pub unsafe fn byte_add(self, count: usize) -> *const T {
+        self.with_addr((self as *const u8 as usize) + count)
+    }
+
+    /// Subtracts an unsigned offset in bytes from a pointer.
+    #[inline]
+    pub unsafe fn byte_sub(self, count: usize) -> *const T {
+        self.with_addr((self as *const u8 as usize) - count)
+    }
+
+    /// Adds a signed offset in bytes to a pointer.
+    #[inline]
+    pub unsafe fn byte_offset(self, count: isize) -> *const T {
+        self.with_addr((self as *const u8 as usize).wrapping_add(count as usize))
+    }
+
+    /// Creates a new pointer with the given address (and `self`'s metadata).
+    #[inline]
+    pub fn with_addr(self, addr: usize) -> *const T {
+        intrinsics::ptr_with_addr(self, addr)
+    }
+
+    /// Creates a new pointer by mapping `self`'s address to a new one.
+    #[inline]
+    pub fn map_addr(self, f: impl FnOnce(usize) -> usize) -> *const T {
+        self.with_addr(f(self as *const u8 as usize))
+    }
     /// Returns `true` if the pointer is null.
     #[inline]
     pub fn is_null(self) -> bool {
@@ -292,42 +340,6 @@ impl<T> *const T {
         (self as usize).wrapping_add((count as usize).wrapping_mul(crate::mem::size_of::<T>())) as *const T
     }
 
-    /// Adds a signed offset in bytes using wrapping arithmetic.
-    #[inline]
-    pub fn wrapping_byte_offset(self, count: isize) -> *const T {
-        (self as usize).wrapping_add(count as usize) as *const T
-    }
-
-    /// Adds an unsigned offset in bytes using wrapping arithmetic.
-    #[inline]
-    pub fn wrapping_byte_add(self, count: usize) -> *const T {
-        (self as usize).wrapping_add(count) as *const T
-    }
-
-    /// Subtracts an unsigned offset in bytes using wrapping arithmetic.
-    #[inline]
-    pub fn wrapping_byte_sub(self, count: usize) -> *const T {
-        (self as usize).wrapping_sub(count) as *const T
-    }
-
-    /// Adds an unsigned offset in bytes to a pointer.
-    #[inline]
-    pub unsafe fn byte_add(self, count: usize) -> *const T {
-        (self as *const u8).add(count) as *const T
-    }
-
-    /// Subtracts an unsigned offset in bytes from a pointer.
-    #[inline]
-    pub unsafe fn byte_sub(self, count: usize) -> *const T {
-        (self as *const u8).sub(count) as *const T
-    }
-
-    /// Adds a signed offset in bytes to a pointer.
-    #[inline]
-    pub unsafe fn byte_offset(self, count: isize) -> *const T {
-        (self as *const u8).offset(count) as *const T
-    }
-
     /// Calculates the distance between two pointers in bytes.
     #[inline]
     pub unsafe fn byte_offset_from<U>(self, origin: *const U) -> isize {
@@ -344,18 +356,6 @@ impl<T> *const T {
     #[inline]
     pub unsafe fn sub_ptr(self, origin: *const T) -> usize {
         intrinsics::ptr_diff(self as *const T, origin) as usize
-    }
-
-    /// Creates a new pointer with the given address.
-    #[inline]
-    pub fn with_addr(self, addr: usize) -> *const T {
-        addr as *const T
-    }
-
-    /// Creates a new pointer by mapping `self`'s address to a new one.
-    #[inline]
-    pub fn map_addr(self, f: impl FnOnce(usize) -> usize) -> *const T {
-        f(self as usize) as *const T
     }
 
     /// Exposes the "provenance" part of the pointer and returns the "address" portion.
@@ -435,6 +435,54 @@ impl<T> *const T {
 }
 
 impl<T: ?Sized> *mut T {
+
+    /// Adds a signed offset in bytes using wrapping arithmetic.
+    #[inline]
+    pub fn wrapping_byte_offset(self, count: isize) -> *mut T {
+        self.with_addr((self as *const u8 as usize).wrapping_add(count as usize))
+    }
+
+    /// Adds an unsigned offset in bytes using wrapping arithmetic.
+    #[inline]
+    pub fn wrapping_byte_add(self, count: usize) -> *mut T {
+        self.with_addr((self as *const u8 as usize).wrapping_add(count))
+    }
+
+    /// Subtracts an unsigned offset in bytes using wrapping arithmetic.
+    #[inline]
+    pub fn wrapping_byte_sub(self, count: usize) -> *mut T {
+        self.with_addr((self as *const u8 as usize).wrapping_sub(count))
+    }
+
+    /// Adds an unsigned offset in bytes to a pointer.
+    #[inline]
+    pub unsafe fn byte_add(self, count: usize) -> *mut T {
+        self.with_addr((self as *const u8 as usize) + count)
+    }
+
+    /// Subtracts an unsigned offset in bytes from a pointer.
+    #[inline]
+    pub unsafe fn byte_sub(self, count: usize) -> *mut T {
+        self.with_addr((self as *const u8 as usize) - count)
+    }
+
+    /// Adds a signed offset in bytes to a pointer.
+    #[inline]
+    pub unsafe fn byte_offset(self, count: isize) -> *mut T {
+        self.with_addr((self as *const u8 as usize).wrapping_add(count as usize))
+    }
+
+    /// Creates a new pointer with the given address (and `self`'s metadata).
+    #[inline]
+    pub fn with_addr(self, addr: usize) -> *mut T {
+        intrinsics::ptr_with_addr_mut(self, addr)
+    }
+
+    /// Creates a new pointer by mapping `self`'s address to a new one.
+    #[inline]
+    pub fn map_addr(self, f: impl FnOnce(usize) -> usize) -> *mut T {
+        self.with_addr(f(self as *const u8 as usize))
+    }
     /// Returns `true` if the pointer is null.
     #[inline]
     pub fn is_null(self) -> bool {
@@ -530,42 +578,6 @@ impl<T> *mut T {
         (self as usize).wrapping_add((count as usize).wrapping_mul(crate::mem::size_of::<T>())) as *mut T
     }
 
-    /// Adds a signed offset in bytes using wrapping arithmetic.
-    #[inline]
-    pub fn wrapping_byte_offset(self, count: isize) -> *mut T {
-        (self as usize).wrapping_add(count as usize) as *mut T
-    }
-
-    /// Adds an unsigned offset in bytes using wrapping arithmetic.
-    #[inline]
-    pub fn wrapping_byte_add(self, count: usize) -> *mut T {
-        (self as usize).wrapping_add(count) as *mut T
-    }
-
-    /// Subtracts an unsigned offset in bytes using wrapping arithmetic.
-    #[inline]
-    pub fn wrapping_byte_sub(self, count: usize) -> *mut T {
-        (self as usize).wrapping_sub(count) as *mut T
-    }
-
-    /// Adds an unsigned offset in bytes to a pointer.
-    #[inline]
-    pub unsafe fn byte_add(self, count: usize) -> *mut T {
-        (self as *mut u8).add(count) as *mut T
-    }
-
-    /// Subtracts an unsigned offset in bytes from a pointer.
-    #[inline]
-    pub unsafe fn byte_sub(self, count: usize) -> *mut T {
-        (self as *mut u8).sub(count) as *mut T
-    }
-
-    /// Adds a signed offset in bytes to a pointer.
-    #[inline]
-    pub unsafe fn byte_offset(self, count: isize) -> *mut T {
-        (self as *mut u8).offset(count) as *mut T
-    }
-
     /// Calculates the distance between two pointers in bytes.
     #[inline]
     pub unsafe fn byte_offset_from<U>(self, origin: *const U) -> isize {
@@ -582,18 +594,6 @@ impl<T> *mut T {
     #[inline]
     pub unsafe fn sub_ptr(self, origin: *const T) -> usize {
         intrinsics::ptr_diff(self as *const T, origin) as usize
-    }
-
-    /// Creates a new pointer with the given address.
-    #[inline]
-    pub fn with_addr(self, addr: usize) -> *mut T {
-        addr as *mut T
-    }
-
-    /// Creates a new pointer by mapping `self`'s address to a new one.
-    #[inline]
-    pub fn map_addr(self, f: impl FnOnce(usize) -> usize) -> *mut T {
-        f(self as usize) as *mut T
     }
 
     /// Exposes the "provenance" part of the pointer and returns the "address" portion.
@@ -848,13 +848,13 @@ impl<T> NonNull<T> {
     /// Adds an offset in bytes to a pointer.
     #[inline]
     pub unsafe fn byte_add(self, count: usize) -> Self {
-        NonNull { pointer: intrinsics::ptr_add(self.pointer as *const u8, count) as *const T }
+        NonNull { pointer: self.pointer.byte_add(count) }
     }
 
     /// Subtracts an offset in bytes from a pointer.
     #[inline]
     pub unsafe fn byte_sub(self, count: usize) -> Self {
-        NonNull { pointer: intrinsics::ptr_offset(self.pointer as *const u8, -(count as isize)) as *const T }
+        NonNull { pointer: self.pointer.byte_sub(count) }
     }
 
     /// Calculates the distance between two pointers (in units of `T`).

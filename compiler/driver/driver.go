@@ -263,6 +263,9 @@ func Frontend(opts *Options) (*typeck.Tcx, *Def, error) {
 // addMainWrapper adds an entry point that reports `Err` from a main
 // returning Result (like std's Termination impl). Returns the entry name.
 func addMainWrapper(c *ast.Crate) string {
+	if e := addNoMainEntry(c); e != "" {
+		return e
+	}
 	for _, it := range c.Items {
 		fn, ok := it.Kind.(*ast.FnItem)
 		if !ok || it.Name.Name != "main" || fn.Decl.Output == nil {
@@ -601,4 +604,49 @@ func loadStd(opts *Options) (*ast.Crate, error) {
 		return LoadCrateFS(os.DirFS(opts.StdDir), "lib.rs", opts.StdDir+"/")
 	}
 	return loadEmbeddedStd()
+}
+
+// addNoMainEntry handles a `#![no_main]` crate whose entry point is a
+// `#[no_mangle] extern "C" fn main([argc, argv]) -> c_int`: the function
+// keeps its Rust name (the runtime provides the C `main`) and is called by a
+// generated entry that exits with its result. Returns "" when the crate is
+// not of that shape.
+func addNoMainEntry(c *ast.Crate) string {
+	noMain := false
+	for _, a := range c.Attrs {
+		if a.Path == "no_main" {
+			noMain = true
+		}
+	}
+	if !noMain {
+		return ""
+	}
+	for _, it := range c.Items {
+		fn, ok := it.Kind.(*ast.FnItem)
+		if !ok || it.Name.Name != "main" {
+			continue
+		}
+		var attrs []*ast.Attr
+		for _, a := range it.Attrs {
+			if a.Path != "no_mangle" && a.Path != "unsafe(no_mangle)" {
+				attrs = append(attrs, a)
+			}
+		}
+		it.Attrs = attrs
+		call := "main()"
+		if len(fn.Decl.Params) == 2 {
+			call = "main(::std::process::__rg_argc() as _, ::std::process::__rg_argv() as _)"
+		}
+		src := "fn __rustgo_main() { let code = unsafe { " + call + " }; ::std::process::exit(code as i32) }"
+		if fn.Decl.Output == nil {
+			src = "fn __rustgo_main() { unsafe { " + call + " }; }"
+		}
+		wc, err := parser.ParseCrate(lexer.AddFile("<main-wrapper>", src), src)
+		if err != nil {
+			return ""
+		}
+		c.Items = append(c.Items, wc.Items...)
+		return "__rustgo_main"
+	}
+	return ""
 }

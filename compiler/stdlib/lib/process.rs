@@ -11,6 +11,12 @@ use crate::path::Path;
 use crate::sys;
 
 /// Terminates the current process with the specified exit code (stdout is flushed).
+/// `argc` / `argv` for the C `main` of a `#![no_main]` crate.
+#[doc(hidden)]
+pub fn __rg_argc() -> i32 { intrinsics::args_count() as i32 }
+#[doc(hidden)]
+pub fn __rg_argv() -> *const u8 { intrinsics::argv_ptr() }
+
 pub fn exit(code: i32) -> ! {
     unsafe {
         intrinsics::flush_stdout();

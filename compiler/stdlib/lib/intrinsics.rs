@@ -48,6 +48,9 @@ extern "rust-intrinsic" {
     pub fn ptr_add<T>(p: *const T, n: usize) -> *const T;
     pub fn ptr_add_mut<T>(p: *mut T, n: usize) -> *mut T;
     pub fn ptr_offset<T>(p: *const T, n: isize) -> *const T;
+    /// `p` with its address replaced by `addr` (keeping any metadata).
+    pub fn ptr_with_addr<T: ?Sized>(p: *const T, addr: usize) -> *const T;
+    pub fn ptr_with_addr_mut<T: ?Sized>(p: *mut T, addr: usize) -> *mut T;
     pub fn ptr_offset_mut<T>(p: *mut T, n: isize) -> *mut T;
     pub fn ptr_diff<T>(a: *const T, b: *const T) -> isize;
     pub fn slice_from_raw_parts<T>(p: *const T, len: usize) -> *const [T];
@@ -129,6 +132,8 @@ extern "rust-intrinsic" {
     pub fn args_count() -> usize;
     pub fn arg_ptr(i: usize) -> *const u8;
     pub fn arg_len(i: usize) -> usize;
+    /// The process's `argv` (a null-terminated array of C strings).
+    pub fn argv_ptr() -> *const u8;
     /// Returns a NUL-terminated value, or null when the variable is not set.
     pub fn env_get(name: *const u8, len: usize) -> *const u8;
     pub fn env_count() -> usize;

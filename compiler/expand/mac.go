@@ -309,7 +309,7 @@ func (e *Expander) expandStmtMac(mac *ast.MacCall, semi bool) ([]ast.Stmt, bool,
 	if err != nil {
 		return nil, user, err
 	}
-	if !user {
+	if !user && macName(mac) != "cfg_select" {
 		x, err := parseExprTokens(tts, mac)
 		if err != nil {
 			return nil, false, err
@@ -325,7 +325,7 @@ func (e *Expander) expandStmtMac(mac *ast.MacCall, semi bool) ([]ast.Stmt, bool,
 		}
 		return checkEOF(p, mac, "statement")
 	})
-	return stmts, true, wrapExpErr(err, mac)
+	return stmts, user, wrapExpErr(err, mac)
 }
 
 func (e *Expander) expandItemMac(mac *ast.MacCall) ([]*ast.Item, bool, error) {
@@ -336,7 +336,7 @@ func (e *Expander) expandItemMac(mac *ast.MacCall) ([]*ast.Item, bool, error) {
 	var err error
 	if def == nil && bi != nil {
 		switch name {
-		case "include":
+		case "include", "cfg_select":
 			// the file's items are spliced in at this position
 			if tts, err = bi(e, mac); err != nil {
 				return nil, false, err

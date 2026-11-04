@@ -116,6 +116,8 @@ func (t *Tcx) checkCast(r *Results, x *ast.CastExpr) {
 		t.ErrorCode(x.Span, "E0605", "non-primitive cast: `%s` as `%s`", from, to)
 	case to.Kind == TAdt || to.Kind == TTuple || to.Kind == TArray || to.Kind == TStr || to.Kind == TSlice:
 		t.ErrorCode(x.Span, "E0605", "non-primitive cast: `%s` as `%s`", from, to)
+	case from.Kind == TInt && to.Kind == TPtr && (fatPointee(to.Elem) || to.Elem.IsUnsized()):
+		t.ErrorCode(x.Span, "E0606", "cannot cast `%s` to a pointer that is wide", from)
 	case (from.Kind == TPtr || from.Kind == TRef) && to.Kind == TPtr && (to.Elem.Kind == TSlice || to.Elem.Kind == TStr) &&
 		!fatPointee(from.Elem) && from.Elem.Kind != TArray && !from.Elem.HasParam() && from.Elem.Kind != TAdt && from.Elem.Kind != TInfer:
 		// a thin pointer has no length/vtable to make a fat one of

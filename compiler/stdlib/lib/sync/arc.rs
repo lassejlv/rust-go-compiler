@@ -103,19 +103,6 @@ impl<T> Arc<T> {
         Arc::try_unwrap(this).ok()
     }
 
-    /// Consumes the `Arc`, returning the wrapped pointer.
-    pub fn into_raw(this: Self) -> *const T {
-        let p = Arc::as_ptr(&this);
-        mem::forget(this);
-        p
-    }
-
-    /// Constructs an `Arc<T>` from a raw pointer obtained from `Arc::into_raw`.
-    pub unsafe fn from_raw(ptr: *const T) -> Self {
-        let base = mem::align_of::<ArcInner<T>>() as *const ArcInner<T>;
-        let offset = (&(*base).value as *const T as usize) - (base as usize);
-        Arc { ptr: ((ptr as usize) - offset) as *mut ArcInner<T> }
-    }
 }
 
 impl<T: Clone> Arc<T> {
@@ -145,6 +132,21 @@ impl<T: Clone> Arc<T> {
 }
 
 impl<T: ?Sized> Arc<T> {
+    /// Consumes the `Arc`, returning the wrapped pointer.
+    pub fn into_raw(this: Self) -> *const T {
+        let p = Arc::as_ptr(&this);
+        mem::forget(this);
+        p
+    }
+
+    /// Constructs an `Arc<T>` from a raw pointer obtained from `Arc::into_raw`.
+    pub unsafe fn from_raw(ptr: *const T) -> Self {
+        // same address and metadata as `ptr`: only used to find the
+        // offset of `value` (which depends on T's alignment)
+        let fake = ptr as *const ArcInner<T>;
+        let offset = (&raw const (*fake).value as *const u8 as usize) - (fake as *const u8 as usize);
+        Arc { ptr: fake.byte_sub(offset) as *mut ArcInner<T> }
+    }
     #[inline]
     fn inner(&self) -> &ArcInner<T> {
         unsafe { &*self.ptr }
@@ -175,19 +177,13 @@ impl<T: ?Sized> Arc<T> {
     }
 
     /// Increments the strong reference count on the `Arc<T>` associated with the provided pointer by one.
-    pub unsafe fn increment_strong_count(ptr: *const T)
-    where
-        T: Sized,
-    {
+    pub unsafe fn increment_strong_count(ptr: *const T) {
         let rc = mem::ManuallyDrop::new(Arc::<T>::from_raw(ptr));
         rc.inner().strong.fetch_add(1, SeqCst);
     }
 
     /// Decrements the strong reference count on the `Arc<T>` associated with the provided pointer by one.
-    pub unsafe fn decrement_strong_count(ptr: *const T)
-    where
-        T: Sized,
-    {
+    pub unsafe fn decrement_strong_count(ptr: *const T) {
         drop(Arc::<T>::from_raw(ptr));
     }
 

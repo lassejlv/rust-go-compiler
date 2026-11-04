@@ -188,6 +188,11 @@ func (fc *fnGen) intrinsic(d *Def, args []Ty, v []string, ret Ty, sp ast.Span) s
 			return v[0]
 		}
 		return fmt.Sprintf("(%s + (int64_t)(%s))", v[0], v[1])
+	case "ptr_with_addr", "ptr_with_addr_mut":
+		if arg(0).IsUnsized() {
+			return fmt.Sprintf("((Fat){ (void*)(uintptr_t)(%s), (%s).meta })", v[1], v[0])
+		}
+		return fmt.Sprintf("((%s)(uintptr_t)(%s))", ct(ret), v[1])
 	case "ptr_diff":
 		if isZST(arg(0)) {
 			return "((int64_t)0)"
@@ -367,6 +372,8 @@ func (fc *fnGen) intrinsic(d *Def, args []Ty, v []string, ret Ty, sp ast.Span) s
 		return "((uint64_t)rg_argc)"
 	case "arg_ptr":
 		return fmt.Sprintf("((uint8_t*)rg_arg_ptr(%s))", v[0])
+	case "argv_ptr":
+		return "((uint8_t*)rg_argv)"
 	case "arg_len":
 		return fmt.Sprintf("rg_arg_len(%s)", v[0])
 	case "env_get":
