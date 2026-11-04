@@ -119,6 +119,7 @@ func (t *Tcx) checkBodyMisc(r *Results, def *Def) {
 	if !std && def != nil && def.Crate != nil && def.Crate.Local {
 		t.checkKnownPanics(r, def, root)
 		t.checkImplicitAutorefs(r, def, root)
+		t.checkCallLints(r, def, root)
 		t.checkParamStatic(r, def)
 	}
 	// locals must have a statically known size, and well-formed types

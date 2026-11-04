@@ -20,6 +20,12 @@ func (t *Tcx) checkConstContext(r *Results, def *Def) {
 	if t.isStd(def) || len(r.Inst.Args) != 0 {
 		return
 	}
+	t.checkConstBody(r, def)
+}
+
+// checkConstBody checks a constant context (also the polymorphic results of
+// a generic const fn).
+func (t *Tcx) checkConstBody(r *Results, def *Def) {
 	var root any
 	what := ""
 	switch {
@@ -35,12 +41,28 @@ func (t *Tcx) checkConstContext(r *Results, def *Def) {
 	default:
 		return
 	}
+	if def.Kind == DefConst || (def.Kind == DefStatic && def.Const != nil && !def.Const.Mut) {
+		// a `&mut` temporary would live for the whole program (E0764)
+		if re, ok := unparen(r.ConstExpr).(*ast.RefExpr); ok && re.Mut && !re.Raw {
+			t.ErrorCode(re.Span, "E0764", "mutable borrows of temporaries that have their lifetime extended until the end of the program are not allowed")
+		}
+	}
 	ast.Walk(root, func(n any) bool {
 		var c *Callee
 		var sp ast.Span
 		switch x := n.(type) {
 		case *ast.ItemStmt, *ast.ClosureExpr:
 			return false
+		case *ast.PathExpr:
+			// a constant cannot read a `static mut`
+			if vr := r.Paths[x.ID]; def.Kind == DefConst && vr != nil && vr.Kind == VStatic && vr.Def != nil && vr.Def.Const != nil && vr.Def.Const.Mut {
+				t.ErrorCode(x.Span, "E0080", "constant accesses mutable global memory")
+			}
+		case *ast.ForExpr:
+			// `for` calls the non-const IntoIterator/Iterator methods
+			t.ErrorCode(x.Span, "E0015", "cannot use `for` loop in %s", what)
+		case *ast.TryExpr:
+			t.ErrorCode(x.Span, "E0658", "`?` is not allowed in %s", what)
 		case *ast.CallExpr:
 			c, sp = r.Callees[x.ID], x.Span
 			if c != nil && c.Kind == CallFn && nonConstStdFn(c.Def) {

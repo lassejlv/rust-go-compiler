@@ -1,5 +1,5 @@
-//~ ERROR E0430
-// `self` may appear only once in an import list.
+//~ ERROR E0252
+// `self` imported twice in one list binds `fmt` twice.
 use std::fmt::{self, self, Display};
 
 struct S;

@@ -96,6 +96,71 @@ func (t *Tcx) checkGenericParams() {
 				t.Errorf(p.Name.Span, "`%s` %s", ct, what)
 			}
 		}
+		if d.Kind == DefFn && d.Fn != nil && d.Fn.Ast != nil && d.Fn.Ast.Body != nil && d.Crate != nil && d.Crate.Local && t.Generics(d).Count() > 0 {
+			// repeat counts and array lengths in a generic body (checked
+			// per instance otherwise)
+			t.Generics(d)
+			ac := t.itemConv(d)
+			ast.Walk(d.Fn.Ast.Body, func(n any) bool {
+				var e ast.Expr
+				switch x := n.(type) {
+				case *ast.ItemStmt:
+					return false
+				case *ast.RepeatExpr:
+					e = x.Count
+				case *ast.ArrayType:
+					e = x.Len
+				}
+				if e == nil || ac.gen == nil {
+					return true
+				}
+				inner := unparen(e)
+				if b, ok := inner.(*ast.BlockExpr); ok && b.Block != nil && len(b.Block.Stmts) == 1 {
+					if es, ok := b.Block.Stmts[0].(*ast.ExprStmt); ok && !es.Semi {
+						inner = unparen(es.Expr)
+					}
+				}
+				if pe, ok := inner.(*ast.PathExpr); ok && pe.QSelf == nil && len(pe.Path.Segments) == 1 {
+					return true // the parameter itself
+				}
+				if sp, found := ac.mentionsGenericParam(e); found {
+					t.Errorf(sp, "generic parameters may not be used in const operations")
+				}
+				return true
+			})
+		}
+		if (d.Kind == DefFn || d.Kind == DefImpl) && ga != nil && d.Crate != nil && d.Crate.Local {
+			for _, p := range ga.Params {
+				if (p.Kind == ast.GPType && p.Default != nil) || (p.Kind == ast.GPConst && p.ConstDefault != nil) {
+					t.Errorf(p.Name.Span, "defaults for generic parameters are not allowed here")
+				}
+			}
+		}
+		if fa, ok := d.Item.Kind.(*ast.FnItem); ok && fa.Body == nil && d.Kind == DefFn && d.Crate != nil && d.Crate.Local {
+			// patterns in parameters of functions without bodies
+			for _, p := range fa.Decl.Params {
+				switch x := p.Pat.(type) {
+				case *ast.IdentPat:
+					if x.Mut || x.ByRef || x.Sub != nil {
+						t.Errorf(p.Pat.GetSpan(), "patterns aren't allowed in functions without bodies")
+					}
+				case *ast.WildPat, nil:
+				default:
+					t.ErrorCode(p.Pat.GetSpan(), "E0642", "patterns aren't allowed in methods without bodies")
+				}
+			}
+		}
+		if d.Kind == DefUnion && d.Crate != nil && d.Crate.Local && d.Adt != nil {
+			// union fields are Copy, references or ManuallyDrop (E0740)
+			t.AdtFields(d)
+			for _, v := range d.Adt.Variants {
+				for _, f := range v.Fields {
+					if f.Ty != nil && !t.unionFieldOk(f.Ty) && f.Ast != nil {
+						t.ErrorCode(f.Ast.Span, "E0740", "field must implement `Copy` or be wrapped in `ManuallyDrop<...>` to be used in a union")
+					}
+				}
+			}
+		}
 		if en, ok := d.Item.Kind.(*ast.EnumItem); ok && d.Kind == DefEnum && d.Crate != nil && d.Crate.Local {
 			// enum variants and their fields are as visible as the enum
 			for _, v := range en.Variants {
@@ -532,4 +597,32 @@ func (t *Tcx) checkAttrTargets(d *Def) {
 			}
 		}
 	}
+	t.checkItemAttrs(d, isFn, isAdt, what)
+}
+
+// unionFieldOk reports whether a type may be a union field: Copy types,
+// references, ManuallyDrop, and tuples and arrays of those. Types with
+// parameters are not judged.
+func (t *Tcx) unionFieldOk(ty Ty) bool {
+	if ty.HasParam() || ty.HasError() || ty.HasProj() || ty.HasInfer() || ty.HasOpaque() {
+		return true
+	}
+	switch ty.Kind {
+	case TRef:
+		return true
+	case TTuple:
+		for _, e := range ty.Elems {
+			if !t.unionFieldOk(e) {
+				return false
+			}
+		}
+		return true
+	case TArray:
+		return t.unionFieldOk(ty.Elem)
+	case TAdt:
+		if ty.Def != nil && ty.Def.Name == "ManuallyDrop" && t.isStd(ty.Def) {
+			return true
+		}
+	}
+	return t.IsCopy(ty)
 }

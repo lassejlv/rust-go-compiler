@@ -456,13 +456,7 @@ func (r *Resolver) collectUse(t *ast.UseTree, prefix []string, global bool, m *M
 	case ast.UseGlob:
 		m.Imports = append(m.Imports, &Import{Module: m, Path: segs, Global: global, Glob: true, Span: t.Span, Vis: vis})
 	case ast.UseNested:
-		selves := 0
 		for _, n := range t.Nested {
-			if n.Kind == ast.UseSimple && n.Prefix != nil && len(n.Prefix.Segments) == 1 && n.Prefix.Segments[0].Ident.Name == "self" {
-				if selves++; selves == 2 {
-					r.Errors = append(r.Errors, fmt.Sprintf("%s: error[E0430]: `self` import can only appear once in an import list", n.Span.Lo))
-				}
-			}
 			r.collectUse(n, segs, global, m, vis)
 		}
 	}
@@ -906,6 +900,13 @@ func (r *Resolver) bindImport(m *Module, imp *Import, ns Namespace, res Res) {
 		return
 	}
 	if ok && old.Res == res {
+		// two single imports binding one name, even to the same item
+		// (`use std::io::Write;` twice), are E0252
+		if !imp.Glob && r.checkDupImports(m) && m.Crate.Local && !macroRes(res) {
+			if prev := r.bindingImport[old]; prev != nil && prev != imp && !prev.Glob && prev.Module == imp.Module {
+				r.reportDupImport(imp, "E0252", name)
+			}
+		}
 		return
 	}
 	if ok && !imp.Glob && r.checkDupImports(m) && !macroRes(res) && !macroRes(old.Res) {
@@ -969,9 +970,15 @@ func (r *Resolver) resolveModulePath(m *Module, segs []string, global bool, repo
 		cur = defRes(m.Normal.Def)
 		start = 1
 	case segs[0] == "super":
+		if atCrateRoot(m) {
+			return Res{}, false
+		}
 		pm := m.ParentModule()
 		start = 1
 		for start < len(segs) && segs[start] == "super" {
+			if atCrateRoot(pm) {
+				return Res{}, false
+			}
 			pm = pm.ParentModule()
 			start++
 		}
@@ -1123,9 +1130,15 @@ func (r *Resolver) resolvePath(m *Module, segs []string, global bool, ns Namespa
 		cur = defRes(m.Crate.Def)
 		i = 1
 	case segs[0] == "super":
+		if atCrateRoot(m) {
+			return PathResult{}, fmt.Errorf("too many leading `super` keywords within `crate` (E0433)")
+		}
 		pm := m.ParentModule()
 		i = 1
 		for i < len(segs) && segs[i] == "super" {
+			if atCrateRoot(pm) {
+				return PathResult{}, fmt.Errorf("too many leading `super` keywords within `crate` (E0433)")
+			}
 			pm = pm.ParentModule()
 			i++
 		}
@@ -1379,6 +1392,16 @@ func RestrictedModule(vis ast.Visibility, owner *Module) *Module {
 		cur = b.Res.Def.Mod
 	}
 	return cur
+}
+
+// atCrateRoot reports whether module m (a block module: its enclosing
+// normal module) is a crate root, which has no `super`.
+func atCrateRoot(m *Module) bool {
+	n := m.Normal
+	if n == nil {
+		n = m
+	}
+	return n.Parent == nil
 }
 
 // injectedStd reports whether a 2015 crate-root path `::name` refers to the

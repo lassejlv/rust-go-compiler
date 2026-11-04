@@ -68,3 +68,60 @@ func (t *Tcx) checkDiscRange(d *Def, k *ast.EnumItem) bool {
 	}
 	return true
 }
+
+// checkConstArgLit reports a literal const argument of the wrong type for
+// its parameter (`f::<1>()` for `const B: bool`, E0308).
+func (t *Tcx) checkConstArgLit(e ast.Expr, ty Ty) {
+	if ty == nil || (ty.Kind != TInt && ty.Kind != TBool && ty.Kind != TChar) {
+		return
+	}
+	x := unparen(e)
+	if b, ok := x.(*ast.BlockExpr); ok && b.Block != nil && len(b.Block.Stmts) == 1 && !b.Async && !b.Const {
+		if es, ok := b.Block.Stmts[0].(*ast.ExprStmt); ok && !es.Semi {
+			x = unparen(es.Expr)
+		}
+	}
+	neg := false
+	if u, ok := x.(*ast.UnaryExpr); ok && u.Op == ast.UnNeg {
+		x = unparen(u.X)
+		neg = true
+	}
+	lit, ok := x.(*ast.LitExpr)
+	if !ok {
+		return
+	}
+	var found string
+	switch lit.Kind {
+	case ast.LitInt:
+		if ty.Kind == TInt {
+			if lit.Suffix == "" || lit.Suffix == ty.IntKind().String() {
+				if neg && !ty.IntKind().Signed() {
+					t.ErrorCode(e.GetSpan(), "E0600", "cannot apply unary operator `-` to type `%s`", ty)
+				} else {
+					t.checkLitRange(lit, ty, neg)
+				}
+				return
+			}
+			found = "`" + lit.Suffix + "`"
+		} else {
+			found = "integer"
+		}
+	case ast.LitBool:
+		if ty.Kind == TBool {
+			return
+		}
+		found = "`bool`"
+	case ast.LitChar:
+		if ty.Kind == TChar {
+			return
+		}
+		found = "`char`"
+	case ast.LitStr:
+		found = "`&str`"
+	case ast.LitFloat:
+		found = "floating-point number"
+	default:
+		return
+	}
+	t.ErrorCode(lit.Span, "E0308", "mismatched types: expected `%s`, found %s", ty, found)
+}
