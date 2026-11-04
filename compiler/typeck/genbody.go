@@ -117,6 +117,47 @@ func (t *Tcx) CheckGenericBodies() {
 		}
 		errs := t.polyCheck(d)
 		if len(errs) == 0 {
+			if r := t.polyResults; r != nil {
+				// a body without errors: the deny-by-default lints
+				t.polyResults = nil
+				t.checkLints(r, d, d.Fn.Ast.Body)
+				ast.Walk(d.Fn.Ast.Body, func(n any) bool {
+					switch x := n.(type) {
+					case *ast.ItemStmt:
+						return false
+					case *ast.UnaryExpr:
+						t.checkNegUnsigned(r, x)
+					}
+					return true
+				})
+				// (`impl Trait` values of generic callees are not revealed
+				// in a polymorphic check: their regions are not known well
+				// enough to borrow-check the body)
+				opaque := false
+				for _, ty := range r.NodeTypes {
+					if ty != nil && ty.HasOpaque() {
+						opaque = true
+						break
+					}
+				}
+				for _, c := range r.Callees {
+					if opaque {
+						break
+					}
+					if c != nil && c.Def != nil && c.Def.Kind == DefFn && c.Def.Fn != nil {
+						if sig := t.FnSig(c.Def); sig != nil && sig.Output != nil && sig.Output.HasOpaque() {
+							opaque = true
+						}
+					}
+				}
+				if sig := t.FnSig(d); sig == nil || (sig.Output != nil && sig.Output.HasOpaque()) {
+					opaque = true
+				}
+				if !opaque {
+					r.PolyCopy = t.copyParams(d)
+					t.PolyClean = append(t.PolyClean, PolyBody{Def: d, Results: r})
+				}
+			}
 			continue
 		}
 		all := true
@@ -141,6 +182,37 @@ func (t *Tcx) CheckGenericBodies() {
 	}
 }
 
+// PolyBody is a generic function whose polymorphic check found no error,
+// with its results (borrow-checked when no instance was).
+type PolyBody struct {
+	Def     *Def
+	Results *Results
+}
+
+// copyParams returns the type parameters of def with a Copy bound (or a
+// bound with a Copy supertrait).
+func (t *Tcx) copyParams(def *Def) map[int]bool {
+	out := map[int]bool{}
+	copyTr := t.LangOpt("copy")
+	t.quietly(func() {
+		for _, p := range t.Generics(def).Predicates {
+			if p.Trait == nil || len(p.Trait.Args) == 0 || p.Maybe {
+				continue
+			}
+			a := p.Trait.Args[0]
+			if a.Kind != TParam {
+				continue
+			}
+			for _, st := range t.AllSupertraits(p.Trait) {
+				if st.Trait == copyTr {
+					out[a.Index] = true
+				}
+			}
+		}
+	})
+	return out
+}
+
 // polyCheck type checks def with its own parameters as types and returns
 // the errors found (a non-reportable one if the check crashed).
 func (t *Tcx) polyCheck(def *Def) (errs []polyErr) {
@@ -158,6 +230,14 @@ func (t *Tcx) polyCheck(def *Def) (errs []polyErr) {
 	fcx := t.newFnCtxt(def, t.Generics(def).Identity())
 	t.polyUnsizedSig(def, ps)
 	fcx.checkFn()
+	t.polyResults = nil
+	if len(ps.errs) == 0 && len(fcx.r.Closures) == 0 {
+		fcx.writeback()
+		if len(ps.errs) == 0 {
+			t.polyResults = fcx.r
+		}
+		return ps.errs
+	}
 	if fcx.r.Body != nil && len(fcx.r.Closures) > 0 && polyAllOk(ps.errs) {
 		// Send/Sync bounds need the closures' captures; errors of the
 		// capture analysis itself only stop this check
@@ -165,6 +245,9 @@ func (t *Tcx) polyCheck(def *Def) (errs []polyErr) {
 		fcx.writeback()
 		if len(ps.errs) == n {
 			fcx.polyAutoBounds(fcx.r.Body)
+			if len(ps.errs) == 0 {
+				t.polyResults = fcx.r
+			}
 		} else {
 			ps.errs = ps.errs[:n]
 		}
@@ -356,6 +439,11 @@ func (fcx *FnCtxt) polyNoItem(recv Ty, name string, assoc bool) {
 		what = "reference"
 	}
 	if !isTyParam(p) {
+		if !assoc && fcx.polyConcrete(r) {
+			// a receiver type without parameters: the lookup does not
+			// depend on the body's bounds
+			fcx.polyClassify("E0599", "no method named `%s` found for `%s` in the current scope", name, r)
+		}
 		return
 	}
 	for _, b := range fcx.paramBounds(p) {
@@ -479,13 +567,53 @@ func (fcx *FnCtxt) polyMismatch(expected, actual Ty) {
 		return
 	}
 	e, a := fcx.resolve(expected), fcx.resolve(actual)
-	if fcx.polyParamMismatch(e, a, 0) {
+	if fcx.polyParamMismatch(e, a, 0) || fcx.polyConcreteClash(e, a) {
 		fcx.polyClassify("E0308", "mismatched types: expected `%s`, found `%s`", e, a)
 		return
 	}
 	if fcx.unboundProj(e) || fcx.unboundProj(a) {
 		fcx.t.poly.next = &polyErr{ok: true} // (consequence)
 	}
+}
+
+// polyConcrete reports whether x is a fully known type without type
+// parameters, projections, inference variables, closures or trait objects.
+func (fcx *FnCtxt) polyConcrete(x Ty) bool {
+	x = fcx.resolve(x)
+	if x == nil || !fcx.rigidTy(x) || x.HasParam() || x.HasProj() || x.HasOpaque() || x.HasError() {
+		return false
+	}
+	return true
+}
+
+// polyConcreteClash reports whether e and a are types without type
+// parameters (nor projections, closures, trait objects, ...) with different
+// outermost constructors, which no coercion relates (`i32` against
+// `&str`): a mismatch that does not depend on the bounds of the body.
+func (fcx *FnCtxt) polyConcreteClash(e, a Ty) bool {
+	if !fcx.rigidTy(e) || !fcx.rigidTy(a) || e.HasParam() || a.HasParam() || e.HasProj() || a.HasProj() {
+		return false
+	}
+	class := func(x Ty) (TyKind, int) {
+		switch {
+		case x.Kind == TInfer && x.Sub == 1:
+			return TInt, -1
+		case x.Kind == TInfer && x.Sub == 2:
+			return TFloat, -1
+		case x.Kind == TInt || x.Kind == TFloat:
+			return x.Kind, int(x.Sub)
+		case x.Kind == TAdt:
+			return x.Kind, x.Def.ID
+		}
+		return x.Kind, -1
+	}
+	ek, es := class(e)
+	ak, as := class(a)
+	if ek != ak {
+		// (fn items coerce to fn pointers)
+		return !(ek == TFnPtr && ak == TFnDef)
+	}
+	return es != as && es != -1 && as != -1
 }
 
 // polyParamMismatch reports whether e and a certainly differ because of a

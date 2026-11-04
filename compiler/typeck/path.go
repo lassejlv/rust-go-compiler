@@ -81,6 +81,10 @@ func (fcx *FnCtxt) resolveValuePath(qself *ast.QSelf, p *ast.Path, sp lexer.Span
 	}
 	pr, err := fcx.resolvePath(p, ValueNS)
 	if err != nil {
+		if fcx.inPoly() && len(segs) == 1 && qself == nil {
+			// an unresolved name does not depend on the body's bounds
+			fcx.polyClassify("E0425", "cannot find value `%s` in this scope", segs[0].Ident.Name)
+		}
 		fcx.errorf(sp, "%v", err)
 		return nil, TyErr
 	}
@@ -509,6 +513,9 @@ func (fcx *FnCtxt) checkCall(x *ast.CallExpr, expected Ty) Ty {
 			if ins, out, ok := fcx.paramFnSig(t); ok {
 				fcx.addAdjust(x.Fn, adjustmentsFor(steps, i)...)
 				fcx.checkArgs(x.Args, ins, false, x.Span)
+				// (for the borrow check of the generic body: a call
+				// through the parameter's Fn* bound)
+				fcx.r.Callees[x.ID] = &Callee{Kind: CallClosure, Ty: t}
 				return out
 			}
 		case TInfer:
@@ -540,6 +547,9 @@ func (fcx *FnCtxt) checkArgs(args []ast.Expr, ins []Ty, variadic bool, sp lexer.
 	fcx.argHints = hints
 	defer func() { fcx.argHints = saved }()
 	if len(args) != len(ins) && !(variadic && len(args) >= len(ins)) {
+		if fcx.inPoly() {
+			fcx.polyClassify("E0061", "this function takes %d argument%s but %d argument%s supplied", len(ins), plural(len(ins)), len(args), map[bool]string{true: " was", false: "s were"}[len(args) == 1])
+		}
 		fcx.errorf(sp, "this function takes %d arguments but %d were supplied", len(ins), len(args))
 	}
 	for pass := 0; pass < 2; pass++ {
@@ -718,6 +728,9 @@ func (fcx *FnCtxt) checkStructExpr(x *ast.StructExpr, expected Ty) Ty {
 		}
 	}
 	fcx.r.Variants[x.ID] = v
+	if isUnion(adt) && len(x.Fields) != 1 {
+		fcx.t.ErrorCode(x.Span, "E0784", "union expressions should have exactly one field")
+	}
 	seen := map[string]bool{}
 	for _, f := range x.Fields {
 		fi := v.FieldIndex(f.Name.Name)
@@ -725,6 +738,9 @@ func (fcx *FnCtxt) checkStructExpr(x *ast.StructExpr, expected Ty) Ty {
 			fcx.errorf(f.Name.Span, "struct `%s` has no field named `%s`", v.Name, f.Name.Name)
 			fcx.checkExpr(f.Expr, nil)
 			continue
+		}
+		if seen[f.Name.Name] {
+			fcx.t.ErrorCode(f.Name.Span, "E0062", "field `%s` specified more than once", f.Name.Name)
 		}
 		seen[f.Name.Name] = true
 		fcx.checkFieldPrivacy(f.Name, adt, v.Fields[fi], v)

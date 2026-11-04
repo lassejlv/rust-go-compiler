@@ -186,7 +186,11 @@ const (
 
 // Results holds the type-checking results of one body instance.
 type Results struct {
-	Inst      Instance
+	Inst Instance
+	// PolyCopy: for the results of a polymorphic check of a generic body
+	// (borrow-checked when it has no instance), the type parameters
+	// known to be Copy (by a where-clause); nil for instances.
+	PolyCopy  map[int]bool
 	NodeTypes map[ast.NodeID]Ty
 	Adjust    map[ast.NodeID][]Adjustment
 	// PatDerefs[pat] = number of implicit derefs (match ergonomics) applied

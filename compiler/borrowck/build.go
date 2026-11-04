@@ -232,11 +232,40 @@ func (b *builder) isCopy(t Ty) bool {
 		return true
 	case TRef:
 		return !t.Mut
-	case TInfer, TError, TParam:
+	case TParam:
+		if pc := b.r.PolyCopy; pc != nil && t.Sub == 0 {
+			return pc[t.Index]
+		}
+		return true
+	case TInfer, TError:
 		return true
 	}
 	if t.HasInfer() || t.HasError() {
 		return true
+	}
+	if t.HasParam() {
+		// a generic body checked polymorphically: its type parameters
+		// stand for a Copy type (`i32`) when they have a Copy bound and
+		// for a type that is not Copy (`&mut i32`) otherwise
+		pc := b.r.PolyCopy
+		t = Fold(t, func(x Ty) Ty {
+			if !x.HasParam() {
+				return x
+			}
+			if x.Kind == TParam {
+				if x.Sub == 1 {
+					return ConstVal(1)
+				}
+				if pc != nil && !pc[x.Index] {
+					return Ref(TyI32, true)
+				}
+				return TyI32
+			}
+			return nil
+		})
+		if t.HasParam() || t.HasProj() {
+			return true
+		}
 	}
 	return b.tcx.IsCopy(t)
 }

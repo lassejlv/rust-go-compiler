@@ -157,6 +157,15 @@ func (t *Tcx) dynCompatible(tr *Def, seen map[*Def]bool) bool {
 		}
 	}
 	for _, st := range t.Supertraits(tr) {
+		if len(st.Args) > 1 {
+			// a supertrait with `Self` as a type argument
+			// (`trait T: PartialEq<Self>`, or `PartialEq`'s default)
+			for _, a := range st.Args[1:] {
+				if a != nil && mentionsParam(a, Param(0, "Self")) {
+					return false
+				}
+			}
+		}
 		if st.Trait != nil && t.isStd(st.Trait) && stdSizedTraits[st.Trait.Name] && st.Trait.Trait != nil && t.stdTraitSized(st.Trait) {
 			return false // `trait Shape: Clone`
 		}

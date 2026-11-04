@@ -642,6 +642,13 @@ func (ac *astConv) lowerTy(at ast.Type) Ty {
 	case *ast.InferType:
 		return ac.newInfer(x.Span)
 	case *ast.FnPtrType:
+		// `impl Trait` is not allowed in fn pointer types, also in a
+		// function's return type (E0562)
+		if ac.opaqueFn != nil {
+			saved := ac.opaqueFn
+			ac.opaqueFn = nil
+			defer func() { ac.opaqueFn = saved }()
+		}
 		ins := make([]Ty, len(x.Inputs))
 		for i, e := range x.Inputs {
 			ins[i] = ac.lowerTy(e)
@@ -670,7 +677,7 @@ func (ac *astConv) lowerTy(at ast.Type) Ty {
 			fd.Fn.OpaqueBounds[idx] = preds
 			return ot
 		}
-		t.Errorf(x.Span, "`impl Trait` is not allowed here")
+		t.ErrorCode(x.Span, "E0562", "`impl Trait` is not allowed here")
 		return TyErr
 	case *ast.DynTraitType:
 		return ac.lowerDyn(x.Bounds, x.Span)
@@ -942,6 +949,9 @@ func (ac *astConv) resToTy(res Res, seg *ast.PathSegment, sp lexer.Span) Ty {
 	t := ac.t
 	switch res.Kind {
 	case ResPrim:
+		if seg != nil && seg.Args != nil && (len(seg.Args.Args) > 0 || len(seg.Args.Bindings) > 0) {
+			t.ErrorCode(sp, "E0109", "type arguments are not allowed on builtin type `%s`", res.Prim)
+		}
 		return primTy(res.Prim)
 	case ResSelfTy:
 		if ac.selfTy == nil {
@@ -1086,6 +1096,8 @@ func (ac *astConv) findAssocType(cur Ty, name string, sp lexer.Span) Ty {
 	// Bounds on params (and Self in traits).
 	if ac.gen != nil {
 		unsub := cur
+		var found Ty
+		var foundTr *Def
 		for _, p := range ac.gen.Predicates {
 			pself := p.Trait.Args[0]
 			if pself != unsub && ac.sub(pself) != cur {
@@ -1093,9 +1105,20 @@ func (ac *astConv) findAssocType(cur Ty, name string, sp lexer.Span) Ty {
 			}
 			for _, st := range t.AllSupertraits(p.Trait) {
 				if it, ok := st.Trait.Trait.Items[name]; ok && it.Kind == DefAssocTy {
-					return ac.sub(Projection(st.Trait, st.Args, name))
+					pr := ac.sub(Projection(st.Trait, st.Args, name))
+					if found == nil {
+						found, foundTr = pr, st.Trait
+					} else if pr != found && cur.Kind == TParam && ac.scope != nil && ac.scope.Crate != nil && ac.scope.Crate.Local && !pr.HasInfer() && !found.HasInfer() {
+						// two bounds of a type parameter declare the
+						// associated type
+						t.ErrorCode(sp, "E0221", "ambiguous associated type `%s` in bounds of `%s` (from `%s` and `%s`)", name, cur, foundTr.Name, st.Trait.Name)
+					}
+					break
 				}
 			}
+		}
+		if found != nil {
+			return found
 		}
 	}
 	// Self inside an impl of a trait: use the impl's own definition.
@@ -1189,6 +1212,9 @@ func (ac *astConv) lowerTraitSeg(d *Def, seg *ast.PathSegment, self Ty, sp lexer
 	tr := &TraitRef{Trait: d, Args: args}
 	if seg.Args != nil {
 		for _, b := range seg.Args.Bindings {
+			if ac.scope != nil && ac.scope.Crate != nil && ac.scope.Crate.Local {
+				ac.t.pendingBindings = append(ac.t.pendingBindings, pendingBinding{trait: tr, name: b.Name.Name, sp: b.Name.Span})
+			}
 			if b.Ty != nil {
 				nb := Binding{Name: b.Name.Name, Ty: ac.lowerTy(b.Ty)}
 				if b.Args != nil {
@@ -1257,4 +1283,3 @@ func paramAssocRefs(n any, g *Generics) []int {
 	})
 	return out
 }
-

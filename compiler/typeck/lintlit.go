@@ -1,14 +1,10 @@
 package typeck
 
-// The deny-by-default `overflowing_literals` lint: an integer literal whose
-// value does not fit its (inferred) type, or a float literal that rounds to
-// infinity, is a hard error unless `#[allow(overflowing_literals)]` is in
-// effect on an enclosing item, module or the crate.
+// The deny-by-default `arithmetic_overflow` and `unconditional_panic` lints
+// on literal operands (`overflowing_literals` is in lints.go).
 
 import (
 	"math/big"
-	"strconv"
-	"strings"
 
 	"rustgo/compiler/ast"
 	"rustgo/compiler/lexer"
@@ -47,114 +43,6 @@ func attrsAllow(attrs []*ast.Attr, name string) bool {
 		}
 	}
 	return false
-}
-
-// checkOverflowingLiterals walks a type-checked body.
-func (t *Tcx) checkOverflowingLiterals(r *Results, def *Def, root any) {
-	if lintLevelAllowed(def, "overflowing_literals") {
-		return
-	}
-	done := map[*ast.LitExpr]bool{}
-	litOf := func(e ast.Expr) *ast.LitExpr {
-		for {
-			switch x := e.(type) {
-			case *ast.ParenExpr:
-				e = x.X
-			case *ast.LitExpr:
-				return x
-			default:
-				return nil
-			}
-		}
-	}
-	check := func(lit *ast.LitExpr, neg bool, fallback Ty) {
-		if done[lit] {
-			return
-		}
-		done[lit] = true
-		ty := r.NodeTypes[lit.ID]
-		if ty == nil || (ty.Kind != TInt && ty.Kind != TFloat) {
-			ty = fallback
-		}
-		if ty == nil {
-			return
-		}
-		switch {
-		case lit.Kind == ast.LitInt && ty.Kind == TInt:
-			v := new(big.Int)
-			if lit.Big != "" {
-				if _, ok := v.SetString(lit.Big, 10); !ok {
-					return
-				}
-			} else {
-				v.SetUint64(lit.IntVal)
-			}
-			if neg {
-				v.Neg(v)
-			}
-			if v.Cmp(tyMin(ty)) < 0 || v.Cmp(tyMax(ty)) > 0 {
-				t.Errorf(lit.Span, "literal out of range for `%s`", ty.IntKind())
-			}
-		case (lit.Kind == ast.LitFloat || lit.Kind == ast.LitInt) && ty.Kind == TFloat:
-			text := strings.ReplaceAll(lit.Value, "_", "")
-			if lit.Kind == ast.LitInt {
-				if lit.Big != "" {
-					text = lit.Big
-				} else {
-					text = strconv.FormatUint(lit.IntVal, 10)
-				}
-			}
-			bits := 64
-			if ty.Sub == 32 {
-				bits = 32
-			}
-			if f, err := strconv.ParseFloat(text, bits); err != nil && (f > 1 || f < -1) {
-				t.Errorf(lit.Span, "literal out of range for `f%d`", bits)
-			}
-		}
-	}
-	var patTy func(p ast.Pat) Ty
-	patTy = func(p ast.Pat) Ty {
-		if p == nil {
-			return nil
-		}
-		return r.NodeTypes[p.GetID()]
-	}
-	ast.Walk(root, func(n any) bool {
-		switch x := n.(type) {
-		case *ast.ItemStmt:
-			return false
-		case *ast.UnaryExpr:
-			if x.Op == ast.UnNeg {
-				if lit := litOf(x.X); lit != nil {
-					check(lit, true, nil)
-				}
-			}
-		case *ast.LitExpr:
-			check(x, false, nil)
-		case *ast.LitPat:
-			pt := patTy(x)
-			if u, ok := x.Expr.(*ast.UnaryExpr); ok && u.Op == ast.UnNeg {
-				if lit := litOf(u.X); lit != nil {
-					check(lit, true, pt)
-				}
-			} else if lit := litOf(x.Expr); lit != nil {
-				check(lit, false, pt)
-			}
-		case *ast.RangePat:
-			pt := patTy(x)
-			for _, e := range []ast.Expr{x.Lo, x.Hi} {
-				if u, ok := e.(*ast.UnaryExpr); ok && u.Op == ast.UnNeg {
-					if lit := litOf(u.X); lit != nil {
-						check(lit, true, pt)
-					}
-				} else if lit := litOf(e); lit != nil {
-					check(lit, false, pt)
-				}
-			}
-		}
-		return true
-	})
 }
 
 // constIntOperand returns the value of an integer literal operand

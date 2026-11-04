@@ -52,6 +52,10 @@ func (t *Tcx) checkConstContext(r *Results, def *Def) {
 				c = nil
 			}
 		}
+		if c != nil && (c.Kind == CallClosure || c.Kind == CallDynFn || c.Kind == CallFnPtr) {
+			// closures, `dyn Fn` and fn pointers are never const
+			t.ErrorCode(sp, "E0015", "cannot call non-const closure in %s", what)
+		}
 		if c != nil && c.Kind == CallFn && c.Def != nil && c.Def.Kind == DefFn && c.Def.Fn != nil && c.Def.Fn.Ast != nil &&
 			!c.Def.Fn.Ast.Const && c.Def.Intrinsic == "" && !c.Def.Fn.Extern {
 			inTrait := c.Def.InTrait() || (c.Def.InImpl() && c.Def.Parent.Impl != nil && c.Def.Parent.Impl.Ast != nil && c.Def.Parent.Impl.Ast.Trait != nil)

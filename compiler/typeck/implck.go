@@ -24,7 +24,33 @@ func (t *Tcx) checkImpls() {
 	// methods are compared with the trait's quietly)
 	for _, d := range t.R.Defs {
 		if d.Kind == DefFn && d.Fn != nil && d.Fn.Ast != nil && !t.isStd(d) && d.Intrinsic == "" {
-			t.FnSig(d)
+			sig := t.FnSig(d)
+			if out := d.Fn.Ast.Decl.Output; sig != nil && sig.Output != nil && out != nil && d.Fn.Ast.Body != nil && sig.Output.IsUnsized() {
+				t.ErrorCode(out.GetSpan(), "E0277", "the size for values of type `%s` cannot be known at compilation time", sig.Output)
+			}
+			if sp := d.Fn.Ast.Decl.SelfParam; sp != nil && sp.Ty != nil && sig != nil && len(sig.Inputs) > 0 && d.Crate != nil && d.Crate.Local {
+				// an explicit `self` type must mention `Self` (`self:
+				// Box<Self>`, `self: &Rc<Self>`, ...)
+				var selfTy Ty
+				switch {
+				case d.InTrait():
+					selfTy = Param(0, "Self")
+				case d.Parent != nil && d.Parent.Kind == DefImpl && d.Parent.Impl != nil:
+					selfTy = d.Parent.Impl.SelfTy
+				}
+				if in := sig.Inputs[0]; selfTy != nil && in != nil && !in.HasError() && !selfTy.HasError() && in != selfTy && !mentionsParam(in, selfTy) {
+					t.ErrorCode(sp.Ty.GetSpan(), "E0307", "invalid `self` parameter type: `%s`", in)
+				}
+			}
+			if sig != nil && d.Crate != nil && d.Crate.Local {
+				// the signature's types must be well-formed
+				for _, ty := range append(append([]Ty{}, sig.Inputs...), sig.Output) {
+					if bad := t.adtBoundViolation(ty); bad != nil {
+						t.ErrorCode(d.Span, "E0277", "the trait bound `%s: %s` is not satisfied", bad.Args[0], bad.Trait.Name)
+						break
+					}
+				}
+			}
 		}
 	}
 	for _, impl := range t.R.Impls {
@@ -40,6 +66,8 @@ func (t *Tcx) checkImpls() {
 		t.checkImplRules(impl)
 	}
 	t.checkInherentDups()
+	t.checkAdtDefs()
+	t.checkBindingNames()
 	t.checkLifetimes()
 	t.checkGenericParams()
 	// constants and statics are checked even when unused (their
@@ -172,7 +200,19 @@ func (t *Tcx) checkTraitImplItems(impl *Def) {
 	}
 	for _, it := range impl.Impl.Order {
 		ti := tr.Trait.Items[it.Name]
-		if ti == nil || ti.Kind != it.Kind {
+		if ti != nil && ti.Kind != it.Kind {
+			// the name is a trait item of another kind
+			code := "E0324"
+			switch it.Kind {
+			case DefAssocTy:
+				code = "E0325"
+			case DefConst:
+				code = "E0323"
+			}
+			t.ErrorCode(it.Item.Name.Span, code, "item `%s` is an associated %s, which doesn't match its trait `%s`", it.Name, itemKindWord(it), tr.Name)
+			continue
+		}
+		if ti == nil {
 			code := "E0407"
 			switch it.Kind {
 			case DefAssocTy:
@@ -185,6 +225,9 @@ func (t *Tcx) checkTraitImplItems(impl *Def) {
 		}
 		if it.Kind == DefFn {
 			t.compareImplMethod(impl, it, ti)
+		}
+		if it.Kind == DefConst {
+			t.compareImplConst(impl, it, ti)
 		}
 	}
 	var missing []string
@@ -324,6 +367,34 @@ func (t *Tcx) compareImplMethod(impl, im, tm *Def) {
 	}
 }
 
+// compareImplConst compares the type of an impl's associated const with
+// the trait's (E0326).
+func (t *Tcx) compareImplConst(impl, ic, tc *Def) {
+	if ic.Const == nil || tc.Const == nil {
+		return
+	}
+	trArgs := impl.Impl.TraitRef.Args
+	if tg := t.Generics(tc); tg == nil || len(trArgs) != tg.OwnStart || tg.Count() != tg.OwnStart {
+		return
+	}
+	var x, y Ty
+	if !t.quietly(func() {
+		x = t.Normalize(Subst(t.ConstTy(tc), trArgs))
+		y = t.Normalize(t.ConstTy(ic))
+	}) {
+		return
+	}
+	if x == y {
+		return
+	}
+	for _, z := range []Ty{x, y} {
+		if z == nil || z.HasProj() || z.HasOpaque() || z.HasError() || z.HasInfer() {
+			return
+		}
+	}
+	t.ErrorCode(ic.Item.Name.Span, "E0326", "implemented const `%s` has an incompatible type for trait: expected `%s`, found `%s`", ic.Name, x, y)
+}
+
 // earlyBoundLifetimes counts the early-bound lifetime parameters of a
 // method (rustc compares their numbers between an impl and its trait,
 // E0195): those that appear in a bound or where-clause, or not in the
@@ -434,14 +505,17 @@ func earlyBoundLifetimes(fn *ast.FnItem) (n int, ok bool) {
 	for _, p := range fn.Decl.Params {
 		collect(inInputs, p.Ty)
 	}
+	inOutput := map[string]bool{}
 	if fn.Decl.Output != nil {
-		collect(map[string]bool{}, fn.Decl.Output) // (risky parts)
+		collect(inOutput, fn.Decl.Output)
 	}
 	if risky {
 		return 0, false
 	}
+	// (rustc's is_late_bound_map: early-bound when in a where-clause, or in
+	// the output but not the inputs; an unused lifetime is late-bound)
 	for _, nm := range names {
-		if inWhere[nm] || !inInputs[nm] {
+		if inWhere[nm] || (!inInputs[nm] && inOutput[nm]) {
 			n++
 		}
 	}
@@ -557,7 +631,7 @@ func (t *Tcx) blanketCovers(a, b *Def) bool {
 			if prev, ok := binds[x.Index]; ok {
 				return prev == y
 			}
-			if y.IsUnsized() || y.Kind == TParam {
+			if (y.IsUnsized() && !ga.Params[x.Index].MaybeUnsized) || y.Kind == TParam {
 				return false // implicit Sized bound / generic: be conservative
 			}
 			binds[x.Index] = y
@@ -608,6 +682,250 @@ func (t *Tcx) blanketCovers(a, b *Def) bool {
 		self, ok := binds[p.Trait.Args[0].Index]
 		if !ok || self.HasParam() || self.HasInfer() || !t.Implements(self, p.Trait.Trait) {
 			return false
+		}
+	}
+	return true
+}
+
+// checkImplObligations reports, for an impl without generic parameters,
+// supertraits of the trait (and `where Self: ..` clauses) that the self
+// type does not implement, and associated types that do not satisfy the
+// bounds the trait declares on them (E0277).
+func (t *Tcx) checkImplObligations(impl *Def) {
+	ii := impl.Impl
+	tr := ii.TraitRef.Trait
+	if tr == nil || tr.Trait == nil || t.Generics(impl).Count() != 0 || impl.Crate == nil || !impl.Crate.Local {
+		return
+	}
+	args := ii.TraitRef.Args
+	for _, a := range args {
+		if a == nil || a.HasParam() || a.HasError() || a.HasInfer() || a.HasProj() || a.HasOpaque() {
+			return
+		}
+	}
+	if len(args) != t.Generics(tr).Count() {
+		return
+	}
+	holds := func(ref *TraitRef) (bool, bool) {
+		for _, a := range ref.Args {
+			if a == nil || a.HasParam() || a.HasError() || a.HasInfer() || a.HasProj() || a.HasOpaque() {
+				return true, false
+			}
+		}
+		ic := newInferCtxt(t)
+		switch ic.evaluate(&Predicate{Trait: ref}, 0) {
+		case SelNone:
+			return false, true
+		}
+		return true, true
+	}
+	for _, st := range t.Supertraits(tr) {
+		var ref *TraitRef
+		if !t.quietly(func() {
+			ref = st.Subst(args)
+			for i, a := range ref.Args {
+				ref.Args[i] = t.Normalize(a)
+			}
+		}) || ref == nil || ref.Trait == nil || ref.Trait.Trait == nil {
+			continue
+		}
+		if ok, known := holds(ref); known && !ok {
+			t.ErrorCode(impl.Span, "E0277", "the trait bound `%s: %s` is not satisfied", ref.Args[0], ref.Trait.Name)
+			return
+		}
+	}
+	for _, it := range ii.Order {
+		if it.Kind != DefAssocTy {
+			continue
+		}
+		ti := tr.Trait.Items[it.Name]
+		if ti == nil || ti.Kind != DefAssocTy || ti.AssocTy == nil {
+			continue
+		}
+		t.Generics(ti)
+		if t.Generics(ti).Count() != len(args) {
+			continue // generic associated type
+		}
+		for _, b := range ti.AssocTy.Bounds {
+			if b.Maybe || b.Trait == nil || len(b.Bindings) > 0 {
+				continue
+			}
+			var ref *TraitRef
+			if !t.quietly(func() {
+				ref = b.Trait.Subst(args)
+				for i, a := range ref.Args {
+					ref.Args[i] = t.Normalize(a)
+				}
+			}) || ref == nil {
+				continue
+			}
+			if ok, known := holds(ref); known && !ok {
+				sp := it.Span
+				if it.Item != nil {
+					sp = it.Item.Span
+				}
+				t.ErrorCode(sp, "E0277", "the trait bound `%s: %s` is not satisfied", ref.Args[0], ref.Trait.Name)
+				return
+			}
+		}
+	}
+}
+
+// genericImplsOverlap reports whether two generic impls of a trait
+// certainly overlap: their trait refs unify (each impl's parameters taken
+// as unknowns) and every where-clause then still constrains a parameter
+// left unknown, so it cannot be refuted (rustc's coherence treats such
+// ambiguous obligations as overlapping). Anything less clear-cut (bounds
+// on concrete types, associated type bindings, const parameters) is not
+// reported.
+func (t *Tcx) genericImplsOverlap(a, b *Def) bool {
+	ga, gb := t.Generics(a), t.Generics(b)
+	for _, g := range []*Generics{ga, gb} {
+		for _, p := range g.Params {
+			if p.Const {
+				return false
+			}
+		}
+	}
+	type term struct {
+		ty   Ty
+		side int
+	}
+	binds := [2]map[int]term{{}, {}}
+	isParam := func(x term) bool {
+		g := ga
+		if x.side == 1 {
+			g = gb
+		}
+		return x.ty.Kind == TParam && x.ty.Index < len(g.Params) && g.Params[x.ty.Index].Name == x.ty.Name
+	}
+	var walk func(x term) term
+	walk = func(x term) term {
+		for isParam(x) {
+			b, ok := binds[x.side][x.ty.Index]
+			if !ok {
+				return x
+			}
+			x = b
+		}
+		return x
+	}
+	// occurs reports whether parameter p appears in y (through bindings)
+	var occurs func(p, y term, d int) bool
+	occurs = func(p, y term, d int) bool {
+		if d > 50 {
+			return true
+		}
+		y = walk(y)
+		if isParam(y) {
+			return y.side == p.side && y.ty.Index == p.ty.Index
+		}
+		if !y.ty.HasParam() {
+			return false
+		}
+		var kids []Ty
+		switch y.ty.Kind {
+		case TRef, TPtr, TSlice, TArray:
+			kids = []Ty{y.ty.Elem}
+		case TAdt, TFnDef:
+			kids = y.ty.Args
+		case TTuple:
+			kids = y.ty.Elems
+		default:
+			return true
+		}
+		for _, k := range kids {
+			if occurs(p, term{k, y.side}, d+1) {
+				return true
+			}
+		}
+		return false
+	}
+	depth := 0
+	var unify func(x, y term) bool
+	unify = func(x, y term) bool {
+		depth++
+		if depth > 1000 {
+			return false
+		}
+		x, y = walk(x), walk(y)
+		if isParam(y) && !isParam(x) {
+			x, y = y, x
+		}
+		if isParam(x) {
+			if isParam(y) && x.side == y.side && x.ty.Index == y.ty.Index {
+				return true
+			}
+			if !isParam(y) && occurs(x, y, 0) {
+				return false
+			}
+			binds[x.side][x.ty.Index] = y
+			return true
+		}
+		if x.ty.HasProj() || y.ty.HasProj() || x.ty.HasOpaque() || y.ty.HasOpaque() || x.ty.HasError() || y.ty.HasError() || x.ty.Kind == TParam || y.ty.Kind == TParam {
+			return false
+		}
+		if !x.ty.HasParam() && !y.ty.HasParam() {
+			return x.ty == y.ty
+		}
+		if x.ty.Kind != y.ty.Kind || x.ty.Mut != y.ty.Mut {
+			return false
+		}
+		switch x.ty.Kind {
+		case TRef, TPtr, TSlice:
+			return unify(term{x.ty.Elem, x.side}, term{y.ty.Elem, y.side})
+		case TAdt:
+			if x.ty.Def != y.ty.Def || len(x.ty.Args) != len(y.ty.Args) {
+				return false
+			}
+			for i := range x.ty.Args {
+				if !unify(term{x.ty.Args[i], x.side}, term{y.ty.Args[i], y.side}) {
+					return false
+				}
+			}
+			return true
+		case TTuple:
+			if len(x.ty.Elems) != len(y.ty.Elems) {
+				return false
+			}
+			for i := range x.ty.Elems {
+				if !unify(term{x.ty.Elems[i], x.side}, term{y.ty.Elems[i], y.side}) {
+					return false
+				}
+			}
+			return true
+		}
+		return false
+	}
+	ar, br := a.Impl.TraitRef.Args, b.Impl.TraitRef.Args
+	if len(ar) != len(br) {
+		return false
+	}
+	for i := range ar {
+		if !unify(term{ar[i], 0}, term{br[i], 1}) {
+			return false
+		}
+	}
+	for side, g := range []*Generics{ga, gb} {
+		for _, p := range g.Predicates {
+			if p.Maybe || p.Trait == nil {
+				continue
+			}
+			if len(p.Bindings) > 0 {
+				return false
+			}
+			if p.Trait.Trait.LangItem == "sized" {
+				// an unknown type may be sized
+				if x := walk(term{p.Trait.Args[0], side}); !isParam(x) && x.ty.IsUnsized() {
+					return false
+				}
+				continue
+			}
+			for _, arg := range p.Trait.Args {
+				if x := walk(term{arg, side}); !isParam(x) {
+					return false
+				}
+			}
 		}
 	}
 	return true
@@ -713,6 +1031,24 @@ func (t *Tcx) checkImplRules(impl *Def) {
 		return
 	}
 	t.checkUnconstrained(impl)
+	t.checkImplHeaderLifetimes(impl)
+	if ii.TraitRef == nil && ia.Trait == nil && ii.SelfTy != nil && impl.Crate != nil && impl.Crate.Local {
+		// inherent impls are only allowed for the crate's own types
+		switch st := ii.SelfTy; st.Kind {
+		case TAdt:
+			if st.Def.Crate != impl.Crate {
+				t.ErrorCode(impl.Span, "E0116", "cannot define inherent `impl` for a type outside of the crate where the type is defined")
+			}
+		case TDyn:
+			if st.Def != nil && st.Def.Crate != impl.Crate {
+				t.ErrorCode(impl.Span, "E0116", "cannot define inherent `impl` for a type outside of the crate where the type is defined")
+			}
+		case TParam:
+			t.ErrorCode(impl.Span, "E0118", "no nominal type found for inherent implementation")
+		case TBool, TChar, TInt, TFloat, TStr, TSlice, TArray, TRef, TPtr, TTuple, TFnPtr, TNever:
+			t.ErrorCode(impl.Span, "E0390", "cannot define inherent `impl` for primitive types")
+		}
+	}
 	if ii.TraitRef == nil || ii.Negative {
 		return
 	}
@@ -722,10 +1058,23 @@ func (t *Tcx) checkImplRules(impl *Def) {
 		}
 	}
 	tr := ii.TraitRef.Trait
+	if tr != nil && tr.Item != nil && !impl.HasAttr("automatically_derived") {
+		if ta, ok := tr.Item.Kind.(*ast.TraitItem); ok {
+			switch {
+			case ta.Unsafe && !ia.Unsafe:
+				t.ErrorCode(impl.Span, "E0200", "the trait `%s` requires an `unsafe impl` declaration", tr.Name)
+			case !ta.Unsafe && ia.Unsafe && !t.isStd(tr):
+				// (only for non-std traits: rustgo's std may not mark
+				// every unsafe trait of the real std as unsafe)
+				t.ErrorCode(impl.Span, "E0199", "implementing the trait `%s` is not unsafe", tr.Name)
+			}
+		}
+	}
 	self := ii.SelfTy
 	if self == nil {
 		return
 	}
+	t.checkImplObligations(impl)
 	switch tr {
 	case t.LangOpt("drop"):
 		if self.Kind != TAdt && self.Kind != TError && self.Kind != TParam {
@@ -736,6 +1085,7 @@ func (t *Tcx) checkImplRules(impl *Def) {
 			if copyImpl := t.adtCopyImpl(self.Def); copyImpl != nil {
 				t.ErrorCode(copyImpl.Span, "E0184", "the trait `Copy` cannot be implemented for this type; the type has a destructor")
 			}
+			t.checkDropImplParams(impl, self)
 		}
 	case t.LangOpt("copy"):
 		if self.Kind != TAdt || t.Generics(impl).Count() != 0 || self.HasParam() {
@@ -904,5 +1254,65 @@ func (t *Tcx) checkStaticSync(d *Def) {
 			sp = d.Const.TyAst.GetSpan()
 		}
 		t.ErrorCode(sp, "E0277", "`%s` cannot be shared between threads safely", ty)
+	}
+}
+
+// checkDropImplParams reports `Drop` impls that are specialized: the self
+// type's arguments must be distinct parameters of the impl (E0366), and
+// the impl may not add where-clauses the type does not have (E0367).
+func (t *Tcx) checkDropImplParams(impl *Def, self Ty) {
+	if impl.Crate == nil || !impl.Crate.Local {
+		return
+	}
+	ig := t.Generics(impl)
+	seen := map[int]bool{}
+	for _, a := range self.Args {
+		if a == nil || a.Kind != TParam || a.Index >= len(ig.Params) || ig.Params[a.Index].Name != a.Name || seen[a.Index] {
+			t.ErrorCode(impl.Span, "E0366", "`Drop` impls cannot be specialized")
+			return
+		}
+		seen[a.Index] = true
+	}
+	ag := t.Generics(self.Def)
+	var adtPreds []*TraitRef
+	for _, p := range ag.Predicates {
+		if p.Trait != nil && !p.Maybe {
+			adtPreds = append(adtPreds, p.Trait.Subst(self.Args))
+		}
+	}
+	for _, p := range ig.Predicates {
+		if p.Maybe || p.Trait == nil || p.Trait.Trait == nil || p.Trait.Trait.LangItem == "sized" || len(p.Bindings) > 0 {
+			continue
+		}
+		found := false
+		for _, ap := range adtPreds {
+			if ap.Trait != p.Trait.Trait || len(ap.Args) != len(p.Trait.Args) {
+				continue
+			}
+			same := true
+			for i := range ap.Args {
+				if ap.Args[i] != p.Trait.Args[i] {
+					same = false
+				}
+			}
+			if same {
+				found = true
+				break
+			}
+		}
+		if !found {
+			// (also implied by a supertrait of a declared bound)
+			for _, ap := range adtPreds {
+				for _, st := range t.AllSupertraits(ap) {
+					if st.Trait == p.Trait.Trait && len(st.Args) == len(p.Trait.Args) && st.Args[0] == p.Trait.Args[0] {
+						found = true
+					}
+				}
+			}
+		}
+		if !found {
+			t.ErrorCode(impl.Span, "E0367", "`Drop` impl requires `%s: %s` but the type it is implemented for does not", p.Trait.Args[0], p.Trait.Trait.Name)
+			return
+		}
 	}
 }

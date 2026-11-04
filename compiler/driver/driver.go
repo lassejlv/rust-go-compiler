@@ -254,6 +254,11 @@ func Frontend(opts *Options) (*typeck.Tcx, *Def, error) {
 	if mainDef == nil {
 		return nil, nil, fmt.Errorf("error: `main` function not found in crate")
 	}
+	if !opts.Test {
+		if err := checkMainSig(user); err != nil {
+			return nil, nil, err
+		}
+	}
 	if aborted := tcx.Guard(func() { tcx.BuildImpls() }); aborted || tcx.Err() != nil {
 		return nil, nil, tcx.Err()
 	}
@@ -652,4 +657,36 @@ func addNoMainEntry(c *ast.Crate) string {
 		return "__rustgo_main"
 	}
 	return ""
+}
+
+// checkMainSig reports a `main` function of a binary crate that takes
+// parameters (E0580) or has generic parameters (E0131).
+func checkMainSig(c *Crate) error {
+	if c.Ast != nil {
+		for _, a := range c.Ast.Attrs {
+			if a.Path == "no_main" {
+				return nil
+			}
+		}
+	}
+	b := c.Root.Lookup("main", ValueNS)
+	if b == nil || b.Res.Def == nil || b.Res.Def.Kind != DefFn || b.Res.Def.Fn == nil || b.Res.Def.Fn.Ast == nil {
+		return nil
+	}
+	fn := b.Res.Def.Fn.Ast
+	sp := b.Res.Def.Span
+	if it := b.Res.Def.Item; it != nil {
+		sp = it.Name.Span
+	}
+	if fn.Generics != nil {
+		for _, p := range fn.Generics.Params {
+			if p.Kind != ast.GPLifetime {
+				return fmt.Errorf("%s: error[E0131]: `main` function is not allowed to have generic parameters", sp.Lo)
+			}
+		}
+	}
+	if len(fn.Decl.Params) > 0 || fn.Decl.SelfParam != nil {
+		return fmt.Errorf("%s: error[E0580]: `main` function has wrong type", sp.Lo)
+	}
+	return nil
 }

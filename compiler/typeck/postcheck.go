@@ -20,10 +20,15 @@ func (t *Tcx) checkBodyMisc(r *Results, def *Def) {
 		return
 	}
 	std := t.isStd(def)
+	t.checkLints(r, def, root)
 	ast.Walk(root, func(n any) bool {
 		switch x := n.(type) {
 		case *ast.ItemStmt:
 			return false
+		case *ast.UnaryExpr:
+			if !std {
+				t.checkNegUnsigned(r, x)
+			}
 		case *ast.CastExpr:
 			t.checkCast(r, x)
 		case *ast.AssignExpr:
@@ -54,7 +59,7 @@ func (t *Tcx) checkBodyMisc(r *Results, def *Def) {
 			}
 		case *ast.MethodCallExpr:
 			if !std {
-				t.checkCallBounds(r, r.Callees[x.ID], x.Span)
+				t.checkCallBounds(r, r.Callees[x.ID], x.Span, def.Crate != nil && def.Crate.Local)
 			}
 			if !std && x.Method.Hyg == 0 {
 				if c := r.Callees[x.ID]; c != nil && isDropMethod(c.Def) {
@@ -63,7 +68,7 @@ func (t *Tcx) checkBodyMisc(r *Results, def *Def) {
 			}
 		case *ast.CallExpr:
 			if !std {
-				t.checkCallBounds(r, r.Callees[x.ID], x.Span)
+				t.checkCallBounds(r, r.Callees[x.ID], x.Span, def.Crate != nil && def.Crate.Local)
 			}
 			if !std {
 				if c := r.Callees[x.ID]; c != nil && isDropMethod(c.Def) {
@@ -77,16 +82,22 @@ func (t *Tcx) checkBodyMisc(r *Results, def *Def) {
 	})
 	// deny-by-default lints; cargo caps lints of registry dependencies
 	if !std && def != nil && def.Crate != nil && def.Crate.Local {
-		t.checkOverflowingLiterals(r, def, root)
 		t.checkKnownPanics(r, def, root)
 	}
-	// locals must have a statically known size
+	// locals must have a statically known size, and well-formed types
 	if !std {
 		for id, l := range r.Locals {
-			if l == nil || l.ByRef || l.Node != id || l.Ty == nil || !l.Ty.IsUnsized() {
+			if l == nil || l.Node != id || l.Ty == nil {
 				continue
 			}
-			t.ErrorCode(l.Span, "E0277", "the size for values of type `%s` cannot be known at compilation time", l.Ty)
+			if !l.ByRef && l.Ty.IsUnsized() {
+				t.ErrorCode(l.Span, "E0277", "the size for values of type `%s` cannot be known at compilation time", l.Ty)
+			}
+			if def.Crate != nil && def.Crate.Local {
+				if bad := t.adtBoundViolation(l.Ty); bad != nil {
+					t.ErrorCode(l.Span, "E0277", "the trait bound `%s: %s` is not satisfied", bad.Args[0], bad.Trait.Name)
+				}
+			}
 		}
 	}
 }
@@ -116,6 +127,12 @@ func (t *Tcx) checkCast(r *Results, x *ast.CastExpr) {
 		t.ErrorCode(x.Span, "E0604", "only `u8` can be cast as `char`, not `%s`", from)
 	case from.Kind == TRef && (isNum(to) || to.Kind == TBool || to.Kind == TChar):
 		t.ErrorCode(x.Span, "E0606", "casting `%s` as `%s` is invalid", from, to)
+	case (from.Kind == TBool || from.Kind == TChar || from.Kind == TFnDef || from.Kind == TFnPtr || from.Kind == TPtr) && to.Kind == TFloat,
+		from.Kind == TFloat && to.Kind == TPtr:
+		t.ErrorCode(x.Span, "E0606", "casting `%s` as `%s` is invalid", from, to)
+	case from.Kind == TAdt && from.Def.Adt != nil && from.Def.Adt.Kind == AdtEnum && !fieldlessEnum(from.Def) && (isNum(to) || to.Kind == TBool || to.Kind == TChar),
+		from.Kind == TClosure && (isNum(to) || to.Kind == TBool || to.Kind == TChar || to.Kind == TPtr):
+		t.ErrorCode(x.Span, "E0605", "non-primitive cast: `%s` as `%s`", from, to)
 	case (isNum(to) || to.Kind == TBool || to.Kind == TChar) &&
 		((from.Kind == TAdt && from.Def.Adt != nil && from.Def.Adt.Kind != AdtEnum) || from.Kind == TStr || from.Kind == TTuple || from.Kind == TArray || from.Kind == TSlice):
 		t.ErrorCode(x.Span, "E0605", "non-primitive cast: `%s` as `%s`", from, to)
@@ -143,6 +160,11 @@ func (t *Tcx) checkAssignLHS(r *Results, l ast.Expr, code string) {
 			return
 		}
 	case *ast.MethodCallExpr, *ast.LitExpr, *ast.BinaryExpr:
+	case *ast.PathExpr:
+		vr := r.Paths[x.ID]
+		if vr == nil || (vr.Kind != VConst && vr.Kind != VFn && vr.Kind != VConstParam) {
+			return
+		}
 	case *ast.UnaryExpr:
 		if x.Op == ast.UnDeref {
 			return
@@ -256,13 +278,27 @@ func displayName(key string) string {
 // checking accepted before all facts were known: closure kinds (`F: Fn`
 // with a closure that is only FnOnce, E0525) and `Send` bounds on values
 // containing `Rc` (E0277).
-func (t *Tcx) checkCallBounds(r *Results, c *Callee, sp ast.Span) {
+func (t *Tcx) checkCallBounds(r *Results, c *Callee, sp ast.Span, local bool) {
 	if c == nil || c.Kind != CallFn || c.Def == nil || c.Def.Kind != DefFn {
 		return
 	}
 	g := t.Generics(c.Def)
 	if len(c.Args) != len(g.Params) {
 		return
+	}
+	// implicit `Sized` bounds of the callee's type parameters (of callees
+	// outside std, whose `?Sized` relaxations rustgo's std may not mirror,
+	// and of a few std functions)
+	if local && (!t.isStd(c.Def) || (c.Def.Parent != nil && c.Def.Parent.Name == "mem" && sizedMemFns[c.Def.Name])) {
+		for i, gp := range g.Params {
+			if gp.Const || gp.MaybeUnsized || gp.Synthetic || (i == 0 && (g.HasSelf || c.Def.InTrait())) {
+				continue
+			}
+			if a := c.Args[i]; castable(a) && a.IsUnsized() {
+				t.ErrorCode(sp, "E0277", "the size for values of type `%s` cannot be known at compilation time", a)
+				break
+			}
+		}
 	}
 	for _, p := range g.Predicates {
 		if p.Trait == nil || p.Maybe || len(p.Trait.Args) == 0 {
@@ -514,4 +550,21 @@ func (t *Tcx) checkStaticMove(r *Results, e ast.Expr) {
 		return
 	}
 	t.ErrorCode(pe.Span, "E0507", "cannot move out of static item `%s`", d.Name)
+}
+
+// sizedMemFns are std::mem functions whose type parameter is Sized.
+var sizedMemFns = map[string]bool{"size_of": true, "align_of": true, "swap": true, "replace": true, "take": true, "drop": true, "forget": true, "zeroed": true, "transmute": true}
+
+// fieldlessEnum reports whether every variant of enum d is a unit variant
+// (only those enums can be cast to integers).
+func fieldlessEnum(d *Def) bool {
+	if d.Adt == nil {
+		return false
+	}
+	for _, v := range d.Adt.Variants {
+		if len(v.Fields) > 0 {
+			return false
+		}
+	}
+	return true
 }

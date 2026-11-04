@@ -185,6 +185,18 @@ func (g *Gen) checkUnreached() {
 		// generic bodies, polymorphically (after every instance, whose
 		// errors are more precise)
 		g.tcx.CheckGenericBodies()
+		// generic functions without any instance are borrow-checked
+		// polymorphically
+		if os.Getenv("RUSTGO_POLY_BORROWCK") != "0" {
+			for _, pb := range g.tcx.PolyClean {
+				if len(g.tcx.Errors) > 0 {
+					break
+				}
+				if !g.bcChecked[pb.Def] || os.Getenv("RUSTGO_POLY_BORROWCK") == "all" {
+					g.borrowck(pb.Def, pb.Results)
+				}
+			}
+		}
 	}
 }
 

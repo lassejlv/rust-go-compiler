@@ -1155,6 +1155,18 @@ func (fcx *FnCtxt) findLoop(label string, sp lexer.Span, isContinue bool) *loopC
 		l := ls[i]
 		if label == "" {
 			if l.block {
+				// (an unlabeled break/continue may not leave a labeled
+				// block for an enclosing loop)
+				for j := i - 1; j >= 0; j-- {
+					if !ls[j].block {
+						what := "break"
+						if isContinue {
+							what = "continue"
+						}
+						fcx.t.ErrorCode(sp, "E0695", "unlabeled `%s` inside of a labeled block", what)
+						break
+					}
+				}
 				continue
 			}
 			return l

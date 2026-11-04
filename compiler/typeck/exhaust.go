@@ -269,6 +269,13 @@ func (cx *patCx) lowerInner(p ast.Pat, ty Ty) *dpat {
 			}
 		}
 		if lo.Cmp(hi) > 0 {
+			if x.Lo != nil && x.Hi != nil {
+				if x.Inclusive {
+					cx.t.ErrorCode(x.Span, "E0030", "lower range bound must be less than or equal to upper")
+				} else {
+					cx.t.ErrorCode(x.Span, "E0579", "lower range bound must be less than upper")
+				}
+			}
 			cx.bail()
 		}
 		return &dpat{c: ctor{kind: ckRange, lo: lo, hi: hi}, ty: ty}

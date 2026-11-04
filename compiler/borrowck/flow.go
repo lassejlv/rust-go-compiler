@@ -66,13 +66,22 @@ func opaqueFlow(t Ty) *Flow {
 	return noFlow()
 }
 
+// polyBodyParams: the type parameters of the generic body being checked
+// polymorphically (nil when checking an instance).
+var polyBodyParams map[Ty]bool
+
 // carriesBorrows reports whether values of t may hold references.
 func carriesBorrows(t Ty) bool {
 	if t == nil {
 		return false
 	}
 	switch t.Kind {
-	case TRef, TDyn, TClosure, TOpaque, TParam, TProjection, TInfer, TError:
+	case TParam:
+		// a type parameter of a generic body checked polymorphically
+		// stands for a type chosen by the caller: it cannot hold
+		// borrows of the body's locals
+		return !polyBodyParams[t]
+	case TRef, TDyn, TClosure, TOpaque, TProjection, TInfer, TError:
 		return true
 	case TPtr, TInt, TFloat, TBool, TChar, TNever, TFnPtr, TFnDef, TStr:
 		return false
