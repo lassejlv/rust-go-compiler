@@ -973,9 +973,11 @@ func (ac *astConv) resToTy(res Res, seg *ast.PathSegment, sp lexer.Span) Ty {
 			}
 			return ac.paramTy(gp)
 		case DefTrait:
-			// bare trait object (2015 style) -> dyn
-			b := &ast.Bound{Path: &ast.Path{Segments: []*ast.PathSegment{seg}, Span: sp}, Span: sp}
-			_ = b
+			// bare trait object (2015/2018 style) -> dyn
+			if !sp.Before2021() && sp.Hi.Off > sp.Lo.Off {
+				t.ErrorCode(sp, "E0782", "expected a type, found a trait (trait objects must include the `dyn` keyword: `dyn %s`)", d.Name)
+				return TyErr
+			}
 			tr, binds := ac.lowerTraitSeg(d, seg, Param(1<<20, "dyn-self"), sp)
 			if tr == nil {
 				return TyErr

@@ -254,6 +254,11 @@ func (l *lx) lexToken() error {
 		return l.lexChar(Byte, start)
 	case IsIdentStart(r):
 		name := l.readIdent()
+		// Rust 2021 reserves `prefix"..."` and `prefix#..` (`$x#` in a
+		// macro pattern is left alone)
+		if c := l.cur(); !l.noCStr && name != "_" && (c == '"' || (c == '#' && (start.Off == 0 || l.src[start.Off-1] != '$'))) {
+			return l.errf(start, "prefix `%s` is unknown (prefixed identifiers and literals are reserved since Rust 2021)", name)
+		}
 		l.emit(Ident, name, start)
 		return nil
 	case r >= '0' && r <= '9':
