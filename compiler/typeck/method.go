@@ -55,7 +55,10 @@ func (fcx *FnCtxt) checkMethodCall(x *ast.MethodCallExpr, expected Ty) Ty {
 		// `{integer}`/`{float}` receiver: a trait method (e.g. Ord::max)
 		// applies without fixing the type; inherent ones need the default
 		s := fcx.ic.snapshot()
-		if p := fcx.lookupMethod(rt, x.Method.Name, x.Span); p != nil && p.item.InTrait() && !p.virtual {
+		fcx.intoIterSkip = x.Method.Span.Edition()
+		p := fcx.lookupMethod(rt, x.Method.Name, x.Span)
+		fcx.intoIterSkip = ""
+		if p != nil && p.item.InTrait() && !p.virtual {
 			early = p
 		} else {
 			fcx.ic.rollback(s)
@@ -86,8 +89,9 @@ func (fcx *FnCtxt) checkMethodCall(x *ast.MethodCallExpr, expected Ty) Ty {
 		fcx.methodNode = x.ID
 		fcx.privMethod = nil
 		fcx.checkPriv = x.Method.Hyg == 0
+		fcx.intoIterSkip = x.Method.Span.Edition()
 		p = fcx.lookupMethod(rt, x.Method.Name, x.Span)
-		fcx.checkPriv = false
+		fcx.checkPriv, fcx.intoIterSkip = false, ""
 		fcx.methodNode = 0
 	}
 	if p != nil && early == nil && ambiguousNum && !p.item.InTrait() && x.Method.Hyg == 0 && fcx.def != nil && !fcx.t.isStd(fcx.def) {
@@ -189,7 +193,7 @@ func (fcx *FnCtxt) lookupMethod(recv Ty, name string, sp lexer.Span) *pick {
 		}
 	}
 	var traitCands []methodCand
-	inScope := fcx.curMod().TraitsInScope(fcx.t.R.Prelude)
+	inScope := fcx.curMod().TraitsInScope(fcx.t.R.PreludeOf(fcx.curMod().Crate))
 	// the trait being implemented is in scope inside its impl
 	var implTrait *Def
 	for d := fcx.def; d != nil; d = d.Parent {
@@ -304,6 +308,10 @@ func (fcx *FnCtxt) lookupMethod(recv Ty, name string, sp lexer.Span) *pick {
 			var foundKind SelKind
 			for _, c := range traitCands {
 				tr := c.item.Parent
+				if mode == 0 && fcx.intoIterSkip != "" && fcx.intoIterSkip < "2024" && tr == fcx.t.LangOpt("into_iterator") &&
+					((u.Kind == TArray && fcx.intoIterSkip < "2021") || (isBoxTy(u) && len(u.Args) > 0 && u.Args[0].Kind == TSlice)) {
+					continue
+				}
 				g := fcx.t.Generics(tr)
 				targs := make([]Ty, len(g.Params))
 				for i := range targs {

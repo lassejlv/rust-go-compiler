@@ -30,16 +30,45 @@ func (s Span) String() string { return s.Lo.String() }
 type SourceFile struct {
 	Name string
 	Src  string
+	// Edition is the Rust edition of the crate the file belongs to
+	// ("2015", "2018", "2021", "2024"; "" = 2021). As in rustc, where a
+	// token's span decides the edition rules that apply to it, the edition
+	// of a token (and of the code it is part of) is its file's.
+	Edition string
 }
 
 // Files is the global source map.
 var Files []*SourceFile
 
+// CurEdition is the edition recorded for the files AddFile registers (the
+// edition of the crate being loaded and expanded).
+var CurEdition string
+
 // AddFile registers a file and returns its index.
 func AddFile(name, src string) int {
-	Files = append(Files, &SourceFile{Name: name, Src: src})
+	Files = append(Files, &SourceFile{Name: name, Src: src, Edition: CurEdition})
 	return len(Files) - 1
 }
+
+// FileEdition returns the edition of file idx ("2021" when unknown).
+func FileEdition[I int | int32](idx I) string {
+	if idx < 0 || int(idx) >= len(Files) || Files[idx].Edition == "" {
+		return "2021"
+	}
+	return Files[idx].Edition
+}
+
+// Edition returns the edition of the file the span is in.
+func (s Span) Edition() string { return FileEdition(s.Lo.File) }
+
+// Before2018 reports whether the span is in a Rust 2015 file.
+func (s Span) Before2018() bool { return s.Edition() == "2015" }
+
+// Before2021 reports whether the span is in a Rust 2015 or 2018 file.
+func (s Span) Before2021() bool { e := s.Edition(); return e == "2015" || e == "2018" }
+
+// Since2024 reports whether the span is in a Rust 2024 (or later) file.
+func (s Span) Since2024() bool { return s.Edition() >= "2024" }
 
 // BaseDir is the directory relative display names are relative to ("" for
 // the working directory).
@@ -92,9 +121,12 @@ type Token struct {
 	Span   Span
 	// Hyg is the macro_rules hygiene mark of an identifier introduced by a
 	// macro body (0 for source text and macro arguments).
-	Hyg   uint32
-	Kind  Kind
-	Raw   bool // raw identifier r#foo / raw string
+	Hyg  uint32
+	Kind Kind
+	Raw  bool // raw identifier r#foo / raw string
+	// Weak marks a Rust 2015 `async`/`await`/`dyn`/`try` the parser sees
+	// as a raw identifier (see Is2015Ident); it is printed without `r#`.
+	Weak  bool
 	Inner bool // for DocComment: //! (inner) vs /// (outer)
 	// JointNext is true when the next token immediately follows this one with
 	// no whitespace (used for splitting/merging punctuation in macros).
@@ -150,5 +182,25 @@ var Keywords = map[string]bool{
 	"unsized": true, "virtual": true, "yield": true, "try": true,
 }
 
-// IsKeyword reports whether a (non-raw) identifier token is a keyword.
-func (t Token) IsKeyword() bool { return t.Kind == Ident && !t.Raw && Keywords[t.Text] }
+// Keywords2018 are the keywords introduced by Rust 2018: plain identifiers
+// in Rust 2015 code (`dyn` stays a contextual keyword in types there).
+var Keywords2018 = map[string]bool{"async": true, "await": true, "dyn": true, "try": true}
+
+// IsKeyword reports whether a (non-raw) identifier token is a keyword in
+// the edition of its span.
+func (t Token) IsKeyword() bool {
+	return t.Kind == Ident && !t.Raw && Keywords[t.Text] && !t.Is2015Ident()
+}
+
+// Is2015Ident reports whether t is a non-raw `async`, `await`, `dyn` or
+// `try` of Rust 2015 code, which is an identifier there.
+func (t Token) Is2015Ident() bool {
+	if t.Kind != Ident || t.Raw {
+		return false
+	}
+	switch t.Text {
+	case "async", "await", "dyn", "try":
+		return t.Span.Before2018()
+	}
+	return false
+}

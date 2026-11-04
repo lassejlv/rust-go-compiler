@@ -1,0 +1,19 @@
+&str "{}"
+&str "50% {done}"
+&str "1 and 2"
+String "owned {}"
+i32 42
+&str "a{}"
+&str "{} not formatted"
+&str "7 formatted"
+&str "x{{y"
+String "internal error: entered unreachable code: {}"
+&str "internal error: entered unreachable code: 3"
+&str "not yet implemented: {}"
+array.into_iter: [8, 8, 8]
+IntoIterator::into_iter(array): [1, 1, 1]
+for x in array: [1, 1, 1]
+boxed_slice.into_iter: [8, 8]
+boxed_array.into_iter: [6, 7]
+c+x / two
+Ok(3) Err("overflow")

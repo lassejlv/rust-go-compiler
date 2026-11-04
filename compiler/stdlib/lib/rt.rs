@@ -40,6 +40,29 @@ pub fn panic_fmt(args: fmt::Arguments<'_>, file: &str, line: u32, col: u32) -> !
     crate::panicking::begin_panic_string(args.into_string(), file, line, col)
 }
 
+/// Panics with an arbitrary payload (the Rust 2015/2018 `panic!(expr)`).
+#[inline(never)]
+#[cold]
+#[track_caller]
+pub fn begin_panic<M: crate::any::Any + Send>(msg: M, file: &str, line: u32, col: u32) -> ! {
+    let (file, line, col) = caller_or(file, line, col);
+    let payload: Box<dyn crate::any::Any + Send> = Box::new(msg);
+    if let Some(s) = payload.downcast_ref::<&'static str>() {
+        crate::panicking::begin_panic_static(*s, file, line, col)
+    }
+    let payload = match payload.downcast::<String>() {
+        Ok(s) => crate::panicking::begin_panic_string(*s, file, line, col),
+        Err(p) => p,
+    };
+    let text = String::from(crate::panicking::payload_as_str(&*payload));
+    if crate::panicking::run_custom_hook(&*payload, file, line, col) {
+        crate::panicking::set_custom_payload(payload);
+        unsafe { intrinsics::panic_resume(text.as_str(), false) }
+    }
+    crate::panicking::set_custom_payload(payload);
+    unsafe { intrinsics::panic_impl(text.as_str(), file, line, col) }
+}
+
 /// Panics on a failed `assert_eq!` / `assert_ne!`.
 #[inline(never)]
 #[cold]

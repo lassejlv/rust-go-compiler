@@ -26,6 +26,21 @@ type Parser struct {
 	// stmtFrag is set while parsing a `stmt` macro fragment: the
 	// statement's trailing `;` is optional (`let x = 5` matches).
 	stmtFrag bool
+	// traitFn is set while parsing a trait's associated item, until the
+	// parameter list of its fn (if any) is reached.
+	traitFn bool
+}
+
+// isNamedParam reports whether a fn parameter starts with `pat:` (rustc's
+// is_named_param: `[&|&&|mut] ident :`); otherwise a Rust 2015 trait
+// method parameter is only a type.
+func (p *Parser) isNamedParam() bool {
+	n := 0
+	if p.is("&") || p.is("&&") || p.is("mut") {
+		n = 1
+	}
+	t := p.peekN(n)
+	return t.Kind == lexer.Ident && p.isN(n+1, ":")
 }
 
 // parseError is the panic payload used for error propagation inside the
@@ -56,7 +71,7 @@ func NewFromTokens(toks []lexer.Token) *Parser {
 	// slice as is (the parser never mutates its tokens)
 	clean := true
 	for i, t := range toks {
-		if t.Kind == lexer.DocComment || (t.Kind == lexer.EOF && i != len(toks)-1) {
+		if t.Kind == lexer.DocComment || (t.Kind == lexer.EOF && i != len(toks)-1) || t.Is2015Ident() {
 			clean = false
 			break
 		}
@@ -82,6 +97,11 @@ func NewFromTokens(toks []lexer.Token) *Parser {
 		if t.Kind == lexer.EOF {
 			break
 		}
+		if t.Is2015Ident() {
+			// `async`, `await`, `dyn` and `try` are identifiers in Rust
+			// 2015 (`dyn` is contextual in types, see parsePrimaryType)
+			t.Raw, t.Weak = true, true
+		}
 		ts = append(ts, t)
 	}
 	eof := lexer.Token{Kind: lexer.EOF}
@@ -95,6 +115,15 @@ func NewFromTokens(toks []lexer.Token) *Parser {
 	p := &Parser{toks: ts}
 	p.lastHi = ts[0].Span.Lo
 	return p
+}
+
+// unweak undoes NewFromTokens' marking of a Rust 2015 `async`, `await`,
+// `dyn` or `try` as a raw identifier for a token kept in a token tree.
+func unweak(t lexer.Token) lexer.Token {
+	if t.Weak {
+		t.Raw, t.Weak = false, false
+	}
+	return t
 }
 
 func docCommentTokens(t lexer.Token) []lexer.Token {
@@ -626,7 +655,7 @@ func (p *Parser) ParseTokenTree() (tt ast.TokenTree, err error) {
 	if t.Kind == lexer.Punct && (t.Text == ")" || t.Text == "]" || t.Text == "}") {
 		p.errorf("unexpected closing delimiter `%s`", t.Text)
 	}
-	return ast.TokenTree{Tok: p.next()}, nil
+	return ast.TokenTree{Tok: unweak(p.next())}, nil
 }
 
 // ---------------------------------------------------------------------------
@@ -665,7 +694,7 @@ func (p *Parser) parseDelimGroup() ast.TokenTree {
 				}
 			}
 		}
-		tt.Inner = append(tt.Inner, ast.TokenTree{Tok: p.next()})
+		tt.Inner = append(tt.Inner, ast.TokenTree{Tok: unweak(p.next())})
 	}
 }
 

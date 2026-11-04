@@ -103,3 +103,17 @@ macro_rules! __std_legacy_int_modules {
 }
 
 __std_legacy_int_modules! { i8 i16 i32 i64 i128 isize u8 u16 u32 u64 u128 usize }
+
+/// Unwraps a result or propagates its error (the deprecated predecessor of
+/// `?`; `try!` in Rust 2015, `r#try!` since `try` became a keyword).
+#[macro_export]
+macro_rules! r#try {
+    ($expr:expr $(,)?) => {
+        match $expr {
+            $crate::result::Result::Ok(val) => val,
+            $crate::result::Result::Err(err) => {
+                return $crate::result::Result::Err($crate::convert::From::from(err));
+            }
+        }
+    };
+}

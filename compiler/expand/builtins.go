@@ -37,7 +37,7 @@ func init() {
 		"write":           writeMac(false),
 		"writeln":         writeMac(true),
 		"panic":           panicMac("explicit panic", ""),
-		"unreachable":     panicMac("internal error: entered unreachable code", "internal error: entered unreachable code: "),
+		"unreachable":     panicMac("internal error: entered unreachable code", unreachablePrefix),
 		"todo":            panicMac("not yet implemented", "not yet implemented: "),
 		"unimplemented":   panicMac("not implemented", "not implemented: "),
 		"assert":          (*Expander).assertMac,
@@ -340,11 +340,42 @@ func writeMac(nl bool) builtinFn {
 // ---------------------------------------------------------------------------
 // panic! and friends
 
+const unreachablePrefix = "internal error: entered unreachable code: "
+
+// macNameSpan returns the span of the macro name of a call, whose edition
+// decides edition-dependent expansions (like rustc's use_panic_2021).
+func macNameSpan(mac *ast.MacCall) lexer.Span {
+	if mac.Path != nil && len(mac.Path.Segments) > 0 {
+		return mac.Path.Segments[len(mac.Path.Segments)-1].Ident.Span
+	}
+	return mac.Span
+}
+
+// panic2015 expands the Rust 2015/2018 `panic!(msg)`: the payload is msg
+// itself (a string literal is not a format string).
+func (e *Expander) panic2015(mac *ast.MacCall, x []ast.TokenTree) ([]ast.TokenTree, error) {
+	if len(x) == 1 && x[0].Delim == 0 && x[0].Tok.Kind == lexer.Str && x[0].Tok.Suffix == "" {
+		return tmpl(mac.Span, "::std::rt::panic_str($0, "+e.locArgs(mac)+")", x)
+	}
+	return tmpl(mac.Span, "::std::rt::begin_panic($0, "+e.locArgs(mac)+")", x)
+}
+
 func panicMac(plain, prefix string) builtinFn {
 	return func(e *Expander, mac *ast.MacCall) ([]ast.TokenTree, error) {
 		args := mac.Args
 		if len(args) == 0 || (len(args) == 1 && isPunct(args[0], ",")) {
 			return tmpl(mac.Span, "::std::rt::panic_str("+rustStr(plain)+", "+e.locArgs(mac)+")")
+		}
+		if (prefix == "" || prefix == unreachablePrefix) && macNameSpan(mac).Before2021() {
+			// Rust 2015/2018: a single argument is not a format string
+			if x, rest, err := firstExpr(args, mac); err == nil && len(rest) == 0 {
+				if prefix == "" {
+					return e.panic2015(mac, x)
+				}
+				// unreachable!(msg) displays msg (`*&`: not inlined as a
+				// literal argument, the message is a formatted String)
+				return tmpl(mac.Span, "::std::rt::panic_fmt(::std::format_args!("+rustStr(prefix+"{}")+", *&$0), "+e.locArgs(mac)+")", x)
+			}
 		}
 		fa, err := e.formatArgsMac(mac, args, prefix, "", false)
 		if err != nil {
@@ -392,6 +423,16 @@ func (e *Expander) assertMac(mac *ast.MacCall) ([]ast.TokenTree, error) {
 	if len(rest) == 0 {
 		msg := "assertion failed: " + condSource(cond)
 		return tmpl(mac.Span, "if !($0) { ::std::rt::panic_str("+rustStr(msg)+", "+e.locArgs(mac)+") }", cond)
+	}
+	if macNameSpan(mac).Before2021() {
+		// Rust 2015/2018: the message is passed to the 2015 `panic!`
+		if x, rest2, err := firstExpr(rest, mac); err == nil && len(rest2) == 0 {
+			p, err := e.panic2015(mac, x)
+			if err != nil {
+				return nil, err
+			}
+			return tmpl(mac.Span, "if !($0) { $1 }", cond, p)
+		}
 	}
 	fa, err := e.formatArgsMac(mac, rest, "", "", false)
 	if err != nil {

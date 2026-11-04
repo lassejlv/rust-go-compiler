@@ -207,6 +207,9 @@ func Frontend(opts *Options) (*typeck.Tcx, *Def, error) {
 	t1 := time.Now()
 	abs, _ := filepath.Abs(opts.Input)
 	dir := filepath.Dir(abs)
+	// the user's files (and the code its macros create) get its edition
+	lexer.CurEdition = opts.Edition
+	defer func() { lexer.CurEdition = "" }()
 	userCrate, err := LoadCrateFS(os.DirFS(dir), filepath.Base(abs), relPrefix(opts.Input))
 	if err != nil {
 		return nil, nil, err

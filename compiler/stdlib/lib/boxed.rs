@@ -326,6 +326,15 @@ impl<T> IntoIterator for Box<[T]> {
     }
 }
 
+impl<T, const N: usize> IntoIterator for Box<[T; N]> {
+    type Item = T;
+    type IntoIter = crate::vec::IntoIter<T>;
+    fn into_iter(self) -> crate::vec::IntoIter<T> {
+        let b: Box<[T]> = self;
+        Vec::from(b).into_iter()
+    }
+}
+
 impl<'a, T> IntoIterator for &'a Box<[T]> {
     type Item = &'a T;
     type IntoIter = crate::slice::Iter<'a, T>;

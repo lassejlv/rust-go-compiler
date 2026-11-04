@@ -16,12 +16,13 @@ type Error struct {
 func (e *Error) Error() string { return fmt.Sprintf("%s: error: %s", e.Pos, e.Msg) }
 
 type lx struct {
-	file int
-	src  string
-	off  int
-	line int
-	col  int
-	toks []Token
+	file   int
+	src    string
+	off    int
+	line   int
+	col    int
+	toks   []Token
+	noCStr bool // Rust 2015/2018: `c".."` is an identifier and a string
 }
 
 // KeepDocs makes Tokenize keep doc comments (as DocComment tokens, which
@@ -32,6 +33,10 @@ var KeepDocs bool
 // token. Comments (including doc comments) are skipped.
 func Tokenize(file int, src string) ([]Token, error) {
 	l := &lx{file: file, src: src, line: 1, col: 1}
+	// C string literals (c"..") exist from Rust 2021 on
+	if e := FileEdition(file); e == "2015" || e == "2018" {
+		l.noCStr = true
+	}
 	l.toks = make([]Token, 0, len(src)/5+16) // ~1 token per 5 bytes of source
 	// Byte-order mark.
 	if strings.HasPrefix(l.src, "\xEF\xBB\xBF") {
@@ -234,14 +239,14 @@ func (l *lx) lexToken() error {
 		l.advance()
 		l.advance()
 		return l.lexRawStr(ByteStr, start)
-	case r == 'c' && l.peek(1) == 'r' && (l.peek(2) == '"' || l.peek(2) == '#'):
+	case r == 'c' && !l.noCStr && l.peek(1) == 'r' && (l.peek(2) == '"' || l.peek(2) == '#'):
 		l.advance()
 		l.advance()
 		return l.lexRawStr(CStr, start)
 	case r == 'b' && l.peek(1) == '"':
 		l.advance()
 		return l.lexStr(ByteStr, start)
-	case r == 'c' && l.peek(1) == '"':
+	case r == 'c' && !l.noCStr && l.peek(1) == '"':
 		l.advance()
 		return l.lexStr(CStr, start)
 	case r == 'b' && l.peek(1) == '\'':

@@ -535,6 +535,30 @@ func (r *Resolver) ResolveImports() {
 	}
 }
 
+// PreludeOf returns the std prelude of crate c's edition
+// (`std::prelude::rust_2015`, ...): TryFrom, TryInto and FromIterator are
+// only in the prelude from Rust 2021 on, Future and IntoFuture from 2024.
+func (r *Resolver) PreludeOf(c *Crate) *Module {
+	if r.Prelude == nil || c == nil {
+		return r.Prelude
+	}
+	var name string
+	switch c.Edition {
+	case "2015":
+		name = "rust_2015"
+	case "2018":
+		name = "rust_2018"
+	case "2024":
+		name = "rust_2024"
+	default:
+		return r.Prelude
+	}
+	if b := r.Prelude.Lookup(name, TypeNS); b != nil && b.Res.Def != nil && b.Res.Def.Mod != nil {
+		return b.Res.Def.Mod
+	}
+	return r.Prelude
+}
+
 // undetermined reports whether a pending import (other than self) of module
 // m, or of a module m glob-imports, may still define name.
 func (r *Resolver) undetermined(m *Module, name string, self *Import) bool {
@@ -611,8 +635,8 @@ func (r *Resolver) lookupUseFirst(m *Module, name string, ns Namespace, self *Im
 			return defRes(cr.Def), true, true
 		}
 	}
-	if r.Prelude != nil {
-		b, det := r.lookupDet(r.Prelude, name, ns, self)
+	if r.PreludeOf(m.Crate) != nil {
+		b, det := r.lookupDet(r.PreludeOf(m.Crate), name, ns, self)
 		if !det {
 			return Res{}, false, false
 		}
@@ -985,8 +1009,8 @@ func (r *Resolver) LookupLexical(m *Module, name string, ns Namespace) (Res, boo
 			return defRes(cr.Def), true
 		}
 	}
-	if r.Prelude != nil {
-		if b := r.Prelude.Lookup(name, ns); b != nil {
+	if r.PreludeOf(m.Crate) != nil {
+		if b := r.PreludeOf(m.Crate).Lookup(name, ns); b != nil {
 			return b.Res, true
 		}
 	}
