@@ -1661,3 +1661,90 @@ impl<I: DoubleEndedIterator + ExactSizeIterator> DoubleEndedIterator for StepBy<
 }
 
 impl<I: ExactSizeIterator> ExactSizeIterator for StepBy<I> {}
+
+// ---------------------------------------------------------------------------
+// Debug for adapters holding closures (printed like std, closures omitted)
+
+impl<I: fmt::Debug, P> fmt::Debug for SkipWhile<I, P> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SkipWhile").field("iter", &self.iter).field("flag", &self.flag).finish()
+    }
+}
+
+impl<I: fmt::Debug, P> fmt::Debug for TakeWhile<I, P> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("TakeWhile").field("iter", &self.iter).field("flag", &self.flag).finish()
+    }
+}
+
+impl<I: fmt::Debug, P> fmt::Debug for MapWhile<I, P> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("MapWhile").field("iter", &self.iter).finish()
+    }
+}
+
+impl<I: fmt::Debug, St: fmt::Debug, F> fmt::Debug for Scan<I, St, F> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Scan").field("iter", &self.iter).field("state", &self.state).finish()
+    }
+}
+
+impl<I: fmt::Debug, F> fmt::Debug for Inspect<I, F> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Inspect").field("iter", &self.iter).finish()
+    }
+}
+
+/// Prints `FlattenCompat { iter: Fuse { iter: Some(<iter>) }, frontiter, backiter }`
+/// (std's internal layout of `Flatten`/`FlatMap`).
+struct FlattenCompatDebug<'a, I, U> {
+    iter: &'a I,
+    is_map: bool,
+    frontiter: &'a Option<U>,
+    backiter: &'a Option<U>,
+}
+
+impl<'a, I: fmt::Debug, U: fmt::Debug> fmt::Debug for FlattenCompatDebug<'a, I, U> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        struct MapOf<'b, I>(&'b I);
+        impl<'b, I: fmt::Debug> fmt::Debug for MapOf<'b, I> {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                f.debug_struct("Map").field("iter", self.0).finish()
+            }
+        }
+        struct FuseOf<'b, T>(&'b T);
+        impl<'b, T: fmt::Debug> fmt::Debug for FuseOf<'b, T> {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                f.debug_struct("Fuse").field("iter", &Some(self.0)).finish()
+            }
+        }
+        let mut d = f.debug_struct("FlattenCompat");
+        if self.is_map {
+            d.field("iter", &FuseOf(&MapOf(self.iter)));
+        } else {
+            d.field("iter", &FuseOf(self.iter));
+        }
+        d.field("frontiter", self.frontiter).field("backiter", self.backiter).finish()
+    }
+}
+
+impl<I: fmt::Debug, U: IntoIterator, F> fmt::Debug for FlatMap<I, U, F>
+where
+    U::IntoIter: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let inner = FlattenCompatDebug { iter: &self.iter, is_map: true, frontiter: &self.frontiter, backiter: &self.backiter };
+        f.debug_struct("FlatMap").field("inner", &inner).finish()
+    }
+}
+
+impl<I: Iterator + fmt::Debug> fmt::Debug for Flatten<I>
+where
+    I::Item: IntoIterator,
+    <I::Item as IntoIterator>::IntoIter: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let inner = FlattenCompatDebug { iter: &self.iter, is_map: false, frontiter: &self.frontiter, backiter: &self.backiter };
+        f.debug_struct("Flatten").field("inner", &inner).finish()
+    }
+}

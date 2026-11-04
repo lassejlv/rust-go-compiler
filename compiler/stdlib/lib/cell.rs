@@ -755,6 +755,23 @@ impl<T, F: FnOnce() -> T> Deref for LazyCell<T, F> {
     }
 }
 
+impl<T: Default> Default for LazyCell<T> {
+    fn default() -> LazyCell<T> {
+        LazyCell::new(T::default)
+    }
+}
+
+impl<T: fmt::Debug, F> fmt::Debug for LazyCell<T, F> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut d = f.debug_tuple("LazyCell");
+        match self.cell.get() {
+            Some(v) => d.field(v),
+            None => d.field(&format_args!("<uninit>")),
+        };
+        d.finish()
+    }
+}
+
 impl<T> Cell<[T]> {
     /// Returns a `&[Cell<T>]` from a `&Cell<[T]>`.
     #[inline]

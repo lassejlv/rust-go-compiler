@@ -254,6 +254,40 @@ impl<'a, T> DoubleEndedIterator for Iter<'a, T> {
 impl<'a, T> ExactSizeIterator for Iter<'a, T> {}
 impl<'a, T> FusedIterator for Iter<'a, T> {}
 
+/// Debug-prints the remaining elements of a list iterator as a list.
+struct RemainingList<'a, T>(&'a [T], &'a [T]);
+
+impl<'a, T: fmt::Debug> fmt::Debug for RemainingList<'a, T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_list().entries(self.0.iter()).entries(self.1.iter()).finish()
+    }
+}
+
+impl<'a, T: fmt::Debug> fmt::Debug for Iter<'a, T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        struct Rest<'a, T>(vec_deque::Iter<'a, T>);
+        impl<'a, T: fmt::Debug> fmt::Debug for Rest<'a, T> {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                f.debug_list().entries(self.0.clone()).finish()
+            }
+        }
+        f.debug_tuple("Iter").field(&Rest(self.inner.clone())).field(&self.inner.len()).finish()
+    }
+}
+
+impl<'a, T: fmt::Debug> fmt::Debug for IterMut<'a, T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let (a, b) = self.inner.remaining();
+        f.debug_tuple("IterMut").field(&RemainingList(a, b)).field(&(a.len() + b.len())).finish()
+    }
+}
+
+impl<T: fmt::Debug> fmt::Debug for IntoIter<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("IntoIter").field(self.inner.as_deque()).finish()
+    }
+}
+
 /// A mutable iterator over the elements of a `LinkedList`.
 pub struct IterMut<'a, T: 'a> {
     inner: vec_deque::IterMut<'a, T>,

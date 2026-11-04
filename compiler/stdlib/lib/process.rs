@@ -41,8 +41,20 @@ pub fn id() -> u32 {
 // ExitCode / Termination
 
 /// This type represents the status code the current process can return to its parent.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct ExitCode(u8);
+
+impl fmt::Debug for ExitCode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        struct Raw(u8);
+        impl fmt::Debug for Raw {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                f.debug_tuple("unix_exit_status").field(&self.0).finish()
+            }
+        }
+        f.debug_tuple("ExitCode").field(&Raw(self.0)).finish()
+    }
+}
 
 impl ExitCode {
     /// The canonical `ExitCode` for successful termination.
@@ -84,6 +96,12 @@ impl Termination for () {
     #[inline]
     fn report(self) -> ExitCode {
         ExitCode::SUCCESS
+    }
+}
+
+impl Termination for crate::convert::Infallible {
+    fn report(self) -> ExitCode {
+        match self {}
     }
 }
 

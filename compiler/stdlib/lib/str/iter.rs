@@ -1088,6 +1088,64 @@ macro_rules! str_escape_iter {
     };
 }
 
+// ---------------------------------------------------------------------------
+// Debug for the remaining pattern iterators (std prints its searcher
+// internals; these print a summary so that the types are Debug).
+
+impl<'a, P: Pattern> fmt::Debug for SplitInclusive<'a, P> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("SplitInclusive").field(&self.0).finish()
+    }
+}
+
+impl<'a, P: Pattern> fmt::Debug for SplitN<'a, P> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SplitN").field("iter", &self.iter).field("count", &self.count).finish()
+    }
+}
+
+impl<'a, P: Pattern> fmt::Debug for RSplitN<'a, P> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("RSplitN").field("iter", &self.iter).field("count", &self.count).finish()
+    }
+}
+
+impl<'a, P: Pattern> fmt::Debug for Matches<'a, P> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Matches").field("haystack", &self.haystack).finish_non_exhaustive()
+    }
+}
+
+impl<'a, P: Pattern> fmt::Debug for RMatches<'a, P> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("RMatches").field(&self.0).finish()
+    }
+}
+
+impl<'a, P: Pattern> fmt::Debug for MatchIndices<'a, P> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("MatchIndices").field("haystack", &self.haystack).finish_non_exhaustive()
+    }
+}
+
+impl<'a, P: Pattern> fmt::Debug for RMatchIndices<'a, P> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("RMatchIndices").field(&self.0).finish()
+    }
+}
+
+impl<'a> fmt::Debug for SplitAsciiWhitespace<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("SplitAsciiWhitespace")
+    }
+}
+
+impl<'a> fmt::Debug for EncodeUtf16<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("EncodeUtf16").finish_non_exhaustive()
+    }
+}
+
 str_escape_iter!(EscapeDebug);
 str_escape_iter!(EscapeDefault);
 str_escape_iter!(EscapeUnicode);

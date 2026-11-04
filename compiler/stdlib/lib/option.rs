@@ -607,9 +607,36 @@ impl<'a, T> From<&'a mut Option<T>> for Option<&'a mut T> {
 // ---------------------------------------------------------------------------
 // Iterators
 
+/// Debug-prints like std's internal `Item { opt: .. }` of the option iterators.
+pub(crate) struct ItemDebug<'a, T>(pub(crate) &'a Option<T>);
+
+impl<'a, T: fmt::Debug> fmt::Debug for ItemDebug<'a, T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Item").field("opt", self.0).finish()
+    }
+}
+
 /// An iterator over a reference to the `Some` variant of an `Option`.
 pub struct Iter<'a, T: 'a> {
     inner: Option<&'a T>,
+}
+
+impl<'a, T: fmt::Debug> fmt::Debug for Iter<'a, T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Iter").field("inner", &ItemDebug(&self.inner)).finish()
+    }
+}
+
+impl<'a, T: fmt::Debug> fmt::Debug for IterMut<'a, T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("IterMut").field("inner", &ItemDebug(&self.inner)).finish()
+    }
+}
+
+impl<T: fmt::Debug> fmt::Debug for IntoIter<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("IntoIter").field("inner", &ItemDebug(&self.inner)).finish()
+    }
 }
 
 impl<'a, T> Iterator for Iter<'a, T> {

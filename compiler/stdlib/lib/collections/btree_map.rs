@@ -1379,8 +1379,74 @@ impl<'a, K: Ord, V> OccupiedEntry<'a, K, V> {
 impl<'a, K: fmt::Debug + Ord, V: fmt::Debug> fmt::Debug for Entry<'a, K, V> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
-            Entry::Vacant(ref v) => f.debug_tuple("Entry").field(v.key()).finish(),
-            Entry::Occupied(ref o) => f.debug_tuple("Entry").field(o.key()).finish(),
+            Entry::Vacant(ref v) => f.debug_tuple("Entry").field(v).finish(),
+            Entry::Occupied(ref o) => f.debug_tuple("Entry").field(o).finish(),
         }
+    }
+}
+
+impl<'a, K: fmt::Debug + Ord, V> fmt::Debug for VacantEntry<'a, K, V> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("VacantEntry").field(self.key()).finish()
+    }
+}
+
+impl<'a, K: fmt::Debug + Ord, V: fmt::Debug> fmt::Debug for OccupiedEntry<'a, K, V> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("OccupiedEntry").field("key", self.key()).field("value", self.get()).finish()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Debug for the remaining iterators (lists of what is left, like std)
+
+impl<'a, K, V> FlatMut<'a, K, V> {
+    /// The remaining entries, in order.
+    fn remaining(&self) -> impl Iterator<Item = &(K, V)> + '_ {
+        let mid = self.mid.as_slice().iter().flat_map(|b| b.iter());
+        self.front.as_slice().iter().chain(mid).chain(self.back.as_slice().iter()).take(self.n)
+    }
+}
+
+impl<'a, K: fmt::Debug, V: fmt::Debug> fmt::Debug for IterMut<'a, K, V> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_list().entries(self.inner.remaining().map(|e| (&e.0, &e.1))).finish()
+    }
+}
+
+impl<'a, K: fmt::Debug, V: fmt::Debug> fmt::Debug for RangeMut<'a, K, V> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_list().entries(self.inner.remaining().map(|e| (&e.0, &e.1))).finish()
+    }
+}
+
+impl<'a, K, V: fmt::Debug> fmt::Debug for ValuesMut<'a, K, V> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_list().entries(self.inner.inner.remaining().map(|e| &e.1)).finish()
+    }
+}
+
+impl<K: fmt::Debug, V: fmt::Debug> fmt::Debug for IntoIter<K, V> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_list().entries(self.inner.as_slice().iter().map(|e| (&e.0, &e.1))).finish()
+    }
+}
+
+impl<K, V> IntoKeys<K, V> {
+    /// The remaining keys (for `btree_set::IntoIter`'s Debug).
+    pub(crate) fn remaining_keys(&self) -> impl Iterator<Item = &K> + '_ {
+        self.inner.inner.as_slice().iter().map(|e| &e.0)
+    }
+}
+
+impl<K: fmt::Debug, V> fmt::Debug for IntoKeys<K, V> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_list().entries(self.inner.inner.as_slice().iter().map(|e| &e.0)).finish()
+    }
+}
+
+impl<K, V: fmt::Debug> fmt::Debug for IntoValues<K, V> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_list().entries(self.inner.inner.as_slice().iter().map(|e| &e.1)).finish()
     }
 }

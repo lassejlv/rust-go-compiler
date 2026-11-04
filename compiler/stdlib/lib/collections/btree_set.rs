@@ -440,9 +440,35 @@ impl<T> DoubleEndedIterator for IntoIter<T> {
     }
 }
 
+/// Std's BTreeSet is a `BTreeMap<T, SetValZST>`; its derived iterator Debug
+/// shows `(key, SetValZST)` pairs.
+#[derive(Debug)]
+struct SetValZST;
+
+struct SetPairs<I>(I);
+
+impl<'b, T: fmt::Debug + 'b, I: Iterator<Item = &'b T> + Clone> fmt::Debug for SetPairs<I> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_list().entries(self.0.clone().map(|k| (k, SetValZST))).finish()
+    }
+}
+
+impl<T: fmt::Debug> fmt::Debug for IntoIter<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let keys: Vec<&T> = self.inner.remaining_keys().collect();
+        f.debug_struct("IntoIter").field("iter", &SetPairs(keys.into_iter())).finish()
+    }
+}
+
 /// An iterator over a sub-range of items in a `BTreeSet`.
 pub struct Range<'a, T: 'a> {
     inner: btree_map::Range<'a, T, ()>,
+}
+
+impl<'a, T: fmt::Debug> fmt::Debug for Range<'a, T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Range").field("iter", &SetPairs(self.clone())).finish()
+    }
 }
 
 impl<'a, T> Clone for Range<'a, T> {

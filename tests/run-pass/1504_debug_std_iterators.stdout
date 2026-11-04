@@ -1,0 +1,61 @@
+SkipWhile { iter: Iter([1, 2, 3]), flag: false }
+TakeWhile { iter: Iter([1, 2, 3]), flag: false }
+MapWhile { iter: Iter([1, 2, 3]) }
+Scan { iter: Iter([1, 2, 3]), state: 0 }
+Inspect { iter: Iter([1, 2, 3]) }
+FlatMap { inner: FlattenCompat { iter: Fuse { iter: Some(Map { iter: Iter([1, 2, 3]) }) }, frontiter: None, backiter: None } }
+Flatten { inner: FlattenCompat { iter: Fuse { iter: Some(IntoIter([[1]])) }, frontiter: None, backiter: None } }
+OnceWith(Some(_))
+RepeatWith { .. }
+Once { inner: IntoIter { inner: Item { opt: Some(5) } } }
+EncodeUtf16 { .. }
+SkipWhile { iter: Iter([3]), flag: true }
+['a', 'b']
+[1, 2]
+['a', 'b']
+[(1, 'a'), (2, 'b')]
+[(1, 'a'), (2, 'b')]
+[(2, 'b')]
+Entry(OccupiedEntry { key: 1, value: 'a' })
+Entry(VacantEntry(9))
+OccupiedEntry { key: 1, value: 'a' }
+VacantEntry(9)
+IntoIter { iter: [(1, SetValZST), (2, SetValZST)] }
+Range { iter: [(2, SetValZST)] }
+['a']
+[(1, 'a')]
+[1]
+['a']
+[(1, 'a')]
+[(1, 'a')]
+[7]
+[7]
+Iter([1, 2, 3], 3)
+Iter([2, 3], 2)
+IterMut([1, 2, 3], 3)
+IntoIter([1, 2, 3])
+IterMut([4, 5], [])
+Iter { inner: Item { opt: Some(1) } }
+IterMut { inner: Item { opt: Some(1) } }
+IntoIter { inner: Item { opt: Some(1) } }
+Iter { inner: Some(1) }
+IterMut { inner: Some(1) }
+IntoIter { inner: Some(1) }
+Holder { vals: ['c'], it: IntoIter { inner: Item { opt: Some(9) } } }
+Holder {
+    vals: [
+        'c',
+    ],
+    it: IntoIter {
+        inner: Item {
+            opt: Some(
+                9,
+            ),
+        },
+    },
+}
+LazyCell(<uninit>)
+1
+LazyCell(1)
+0 LazyCell([])
+ExitCode(unix_exit_status(0)) ExitCode(unix_exit_status(1)) ExitCode(unix_exit_status(42))

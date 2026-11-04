@@ -985,6 +985,19 @@ impl<'a, T> ExactSizeIterator for IterMut<'a, T> {
 
 impl<'a, T> FusedIterator for IterMut<'a, T> {}
 
+impl<'a, T> IterMut<'a, T> {
+    /// The remaining elements, front part first.
+    pub(crate) fn remaining(&self) -> (&[T], &[T]) {
+        (self.a.as_slice(), self.b.as_slice())
+    }
+}
+
+impl<'a, T: fmt::Debug> fmt::Debug for IterMut<'a, T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("IterMut").field(&self.a.as_slice()).field(&self.b.as_slice()).finish()
+    }
+}
+
 /// An owning iterator over the elements of a `VecDeque`.
 pub struct IntoIter<T> {
     inner: VecDeque<T>,
@@ -1024,6 +1037,13 @@ impl<T: Clone> Clone for IntoIter<T> {
     }
 }
 
+impl<T> IntoIter<T> {
+    /// The remaining elements.
+    pub(crate) fn as_deque(&self) -> &VecDeque<T> {
+        &self.inner
+    }
+}
+
 impl<T: fmt::Debug> fmt::Debug for IntoIter<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("IntoIter").field(&self.inner).finish()
@@ -1034,6 +1054,13 @@ impl<T: fmt::Debug> fmt::Debug for IntoIter<T> {
 pub struct Drain<'a, T: 'a> {
     inner: crate::vec::IntoIter<T>,
     _marker: PhantomData<&'a mut VecDeque<T>>,
+}
+
+// Note: std prints its internal counters here; this prints what is left.
+impl<'a, T: fmt::Debug> fmt::Debug for Drain<'a, T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("Drain").field(&self.inner.as_slice()).finish()
+    }
 }
 
 impl<'a, T> Iterator for Drain<'a, T> {

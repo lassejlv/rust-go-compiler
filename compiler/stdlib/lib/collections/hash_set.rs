@@ -419,6 +419,12 @@ pub struct IntoIter<K> {
     inner: hash_map::IntoKeys<K, ()>,
 }
 
+impl<K: fmt::Debug> fmt::Debug for IntoIter<K> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Debug::fmt(&self.inner, f)
+    }
+}
+
 impl<K> Iterator for IntoIter<K> {
     type Item = K;
     #[inline]
@@ -440,6 +446,12 @@ impl<K> ExactSizeIterator for IntoIter<K> {
 /// A draining iterator over the items of a `HashSet`.
 pub struct Drain<'a, K: 'a> {
     inner: hash_map::Drain<'a, K, ()>,
+}
+
+impl<'a, K: fmt::Debug> fmt::Debug for Drain<'a, K> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_list().entries(self.inner.remaining_keys()).finish()
+    }
 }
 
 impl<'a, K> Iterator for Drain<'a, K> {

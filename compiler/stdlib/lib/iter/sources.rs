@@ -57,10 +57,23 @@ impl<T> fmt::Debug for Empty<T> {
 }
 
 /// An iterator that yields an element exactly once.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 #[must_use]
 pub struct Once<T> {
     inner: Option<T>,
+}
+
+impl<T: fmt::Debug> fmt::Debug for Once<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // std: Once { inner: option::IntoIter { inner: Item { opt } } }
+        struct IntoIterDebug<'a, T>(&'a Option<T>);
+        impl<'a, T: fmt::Debug> fmt::Debug for IntoIterDebug<'a, T> {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                f.debug_struct("IntoIter").field("inner", &crate::option::ItemDebug(self.0)).finish()
+            }
+        }
+        f.debug_struct("Once").field("inner", &IntoIterDebug(&self.inner)).finish()
+    }
 }
 
 /// Creates an iterator that yields an element exactly once.
@@ -93,6 +106,12 @@ impl<T> FusedIterator for Once<T> {}
 #[must_use]
 pub struct OnceWith<F> {
     make: Option<F>,
+}
+
+impl<F> fmt::Debug for OnceWith<F> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.make.is_some() { f.write_str("OnceWith(Some(_))") } else { f.write_str("OnceWith(None)") }
+    }
 }
 
 /// Creates an iterator that lazily generates a value exactly once by invoking the provided closure.
@@ -211,6 +230,12 @@ impl<A: Clone> FusedIterator for RepeatN<A> {}
 #[must_use]
 pub struct RepeatWith<F> {
     repeater: F,
+}
+
+impl<F> fmt::Debug for RepeatWith<F> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("RepeatWith").finish_non_exhaustive()
+    }
 }
 
 /// Creates a new iterator that repeats elements endlessly by applying the provided closure.

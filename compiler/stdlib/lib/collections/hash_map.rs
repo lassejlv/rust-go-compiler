@@ -1144,3 +1144,57 @@ impl<'a, K: fmt::Debug, V> fmt::Debug for VacantEntry<'a, K, V> {
         f.debug_tuple("VacantEntry").field(&self.key).finish()
     }
 }
+
+// ---------------------------------------------------------------------------
+// Debug for the remaining iterators (lists of what is left, like std)
+
+struct BucketPairs<'a, K, V>(&'a [Bucket<K, V>]);
+
+impl<'a, K: fmt::Debug, V: fmt::Debug> fmt::Debug for BucketPairs<'a, K, V> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_list().entries(self.0.iter().map(|b| (&b.key, &b.value))).finish()
+    }
+}
+
+impl<'a, K: fmt::Debug, V: fmt::Debug> fmt::Debug for IterMut<'a, K, V> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Debug::fmt(&BucketPairs(self.inner.as_slice()), f)
+    }
+}
+
+impl<K: fmt::Debug, V: fmt::Debug> fmt::Debug for IntoIter<K, V> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Debug::fmt(&BucketPairs(self.inner.as_slice()), f)
+    }
+}
+
+impl<'a, K, V> Drain<'a, K, V> {
+    /// The remaining keys (for `hash_set::Drain`'s Debug).
+    pub(crate) fn remaining_keys(&self) -> impl Iterator<Item = &K> + '_ {
+        self.inner.as_slice().iter().map(|b| &b.key)
+    }
+}
+
+impl<'a, K: fmt::Debug, V: fmt::Debug> fmt::Debug for Drain<'a, K, V> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Debug::fmt(&BucketPairs(self.inner.as_slice()), f)
+    }
+}
+
+impl<'a, K, V: fmt::Debug> fmt::Debug for ValuesMut<'a, K, V> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_list().entries(self.inner.inner.as_slice().iter().map(|b| &b.value)).finish()
+    }
+}
+
+impl<K: fmt::Debug, V> fmt::Debug for IntoKeys<K, V> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_list().entries(self.inner.inner.as_slice().iter().map(|b| &b.key)).finish()
+    }
+}
+
+impl<K, V: fmt::Debug> fmt::Debug for IntoValues<K, V> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_list().entries(self.inner.inner.as_slice().iter().map(|b| &b.value)).finish()
+    }
+}
