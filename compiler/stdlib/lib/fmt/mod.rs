@@ -57,6 +57,9 @@ pub struct Arguments<'a> {
     // `write_str`/`write_char` of the formatter): writers get the pieces as
     // separate writes, like rustc's `fmt::write`
     marks: Marks,
+    // a formatting trait implementation returned an error (the text holds
+    // what was written before it); writers then return `Err`
+    err: bool,
     _marker: PhantomData<&'a ()>,
 }
 
@@ -112,13 +115,13 @@ impl<'a> Arguments<'a> {
     /// Creates `Arguments` from already formatted text (used by `format_args!`).
     #[inline]
     pub fn new(s: crate::string::String) -> Arguments<'a> {
-        Arguments { s, lit: None, marks: Marks::new(), _marker: PhantomData }
+        Arguments { s, lit: None, marks: Marks::new(), err: false, _marker: PhantomData }
     }
 
     /// Creates `Arguments` for a format string without arguments (`as_str` returns it).
     #[inline]
     pub fn new_const(s: &'static str) -> Arguments<'a> {
-        Arguments { s: crate::string::String::from(s), lit: Some(s), marks: Marks::new(), _marker: PhantomData }
+        Arguments { s: crate::string::String::from(s), lit: Some(s), marks: Marks::new(), err: false, _marker: PhantomData }
     }
 
     /// Gets the formatted string, if it has no arguments to be formatted at runtime.
@@ -135,7 +138,16 @@ impl<'a> Arguments<'a> {
 
     #[inline]
     pub(crate) fn into_string(self) -> crate::string::String {
+        if self.err {
+            format_error_panic();
+        }
         self.s
+    }
+
+    /// Whether a formatting trait implementation returned an error.
+    #[inline]
+    pub(crate) fn failed(&self) -> bool {
+        self.err
     }
 
     /// The number of pieces the formatting wrote (see `segment`).
@@ -157,10 +169,10 @@ impl<'a> Arguments<'a> {
     pub(crate) fn write_pieces<W: Write + ?Sized>(&self, w: &mut W) -> Result {
         let len = self.s.len();
         if self.marks.n == 0 {
-            if len == 0 {
-                return Ok(());
+            if len != 0 {
+                w.write_str(self.s.as_str())?;
             }
-            return w.write_str(self.s.as_str());
+            return if self.err { Err(Error) } else { Ok(()) };
         }
         let n = self.marks.n as usize;
         let mut start = 0;
@@ -171,7 +183,7 @@ impl<'a> Arguments<'a> {
             start = end;
             i += 1;
         }
-        Ok(())
+        if self.err { Err(Error) } else { Ok(()) }
     }
 }
 
@@ -191,6 +203,22 @@ impl<'a> Display for Arguments<'a> {
 #[inline]
 pub fn format(args: Arguments<'_>) -> crate::string::String {
     args.into_string()
+}
+
+/// `format!`/`to_string` on a value whose formatting trait implementation
+/// returned an error (std panics too).
+#[cold]
+#[inline(never)]
+#[track_caller]
+pub(crate) fn format_error_panic() -> ! {
+    crate::panic!("a formatting trait implementation returned an error when the underlying stream did not")
+}
+
+/// A `{:.*}` / `{:1$}` width or precision argument.
+#[doc(hidden)]
+#[inline]
+pub fn __count(n: &usize) -> Option<usize> {
+    Some(*n)
 }
 
 /// `format!` expands to `__must_use({ let res = ..; res })` like std's
@@ -366,7 +394,8 @@ impl<'a> Formatter<'a> {
     pub fn write_fmt(&mut self, fmt: Arguments<'_>) -> Result {
         if self.marks.is_null() {
             // the pieces only matter to a recording formatter
-            return self.write_str(fmt.as_formatted_str());
+            self.write_str(fmt.as_formatted_str())?;
+            return if fmt.failed() { Err(Error) } else { Ok(()) };
         }
         fmt.write_pieces(self)
     }
@@ -770,7 +799,9 @@ pub struct __Spec {
 #[inline(never)]
 pub fn __format(pieces: &[&'static str], specs: &[__Spec], args: &[__Arg<'_>]) -> crate::string::String {
     let mut f = Formatter::new();
-    __format_into(&mut f, pieces, specs, args);
+    if __format_into(&mut f, pieces, specs, args).is_err() {
+        format_error_panic();
+    }
     f.into_string()
 }
 
@@ -782,16 +813,16 @@ pub fn __format_args<'a>(pieces: &[&'static str], specs: &[__Spec], args: &[__Ar
     let mut marks = Marks::new();
     let mut f = Formatter::new();
     f.marks = &mut marks;
-    __format_into(&mut f, pieces, specs, args);
-    Arguments { s: f.buf, lit: None, marks, _marker: PhantomData }
+    let err = __format_into(&mut f, pieces, specs, args).is_err();
+    Arguments { s: f.buf, lit: None, marks, err, _marker: PhantomData }
 }
 
-fn __format_into(f: &mut Formatter<'_>, pieces: &[&'static str], specs: &[__Spec], args: &[__Arg<'_>]) {
+fn __format_into(f: &mut Formatter<'_>, pieces: &[&'static str], specs: &[__Spec], args: &[__Arg<'_>]) -> Result {
     let mut i = 0;
     while i < args.len() {
         let p = pieces[i];
         if !p.is_empty() {
-            let _ = f.write_str(p);
+            f.write_str(p)?;
         }
         if i < specs.len() {
             let s = &specs[i];
@@ -799,7 +830,7 @@ fn __format_into(f: &mut Formatter<'_>, pieces: &[&'static str], specs: &[__Spec
         } else {
             f.set_spec(' ', 0, 0, None, None);
         }
-        let _ = match args[i] {
+        match args[i] {
             __Arg::Display(a) => a.fmt(f),
             __Arg::Debug(a) => a.fmt(f),
             __Arg::LowerHex(a) => a.fmt(f),
@@ -809,12 +840,13 @@ fn __format_into(f: &mut Formatter<'_>, pieces: &[&'static str], specs: &[__Spec
             __Arg::LowerExp(a) => a.fmt(f),
             __Arg::UpperExp(a) => a.fmt(f),
             __Arg::Pointer(a) => a.fmt(f),
-        };
+        }?;
         i += 1;
     }
     if i < pieces.len() && !pieces[i].is_empty() {
-        let _ = f.write_str(pieces[i]);
+        f.write_str(pieces[i])?;
     }
+    Ok(())
 }
 
 /// `?` formatting.

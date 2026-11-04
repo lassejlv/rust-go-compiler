@@ -597,7 +597,9 @@ func buildFormatArgs(sp lexer.Span, in *formatInput) ([]ast.TokenTree, error) {
 			case FmtCountIs:
 				return fmt.Sprintf("::std::option::Option::Some(%dusize)", c.N)
 			case FmtCountParam:
-				return fmt.Sprintf("::std::option::Option::Some(*%s)", argRef(idx))
+				// (through a `&usize` parameter, so that `&usize` args
+				// deref-coerce like rustc's Argument::from_usize)
+				return fmt.Sprintf("::std::fmt::__count(%s)", argRef(idx))
 			}
 			return "::std::option::Option::None"
 		}

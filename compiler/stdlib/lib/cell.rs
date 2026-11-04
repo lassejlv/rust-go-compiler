@@ -630,6 +630,14 @@ pub struct OnceCell<T> {
     inner: UnsafeCell<Option<T>>,
 }
 
+impl<T> From<T> for OnceCell<T> {
+    /// Creates a new `OnceCell<T>` which already contains the given `value`.
+    #[inline]
+    fn from(value: T) -> Self {
+        OnceCell { inner: UnsafeCell::new(Some(value)) }
+    }
+}
+
 impl<T> OnceCell<T> {
     /// Creates a new uninitialized cell.
     #[inline]

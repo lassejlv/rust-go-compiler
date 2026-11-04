@@ -415,17 +415,17 @@ func itoa(n int) string { return strconv.Itoa(n) }
 func TestFormatArgRefs(t *testing.T) {
 	// width from named arg
 	got := expandExprSrc(t, "", `format_args!("{:>width$}", x, width = 6)`)
-	contains(t, got, "match (&x, &6) { (__arg0, __arg1)", "align: 2u8, flags: 0u32, width: ::std::option::Option::Some(*__arg1), precision: "+specNone+" }], &[::std::fmt::__Arg::new_display(__arg0)]")
+	contains(t, got, "match (&x, &6) { (__arg0, __arg1)", "align: 2u8, flags: 0u32, width: ::std::fmt::__count(__arg1), precision: "+specNone+" }], &[::std::fmt::__Arg::new_display(__arg0)]")
 	// positional width
 	got = expandExprSrc(t, "", `format_args!("{:1$}", x, 7)`)
-	contains(t, got, "width: ::std::option::Option::Some(*__arg1), precision: "+specNone+" }], &[::std::fmt::__Arg::new_display(__arg0)]")
+	contains(t, got, "width: ::std::fmt::__count(__arg1), precision: "+specNone+" }], &[::std::fmt::__Arg::new_display(__arg0)]")
 	// .prec$
 	got = expandExprSrc(t, "", `format_args!("{:.prec$}", 1.5, prec = 2)`)
-	contains(t, got, "width: "+specNone+", precision: ::std::option::Option::Some(*__arg1) }], &[::std::fmt::__Arg::new_display(__arg0)]")
+	contains(t, got, "width: "+specNone+", precision: ::std::fmt::__count(__arg1) }], &[::std::fmt::__Arg::new_display(__arg0)]")
 	// .* takes two args: precision, then the value
 	got = expandExprSrc(t, "", `format_args!("{} {:.*} {}", a, 3, b, c)`)
 	contains(t, got, "match (&a, &3, &b, &c)",
-		"precision: ::std::option::Option::Some(*__arg1) }",
+		"precision: ::std::fmt::__count(__arg1) }",
 		"&[::std::fmt::__Arg::new_display(__arg0), ::std::fmt::__Arg::new_display(__arg2), ::std::fmt::__Arg::new_display(__arg3)]")
 	// explicit index, reuse of the same argument
 	got = expandExprSrc(t, "", `format_args!("{0} {0:>5} {1:?} {0}", a, b)`)
@@ -441,7 +441,7 @@ func TestFormatArgRefs(t *testing.T) {
 	contains(t, got, "match (&a, &b) { (__arg0, __arg1)", "&[::std::fmt::__Arg::new_display(__arg1), ::std::fmt::__Arg::new_display(__arg0)]")
 	// implicit capture used in width
 	got = expandExprSrc(t, "", `format_args!("{:w$}", v)`)
-	contains(t, got, "match (&v, &w)", "Some(*__arg1)")
+	contains(t, got, "match (&v, &w)", "__count(__arg1)")
 	// named argument referenced positionally
 	got = expandExprSrc(t, "", `format_args!("{} {}", 1, x = 2)`)
 	contains(t, got, `::std::fmt::Arguments::new_const("1 2")`)

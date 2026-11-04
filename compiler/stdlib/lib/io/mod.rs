@@ -370,6 +370,9 @@ pub trait Write {
             self.write_all(args.segment(i).as_bytes())?;
             i += 1;
         }
+        if args.failed() {
+            return Err(Error::new(ErrorKind::Other, "formatter error"));
+        }
         Ok(())
     }
 

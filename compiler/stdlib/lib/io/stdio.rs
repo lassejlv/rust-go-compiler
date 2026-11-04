@@ -20,7 +20,27 @@ pub fn __eprint(pieces: &[&'static str], specs: &[fmt::__Spec], args: &[fmt::__A
 }
 
 /// Prints the formatted text to standard output (used by `print!`).
+/// print!/eprint! of a value whose formatting failed: the text written
+/// before the error is printed, then std panics.
+#[cold]
+#[inline(never)]
+fn print_failed(label: &str, args: &fmt::Arguments<'_>) -> ! {
+    let s = args.as_formatted_str();
+    if !try_capture(s.as_bytes()) {
+        if label == "stdout" {
+            unsafe { intrinsics::write_stdout(s.as_ptr(), s.len()) }
+        } else {
+            unsafe { intrinsics::write_stderr(s.as_ptr(), s.len()) }
+        }
+    }
+    let _ = label;
+    crate::panic!("a formatting trait implementation returned an error when the underlying stream did not")
+}
+
 pub fn _print(args: fmt::Arguments<'_>) {
+    if args.failed() {
+        print_failed("stdout", &args);
+    }
     let s = args.as_formatted_str();
     if try_capture(s.as_bytes()) {
         return;
@@ -30,6 +50,9 @@ pub fn _print(args: fmt::Arguments<'_>) {
 
 /// Prints the formatted text to standard error (used by `eprint!`).
 pub fn _eprint(args: fmt::Arguments<'_>) {
+    if args.failed() {
+        print_failed("stderr", &args);
+    }
     let s = args.as_formatted_str();
     if try_capture(s.as_bytes()) {
         return;

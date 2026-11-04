@@ -623,7 +623,7 @@ impl fmt::Write for String {
     fn write_fmt(&mut self, args: fmt::Arguments<'_>) -> fmt::Result {
         // the pieces are not observable: append the text at once
         self.push_str(args.as_formatted_str());
-        Ok(())
+        if args.failed() { Err(fmt::Error) } else { Ok(()) }
     }
 }
 
@@ -976,7 +976,9 @@ impl<T: fmt::Display + ?Sized> ToString for T {
     #[inline]
     fn to_string(&self) -> String {
         let mut f = fmt::Formatter::new();
-        let _ = fmt::Display::fmt(self, &mut f);
+        if fmt::Display::fmt(self, &mut f).is_err() {
+            fmt::format_error_panic();
+        }
         f.into_string()
     }
 }
