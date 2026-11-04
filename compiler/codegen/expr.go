@@ -1389,6 +1389,9 @@ func (fc *fnGen) methodCall(x *ast.MethodCallExpr, t Ty) string {
 		fat := fc.dynFat(recv, fc.aty(x.Receiver))
 		fp := fmt.Sprintf("((%s(*)(%s))((void**)(%s).meta)[%d])", fc.ctype(t), strings.Join(pts, ", "), fat, idx)
 		all := append([]string{fat + ".ptr"}, args...)
+		if hasTrackCaller(c.Def) {
+			return fc.finishCall(fc.trackedIndirectCall(fp, all, x.Method.Span), t)
+		}
 		return fc.finishCall(fmt.Sprintf("%s(%s)", fp, strings.Join(all, ", ")), t)
 	}
 	all := append([]string{recv}, args...)
@@ -1417,6 +1420,9 @@ func (fc *fnGen) callResolvedSpan(d *Def, args []Ty, vals []string, ret Ty, sp a
 			}
 			fat := fc.dynFat(recv, ins[0])
 			fp := fmt.Sprintf("((%s(*)(%s))((void**)(%s).meta)[%d])", fc.ctype(ret), strings.Join(pts, ", "), fat, idx)
+			if hasTrackCaller(d) {
+				return fc.trackedIndirectCall(fp, append([]string{fat + ".ptr"}, vals[1:]...), sp)
+			}
 			return fmt.Sprintf("%s(%s)", fp, strings.Join(append([]string{fat + ".ptr"}, vals[1:]...), ", "))
 		}
 		rd, rargs, ok := fc.g.tcx.ResolveAssocFn(d, args)
@@ -1436,22 +1442,35 @@ func (fc *fnGen) callResolvedSpan(d *Def, args []Ty, vals []string, ret Ty, sp a
 	if hasTrackCaller(d) {
 		// pass our location (or the one we were given) after evaluating
 		// the arguments, which may make tracked calls themselves
-		var b strings.Builder
-		b.WriteString("({ ")
-		as := make([]string, len(vals))
-		for i, v := range vals {
-			as[i] = fc.newName("tca")
-			fmt.Fprintf(&b, "__auto_type %s = %s; ", as[i], v)
-		}
+		// (to NAME_tc, see genFunction)
 		if fc.trackCaller {
-			b.WriteString("rg_caller_loc = __loc; rg_caller_tracked = 1; ")
+			vals = append(vals, "__loc", "1")
 		} else {
-			fmt.Fprintf(&b, "rg_caller_loc = &%s; rg_caller_tracked = 0; ", fc.g.locStatic(sp))
+			vals = append(vals, "&"+fc.g.locStatic(sp), "0")
 		}
-		fmt.Fprintf(&b, "%s(%s); })", name, strings.Join(as, ", "))
-		return b.String()
+		return fmt.Sprintf("%s_tc(%s)", name, strings.Join(vals, ", "))
 	}
 	return fmt.Sprintf("%s(%s)", name, strings.Join(vals, ", "))
+}
+
+// trackedIndirectCall calls a #[track_caller] method through a vtable: the
+// entry (the method's NAME wrapper, see genFunction) takes our location from
+// rg_caller_loc, stored after evaluating the arguments.
+func (fc *fnGen) trackedIndirectCall(fp string, vals []string, sp ast.Span) string {
+	var b strings.Builder
+	b.WriteString("({ ")
+	as := make([]string, len(vals))
+	for i, v := range vals {
+		as[i] = fc.newName("tca")
+		fmt.Fprintf(&b, "__auto_type %s = %s; ", as[i], v)
+	}
+	if fc.trackCaller {
+		b.WriteString("rg_caller_loc = __loc; rg_caller_tracked = 1; ")
+	} else {
+		fmt.Fprintf(&b, "rg_caller_loc = &%s; rg_caller_tracked = 0; ", fc.g.locStatic(sp))
+	}
+	fmt.Fprintf(&b, "%s(%s); })", fp, strings.Join(as, ", "))
+	return b.String()
 }
 
 // builtinTraitCall implements trait methods with compiler-provided impls.

@@ -198,7 +198,9 @@ func (p *Program) Units(n int) []string {
 	hdr.WriteString("\n/* ---- prototypes ---- */\n")
 	for _, name := range protoOrder {
 		if exported[name] {
-			hdr.WriteString(protoOf[name])
+			// (an exported `inline` function would be a C99 inline
+			// definition, which emits no symbol)
+			hdr.WriteString(strings.TrimPrefix(protoOf[name], "inline "))
 			hdr.WriteByte('\n')
 		}
 	}
@@ -228,8 +230,10 @@ func (p *Program) Units(n int) []string {
 		for _, f := range fs {
 			if !exported[f.name] {
 				b.WriteString("static ")
+				b.WriteString(f.text)
+			} else {
+				b.WriteString(strings.TrimPrefix(f.text, "inline "))
 			}
-			b.WriteString(f.text)
 		}
 		if i == 0 {
 			b.WriteString(p.main)

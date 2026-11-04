@@ -310,17 +310,36 @@ func (g *Gen) genFunction(inst instance) {
 	g.borrowck(d, r)
 	fg := newFnGen(g, r)
 	fg.computeSplit(d.Fn.Ast.Body)
-	if hasTrackCaller(d) {
-		// the caller stored its location right before calling us
-		fg.trackCaller = true
-		fg.line("const RgLoc* __loc = rg_caller_loc; int __loc_tracked = rg_caller_tracked;")
-	}
-	var params []string
+	var params, pnames []string
 	for i, pt := range r.ParamTys {
 		params = append(params, fmt.Sprintf("%s p%d", g.ctype(pt), i))
+		pnames = append(pnames, fmt.Sprintf("p%d", i))
 	}
-	sig := fmt.Sprintf("static %s %s(%s)", g.ctype(r.RetTy), name, joinParams(params))
-	fmt.Fprintf(&g.protos, "%s;\n", sig)
+	var sig string
+	inl, attrs := fnAttrs(d)
+	if hasTrackCaller(d) {
+		// #[track_caller]: direct calls pass the location explicitly to
+		// NAME_tc (a constant after inlining, so that it only materializes
+		// on the panic paths). NAME itself (fn pointers, vtables, Fn trait
+		// shims) takes the location a virtual call stored in rg_caller_loc,
+		// or else the function's own definition (like rustc's reify shim).
+		fg.trackCaller = true
+		tc := name + "_tc"
+		dsp := d.Span // (after the attributes, like rustc's def_span)
+		if d.Item != nil && len(d.Item.Tokens) > 0 {
+			dsp = d.Item.Tokens[0].Span
+		}
+		def := g.locStatic(dsp)
+		sig = fmt.Sprintf("static %s%s %s(%s)", inl, g.ctype(r.RetTy), tc, strings.Join(append(params, "const RgLoc* __loc", "int __loc_tracked"), ", "))
+		fmt.Fprintf(&g.protos, "%s%s;\n", sig, attrs)
+		wsig := fmt.Sprintf("static %s %s(%s)", g.ctype(r.RetTy), name, joinParams(params))
+		fmt.Fprintf(&g.protos, "%s;\n", wsig)
+		fmt.Fprintf(&g.fns, "%s {\n  const RgLoc* l = rg_caller_loc; int t = rg_caller_tracked; rg_caller_loc = 0;\n  if (!l) { l = &%s; t = 0; }\n  return %s(%s);\n}\n",
+			wsig, def, tc, strings.Join(append(pnames, "l", "t"), ", "))
+	} else {
+		sig = fmt.Sprintf("static %s%s %s(%s)", inl, g.ctype(r.RetTy), name, joinParams(params))
+		fmt.Fprintf(&g.protos, "%s%s;\n", sig, attrs)
+	}
 	fg.retTy = r.RetTy
 	fg.pushScope()
 	for i, l := range r.Params {
@@ -506,6 +525,39 @@ func (g *Gen) initArrayCtors() (calls []string) {
 		}
 	}
 	return calls
+}
+
+// fnAttrs maps a fn's #[inline] / #[inline(always)] / #[inline(never)] /
+// #[cold] attributes to C: an `inline ` specifier (a hint: at -O1 gcc only
+// inlines functions declared inline or called once) and prototype
+// attributes (cold functions are optimized for size and the branches
+// leading to their calls predicted not taken).
+func fnAttrs(d *Def) (inl, attrs string) {
+	var as []string
+	for _, a := range d.Attrs {
+		switch a.Path {
+		case "inline":
+			never := false
+			for _, tt := range a.Tokens {
+				for _, in := range tt.Inner {
+					if in.Tok.Text == "never" {
+						never = true
+					}
+				}
+			}
+			if never {
+				as = append(as, "noinline")
+			} else {
+				inl = "inline "
+			}
+		case "cold":
+			as = append(as, "cold")
+		}
+	}
+	if len(as) > 0 {
+		attrs = " __attribute__((" + strings.Join(as, ", ") + "))"
+	}
+	return
 }
 
 // hasTrackCaller reports #[track_caller] on a fn (or on the trait method an
