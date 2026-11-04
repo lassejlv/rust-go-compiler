@@ -4,6 +4,7 @@ mod cmp;
 mod index;
 mod iter;
 mod sort;
+mod unstable_sort;
 
 pub use self::index::{range, SliceIndex};
 pub(crate) use self::index::{bounds_into_range, bounds_into_range_unchecked, bounds_into_slice_range};
@@ -1094,7 +1095,7 @@ impl<T> [T] {
     where
         T: Ord,
     {
-        sort::merge_sort(self, &mut |a: &T, b: &T| a.lt(b));
+        unstable_sort::sort(self, &mut |a: &T, b: &T| a.lt(b));
     }
 
     /// Sorts the slice with a comparison function (the order of equal elements is unspecified).
@@ -1104,7 +1105,7 @@ impl<T> [T] {
         F: FnMut(&T, &T) -> Ordering,
     {
         let mut compare = compare;
-        sort::merge_sort(self, &mut |a: &T, b: &T| compare(a, b) == Ordering::Less);
+        unstable_sort::sort(self, &mut |a: &T, b: &T| compare(a, b) == Ordering::Less);
     }
 
     /// Sorts the slice with a key extraction function (the order of equal elements is unspecified).
@@ -1115,7 +1116,7 @@ impl<T> [T] {
         K: Ord,
     {
         let mut f = f;
-        sort::merge_sort(self, &mut |a: &T, b: &T| f(a).lt(&f(b)));
+        unstable_sort::sort(self, &mut |a: &T, b: &T| f(a).lt(&f(b)));
     }
 
     /// Reorders the slice such that the element at `index` is at its final sorted position.
@@ -1132,10 +1133,7 @@ impl<T> [T] {
                 column!(),
             );
         }
-        self.sort_unstable();
-        let (left, rest) = self.split_at_mut(index);
-        let (pivot, right) = rest.split_first_mut().unwrap();
-        (left, pivot, right)
+        unstable_sort::partition_at_index(self, index, |a: &T, b: &T| a.lt(b))
     }
 
     /// Reorders the slice with a comparator function such that the element at `index` is at its final sorted position.
@@ -1152,10 +1150,8 @@ impl<T> [T] {
                 column!(),
             );
         }
-        self.sort_unstable_by(compare);
-        let (left, rest) = self.split_at_mut(index);
-        let (pivot, right) = rest.split_first_mut().unwrap();
-        (left, pivot, right)
+        let mut compare = compare;
+        unstable_sort::partition_at_index(self, index, |a: &T, b: &T| compare(a, b) == Ordering::Less)
     }
 
     /// Reorders the slice with a key extraction function such that the element at `index` is at its final sorted position.
@@ -1164,7 +1160,16 @@ impl<T> [T] {
         F: FnMut(&T) -> K,
         K: Ord,
     {
-        self.select_nth_unstable_by(index, |a, b| f(a).cmp(&f(b)))
+        let len = self.len();
+        if index >= len {
+            crate::rt::panic_fmt(
+                format_args!("partition_at_index index {index} greater than length of slice {len}"),
+                file!(),
+                line!(),
+                column!(),
+            );
+        }
+        unstable_sort::partition_at_index(self, index, |a: &T, b: &T| f(a).lt(&f(b)))
     }
 
     /// Checks if the elements of this slice are sorted.

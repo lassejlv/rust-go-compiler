@@ -8,6 +8,10 @@ extern "rust-intrinsic" {
     pub fn size_of_val<T: ?Sized>(p: *const T) -> usize;
     pub fn align_of_val<T: ?Sized>(p: *const T) -> usize;
     pub fn needs_drop<T: ?Sized>() -> bool;
+    /// Whether `T: Copy` (std specializes its unstable small-sort on it).
+    pub fn type_is_copy<T>() -> bool;
+    /// Whether `T: Freeze` (no `UnsafeCell` outside an indirection).
+    pub fn type_is_freeze<T>() -> bool;
     pub fn type_name<T: ?Sized>() -> &'static str;
     // ---- #[track_caller]
     pub fn caller_location() -> &'static crate::panic::Location<'static>;

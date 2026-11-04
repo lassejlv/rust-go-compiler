@@ -269,6 +269,50 @@ func (g *Gen) fieldTypes(t Ty, vi int) []Ty {
 
 func (g *Gen) variantIndex(v *VariantDef) int { return v.Index }
 
+// isFreeze reports whether t is Freeze: it contains no UnsafeCell except
+// behind a reference or pointer (the auto trait's structural rule).
+func (g *Gen) isFreeze(t Ty, depth int) bool {
+	if depth > 64 {
+		return true
+	}
+	switch t.Kind {
+	case TTuple:
+		for _, e := range t.Elems {
+			if !g.isFreeze(e, depth+1) {
+				return false
+			}
+		}
+		return true
+	case TArray, TSlice:
+		return g.isFreeze(t.Elem, depth+1)
+	case TClosure:
+		ci := g.tcx.Closures[t]
+		for _, c := range ci.Captures {
+			if !c.ByRef && !g.isFreeze(c.Ty, depth+1) {
+				return false
+			}
+		}
+		return true
+	case TAdt:
+		d := t.Def
+		if d.LangItem == "unsafe_cell" {
+			return false
+		}
+		if d.LangItem == "phantom_data" {
+			return true
+		}
+		for vi := range d.Adt.Variants {
+			for _, ft := range g.fieldTypes(t, vi) {
+				if !g.isFreeze(ft, depth+1) {
+					return false
+				}
+			}
+		}
+		return true
+	}
+	return true
+}
+
 // ---------------------------------------------------------------------------
 // Drop glue
 

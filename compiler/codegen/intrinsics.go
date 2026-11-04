@@ -102,6 +102,18 @@ func (fc *fnGen) intrinsic(d *Def, args []Ty, v []string, ret Ty, sp ast.Span) s
 			return "1"
 		}
 		return "0"
+	case "type_is_copy":
+		// T: Copy (std's sort specializes its small-sort on it)
+		if g.tcx.IsCopy(arg(0)) {
+			return "1"
+		}
+		return "0"
+	case "type_is_freeze":
+		// T: Freeze (no UnsafeCell outside of an indirection)
+		if g.isFreeze(arg(0), 0) {
+			return "1"
+		}
+		return "0"
 	case "overflow_checks":
 		// debug vs --release (#[rustc_inherit_overflow_checks] in std)
 		return "((uint8_t)RG_OVERFLOW_CHECKS)"
