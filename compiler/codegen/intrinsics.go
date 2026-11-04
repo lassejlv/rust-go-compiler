@@ -163,6 +163,12 @@ func (fc *fnGen) intrinsic(d *Def, args []Ty, v []string, ret Ty, sp ast.Span) s
 		return fmt.Sprintf("(memset(%s, %s, (%s) * sizeof(%s)), (Unit){})", v[0], v[1], v[2], ct(arg(0)))
 	case "compare_bytes":
 		return fmt.Sprintf("((int32_t)rg_memcmp(%s, %s, %s))", v[0], v[1], v[2])
+	case "memchr":
+		return fmt.Sprintf("rg_memchr(%s, %s, %s)", v[0], v[1], v[2])
+	case "memrchr":
+		return fmt.Sprintf("rg_memrchr(%s, %s, %s)", v[0], v[1], v[2])
+	case "memmem":
+		return fmt.Sprintf("rg_memmem(%s, %s, %s, %s)", v[0], v[1], v[2], v[3])
 	case "read":
 		if isZST(arg(0)) {
 			return fmt.Sprintf("((%s){})", ct(arg(0)))
@@ -271,9 +277,9 @@ func (fc *fnGen) intrinsic(d *Def, args []Ty, v []string, ret Ty, sp ast.Span) s
 	case "ctpop":
 		t := arg(0)
 		if t.IntKind().Bits() == 128 {
-			return fmt.Sprintf("((uint32_t)(__builtin_popcountll((uint64_t)(%s)) + __builtin_popcountll((uint64_t)((unsigned __int128)(%s) >> 64))))", v[0], v[0])
+			return fmt.Sprintf("((uint32_t)(rg_popcount64((uint64_t)(%s)) + rg_popcount64((uint64_t)((unsigned __int128)(%s) >> 64))))", v[0], v[0])
 		}
-		return fmt.Sprintf("((uint32_t)__builtin_popcountll((uint64_t)(%s)(%s)))", fc.unsignedC(t), v[0])
+		return fmt.Sprintf("((uint32_t)rg_popcount64((uint64_t)(%s)(%s)))", fc.unsignedC(t), v[0])
 	case "ctlz":
 		t := arg(0)
 		bits := t.IntKind().Bits()

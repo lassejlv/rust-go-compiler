@@ -198,7 +198,9 @@ func (p *Program) Units(n int) []string {
 	hdr.WriteString("\n/* ---- prototypes ---- */\n")
 	for _, name := range protoOrder {
 		if exported[name] {
-			hdr.WriteString(protoOf[name])
+			// (an exported `inline` function would be a C99 inline
+			// definition, which emits no symbol)
+			hdr.WriteString(stripInline(protoOf[name]))
 			hdr.WriteByte('\n')
 		}
 	}
@@ -228,8 +230,10 @@ func (p *Program) Units(n int) []string {
 		for _, f := range fs {
 			if !exported[f.name] {
 				b.WriteString("static ")
+				b.WriteString(f.text)
+			} else {
+				b.WriteString(stripInline(f.text))
 			}
-			b.WriteString(f.text)
 		}
 		if i == 0 {
 			b.WriteString(p.main)
@@ -237,6 +241,11 @@ func (p *Program) Units(n int) []string {
 		out[i] = b.String()
 	}
 	return out
+}
+
+// stripInline removes the inline specifier of an exported function.
+func stripInline(s string) string {
+	return strings.TrimPrefix(strings.TrimPrefix(s, "inline "), "RG_INLINE_BIG ")
 }
 
 // cFnName returns the name of the function declared or defined by a

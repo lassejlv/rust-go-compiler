@@ -40,6 +40,12 @@ extern "rust-intrinsic" {
     pub fn copy_nonoverlapping<T>(src: *const T, dst: *mut T, count: usize);
     pub fn write_bytes<T>(dst: *mut T, val: u8, count: usize);
     pub fn compare_bytes(a: *const u8, b: *const u8, n: usize) -> i32;
+    /// The index of the first byte `c` in `p[..n]`, or `n`.
+    pub fn memchr(p: *const u8, c: u8, n: usize) -> usize;
+    /// The index of the last byte `c` in `p[..n]`, or `n`.
+    pub fn memrchr(p: *const u8, c: u8, n: usize) -> usize;
+    /// The index of the first occurrence of `needle[..nn]` in `h[..hn]`, or `usize::MAX`.
+    pub fn memmem(h: *const u8, hn: usize, needle: *const u8, nn: usize) -> usize;
     pub fn read<T>(p: *const T) -> T;
     pub fn write<T>(p: *mut T, v: T);
     pub fn drop_in_place<T: ?Sized>(p: *mut T);

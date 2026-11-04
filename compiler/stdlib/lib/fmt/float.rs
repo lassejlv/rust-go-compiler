@@ -37,7 +37,17 @@ fn fmt_float(f: &mut Formatter<'_>, v: f64, is_f32: bool, mode: u8) -> Result {
         None => -1,
     };
     let mode = if mode == MODE_DEBUG && prec >= 0 { MODE_DISPLAY } else { mode };
-    let mut buf = [0u8; 1200];
+    // the text is at most 343 bytes long without a precision (the digits of
+    // 1e308 or 5e-324), or with one below 50: a smaller buffer to clear
+    if prec < 50 {
+        fmt_float_in::<400>(f, v, is_f32, mode, prec, extra_zeros)
+    } else {
+        fmt_float_in::<1200>(f, v, is_f32, mode, prec, extra_zeros)
+    }
+}
+
+fn fmt_float_in<const N: usize>(f: &mut Formatter<'_>, v: f64, is_f32: bool, mode: u8, prec: isize, extra_zeros: usize) -> Result {
+    let mut buf = [0u8; N];
     let len = unsafe { intrinsics::fmt_f64(v, is_f32, mode, prec, buf.as_mut_ptr()) };
     let s = unsafe { crate::str::from_raw_parts(buf.as_ptr(), len) };
     let is_nan = v != v;
