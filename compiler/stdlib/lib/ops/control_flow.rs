@@ -2,10 +2,13 @@
 
 /// Used to tell an operation whether it should exit early or go on as usual.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[lang = "ControlFlow"]
 pub enum ControlFlow<B, C = ()> {
     /// Move on to the next phase of the operation as normal.
+    #[lang = "Continue"]
     Continue(C),
     /// Exit the operation without running subsequent phases.
+    #[lang = "Break"]
     Break(B),
 }
 

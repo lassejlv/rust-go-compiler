@@ -1,0 +1,96 @@
+== Clearing ==
+A sunny clearing. A path leads north.
+You see: a lamp, a apple.
+Exits: North
+> take lamp
+Taken: a lamp.
+> take apple
+Taken: a apple.
+> eat apple
+You eat the apple. Health is now 60.
+> n
+== Forest ==
+Tall pines. Paths go east and west; a cave mouth yawns below.
+Exits: South East West Down
+> go down
+It is pitch dark. You might be eaten by a grue.
+> take ruby
+!! There is no ruby here.
+> light lamp
+You turn the lamp on. (2 fuel left)
+> look
+== Cave ==
+A damp cave. Something glints in the dark.
+You see: a glittering ruby (worth 120 gold), a worms.
+Exits: Up
+> take the ruby
+Taken: a glittering ruby (worth 120 gold).
+> take worms
+Taken: a worms.
+> up
+== Forest ==
+Tall pines. Paths go east and west; a cave mouth yawns below.
+Exits: South East West Down
+> go up
+!! You can't go Up from here.
+> w
+== River ==
+A rushing river. A fisherman sits on the bank.
+Old Pete is here (Wary).
+Exits: East
+> talk
+Old Pete eyes you suspiciously, then nods.
+> talk
+Old Pete brightens at the sight of the worms.
+> give worms to pete
+You hand over the worms. In return you receive a brass key engraved 'oak door'.
+> talk
+Nobody is here.
+> give worms
+Not yet...
+> inventory
+key(1), lamp(3), ruby(12)
+> e
+== Forest ==
+Tall pines. Paths go east and west; a cave mouth yawns below.
+Exits: South East West Down
+> e
+== Hut ==
+A cozy hut with a heavy oak door to the north.
+Exits: North* West
+> n
+== Vault ==
+The vault! Gold everywhere.
+You see: a glittering crown (worth 500 gold).
+Exits: South
+> take crown
+The crown is too heavy (carrying 16).
+> fly
+!! I don't understand: 'fly'
+> go sideways
+!! I don't understand: unknown direction 'sideways'
+> drop lamp
+Dropped lamp.
+> drop sword
+!! There is no sword here.
+> 
+!! I don't understand: say something
+> i
+key(1), ruby(12)
+> save
+room=4
+health=60
+moves=27
+score=25
+visited=0,1,2,3,4,5
+inv=ruby,key
+> quit
+Final score: 145
+reloaded: room=4 health=60 moves=28 score=25 visited={0, 1, 2, 3, 4, 5}
+load error: corrupt save file at line 2 <- invalid digit found in string
+load error: corrupt save file at line 2 <- invalid digit found in string
+load error: corrupt save file at line 1 <- missing '='
+load error: corrupt save file at line 2 <- unknown key "color"
+[South, North, West, East, Down, Up]
+Ok(North) Err("I don't understand: unknown direction 'x'")
+{"Drop": 2, "Give": 2, "Go": 8, "Inventory": 2, "Look": 1, "Quit": 1, "Save": 1, "Take": 6, "Talk": 3, "Use": 2, "error": 3}

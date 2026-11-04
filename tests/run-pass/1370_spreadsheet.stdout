@@ -1,0 +1,44 @@
+   A1 -> (0, 0) -> A1
+   Z9 -> (25, 8) -> Z9
+ AA10 -> (26, 9) -> AA10
+ $B$7 -> (1, 6) -> B7
+  AZ1 -> (51, 0) -> AZ1
+ ZZ99 -> (701, 98) -> ZZ99
+   a1 -> (0, 0) -> A1
+   1A -> invalid
+   A0 -> invalid
+ AAA1 -> (702, 0) -> AAA1
+    |     A     |     B     |     C     |     D     
+   1|Item       |Qty        |Price      |Total      
+   2|Widget     |          4|     2.5000|         10
+   3|Gadget     |         10|     1.2500|    12.5000
+   4|Doohickey  |          1|    99.9900|    99.9900
+   5|Total      |         15|           |   122.4900
+   6|Avg price  |           |    34.5800|           
+   7|Big?       |           |           |big!       
+   8|Tax        |           |8%         |#VALUE!    
+   9|Grand      |           |           |#VALUE!    
+evals so far 28
+set B2=40 recalculated ["B2", "B5", "D2", "D5", "D7", "D8", "D9"]
+D9 = #VALUE! D7 = big!
+div0 chain: C8=#DIV/0! D8=#DIV/0! D9=#DIV/0!
+IFERROR -> -1
+fixed: D9=233.7390 E1=233.7390
+cycle cells ["F1", "F2", "F3"]: #CYCLE! #CYCLE! #CYCLE!
+cycle broken: F1=7 F2=6 F3=5
+=1+                            => #PARSE! (unexpected end)
+=SUM(A1:                       => #PARSE! (bad range end)
+="abc                          => #PARSE! (unterminated string)
+=FOO(1)                        => #NAME?
+=bar                           => #NAME?
+=2^3^2                         => 512
+=-2^2                          => 4
+=(1+2)*3-4/2                   => 7
+="a"<"B"                       => TRUE
+=LEN(A4)&UPPER(A2)             => 9WIDGET
+=COUNT(A1:D4)+COUNTA(A1:D4)    => 25
+=MAX(B2:B4)-MIN(C2:C4)         => 38.7500
+=A2+1                          => #VALUE!
+=IF(1,2)                       => 2
+cells 33 formulas 13 widest Some((3, "D5")) evals 63
+chain A300=1902 recalcs 300

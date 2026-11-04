@@ -1,0 +1,82 @@
+>  1| fn main() {
+   2|     let x = 1;
+   3|     let y = 2;
+   4| }
+   5| 
+   6| zeta
+   7| alpha
+   8| Mike
+   9| bravo
+--- after inserts
+   1| fn main() {
+   2|     let x = 1; // one
+   3|     let y = 2;
+   4|     println!("{}", x + y);
+>  5| }
+   6| 
+   7| zeta
+   8| alpha
+   9| Mike
+  10| bravo
+--- after delete_back(3) cursor Pos { line: 3, col: 24 }
+   1| fn main() {
+   2|     let x = 1; // one
+   3|     let y = 2;
+>  4|     println!("{}", x + y}
+   5| 
+   6| zeta
+   7| alpha
+   8| Mike
+   9| bravo
+--- join lines, cursor Pos { line: 3, col: 25 }
+   1| fn main() {
+   2|     let x = 1; // one
+   3|     let y = 2;
+>  4|     println!("{}", x + y}
+   5| zeta
+   6| alpha
+   7| Mike
+   8| bravo
+--- replaced 2
+   1| fn main() {
+>  2|     const x = 1; // one
+   3|     const y = 2;
+   4|     println!("{}", x + y}
+   5| zeta
+   6| alpha
+   7| Mike
+   8| bravo
+find x: [Pos { line: 1, col: 10 }, Pos { line: 3, col: 19 }]
+undid 5 groups; text restored: true
+--- after 2 redos
+   1| fn main() {
+   2|     let x = 1; // one
+   3|     let y = 2;
+   4|     println!("{}", x + y);
+>  5| }
+   6| 
+   7| zeta
+   8| alpha
+   9| Mike
+  10| bravo
+--- sorted/indented
+   1| fn main() {
+   2|     let x = 1; // one
+   3|     let y = 2;
+   4|     println!("{}", x + y); // longest
+   5| }
+   6| 
+   7|   alpha
+>  8|   bravo
+   9|   Mike
+  10| zeta
+marks {'a': Pos { line: 2, col: 3 }, 'b': Pos { line: 7, col: 0 }}
+stats [("delete", 2), ("indent", 3), ("insert", 2), ("sort", 1)] undo=2 redo=3
+--- macro
+   1| # one
+   2| # two
+   3| # three
+>  4| four
+folds: ["1..5", "  2..4", "6..9", "  7..8"]
+[5, 2, 3, 15] [(0, 2), (2, 2)]
+[[0, 1, 2, 3], [4, 6, 8, 10], [8, 10, 12, 14]]

@@ -269,6 +269,17 @@ func (fcx *FnCtxt) checkPatInner(p ast.Pat, expected Ty, bm bindingMode, oc *orC
 			isArray = true
 		case TSlice:
 			elem = et.Elem
+		case TInfer:
+			// like rustc, a pattern without `..` fixes the type to an
+			// array of its length (`let [a, b] = v.try_into()?;`)
+			if !hasRest(x.Elems) {
+				elem = fcx.ic.newVar()
+				et = ArrayN(elem, uint64(len(x.Elems)))
+				fcx.demandEq(x.Span, expected, et)
+				isArray = true
+				break
+			}
+			fallthrough
 		default:
 			fcx.errorf(x.Span, "expected an array or slice, found `%s`", fcx.resolve(expected))
 			return

@@ -1,0 +1,22 @@
+1,2,3,4,5,7
+[(1, 2), (3, 4), (5, 6), (7, 0)]
+rle: 3ab2c4de2a
+diffs [3, 5, 7, 9]
+counts [('i', 4), ('s', 4), ('p', 2), ('m', 1)]
+groups {'a': ["apple", "avocado", "axe"], 'b': ["bob", "banana"], 'c': ["cat", "cherry"]}
+minmax Some((-1.0, 9.25)) Some(("apple", "cherry")) None
+sorted ["cat", "bob", "axe", "apple", "cherry", "banana", "avocado"]
+len 5 fwd [3, 7, 11, 15, 19] rev [19, 15, 11, 7, 3]
+mixed Some(3) Some(19) Some(7) Some(15) len=1
+rposition Some(4) nth_back Some(15) zip-rev [(3, 19), (7, 15), (11, 11), (15, 7), (19, 3)]
+chain-rev [100, 15, 7]
+lending windows -> [1, 2, 6, 12, 23, 41]
+Request { url: "https://example.com/api", method: "POST", headers: [("accept", "*/*"), ("content-length", "7"), ("x-retry", "3")], body: Some("{\"k\":1}") }
+GET /health None 0
+ids [0, 1, 2, 3, 4, 5, 0, 6, 7, 0, 8] unique 9
+resolve ["end", "the", "dog"] None
+longest a much longer string here
+[Some(1); None]
+["a\tb"; "c"]
+[0, 3, 4, 5, 6, 1, 2] 7 [2, 6, 4, 0]
+[6, 5, 4, 3, 2, 1, 0] [5, 4]

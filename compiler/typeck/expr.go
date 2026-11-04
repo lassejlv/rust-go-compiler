@@ -1262,6 +1262,16 @@ func (fcx *FnCtxt) checkTry(x *ast.TryExpr) Ty {
 		}
 		return t.Args[0]
 	}
+	// ControlFlow<B, C>: `?` yields C and returns ControlFlow::Break(b)
+	if cfD := fcx.t.LangOpt("ControlFlow"); cfD != nil && t.Kind == TAdt && t.Def == cfD {
+		info.Src, info.Out = TryControlFlow, TryControlFlow
+		info.OkTy = t.Args[1]
+		info.ErrTy = t.Args[0]
+		if !fcx.ic.unify(ret, Adt(cfD, []Ty{t.Args[0], fcx.ic.newVar()})) {
+			fcx.errorf(x.Span, "the `?` operator can only be used on `ControlFlow`s in a function that returns `ControlFlow` (found `%s`)", fcx.resolve(ret))
+		}
+		return t.Args[1]
+	}
 	// Poll<Result<T, E>> and Poll<Option<Result<T, E>>> (std's Try impls
 	// for Poll): `?` propagates the error and yields Poll<T> / Poll<Option<T>>
 	pollD := fcx.t.LangOpt("Poll")

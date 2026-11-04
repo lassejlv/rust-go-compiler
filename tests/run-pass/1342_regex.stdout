@@ -1,0 +1,68 @@
+/a(b|c)*d/ insts=13 groups=2
+  "abcbd"                pike: [0..5] "abcbd" "b"                       bt-steps=19 
+  "ad"                   pike: [0..2] "ad" -                            bt-steps=9 
+  "xxabd"                pike: [2..5] "abd" "b"                         bt-steps=18 
+  "abce"                 pike: no match                                 bt-steps=31 
+/^(\d+)-(\d+)$/ insts=18 groups=3
+  "12-345"               pike: [0..6] "12-345" "12" "345"               bt-steps=16 
+  "12-"                  pike: no match                                 bt-steps=22 
+  "a12-3"                pike: no match                                 bt-steps=21 
+/(a+)(a+)/ insts=15 groups=3
+  "aaaa"                 pike: [0..4] "aaaa" "aaa" "a"                  bt-steps=16 
+  "a"                    pike: no match                                 bt-steps=14 
+/(a+?)(a+)/ insts=15 groups=3
+  "aaaa"                 pike: [0..4] "aaaa" "a" "aaa"                  bt-steps=11 
+/colou?r/ insts=10 groups=1
+  "color"                pike: [0..5] "color"                           bt-steps=9 
+  "colour"               pike: [0..6] "colour"                          bt-steps=9 
+  "colouur"              pike: no match                                 bt-steps=31 
+/[a-z]+@[a-z]+\.(com|org)/ insts=23 groups=2
+  "mail bob@example.com now" pike: [5..20] "bob@example.com" "com"          bt-steps=64 
+  "x@y.net"              pike: no match                                 bt-steps=58 
+  "me@site.org"          pike: [0..11] "me@site.org" "org"              bt-steps=22 
+/(\w+)\s(\w+)/ insts=16 groups=3
+  "hello world"          pike: [0..11] "hello world" "hello" "world"    bt-steps=19 
+  "  foo   bar"          pike: no match                                 bt-steps=93 
+/x{2,3}/ insts=7 groups=1
+  "x"                    pike: no match                                 bt-steps=7 
+  "xx"                   pike: [0..2] "xx"                              bt-steps=5 
+  "xxxxx"                pike: [0..3] "xxx"                             bt-steps=5 
+/(ab){2}/ insts=11 groups=2
+  "abab"                 pike: [0..4] "abab" "ab"                       bt-steps=10 
+  "ab"                   pike: no match                                 bt-steps=19 
+  "cababab"              pike: [1..5] "abab" "ab"                       bt-steps=15 
+/[^aeiou ]+/ insts=7 groups=1
+  "the quick brown"      pike: [0..2] "th"                              bt-steps=5 
+/(a|ab)(c|bcd)(d*)/ insts=23 groups=4
+  "abcd"                 pike: [0..4] "abcd" "a" "bcd" ""               bt-steps=15 
+/(a*)*b/ insts=11 groups=2
+  "aaab"                 pike: [0..4] "aaab" "aaa"                      bt-steps=13 MISMATCH
+    backtracker: [0..4] "aaab" ""
+  "aaaa"                 pike: no match                                 bt-steps=196 
+// insts=3 groups=1
+  ""                     pike: [0..0] ""                                bt-steps=2 
+  "abc"                  pike: [0..0] ""                                bt-steps=2 
+/a.c/ insts=6 groups=1
+  "abc"                  pike: [0..3] "abc"                             bt-steps=5 
+  "a\nc"                 pike: no match                                 bt-steps=13 
+  "ac"                   pike: no match                                 bt-steps=11 
+/[-a]+/ insts=7 groups=1
+  "--a-b"                pike: [0..4] "--a-"                            bt-steps=7 
+/(x)?(y)/ insts=10 groups=3
+  "y"                    pike: [0..1] "y" - "y"                         bt-steps=7 
+  "xy"                   pike: [0..2] "xy" "x" "y"                      bt-steps=7 
+agree 35/36
+"(ab" -> unbalanced parenthesis at 3 / Unbalanced(3)
+"ab)" -> unbalanced parenthesis at 2 / Unbalanced(2)
+"*a" -> nothing to repeat before '*' / BadRepeat('*')
+"a{x}" -> nothing to repeat before '{' / BadRepeat('{')
+"[z-a]" -> invalid range z-a / BadRange('z', 'a')
+"[abc" -> unexpected end of pattern / UnexpectedEof
+"a\\" -> unexpected end of pattern / UnexpectedEof
+["1", "22", "333", "4444"]
+1=a, 22=bb, 333=ccc
+"-a-b-c-"
+["", "xx", "", "x", ""]
+pathological n=16 pike=26 bt=true steps=720895
+[3..7] "éééx" "x"
+["and", "bat", "cat", "hat", "the"]

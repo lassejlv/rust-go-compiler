@@ -1,4 +1,8 @@
-//! An ordered map (implemented as a sorted vector of entries).
+//! An ordered map, implemented as a sorted sequence of bounded sorted blocks
+//! (a two-level "B-tree" of height 2): lookups binary-search the blocks and
+//! then the block, inserts and removals move at most one block's elements
+//! (and occasionally the block list), so all operations stay fast for large
+//! maps (a plain sorted vector made random inserts and `pop_first` O(n)).
 
 use crate::borrow::Borrow;
 use crate::cmp::Ordering;
@@ -10,34 +14,41 @@ use crate::ops::{Bound, Index, RangeBounds};
 use crate::slice;
 use crate::vec;
 
-/// An ordered map based on a sorted vector.
+/// Blocks are split when they grow beyond this many entries.
+const BLOCK_MAX: usize = 128;
+
+/// An ordered map based on a B-Tree.
 pub struct BTreeMap<K, V> {
-    entries: Vec<(K, V)>,
+    // non-empty sorted blocks; their concatenation is sorted by key
+    blocks: Vec<Vec<(K, V)>>,
+    len: usize,
 }
 
 impl<K, V> BTreeMap<K, V> {
     /// Makes a new, empty `BTreeMap`.
     #[inline]
     pub const fn new() -> BTreeMap<K, V> {
-        BTreeMap { entries: Vec::new() }
+        BTreeMap { blocks: Vec::new(), len: 0 }
     }
 
     /// Clears the map, removing all elements.
     #[inline]
     pub fn clear(&mut self) {
-        self.entries.clear()
+        self.blocks.clear();
+        self.len = 0;
     }
 
     /// Gets an iterator over the entries of the map, sorted by key.
     #[inline]
     pub fn iter(&self) -> Iter<'_, K, V> {
-        Iter { inner: self.entries.iter() }
+        Iter { inner: Flat::new(&self.blocks, self.len) }
     }
 
     /// Gets a mutable iterator over the entries of the map, sorted by key.
     #[inline]
     pub fn iter_mut(&mut self) -> IterMut<'_, K, V> {
-        IterMut { inner: self.entries.iter_mut() }
+        let n = self.len;
+        IterMut { inner: FlatMut::new(&mut self.blocks, n) }
     }
 
     /// Gets an iterator over the keys of the map, in sorted order.
@@ -73,20 +84,23 @@ impl<K, V> BTreeMap<K, V> {
     /// Returns the number of elements in the map.
     #[inline]
     pub const fn len(&self) -> usize {
-        self.entries.len()
+        self.len
     }
 
     /// Returns `true` if the map contains no elements.
     #[inline]
     pub const fn is_empty(&self) -> bool {
-        self.entries.len() == 0
+        self.len == 0
     }
 
     /// Returns the first key-value pair in the map (the minimum key).
     #[inline]
     pub fn first_key_value(&self) -> Option<(&K, &V)> {
-        match self.entries.first() {
-            Some(e) => Some((&e.0, &e.1)),
+        match self.blocks.first() {
+            Some(b) => {
+                let e = &b[0];
+                Some((&e.0, &e.1))
+            }
             None => None,
         }
     }
@@ -94,8 +108,11 @@ impl<K, V> BTreeMap<K, V> {
     /// Returns the last key-value pair in the map (the maximum key).
     #[inline]
     pub fn last_key_value(&self) -> Option<(&K, &V)> {
-        match self.entries.last() {
-            Some(e) => Some((&e.0, &e.1)),
+        match self.blocks.last() {
+            Some(b) => {
+                let e = &b[b.len() - 1];
+                Some((&e.0, &e.1))
+            }
             None => None,
         }
     }
@@ -103,36 +120,41 @@ impl<K, V> BTreeMap<K, V> {
     /// Removes and returns the first element in the map.
     #[inline]
     pub fn pop_first(&mut self) -> Option<(K, V)> {
-        if self.entries.is_empty() {
+        if self.len == 0 {
             None
         } else {
-            Some(self.entries.remove(0))
+            Some(self.remove_at(0, 0))
         }
     }
 
     /// Removes and returns the last element in the map.
     #[inline]
     pub fn pop_last(&mut self) -> Option<(K, V)> {
-        self.entries.pop()
+        if self.len == 0 {
+            return None;
+        }
+        let b = self.blocks.len() - 1;
+        let i = self.blocks[b].len() - 1;
+        Some(self.remove_at(b, i))
     }
 
     /// Returns the first entry in the map for in-place manipulation.
     pub fn first_entry(&mut self) -> Option<OccupiedEntry<'_, K, V>> {
-        if self.entries.is_empty() {
+        if self.len == 0 {
             None
         } else {
-            Some(OccupiedEntry { map: self, idx: 0 })
+            Some(OccupiedEntry { map: self, b: 0, i: 0 })
         }
     }
 
     /// Returns the last entry in the map for in-place manipulation.
     pub fn last_entry(&mut self) -> Option<OccupiedEntry<'_, K, V>> {
-        let n = self.entries.len();
-        if n == 0 {
-            None
-        } else {
-            Some(OccupiedEntry { map: self, idx: n - 1 })
+        if self.len == 0 {
+            return None;
         }
+        let b = self.blocks.len() - 1;
+        let i = self.blocks[b].len() - 1;
+        Some(OccupiedEntry { map: self, b, i })
     }
 
     /// Retains only the elements specified by the predicate.
@@ -141,28 +163,141 @@ impl<K, V> BTreeMap<K, V> {
         F: FnMut(&K, &mut V) -> bool,
     {
         let mut f = f;
-        self.entries.retain_mut(|e| f(&e.0, &mut e.1));
+        let mut n = 0;
+        let mut bi = 0;
+        while bi < self.blocks.len() {
+            self.blocks[bi].retain_mut(|e| f(&e.0, &mut e.1));
+            n += self.blocks[bi].len();
+            bi += 1;
+        }
+        self.blocks.retain(|b| !b.is_empty());
+        self.len = n;
+    }
+
+    /// Removes the entry at block `b`, index `i`.
+    fn remove_at(&mut self, b: usize, i: usize) -> (K, V) {
+        let e = self.blocks[b].remove(i);
+        self.len -= 1;
+        let n = self.blocks[b].len();
+        if n == 0 {
+            self.blocks.remove(b);
+        } else if n < BLOCK_MAX / 4 && b + 1 < self.blocks.len() && n + self.blocks[b + 1].len() <= BLOCK_MAX {
+            // merge a small block with its successor
+            let next = self.blocks.remove(b + 1);
+            self.blocks[b].extend(next);
+        }
+        e
+    }
+
+    /// Inserts at block `b`, index `i` (a valid insertion point), splitting
+    /// a full block; returns the entry's final position.
+    fn insert_at(&mut self, b: usize, i: usize, key: K, value: V) -> (usize, usize) {
+        self.len += 1;
+        if self.blocks.is_empty() {
+            let mut blk = Vec::with_capacity(8);
+            blk.push((key, value));
+            self.blocks.push(blk);
+            return (0, 0);
+        }
+        self.blocks[b].insert(i, (key, value));
+        let n = self.blocks[b].len();
+        if n > BLOCK_MAX {
+            let half = n / 2;
+            let tail = self.blocks[b].split_off(half);
+            self.blocks.insert(b + 1, tail);
+            if i >= half {
+                return (b + 1, i - half);
+            }
+        }
+        (b, i)
+    }
+
+    /// Number of entries between positions p and q (p <= q).
+    fn count_between(&self, p: (usize, usize), q: (usize, usize)) -> usize {
+        if p.0 == q.0 {
+            return q.1 - p.1;
+        }
+        let mut n = self.blocks[p.0].len() - p.1;
+        let mut b = p.0 + 1;
+        while b < q.0 {
+            n += self.blocks[b].len();
+            b += 1;
+        }
+        if q.0 < self.blocks.len() {
+            n += q.1;
+        }
+        n
+    }
+
+    /// All entries in order, consuming the map.
+    fn into_flat(self) -> Vec<(K, V)> {
+        let mut out = Vec::with_capacity(self.len);
+        let mut bs = self.blocks.into_iter();
+        while let Some(b) = bs.next() {
+            out.extend(b);
+        }
+        out
+    }
+
+    /// Rebuilds a map from sorted, deduplicated entries.
+    fn from_sorted(v: Vec<(K, V)>) -> BTreeMap<K, V> {
+        let len = v.len();
+        let mut blocks = Vec::new();
+        let mut it = v.into_iter();
+        let mut cur: Vec<(K, V)> = Vec::new();
+        while let Some(e) = it.next() {
+            cur.push(e);
+            if cur.len() == BLOCK_MAX / 2 {
+                blocks.push(mem::take(&mut cur));
+            }
+        }
+        if !cur.is_empty() {
+            blocks.push(cur);
+        }
+        BTreeMap { blocks, len }
     }
 }
 
 impl<K: Ord, V> BTreeMap<K, V> {
-    /// Binary search for `key`: Ok(index) if present, Err(insertion point) otherwise.
+    /// Binary search for `key`: Ok(position) if present, Err(insertion point)
+    /// otherwise. Positions are (block, index); the insertion point past the
+    /// last entry is (last block, its length).
     #[inline]
-    fn search<Q: ?Sized + Ord>(&self, key: &Q) -> Result<usize, usize>
+    fn search<Q: ?Sized + Ord>(&self, key: &Q) -> Result<(usize, usize), (usize, usize)>
     where
         K: Borrow<Q>,
     {
+        let nb = self.blocks.len();
+        if nb == 0 {
+            return Err((0, 0));
+        }
+        // the first block whose last key is >= key
         let mut lo = 0usize;
-        let mut hi = self.entries.len();
+        let mut hi = nb;
         while lo < hi {
             let mid = lo + (hi - lo) / 2;
-            match self.entries[mid].0.borrow().cmp(key) {
-                Ordering::Less => lo = mid + 1,
-                Ordering::Greater => hi = mid,
-                Ordering::Equal => return Ok(mid),
+            let blk = &self.blocks[mid];
+            if blk[blk.len() - 1].0.borrow() < key {
+                lo = mid + 1;
+            } else {
+                hi = mid;
             }
         }
-        Err(lo)
+        if lo == nb {
+            return Err((nb - 1, self.blocks[nb - 1].len()));
+        }
+        let blk = &self.blocks[lo];
+        let mut l = 0usize;
+        let mut h = blk.len();
+        while l < h {
+            let mid = l + (h - l) / 2;
+            match blk[mid].0.borrow().cmp(key) {
+                Ordering::Less => l = mid + 1,
+                Ordering::Greater => h = mid,
+                Ordering::Equal => return Ok((lo, mid)),
+            }
+        }
+        Err((lo, l))
     }
 
     /// Returns a reference to the value corresponding to the key.
@@ -173,7 +308,7 @@ impl<K: Ord, V> BTreeMap<K, V> {
         Q: Ord,
     {
         match self.search(key) {
-            Ok(i) => Some(&self.entries[i].1),
+            Ok((b, i)) => Some(&self.blocks[b][i].1),
             Err(_) => None,
         }
     }
@@ -186,8 +321,8 @@ impl<K: Ord, V> BTreeMap<K, V> {
         Q: Ord,
     {
         match self.search(k) {
-            Ok(i) => {
-                let e = &self.entries[i];
+            Ok((b, i)) => {
+                let e = &self.blocks[b][i];
                 Some((&e.0, &e.1))
             }
             Err(_) => None,
@@ -212,7 +347,7 @@ impl<K: Ord, V> BTreeMap<K, V> {
         Q: Ord,
     {
         match self.search(key) {
-            Ok(i) => Some(&mut self.entries[i].1),
+            Ok((b, i)) => Some(&mut self.blocks[b][i].1),
             Err(_) => None,
         }
     }
@@ -220,9 +355,9 @@ impl<K: Ord, V> BTreeMap<K, V> {
     /// Inserts a key-value pair into the map, returning the old value if the key was present.
     pub fn insert(&mut self, key: K, value: V) -> Option<V> {
         match self.search(&key) {
-            Ok(i) => Some(mem::replace(&mut self.entries[i].1, value)),
-            Err(i) => {
-                self.entries.insert(i, (key, value));
+            Ok((b, i)) => Some(mem::replace(&mut self.blocks[b][i].1, value)),
+            Err((b, i)) => {
+                self.insert_at(b, i, key, value);
                 None
             }
         }
@@ -236,7 +371,7 @@ impl<K: Ord, V> BTreeMap<K, V> {
         Q: Ord,
     {
         match self.search(key) {
-            Ok(i) => Some(self.entries.remove(i).1),
+            Ok((b, i)) => Some(self.remove_at(b, i).1),
             Err(_) => None,
         }
     }
@@ -249,21 +384,68 @@ impl<K: Ord, V> BTreeMap<K, V> {
         Q: Ord,
     {
         match self.search(key) {
-            Ok(i) => Some(self.entries.remove(i)),
+            Ok((b, i)) => Some(self.remove_at(b, i)),
             Err(_) => None,
         }
     }
 
     /// Moves all elements from `other` into `self`, leaving `other` empty.
     pub fn append(&mut self, other: &mut BTreeMap<K, V>) {
-        let items = mem::take(&mut other.entries);
+        let items = mem::take(other).into_flat();
         let mut it = items.into_iter();
         while let Some((k, v)) = it.next() {
             self.insert(k, v);
         }
     }
 
-    fn range_indices<T: ?Sized, R>(&self, range: &R) -> (usize, usize)
+    /// The position of the first entry not below the start bound.
+    fn lower_pos<T: ?Sized + Ord>(&self, b: Bound<&T>) -> (usize, usize)
+    where
+        K: Borrow<T>,
+    {
+        let p = match b {
+            Bound::Included(s) => match self.search(s) {
+                Ok(p) => p,
+                Err(p) => p,
+            },
+            Bound::Excluded(s) => match self.search(s) {
+                Ok((b, i)) => (b, i + 1),
+                Err(p) => p,
+            },
+            Bound::Unbounded => (0, 0),
+        };
+        self.norm(p)
+    }
+
+    /// The position just past the last entry not above the end bound.
+    fn upper_pos<T: ?Sized + Ord>(&self, b: Bound<&T>) -> (usize, usize)
+    where
+        K: Borrow<T>,
+    {
+        let p = match b {
+            Bound::Included(e) => match self.search(e) {
+                Ok((b, i)) => (b, i + 1),
+                Err(p) => p,
+            },
+            Bound::Excluded(e) => match self.search(e) {
+                Ok(p) => p,
+                Err(p) => p,
+            },
+            Bound::Unbounded => (self.blocks.len(), 0),
+        };
+        self.norm(p)
+    }
+
+    /// Normalizes a position at the end of a block to the start of the next.
+    fn norm(&self, p: (usize, usize)) -> (usize, usize) {
+        if p.0 < self.blocks.len() && p.1 >= self.blocks[p.0].len() {
+            (p.0 + 1, 0)
+        } else {
+            p
+        }
+    }
+
+    fn range_positions<T: ?Sized, R>(&self, range: &R) -> ((usize, usize), (usize, usize), usize)
     where
         T: Ord,
         K: Borrow<T>,
@@ -287,30 +469,13 @@ impl<K: Ord, V> BTreeMap<K, V> {
                 crate::rt::panic_str("range start and end are equal and excluded in BTreeMap", file!(), line!(), column!());
             }
         }
-        let start = match range.start_bound() {
-            Bound::Included(s) => match self.search(s) {
-                Ok(i) => i,
-                Err(i) => i,
-            },
-            Bound::Excluded(s) => match self.search(s) {
-                Ok(i) => i + 1,
-                Err(i) => i,
-            },
-            Bound::Unbounded => 0,
-        };
-        let end = match range.end_bound() {
-            Bound::Included(e) => match self.search(e) {
-                Ok(i) => i + 1,
-                Err(i) => i,
-            },
-            Bound::Excluded(e) => match self.search(e) {
-                Ok(i) => i,
-                Err(i) => i,
-            },
-            Bound::Unbounded => self.entries.len(),
-        };
-        let end = if end < start { start } else { end };
-        (start, end)
+        let start = self.lower_pos(range.start_bound());
+        let end = self.upper_pos(range.end_bound());
+        if end <= start {
+            return (start, start, 0);
+        }
+        let n = self.count_between(start, end);
+        (start, end, n)
     }
 
     /// Constructs a double-ended iterator over a sub-range of elements in the map.
@@ -320,8 +485,8 @@ impl<K: Ord, V> BTreeMap<K, V> {
         K: Borrow<T> + Ord,
         R: RangeBounds<T>,
     {
-        let (start, end) = self.range_indices(&range);
-        Range { inner: self.entries[start..end].iter() }
+        let (start, end, n) = self.range_positions(&range);
+        Range { inner: Flat::between(&self.blocks, start, end, n) }
     }
 
     /// Constructs a mutable double-ended iterator over a sub-range of elements in the map.
@@ -331,15 +496,15 @@ impl<K: Ord, V> BTreeMap<K, V> {
         K: Borrow<T> + Ord,
         R: RangeBounds<T>,
     {
-        let (start, end) = self.range_indices(&range);
-        RangeMut { inner: self.entries[start..end].iter_mut() }
+        let (start, end, n) = self.range_positions(&range);
+        RangeMut { inner: FlatMut::between(&mut self.blocks, start, end, n) }
     }
 
     /// Gets the given key's corresponding entry in the map for in-place manipulation.
     pub fn entry(&mut self, key: K) -> Entry<'_, K, V> {
         match self.search(&key) {
-            Ok(idx) => Entry::Occupied(OccupiedEntry { map: self, idx }),
-            Err(idx) => Entry::Vacant(VacantEntry { map: self, idx, key }),
+            Ok((b, i)) => Entry::Occupied(OccupiedEntry { map: self, b, i }),
+            Err((b, i)) => Entry::Vacant(VacantEntry { map: self, b, i, key }),
         }
     }
 
@@ -348,11 +513,29 @@ impl<K: Ord, V> BTreeMap<K, V> {
     where
         K: Borrow<Q>,
     {
-        let idx = match self.search(key) {
-            Ok(i) => i,
-            Err(i) => i,
-        };
-        BTreeMap { entries: self.entries.split_off(idx) }
+        let (b, i) = self.norm(match self.search(key) {
+            Ok(p) => p,
+            Err(p) => p,
+        });
+        if b >= self.blocks.len() {
+            return BTreeMap::new();
+        }
+        let mut tail_blocks = self.blocks.split_off(b + 1);
+        let tail_of_b = self.blocks[b].split_off(i);
+        if self.blocks[b].is_empty() {
+            self.blocks.pop();
+        }
+        if !tail_of_b.is_empty() {
+            tail_blocks.insert(0, tail_of_b);
+        }
+        let mut moved = 0;
+        let mut k = 0;
+        while k < tail_blocks.len() {
+            moved += tail_blocks[k].len();
+            k += 1;
+        }
+        self.len -= moved;
+        BTreeMap { blocks: tail_blocks, len: moved }
     }
 
     /// Creates an iterator that visits all elements in ascending key order and uses a closure to determine if an element should be removed.
@@ -367,8 +550,8 @@ impl<K: Ord, V> BTreeMap<K, V> {
     {
         let mut pred = pred;
         let mut removed = Vec::new();
-        let mut kept = Vec::with_capacity(self.entries.len());
-        let mut it = mem::take(&mut self.entries).into_iter();
+        let mut kept = Vec::with_capacity(self.len);
+        let mut it = mem::take(self).into_flat().into_iter();
         while let Some(mut e) = it.next() {
             if range.contains(&e.0) && pred(&e.0, &mut e.1) {
                 removed.push(e);
@@ -376,14 +559,14 @@ impl<K: Ord, V> BTreeMap<K, V> {
                 kept.push(e);
             }
         }
-        self.entries = kept;
+        *self = BTreeMap::from_sorted(kept);
         removed.into_iter()
     }
 }
 
 impl<K: Clone, V: Clone> Clone for BTreeMap<K, V> {
     fn clone(&self) -> BTreeMap<K, V> {
-        BTreeMap { entries: self.entries.clone() }
+        BTreeMap { blocks: self.blocks.clone(), len: self.len }
     }
 }
 
@@ -395,7 +578,22 @@ impl<K, V> Default for BTreeMap<K, V> {
 
 impl<K: PartialEq, V: PartialEq> PartialEq for BTreeMap<K, V> {
     fn eq(&self, other: &BTreeMap<K, V>) -> bool {
-        self.entries == other.entries
+        if self.len != other.len {
+            return false;
+        }
+        let mut a = self.iter();
+        let mut b = other.iter();
+        while let Some((ka, va)) = a.next() {
+            match b.next() {
+                Some((kb, vb)) => {
+                    if ka != kb || va != vb {
+                        return false;
+                    }
+                }
+                None => return false,
+            }
+        }
+        true
     }
 }
 
@@ -404,14 +602,14 @@ impl<K: Eq, V: Eq> Eq for BTreeMap<K, V> {}
 impl<K: PartialOrd, V: PartialOrd> PartialOrd for BTreeMap<K, V> {
     #[inline]
     fn partial_cmp(&self, other: &BTreeMap<K, V>) -> Option<Ordering> {
-        self.entries.partial_cmp(&other.entries)
+        self.iter().partial_cmp(other.iter())
     }
 }
 
 impl<K: Ord, V: Ord> Ord for BTreeMap<K, V> {
     #[inline]
     fn cmp(&self, other: &BTreeMap<K, V>) -> Ordering {
-        self.entries.cmp(&other.entries)
+        self.iter().cmp(other.iter())
     }
 }
 
@@ -486,6 +684,7 @@ impl<K: Ord, V, const N: usize> From<[(K, V); N]> for BTreeMap<K, V> {
     }
 }
 
+
 impl<'a, K, V> IntoIterator for &'a BTreeMap<K, V> {
     type Item = (&'a K, &'a V);
     type IntoIter = Iter<'a, K, V>;
@@ -506,18 +705,173 @@ impl<K, V> IntoIterator for BTreeMap<K, V> {
     type Item = (K, V);
     type IntoIter = IntoIter<K, V>;
     fn into_iter(self) -> IntoIter<K, V> {
-        IntoIter { inner: self.entries.into_iter() }
+        IntoIter { inner: self.into_flat().into_iter() }
     }
 }
 
 // ---------------------------------------------------------------------------
 // Iterators
 
+/// The entries of a run of blocks: the rest of the front block, the blocks
+/// in between, the start of the back block; `n` entries remain.
+struct Flat<'a, K: 'a, V: 'a> {
+    front: slice::Iter<'a, (K, V)>,
+    mid: slice::Iter<'a, Vec<(K, V)>>,
+    back: slice::Iter<'a, (K, V)>,
+    n: usize,
+}
+
+impl<'a, K, V> Clone for Flat<'a, K, V> {
+    fn clone(&self) -> Self {
+        Flat { front: self.front.clone(), mid: self.mid.clone(), back: self.back.clone(), n: self.n }
+    }
+}
+
+impl<'a, K, V> Flat<'a, K, V> {
+    fn new(blocks: &'a [Vec<(K, V)>], n: usize) -> Self {
+        Flat { front: Default::default(), mid: blocks.iter(), back: Default::default(), n }
+    }
+
+    fn between(blocks: &'a [Vec<(K, V)>], s: (usize, usize), e: (usize, usize), n: usize) -> Self {
+        if n == 0 {
+            return Flat { front: Default::default(), mid: Default::default(), back: Default::default(), n: 0 };
+        }
+        if s.0 == e.0 {
+            return Flat { front: blocks[s.0][s.1..e.1].iter(), mid: Default::default(), back: Default::default(), n };
+        }
+        let back = if e.0 < blocks.len() { blocks[e.0][..e.1].iter() } else { Default::default() };
+        Flat { front: blocks[s.0][s.1..].iter(), mid: blocks[s.0 + 1..e.0].iter(), back, n }
+    }
+
+    #[inline]
+    fn next(&mut self) -> Option<&'a (K, V)> {
+        if self.n == 0 {
+            return None;
+        }
+        loop {
+            if let Some(e) = self.front.next() {
+                self.n -= 1;
+                return Some(e);
+            }
+            match self.mid.next() {
+                Some(b) => self.front = b.iter(),
+                None => {
+                    let e = self.back.next();
+                    if e.is_some() {
+                        self.n -= 1;
+                    }
+                    return e;
+                }
+            }
+        }
+    }
+
+    #[inline]
+    fn next_back(&mut self) -> Option<&'a (K, V)> {
+        if self.n == 0 {
+            return None;
+        }
+        loop {
+            if let Some(e) = self.back.next_back() {
+                self.n -= 1;
+                return Some(e);
+            }
+            match self.mid.next_back() {
+                Some(b) => self.back = b.iter(),
+                None => {
+                    let e = self.front.next_back();
+                    if e.is_some() {
+                        self.n -= 1;
+                    }
+                    return e;
+                }
+            }
+        }
+    }
+}
+
+/// Mutable version of `Flat`.
+struct FlatMut<'a, K: 'a, V: 'a> {
+    front: slice::IterMut<'a, (K, V)>,
+    mid: slice::IterMut<'a, Vec<(K, V)>>,
+    back: slice::IterMut<'a, (K, V)>,
+    n: usize,
+}
+
+impl<'a, K, V> FlatMut<'a, K, V> {
+    fn new(blocks: &'a mut [Vec<(K, V)>], n: usize) -> Self {
+        FlatMut { front: Default::default(), mid: blocks.iter_mut(), back: Default::default(), n }
+    }
+
+    fn between(blocks: &'a mut [Vec<(K, V)>], s: (usize, usize), e: (usize, usize), n: usize) -> Self {
+        if n == 0 {
+            return FlatMut { front: Default::default(), mid: Default::default(), back: Default::default(), n: 0 };
+        }
+        let (head, rest) = blocks.split_at_mut(s.0 + 1);
+        let first: &'a mut Vec<(K, V)> = &mut head[s.0];
+        if s.0 == e.0 {
+            return FlatMut { front: first[s.1..e.1].iter_mut(), mid: Default::default(), back: Default::default(), n };
+        }
+        let (mid, tail) = rest.split_at_mut(e.0 - s.0 - 1);
+        let back = match tail.first_mut() {
+            Some(b) => b[..e.1].iter_mut(),
+            None => Default::default(),
+        };
+        FlatMut { front: first[s.1..].iter_mut(), mid: mid.iter_mut(), back, n }
+    }
+
+    #[inline]
+    fn next(&mut self) -> Option<&'a mut (K, V)> {
+        if self.n == 0 {
+            return None;
+        }
+        loop {
+            if let Some(e) = self.front.next() {
+                self.n -= 1;
+                return Some(e);
+            }
+            match self.mid.next() {
+                Some(b) => self.front = b.iter_mut(),
+                None => {
+                    let e = self.back.next();
+                    if e.is_some() {
+                        self.n -= 1;
+                    }
+                    return e;
+                }
+            }
+        }
+    }
+
+    #[inline]
+    fn next_back(&mut self) -> Option<&'a mut (K, V)> {
+        if self.n == 0 {
+            return None;
+        }
+        loop {
+            if let Some(e) = self.back.next_back() {
+                self.n -= 1;
+                return Some(e);
+            }
+            match self.mid.next_back() {
+                Some(b) => self.back = b.iter_mut(),
+                None => {
+                    let e = self.front.next_back();
+                    if e.is_some() {
+                        self.n -= 1;
+                    }
+                    return e;
+                }
+            }
+        }
+    }
+}
+
 macro_rules! __std_btree_ref_iter {
     ($name:ident, $doc:expr) => {
         #[doc = $doc]
         pub struct $name<'a, K: 'a, V: 'a> {
-            inner: slice::Iter<'a, (K, V)>,
+            inner: Flat<'a, K, V>,
         }
 
         impl<'a, K, V> Clone for $name<'a, K, V> {
@@ -537,7 +891,7 @@ macro_rules! __std_btree_ref_iter {
             }
             #[inline]
             fn size_hint(&self) -> (usize, Option<usize>) {
-                self.inner.size_hint()
+                (self.inner.n, Some(self.inner.n))
             }
             #[inline]
             fn last(self) -> Option<(&'a K, &'a V)> {
@@ -558,7 +912,7 @@ macro_rules! __std_btree_ref_iter {
 
         impl<'a, K, V> ExactSizeIterator for $name<'a, K, V> {
             fn len(&self) -> usize {
-                self.inner.len()
+                self.inner.n
             }
         }
 
@@ -579,7 +933,7 @@ macro_rules! __std_btree_mut_iter {
     ($name:ident, $doc:expr) => {
         #[doc = $doc]
         pub struct $name<'a, K: 'a, V: 'a> {
-            inner: slice::IterMut<'a, (K, V)>,
+            inner: FlatMut<'a, K, V>,
         }
 
         impl<'a, K, V> Iterator for $name<'a, K, V> {
@@ -593,7 +947,7 @@ macro_rules! __std_btree_mut_iter {
             }
             #[inline]
             fn size_hint(&self) -> (usize, Option<usize>) {
-                self.inner.size_hint()
+                (self.inner.n, Some(self.inner.n))
             }
         }
 
@@ -609,7 +963,7 @@ macro_rules! __std_btree_mut_iter {
 
         impl<'a, K, V> ExactSizeIterator for $name<'a, K, V> {
             fn len(&self) -> usize {
-                self.inner.len()
+                self.inner.n
             }
         }
 
@@ -874,14 +1228,16 @@ pub use self::Entry::{Occupied, Vacant};
 /// A view into a vacant entry in a `BTreeMap`.
 pub struct VacantEntry<'a, K: 'a, V: 'a> {
     map: &'a mut BTreeMap<K, V>,
-    idx: usize,
+    b: usize,
+    i: usize,
     key: K,
 }
 
 /// A view into an occupied entry in a `BTreeMap`.
 pub struct OccupiedEntry<'a, K: 'a, V: 'a> {
     map: &'a mut BTreeMap<K, V>,
-    idx: usize,
+    b: usize,
+    i: usize,
 }
 
 impl<'a, K: Ord, V> Entry<'a, K, V> {
@@ -969,46 +1325,44 @@ impl<'a, K: Ord, V> VacantEntry<'a, K, V> {
 
     /// Sets the value of the entry with the `VacantEntry`'s key, and returns a mutable reference to it.
     pub fn insert(self, value: V) -> &'a mut V {
-        let idx = self.idx;
         let map = self.map;
-        map.entries.insert(idx, (self.key, value));
-        &mut map.entries[idx].1
+        let (b, i) = map.insert_at(self.b, self.i, self.key, value);
+        &mut map.blocks[b][i].1
     }
 
     /// Sets the value of the entry with the `VacantEntry`'s key, and returns an `OccupiedEntry`.
     pub fn insert_entry(self, value: V) -> OccupiedEntry<'a, K, V> {
-        let idx = self.idx;
         let map = self.map;
-        map.entries.insert(idx, (self.key, value));
-        OccupiedEntry { map, idx }
+        let (b, i) = map.insert_at(self.b, self.i, self.key, value);
+        OccupiedEntry { map, b, i }
     }
 }
 
 impl<'a, K: Ord, V> OccupiedEntry<'a, K, V> {
     /// Gets a reference to the key in the entry.
     pub fn key(&self) -> &K {
-        &self.map.entries[self.idx].0
+        &self.map.blocks[self.b][self.i].0
     }
 
     /// Take ownership of the key and value from the map.
     pub fn remove_entry(self) -> (K, V) {
-        self.map.entries.remove(self.idx)
+        self.map.remove_at(self.b, self.i)
     }
 
     /// Gets a reference to the value in the entry.
     pub fn get(&self) -> &V {
-        &self.map.entries[self.idx].1
+        &self.map.blocks[self.b][self.i].1
     }
 
     /// Gets a mutable reference to the value in the entry.
     pub fn get_mut(&mut self) -> &mut V {
-        &mut self.map.entries[self.idx].1
+        &mut self.map.blocks[self.b][self.i].1
     }
 
     /// Converts the entry into a mutable reference to its value.
     pub fn into_mut(self) -> &'a mut V {
-        let idx = self.idx;
-        &mut self.map.entries[idx].1
+        let (b, i) = (self.b, self.i);
+        &mut self.map.blocks[b][i].1
     }
 
     /// Sets the value of the entry with the `OccupiedEntry`'s key, and returns the entry's old value.

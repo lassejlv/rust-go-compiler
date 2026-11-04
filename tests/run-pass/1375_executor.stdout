@@ -1,0 +1,40 @@
+[t=  0] queued job 0
+[t=  0] queued job 1
+[t=  0] w1 starts job 0 (cost 5)
+[t=  0] w2 starts job 1 (cost 3)
+[t=  0] queued job 2
+[t=  0] queued job 3
+[t=  0] queued job 4
+[t=  3] w2 finished job 1
+[t=  3] w2 starts job 3 (cost 2)
+[t=  3] queued job 5
+[t=  3] producer done
+[t=  5] w1 finished job 0
+[t=  5] w1 starts job 4 (cost 7)
+[t=  5] w2 finished job 3
+[t=  5] w2 starts job 5 (cost 1)
+[t=  6] w2 finished job 5
+[t=  6] w2 exits
+[t=  6] w3 starts job 2 (cost 8)
+[t= 12] w1 finished job 4
+[t= 12] w1 exits
+[t= 14] w3 finished job 2
+[t= 14] w3 exits
+[t= 14] results ["w2:1", "w1:0", "w2:3", "w2:5", "w1:4", "w3:2"]
+[t= 17] short timer won
+[t= 21] joined 40 + 2 = 42
+[t= 21] order 1 delivered to 2 handlers
+[t= 21] order 2 delivered to 2 handlers
+[t= 21] order 3 delivered to 2 handlers
+[t= 21] unhandled event delivered to 0 handlers
+[t= 22] shipped order 2 (1 units)
+[t= 23] shipped order 3 (2 units)
+[t= 24] shipped order 1 (3 units)
+[t= 26] shutdown requested: end of day
+[t= 26] total units 6
+done: 34 polls, 0 tasks left, clock 26
+[t=  0] got 0
+[t=  1] got 1
+[t=  2] got 4
+[t=  3] sum 5
+done: 9 polls, 0 tasks left, clock 3

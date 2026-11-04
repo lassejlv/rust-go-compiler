@@ -1,0 +1,40 @@
+--- arith ---
+0000 Load(0)
+0001 Push(2)
+0002 Lt
+0003 Jz(6)
+0004 Push(1)
+0005 Jmp(12)
+0006 Load(0)
+0007 Load(0)
+0008 Push(1)
+0009 Sub
+0010 Call(0, 1)
+0011 Mul
+2432902008176640000
+6765
+2001
+ok 0 steps=251094 allocs=0 gcs=0 freed=0 live=0
+--- lists ---
+34220
+(5 . (4 . (3 . (2 . (1 . (0 . ()))))))
+ok 1 steps=66427 allocs=3552 gcs=49 freed=3540 live=12
+--- arrays ---
+[0 0 0 0 1 0 1 0 1 1 1 0 1 0 1 1 1 0 1 0 1 1 1 0 1 1 1 1 1 0]
+[0 1 2 3 4 5 6 7 8 9]
+done
+5
+ok 2 steps=3171 allocs=5 gcs=0 freed=0 live=5
+--- divzero ---
+vm error: DivZero(5)
+--- bounds ---
+vm error: Bounds { idx: 5, len: 1 }
+--- unbound ---
+compile error: unbound variable `zz`
+--- arity ---
+compile error: `f` takes 1 args but 0 given
+--- overflow ---
+vm error: StackOverflow
+--- typeerr ---
+vm error: Type("int", 3)
+{"arith": "ok", "arity": "compile-error", "arrays": "ok", "bounds": "vm", "divzero": "vm", "lists": "ok", "overflow": "vm", "typeerr": "vm", "unbound": "compile-error"}

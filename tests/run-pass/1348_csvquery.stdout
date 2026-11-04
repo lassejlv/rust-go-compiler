@@ -1,0 +1,49 @@
+6 cols ["name", "dept", "salary", "age", "city", "start"], 11 rows
++-------+-----------+-----+
+| name  |  salary   | age |
++-------+-----------+-----+
+| Eve   | 135000.50 |  41 |
+| Alice |    120000 |  34 |
+| Bob   |     95000 |  28 |
+| Heidi |     88000 |  26 |
++-------+-----------+-----+
++-------------+---------------+-------------+-------------+----------+----------+
+|    dept     | count(salary) | sum(salary) | avg(salary) | min(age) | max(age) |
++-------------+---------------+-------------+-------------+----------+----------+
+| Engineering |             4 |   438000.50 |   109500.12 |       26 |       41 |
+| Sales       |             2 |   151000.00 |    75500.00 |       31 |       52 |
+| Marketing   |             2 |   137000.00 |    68500.00 |       23 |       37 |
+| HR          |             2 |   118000.25 |    59000.12 |       29 |       48 |
++-------------+---------------+-------------+-------------+----------+----------+
++---------+--------+----------+
+|  name   | tenure | per_year |
++---------+--------+----------+
+| Ivan    |      6 | 13500.00 |
+| Grace   |      8 |  9000.00 |
+| Alice   |      9 | 13333.33 |
+| Eve     |     12 | 11250.04 |
+| Mallory |     14 |  4142.88 |
++---------+--------+----------+
++---------------+-------------+----------+
+|     city      | count(name) | avg(age) |
++---------------+-------------+----------+
+| Portland      |           3 |    27.33 |
+| Boise         |           2 |    39.00 |
+| Seattle       |           2 |    42.50 |
+| Seattle, WA   |           2 |    39.50 |
+|               |           1 |    29.00 |
+| San Francisco |           1 |    41.00 |
++---------------+-------------+----------+
+error: NoColumn("bogus")
+csv error: Ragged { line: 2, expected: 2, got: 3 }
+csv error: UnclosedQuote(2)
+ok 1 rows [[Int(1)]]
+cities: {"Boise", "Portland", "San Francisco", "Seattle", "Seattle, WA"}
+initials: ABCDEFGHIJM
+[(16, ["Carol \"CJ\" Jones"]), (7, ["Mallory"]), (5, ["Alice", "Frank", "Grace", "Heidi"])]
+median 76500.00, below 5, at/above 5
+gaps: 2000 5000 5000 2000 9000 7000 7000 25000 15000
+first >= 80k at 5 (Some(81000.0)); binary_search 95000 -> Ok(7)
+{"Engineering": 438000.5, "HR": 118000.25, "Marketing": 137000.0, "Sales": 151000.0}
+Some("Dan") Some("     Frank|23      |Marketing|")
+Some(Less)

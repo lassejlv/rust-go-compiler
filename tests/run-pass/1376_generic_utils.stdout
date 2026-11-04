@@ -1,0 +1,20 @@
+totals 14 3 18
+longest 6 6
+{2: 2, 3: 1, 6: 1, 7: 1} {0: 4, 1: 3, 2: 3}
+[Some(2), None, Some(1)]
+"/tmp/a/b.txt" Some("rel")
+ann & ann | bob & bob & bob
+{ant, brown, dog, fox, jumps, lazy, over, quick, the} contains fox true cat false
+["dog", "fox", "jumps", "lazy", "over"]
+{1, 3, 5, 9} [2, 6, 10, 18] [9, 5, 3, 1]
+1 3 5 9 
+ok [("a", 1), ("b", 2)]
+err config key "a": duplicate -> ConfigError(a, duplicate)
+err missing '=' in "x 5" -> other(missing '=' in "x 5")
+err config key "": empty key -> ConfigError(, empty key)
+err invalid digit found in string -> ParseIntError(invalid digit found in string)
+ok []
+other(plain) / true
+[Word("let"), Word("x_1"), Sym('='), Num(42), Sym('+'), Word("y"), Sym('*'), Sym('('), Num(7), Sym(')')]
+[Word("a"), Word("b")] then [Word("c"), Num(1), Num(2), Num(3)]
+[5, 4, 3, 2] ['f', 'e', 'd', 'c', 'b', 'a']

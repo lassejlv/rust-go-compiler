@@ -1,0 +1,70 @@
+== adults in Lima or Oslo ==
+  Sort users.age DESC, users.name
+    Filter (users.age >= 30 AND (users.city = Lima OR users.city = Oslo))
+      Scan users (12 rows)
+users.id | users.name | users.city | users.age
+      11 | kai        | Oslo       |        48
+       6 | fay        | Oslo       |        33
+== index lookup ==
+  Project users.name, users.age
+    IndexLookup users.city = Pune
+users.name | users.age
+bo         |        31
+gus        |        46
+liv        |        61
+== hash join ==
+  Limit 5
+    Sort orders.amount DESC
+      HashJoin orders.uid = users.id
+        Scan orders (60 rows)
+        Scan users (12 rows)
+orders.oid | orders.uid | orders.amount | orders.item | users.id | users.name | users.city | users.age
+        14 |         11 |         97.16 | pen         |       11 | kai        | Oslo       |        48
+        15 |          1 |         93.03 | book        |        1 | ana        | Oslo       |        18
+        22 |          6 |         91.20 | pen         |        6 | fay        | Oslo       |        33
+        19 |          1 |         88.61 | lamp        |        1 | ana        | Oslo       |        18
+        12 |          4 |         88.34 | lamp        |        4 | dee        | Lima       | NULL     
+hash join rows 51 merge join rows 51 identical true top amount 97.16
+== revenue by city ==
+  Sort sum(orders.amount) DESC
+    Aggregate group=[6] aggs=[(Count, 0), (Sum, 2), (Avg, 2), (Max, 7)]
+      HashJoin orders.uid = users.id
+        Scan orders (60 rows)
+        Scan users (12 rows)
+users.city | count(orders.oid) | sum(orders.amount) | avg(orders.amount) | max(users.age)
+Oslo       |                14 |             756.16 |              54.01 |          48.00
+Pune       |                12 |             579.37 |              48.28 |          61.00
+Lima       |                10 |             479.52 |              47.95 | NULL          
+Baku       |                11 |             407.60 |              37.05 |          59.00
+Kyiv       |                 4 |             160.61 |              40.15 |          35.00
+== items per user (merge join, filtered) ==
+  Aggregate group=[5, 3] aggs=[(Count, 0)]
+    Filter NOT orders.item = mug
+      MergeJoin orders.uid = users.id
+        Scan orders (60 rows)
+        Scan users (12 rows)
+users.name | orders.item | count(orders.oid)
+ana        | book        |                 2
+ana        | desk        |                 1
+ana        | lamp        |                 1
+ana        | pen         |                 1
+bo         | lamp        |                 4
+cy         | desk        |                 1
+cy         | lamp        |                 1
+cy         | pen         |                 3
+... 30 rows
+== self-join same city ==
+  Limit 6
+    Filter (users.id < 6 AND NOT users.id = users.id)
+      HashJoin users.city = users.city
+        Scan users (12 rows)
+        Scan users (12 rows)
+users.id | users.name | users.city | users.age | users.id | users.name | users.city | users.age
+       1 | ana        | Oslo       |        18 |        6 | fay        | Oslo       |        33
+       1 | ana        | Oslo       |        18 |       11 | kai        | Oslo       |        48
+       2 | bo         | Pune       |        31 |        7 | gus        | Pune       |        46
+       2 | bo         | Pune       |        31 |       12 | liv        | Pune       |        61
+       3 | cy         | Baku       |        44 |        8 | hal        | Baku       |        59
+       4 | dee        | Lima       | NULL      |        9 | ivy        | Lima       | NULL     
+orphan orders 9 null ages 2
+Some(Less) Some(Greater)

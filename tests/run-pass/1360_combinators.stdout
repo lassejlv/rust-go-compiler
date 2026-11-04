@@ -1,0 +1,25 @@
+1 + 2 * 3                      = 7
+(1 + 2) * 3                    = 9
+2 ^ 3 ^ 2                      = 512
+-x ^ 2                         = 9
+10 / 4 - 1.5                   = 1
+max(1, x * 2, 4) + min(7, 8)   = 13
+sqrt(16) * abs(-2.5)           = 10
+2 * pi * x                     = 18.849539999999998
+1 / (x - 3)                    eval error: division by zero
+foo(1)                         eval error: bad call foo(1 args)
+y + 1                          eval error: unknown variable y
+1 +                            parse error at offset 2 (near "+ "): expected end of input
+(1 + 2                         parse error at offset 6 (near ""): expected ")"
+3 $ 4                          parse error at offset 2 (near "$ 4"): expected end of input
+max()                          eval error: bad call max(0 args)
+Bin('-', Bin('-', Num(1.0), Num(2.0)), Bin('*', Num(3.0), Neg(Num(4.0))))
+ini rest=""
+[db.main] {"pass": "s3cr3t", "user": "admin"}
+[empty] {}
+[server] {"host": "example.com", "port": "8080"}
+bad ini: at offset 9 (near "[bad\nb"): expected end of input
+Ok(("rest", [1.0, 2.5, -3.0, 4.0]))
+Err(PErr { pos: 0, expected: ["digit"] })
+Ok(("42", ["héllo", "wörld"]))
+Ok(("rec x", "let")) Err(PErr { pos: 3, expected: ["\"let\"", "\"letrec\"", "\"fn\""] })

@@ -70,6 +70,9 @@ extern "rust-intrinsic" {
     pub fn write_stdout(p: *const u8, len: usize);
     pub fn write_stderr(p: *const u8, len: usize);
     pub fn flush_stdout();
+    /// Restores the stack size limit the process started with (in a forked
+    /// child before exec; the runtime raises it for the main thread).
+    pub fn restore_stack_limit();
     pub fn panic_impl(msg: &str, file: &str, line: u32, col: u32) -> !;
 
     // ---- panics and unwinding

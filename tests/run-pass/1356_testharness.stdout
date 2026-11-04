@@ -1,0 +1,31 @@
+arith                  Pass
+assert-eq              Panic("assertion `left == right` failed: vectors differ\n  left: [1, 2]\n right: [1, 3]")
+assert-ne              Panic("assertion `left != right` failed\n  left: 2\n right: 2")
+char-boundary          Panic("end byte index 2 is not a char boundary; it is inside 'é' (bytes 1..3 of string)")
+closure-state          Pass
+div-zero               Panic("attempt to divide by zero")
+expect-err             Panic("config should load: \"boom\"")
+explicit-panic         Panic("custom 42 message")
+index-oob              Panic("index out of bounds: the len is 3 but the index is 5")
+overflow               Pass
+refcell-double-borrow  Panic("RefCell already borrowed")
+slice-range            Panic("end byte index 10 is out of bounds for string of length 5")
+strings                Fail("\"Hello\".to_uppercase() != \"HELLO!\" (\"HELLO\" vs \"HELLO!\")")
+todo                   Panic("not yet implemented")
+unreachable            Panic("internal error: entered unreachable code: state 3")
+unwrap-none            Panic("called `Option::unwrap()` on a `None` value")
+3 passed, 13 failed, shared counter 1
+unwind: err=true drops=["even-frame", "odd-frame", "even-frame", "odd-frame", "even-frame"]
+sort: counterexample [0, -1] after 9 shrinks
+reverse: Ok(200)
+mean: counterexample []
+sum<100: Err((3, 102, true))
+threads: [Ok(0), Ok(10), Err("worker 2 failed"), Ok(30)] log [0, 1, 3]
+poisoned: true value 1
+None -2147483648 2147483647 (-2147483648, true) None
+-128 127 -9223372036854775808 5
+9223372036854775808 13330 0 16
+None Some(4052555153018976267) 1267650600228229401496703205376
+18446744073709551613 0 7
+MIN / -1 panics: true
+checked shift: None Some(16)

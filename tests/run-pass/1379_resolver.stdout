@@ -1,0 +1,50 @@
+0.9.9 < 1.0.0-alpha < 1.0.0-alpha.1 < 1.0.0-alpha.beta < 1.0.0-beta < 1.0.0-beta.2 < 1.0.0-beta.11 < 1.0.0-rc.1 < 1.0.0 < 1.0.1
+Err("bad version \"1.0\": expected 3 components")
+Err("bad version \"1.x.0\": invalid digit found in string")
+Err("bad version \"a.b.c-d\": invalid digit found in string")
+^1.2.3         [^1.2.3] matches ["1.2.3", "1.2.9", "1.3.0", "1.2.5"]
+^0.4           [^0.4.0] matches ["0.4.7"]
+^0.0.3         [^0.0.3] matches ["0.0.3"]
+~1.2           [~1.2.0] matches ["1.2.0", "1.2.3", "1.2.9", "1.2.5"]
+>=1.0, <1.3    [>=1.0.0, <1.3.0] matches ["1.2.0", "1.2.3", "1.2.9", "1.2.5"]
+=1.2.5         [=1.2.5] matches ["1.2.5"]
+*              [*] matches ["1.2.0", "1.2.3", "1.2.9", "1.3.0", "2.0.0", "0.4.7", "0.5.0", "0.0.3", "0.0.4", "1.2.5"]
+1.3            [^1.3.0] matches ["1.3.0"]
+resolve app ^1: true in 51 steps, 16 conflicts on the way
+  conflict: bytes 1.0.0 (chosen) does not satisfy ^0.7.0 required by json 3.1.0
+  conflict: bytes 1.0.0 (chosen) does not satisfy ^0.6.0 required by json 3.0.0
+  conflict: log 1.3.0 (chosen) does not satisfy ~1.2.0 required by app 1.0.0
+  conflict: bytes 0.7.0 (chosen) does not satisfy ^0.6.0 required by db 0.4.0
+# lockfile
+app = "1.0.0"  # deps: web ^2.1.0, db ^0.4.0, log ~1.2.0
+bytes = "0.6.2"
+db = "0.4.0"  # deps: bytes ^0.6.0, log ^1.2.0
+http = "1.4.0"  # deps: bytes >=0.6.0, <0.8.0
+json = "3.0.0"  # deps: bytes ^0.6.0
+log = "1.2.5"
+web = "2.1.0"  # deps: http ^1.3.0, log ^1.2.0, json ^3.0.0
+build waves: [["bytes", "log"], ["db", "http", "json"], ["web"], ["app"]]
+wave 0: bytes#118facc4 log#4d1dd
+wave 1: db#26c5 http#93ad0f json#94916f
+wave 2: web#4f9ed
+wave 3: app#4a8ba
+resolve app =1.0.0: true in 51 steps, 16 conflicts on the way
+  conflict: bytes 1.0.0 (chosen) does not satisfy ^0.7.0 required by json 3.1.0
+  conflict: bytes 1.0.0 (chosen) does not satisfy ^0.6.0 required by json 3.0.0
+  conflict: log 1.3.0 (chosen) does not satisfy ~1.2.0 required by app 1.0.0
+  conflict: bytes 0.7.0 (chosen) does not satisfy ^0.6.0 required by db 0.4.0
+# lockfile
+app = "1.0.0"  # deps: web ^2.1.0, db ^0.4.0, log ~1.2.0
+bytes = "0.6.2"
+db = "0.4.0"  # deps: bytes ^0.6.0, log ^1.2.0
+http = "1.4.0"  # deps: bytes >=0.6.0, <0.8.0
+json = "3.0.0"  # deps: bytes ^0.6.0
+log = "1.2.5"
+web = "2.1.0"  # deps: http ^1.3.0, log ^1.2.0, json ^3.0.0
+build waves: [["bytes", "log"], ["db", "http", "json"], ["web"], ["app"]]
+wave 0: bytes#118facc4 log#4d1dd
+wave 1: db#26c5 http#93ad0f json#94916f
+wave 2: web#4f9ed
+wave 3: app#4a8ba
+unsatisfiable: false after 1 steps
+  no package named "ghost" (required by root)

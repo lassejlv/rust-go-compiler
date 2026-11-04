@@ -183,6 +183,7 @@ const (
 	TryResult
 	TryPoll
 	TryPollOpt
+	TryControlFlow // ControlFlow<B, C>: yields C, returns Break(b)
 )
 
 // Results holds the type-checking results of one body instance.
