@@ -635,16 +635,58 @@ static float rg_powif(float a, int32_t b) {
   return recip ? 1 / r : r;
 }
 
-/* shortest round-trip digits: returns number of digits, sets *exp10 (scientific exponent) */
+static int rg_roundtrips(const char* s, double a, int is_f32) {
+  if (is_f32) return strtof(s, NULL) == (float)a;
+  return strtod(s, NULL) == a;
+}
+
+/* If the p-significant-digit rounding of a (a > 0) is an exact tie
+ * (the exact decimal expansion continues with 5000...), write the rounded-up
+ * candidate (std's shortest mode rounds ties up; printf rounds half to even)
+ * into up as "d.ddde<exp>" and return 1. */
+static int rg_tie_round_up(double a, int p, const char* nb, char* up, size_t upsz) {
+  /* nb: a printed with p+1 significant digits */
+  const char* e = strchr(nb, 'e');
+  if (!e || e[-1] != '5') return 0;      /* a tie needs a trailing 5 */
+  char ex[1100];                           /* exact expansion (<= 767 digits) */
+  snprintf(ex, sizeof ex, "%.*e", 800, a);
+  char* ee = strchr(ex, 'e');
+  int exp10 = atoi(ee + 1);
+  /* significant digits of the exact expansion */
+  char d[820]; int nd = 0;
+  for (char* q = ex; q < ee; q++) if (*q >= '0' && *q <= '9') d[nd++] = *q;
+  if (nd <= p || d[p] != '5') return 0;
+  for (int i = p + 1; i < nd; i++) if (d[i] != '0') return 0;
+  /* round the first p digits up */
+  int i = p - 1;
+  while (i >= 0 && d[i] == '9') { d[i] = '0'; i--; }
+  if (i < 0) { d[0] = '1'; for (int k = 1; k < p; k++) d[k] = '0'; exp10++; }
+  else d[i]++;
+  int n = 0;
+  up[n++] = d[0];
+  if (p > 1) { up[n++] = '.'; for (int k = 1; k < p; k++) up[n++] = d[k]; }
+  snprintf(up + n, upsz - n, "e%d", exp10);
+  return 1;
+}
+
+/* shortest round-trip digits: returns number of digits, sets *exp10 (scientific exponent).
+ * Among the shortest representations the closest to the exact value is
+ * chosen, an exact tie rounding up (like std's Grisu/Dragon shortest mode). */
 static int rg_shortest(double a, int is_f32, char* digits, int* exp10) {
   char buf[64];
   if (a == 0) { digits[0] = '0'; digits[1] = 0; *exp10 = 0; return 1; }
+  double m = a < 0 ? -a : a;
+  char next[64];
+  snprintf(next, sizeof next, "%.*e", 0, m);
   for (int p = 1; p <= 17; p++) {
-    snprintf(buf, sizeof buf, "%.*e", p - 1, a);
-    int ok;
-    if (is_f32) ok = strtof(buf, NULL) == (float)a;
-    else ok = strtod(buf, NULL) == a;
-    if (ok) break;
+    char up[64];
+    memcpy(buf, next, sizeof buf);       /* m with p significant digits */
+    snprintf(next, sizeof next, "%.*e", p, m);
+    if (rg_tie_round_up(m, p, next, up, sizeof up) && rg_roundtrips(up, m, is_f32)) {
+      memcpy(buf, up, sizeof buf);
+      break;
+    }
+    if (rg_roundtrips(buf, m, is_f32)) break;
   }
   int n = 0; char* q = buf;
   for (; *q && *q != 'e'; q++) if (*q >= '0' && *q <= '9') digits[n++] = *q;
