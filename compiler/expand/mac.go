@@ -209,6 +209,9 @@ func (e *Expander) checkTextualScope(def *macroDef, mac *ast.MacCall) error {
 	if _, ok := builtins[name]; ok {
 		return nil
 	}
+	if e.usedNames[name] {
+		return nil // imported with `use`: path-scoped
+	}
 	if _, ok := e.aliases[e.crate][name]; ok {
 		return nil
 	}

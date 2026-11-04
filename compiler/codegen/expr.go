@@ -668,6 +668,9 @@ func (fc *fnGen) binary(x *ast.BinaryExpr, t Ty) string {
 			return fc.spill(v, TyBool)
 		}
 		l := fc.spillIfNeeded(fc.value(x.L), fc.aty(x.L))
+		if isLocalName(l) && mayPanic(x.R) {
+			l = fc.spill(l, fc.aty(x.L))
+		}
 		r := fc.value(x.R)
 		return fc.spill(fc.callResolvedSpan(c.Def, c.Args, []string{l, r}, t, x.Span), t)
 	}
@@ -695,7 +698,8 @@ func (fc *fnGen) binary(x *ast.BinaryExpr, t Ty) string {
 	}
 	lt := fc.aty(x.L)
 	l := fc.value(x.L)
-	if !isSimple(l) {
+	if !isSimple(l) || (isLocalName(l) && mayPanic(x.R)) {
+		// (a local is copied before a right operand that may assign it)
 		l = fc.spill(l, lt)
 	}
 	r := fc.value(x.R)
@@ -1209,6 +1213,10 @@ func (fc *fnGen) evalOperands(es []ast.Expr) []string {
 			}
 			v = n
 		} else if !isSimple(v) && !strings.HasPrefix(v, "((") {
+			v = fc.spill(v, t)
+		} else if t != nil && !isZST(t) && isLocalName(v) && anyMayPanic(es[i+1:]) {
+			// a local read by value is copied now: a later operand may
+			// assign it (`(x, { x += 1; x })`, `f(x, inc(&mut x))`)
 			v = fc.spill(v, t)
 		}
 		out[i] = v
@@ -1892,4 +1900,18 @@ func (fc *fnGen) capturePlace(c *typeck.Capture) (string, string) {
 		cur = pr.Ty
 	}
 	return p, flag
+}
+
+// isLocalName reports the C name of a user local (`l<N>`), which a later
+// operand may assign; temporaries are assigned once.
+func isLocalName(v string) bool {
+	if len(v) < 2 || v[0] != 'l' {
+		return false
+	}
+	for i := 1; i < len(v); i++ {
+		if v[i] < '0' || v[i] > '9' {
+			return false
+		}
+	}
+	return true
 }

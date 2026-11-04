@@ -1,0 +1,11 @@
+tuple (1, 2)
+tuple-call (1, 2)
+struct S { x: 1, y: 2 }
+array [1, 2]
+fncall (1, 2)
+binop 3
+binop-block 12
+method 6
+assign (1, 7) 7
+string (1, 2)
+u8 (3, 4, 4)

@@ -77,6 +77,10 @@ type Expander struct {
 	// defSites lists the macro_rules! definitions of the crate being
 	// expanded by name (see checkTextualScope).
 	defSites map[string][]defSite
+	// usedNames: names imported by `use` items of the crate being expanded
+	// (a `use m;` of a macro_rules! macro makes it usable before its
+	// definition)
+	usedNames map[string]bool
 }
 
 type defSite struct {
@@ -106,6 +110,7 @@ func (e *Expander) ExpandCrate(c *ast.Crate, crateName string) error {
 	applyCrateConfig(e.Config)
 	e.crate = crateName
 	e.defSites = nil
+	e.usedNames = nil
 	if _, ok := e.macros[crateName]; !ok {
 		e.macros[crateName] = map[string]*macroDef{}
 		e.crateOrder = append(e.crateOrder, crateName)
@@ -116,6 +121,13 @@ func (e *Expander) ExpandCrate(c *ast.Crate, crateName string) error {
 		e.DisplayName = ""
 	}
 	e.site = nil
+	// `#![cfg(false)]` on the crate: the crate is empty
+	if keep, attrs, err := e.processAttrs(c.Attrs); err == nil {
+		if !keep {
+			c.Items = nil
+		}
+		c.Attrs = attrs
+	}
 	if e.CollectDocs {
 		if ls := e.docLines(c.Attrs, true); len(ls) > 0 {
 			e.Docs = append(e.Docs, DocBlock{Lines: ls})
@@ -195,6 +207,7 @@ func (e *Expander) collectItems(items []*ast.Item) {
 		case *ast.UseItem:
 			e.collectUseAliases(k.Tree)
 			e.collectMacroImports(k.Tree, nil)
+			e.collectUsedNames(k.Tree)
 		case *ast.ModItem:
 			e.collectMod = append(e.collectMod, it.Name.Name)
 			e.collectItems(k.Items)
@@ -1490,4 +1503,22 @@ func (e *Expander) recordTest(it *ast.Item, attrs []*ast.Attr) {
 		}
 	}
 	e.Tests = append(e.Tests, tf)
+}
+
+func (e *Expander) collectUsedNames(t *ast.UseTree) {
+	if t == nil {
+		return
+	}
+	if e.usedNames == nil {
+		e.usedNames = map[string]bool{}
+	}
+	if t.Rename != nil {
+		e.usedNames[t.Rename.Name] = true
+	}
+	if t.Prefix != nil && len(t.Prefix.Segments) > 0 {
+		e.usedNames[t.Prefix.Segments[len(t.Prefix.Segments)-1].Ident.Name] = true
+	}
+	for _, n := range t.Nested {
+		e.collectUsedNames(n)
+	}
 }

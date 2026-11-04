@@ -38,7 +38,8 @@ func (t *Tcx) checkBodyMisc(r *Results, def *Def) {
 			}
 		case *ast.LetStmt:
 			t.checkPatBindings(r, x.Pat)
-			if !std && x.Init != nil {
+			if _, wild := x.Pat.(*ast.WildPat); !std && x.Init != nil && !wild {
+				// (`let _ = STATIC;` does not move)
 				t.checkStaticMove(r, x.Init)
 			}
 		case *ast.LetExpr:
