@@ -244,6 +244,7 @@ func buildFn(tcx *typeck.Tcx, d *Def, r *typeck.Results) *builder {
 	b.cur = b.retBlock
 	b.terminate(Term{Kind: TReturn, Span: fa.Body.Span})
 	b.fixupMutability()
+	b.checkGuards()
 	return b
 }
 
@@ -348,6 +349,7 @@ func buildClosureKind(tcx *typeck.Tcx, r *typeck.Results, ci *typeck.ClosureInfo
 	b.cur = b.retBlock
 	b.terminate(Term{Kind: TReturn, Span: ci.Expr.Span})
 	b.fixupMutability()
+	b.checkGuards()
 	return b
 }
 

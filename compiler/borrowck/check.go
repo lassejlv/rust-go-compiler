@@ -40,6 +40,7 @@ func CheckFn(tcx *typeck.Tcx, d *Def, r *typeck.Results) (msgs []string) {
 		c := &checker{body: body, md: buildMoveData(body), seen: map[string]bool{}, ctx: &Ctx{tcx: tcx, fn: d}}
 		c.checkMoves()
 		c.checkLoans()
+		msgs = append(msgs, body.Errors...)
 		for _, dg := range c.diags {
 			msgs = append(msgs, dg.msg)
 		}
