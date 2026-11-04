@@ -598,6 +598,32 @@ static uint8_t* rg_alloc(uint64_t size, uint64_t align) { return rg_ga_alloc ? r
 static uint8_t* rg_realloc(uint8_t* p, uint64_t old, uint64_t align, uint64_t size) { return rg_ga_realloc ? rg_ga_realloc(p, old, align, size) : rg_sys_realloc(p, old, align, size); }
 static void rg_dealloc(uint8_t* p, uint64_t size, uint64_t align) { if (rg_ga_dealloc) rg_ga_dealloc(p, size, align); else rg_sys_dealloc(p, size, align); }
 static int rg_memcmp(const uint8_t* a, const uint8_t* b, uint64_t n) { return n ? memcmp(a, b, n) : 0; }
+/* count_ones: without -mpopcnt, __builtin_popcountll is a libgcc call */
+static inline uint64_t rg_popcount64(uint64_t x) {
+#ifdef __POPCNT__
+  return (uint64_t)__builtin_popcountll(x);
+#else
+  x = x - ((x >> 1) & 0x5555555555555555ULL);
+  x = (x & 0x3333333333333333ULL) + ((x >> 2) & 0x3333333333333333ULL);
+  x = (x + (x >> 4)) & 0x0f0f0f0f0f0f0f0fULL;
+  return (x * 0x0101010101010101ULL) >> 56;
+#endif
+}
+/* (GNU extensions, declared here as <string.h> only does with _GNU_SOURCE) */
+extern void* memmem(const void* h, size_t hn, const void* n, size_t nn);
+extern void* memrchr(const void* s, int c, size_t n);
+static uint64_t rg_memchr(const uint8_t* p, uint8_t c, uint64_t n) {
+  const uint8_t* r = n ? (const uint8_t*)memchr(p, c, n) : 0;
+  return r ? (uint64_t)(r - p) : n;
+}
+static uint64_t rg_memrchr(const uint8_t* p, uint8_t c, uint64_t n) {
+  const uint8_t* r = n ? (const uint8_t*)memrchr(p, c, n) : 0;
+  return r ? (uint64_t)(r - p) : n;
+}
+static uint64_t rg_memmem(const uint8_t* h, uint64_t hn, const uint8_t* nd, uint64_t nn) {
+  const uint8_t* r = (const uint8_t*)memmem(h, hn, nd, nn);
+  return r ? (uint64_t)(r - h) : UINT64_MAX;
+}
 
 static int rg_str_eq(Fat a, Fat b) { return a.meta == b.meta && (a.meta == 0 || memcmp(a.ptr, b.ptr, a.meta) == 0); }
 
@@ -635,22 +661,131 @@ static float rg_powif(float a, int32_t b) {
   return recip ? 1 / r : r;
 }
 
-/* shortest round-trip digits: returns number of digits, sets *exp10 (scientific exponent) */
-static int rg_shortest(double a, int is_f32, char* digits, int* exp10) {
-  char buf[64];
-  if (a == 0) { digits[0] = '0'; digits[1] = 0; *exp10 = 0; return 1; }
-  for (int p = 1; p <= 17; p++) {
-    snprintf(buf, sizeof buf, "%.*e", p - 1, a);
-    int ok;
-    if (is_f32) ok = strtof(buf, NULL) == (float)a;
-    else ok = strtod(buf, NULL) == a;
-    if (ok) break;
+/* Exact arithmetic on unsigned big integers (enough for any double:
+ * the shortest-digits algorithm below needs about 1140 bits). */
+typedef struct { int n; uint32_t w[44]; } RgBig;
+static void rgb_set(RgBig* a, uint64_t v) { a->n = 0; while (v) { a->w[a->n++] = (uint32_t)v; v >>= 32; } }
+static inline void rgb_mul_small(RgBig* a, uint32_t m) {
+  uint64_t c = 0;
+  for (int i = 0; i < a->n; i++) { uint64_t t = (uint64_t)a->w[i] * m + c; a->w[i] = (uint32_t)t; c = t >> 32; }
+  if (c) a->w[a->n++] = (uint32_t)c;
+}
+static void rgb_mul_pow10(RgBig* a, int k) {
+  static const uint32_t p10[9] = { 1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000 };
+  while (k >= 9) { rgb_mul_small(a, 1000000000u); k -= 9; }
+  if (k > 0) rgb_mul_small(a, p10[k]);
+}
+static void rgb_shl(RgBig* a, int k) {
+  if (a->n == 0 || k == 0) return;
+  int ws = k >> 5, bs = k & 31;
+  if (bs) {
+    uint32_t c = 0;
+    for (int i = 0; i < a->n; i++) { uint32_t w = a->w[i]; a->w[i] = (w << bs) | c; c = w >> (32 - bs); }
+    if (c) a->w[a->n++] = c;
   }
-  int n = 0; char* q = buf;
-  for (; *q && *q != 'e'; q++) if (*q >= '0' && *q <= '9') digits[n++] = *q;
+  if (ws) { memmove(a->w + ws, a->w, (size_t)a->n * 4); memset(a->w, 0, (size_t)ws * 4); a->n += ws; }
+}
+static inline int rgb_cmp(const RgBig* a, const RgBig* b) {
+  if (a->n != b->n) return a->n < b->n ? -1 : 1;
+  for (int i = a->n - 1; i >= 0; i--) if (a->w[i] != b->w[i]) return a->w[i] < b->w[i] ? -1 : 1;
+  return 0;
+}
+/* r = a + b */
+static inline void rgb_add(RgBig* r, const RgBig* a, const RgBig* b) {
+  int n = a->n > b->n ? a->n : b->n; uint64_t c = 0;
+  for (int i = 0; i < n; i++) {
+    uint64_t t = c + (i < a->n ? a->w[i] : 0) + (i < b->n ? b->w[i] : 0);
+    r->w[i] = (uint32_t)t; c = t >> 32;
+  }
+  r->n = n;
+  if (c) r->w[r->n++] = (uint32_t)c;
+}
+/* a -= b (a >= b) */
+static void rgb_sub(RgBig* a, const RgBig* b) {
+  int64_t c = 0;
+  for (int i = 0; i < a->n; i++) {
+    int64_t t = (int64_t)a->w[i] - (int64_t)(i < b->n ? b->w[i] : 0) + c;
+    a->w[i] = (uint32_t)t; c = t < 0 ? -1 : 0;
+  }
+  while (a->n > 0 && a->w[a->n - 1] == 0) a->n--;
+}
+
+/* Shortest round-trip digits of a finite nonzero |a| (as a float when
+ * is_f32): Burger & Dybvig's free-format algorithm with exact arithmetic,
+ * which like the real library's Grisu/Dragon picks the shortest digit
+ * string that reads back as `a`, and the one closest to `a` among those
+ * (ties up). Returns the number of digits, sets *exp10 (scientific
+ * exponent). */
+static int rg_shortest(double a, int is_f32, char* digits, int* exp10) {
+  if (a == 0) { digits[0] = '0'; digits[1] = 0; *exp10 = 0; return 1; }
+  if (a < 0) a = -a;
+  uint64_t f, hidden; int e, min_e;
+  if (is_f32) {
+    float x = (float)a; uint32_t bits; memcpy(&bits, &x, 4);
+    int be = (int)((bits >> 23) & 0xff); uint32_t m = bits & 0x7fffff;
+    if (be == 0) { f = m; e = -149; } else { f = m | 0x800000u; e = be - 150; }
+    hidden = 1u << 23; min_e = -149;
+    a = (double)x;
+  } else {
+    uint64_t bits; memcpy(&bits, &a, 8);
+    int be = (int)((bits >> 52) & 0x7ff); uint64_t m = bits & ((1ULL << 52) - 1);
+    if (be == 0) { f = m; e = -1074; } else { f = m | (1ULL << 52); e = be - 1075; }
+    hidden = 1ULL << 52; min_e = -1074;
+  }
+  if (a < (is_f32 ? 16777216.0 : 9007199254740992.0) && a == (double)(uint64_t)a) {
+    /* an integer below 2^53 (2^24 for f32: its neighbours are at most 1 away): its
+       digits, without trailing zeros */
+    char buf[24]; int n = 0; uint64_t u = (uint64_t)a;
+    while (u) { buf[n++] = (char)('0' + u % 10); u /= 10; }
+    *exp10 = n - 1;
+    int z = 0; while (z < n - 1 && buf[z] == '0') z++;
+    int nd = 0; for (int i = n - 1; i >= z; i--) digits[nd++] = buf[i];
+    digits[nd] = 0;
+    return nd;
+  }
+  /* bounds of the rounding interval are inclusive for an even mantissa */
+  int ok = (f & 1) == 0;
+  /* v = r/s; the interval is [v - mm/s, v + mp/s] */
+  RgBig r, s, mp, mm, t;
+  if (e >= 0) {
+    rgb_set(&r, f); rgb_set(&mp, 1);
+    if (f != hidden) { rgb_shl(&r, e + 1); rgb_set(&s, 2); rgb_shl(&mp, e); mm = mp; }
+    else { rgb_shl(&r, e + 2); rgb_set(&s, 4); rgb_shl(&mp, e + 1); rgb_set(&mm, 1); rgb_shl(&mm, e); }
+  } else {
+    rgb_set(&r, f); rgb_set(&s, 1);
+    if (e == min_e || f != hidden) { rgb_shl(&r, 1); rgb_shl(&s, 1 - e); rgb_set(&mp, 1); rgb_set(&mm, 1); }
+    else { rgb_shl(&r, 2); rgb_shl(&s, 2 - e); rgb_set(&mp, 2); rgb_set(&mm, 1); }
+  }
+  /* scale so that the digits are those of v / 10^k, 10^(k-1) <= high < 10^k */
+  int k = (int)ceil(log10(a) - 1e-10);
+  if (k >= 0) rgb_mul_pow10(&s, k);
+  else { rgb_mul_pow10(&r, -k); rgb_mul_pow10(&mp, -k); rgb_mul_pow10(&mm, -k); }
+  rgb_add(&t, &r, &mp);
+  { int c = rgb_cmp(&t, &s); if (ok ? c >= 0 : c > 0) { rgb_mul_small(&s, 10); k++; } }
+  int n = 0;
+  for (;;) {
+    rgb_mul_small(&r, 10); rgb_mul_small(&mp, 10); rgb_mul_small(&mm, 10);
+    int d = 0;
+    while (rgb_cmp(&r, &s) >= 0) { rgb_sub(&r, &s); d++; }
+    int c1 = rgb_cmp(&r, &mm);
+    int tc1 = ok ? c1 <= 0 : c1 < 0;
+    rgb_add(&t, &r, &mp);
+    int c2 = rgb_cmp(&t, &s);
+    int tc2 = ok ? c2 >= 0 : c2 > 0;
+    if (!tc1 && !tc2) { digits[n++] = (char)('0' + d); if (n >= 30) break; continue; }
+    if (tc1 && tc2) {
+      RgBig r2 = r; rgb_shl(&r2, 1);
+      if (rgb_cmp(&r2, &s) >= 0) d++;
+    } else if (tc2) d++;
+    digits[n++] = (char)('0' + d);
+    break;
+  }
+  /* (a rounded-up 9 carries into the previous digits) */
+  for (int i = n - 1; i > 0 && digits[i] > '9'; i--) { digits[i] = '0'; digits[i - 1]++; }
+  if (digits[0] > '9') { digits[0] = '1'; k++; }
+  while (n > 1 && digits[n - 1] == '0') n--;
   digits[n] = 0;
-  *exp10 = atoi(q + 1);
-  while (n > 1 && digits[n - 1] == '0') digits[--n] = 0;
+  *exp10 = k - 1;
   return n;
 }
 

@@ -19,36 +19,47 @@ use crate::intrinsics;
 // ---------------------------------------------------------------------------
 // UTF-8 helpers (the input is always valid UTF-8)
 
-/// Decodes the char starting at byte `i` of `s`: (char, encoded length).
+/// Decodes the char starting at byte `i` (< s.len(), a char boundary) of
+/// `s`: (char, encoded length).
 #[inline]
 pub(crate) fn decode_at(s: &str, i: usize) -> (char, usize) {
-    let b = s.as_bytes();
-    let x = b[i] as u32;
+    let x = unsafe { *intrinsics::ptr_add(s.as_ptr(), i) } as u32;
     if x < 0x80 {
         return (unsafe { crate::char::from_u32_unchecked(x) }, 1);
     }
+    decode_multi(s.as_ptr(), i, x)
+}
+
+/// Decodes a multi-byte char starting with byte `x` at `p[i]`.
+#[inline(never)]
+fn decode_multi(p: *const u8, i: usize, x: u32) -> (char, usize) {
+    let at = |k: usize| unsafe { *intrinsics::ptr_add(p, i + k) } as u32 & 0x3F;
     if x < 0xE0 {
-        let c = ((x & 0x1F) << 6) | (b[i + 1] as u32 & 0x3F);
+        let c = ((x & 0x1F) << 6) | at(1);
         return (unsafe { crate::char::from_u32_unchecked(c) }, 2);
     }
     if x < 0xF0 {
-        let c = ((x & 0x0F) << 12) | ((b[i + 1] as u32 & 0x3F) << 6) | (b[i + 2] as u32 & 0x3F);
+        let c = ((x & 0x0F) << 12) | (at(1) << 6) | at(2);
         return (unsafe { crate::char::from_u32_unchecked(c) }, 3);
     }
-    let c = ((x & 0x07) << 18) | ((b[i + 1] as u32 & 0x3F) << 12) | ((b[i + 2] as u32 & 0x3F) << 6) | (b[i + 3] as u32 & 0x3F);
+    let c = ((x & 0x07) << 18) | (at(1) << 12) | (at(2) << 6) | at(3);
     (unsafe { crate::char::from_u32_unchecked(c) }, 4)
 }
 
-/// Decodes the char ending just before byte `i` of `s`: (char, encoded length).
+/// Decodes the char ending just before byte `i` (> 0, a char boundary) of
+/// `s`: (char, encoded length).
 #[inline]
 pub(crate) fn decode_before(s: &str, i: usize) -> (char, usize) {
-    let b = s.as_bytes();
+    let p = s.as_ptr();
     let mut start = i - 1;
-    while (b[start] & 0xC0) == 0x80 {
+    let x = unsafe { *intrinsics::ptr_add(p, start) } as u32;
+    if x < 0x80 {
+        return (unsafe { crate::char::from_u32_unchecked(x) }, 1);
+    }
+    while (unsafe { *intrinsics::ptr_add(p, start) } & 0xC0) == 0x80 {
         start -= 1;
     }
-    let (c, len) = decode_at(s, start);
-    (c, len)
+    decode_at(s, start)
 }
 
 #[inline]
