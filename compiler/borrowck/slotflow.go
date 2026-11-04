@@ -533,6 +533,29 @@ func slotFlow(tcx *typeck.Tcx, fl *Flow, d *Def, selfAst ast.Type, params map[st
 			}
 		}
 	}
+	// stores of what a lifetime of the signature relates (`set_b(&mut
+	// self, b: &'b str)` into the 'b slots of the referent)
+	for di, a := range args {
+		if di >= len(mutIn) || !mutIn[di] || a.lay.root.ty == nil || a.lay.root.ty.Kind != TRef {
+			continue
+		}
+		for j := 1; j < len(a.labels); j++ {
+			lb := a.labels[j]
+			if lb == "" || lb[0] != '\'' || lb == "'?" || lb == "'static" {
+				continue
+			}
+			for si, sa := range args {
+				if si == di {
+					continue
+				}
+				for k, l2 := range sa.labels {
+					if l2 == lb {
+						fl.IntoSlots = append(fl.IntoSlots, IntoSlot{Dst: di, DstSlot: j, Src: si, SrcSlot: k, Name: lb})
+					}
+				}
+			}
+		}
+	}
 }
 
 // closureProduced returns the flow into result node n (the result of

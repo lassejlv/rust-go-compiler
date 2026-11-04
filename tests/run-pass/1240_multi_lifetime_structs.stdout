@@ -1,0 +1,12 @@
+[("abc", "x"), ("d", "y")]
+[("abc", "long"), ("d", "short")]
+("le", "ri")
+["a", "b"]
+[0, 1, 2, 0, 3] CAT
+saw ("the", "cat saw the dog") ["THE", "CAT", "SAW", "DOG"]
+dog ["the", "cat", "saw", "the"]
+[1, 50, 8, 3] Some(50)
+Two { a: ["lit", "lit2"], b: Some("long-lived"), n: 2 } Some("lit") Some("long-lived")
+Some("temp")
+Some("long-lived")
+Two { a: ["y"], b: Some("x"), n: 1 }

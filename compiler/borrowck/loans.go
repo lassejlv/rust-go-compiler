@@ -1914,8 +1914,24 @@ func (lc *loanChecker) transferTerm(st *lstate, t Term) {
 // into place p (borrowed by the `&mut` argument) is described slot by slot
 // by fl.IntoSlots, which apply to p.
 func (lc *loanChecker) intoSlotsCover(fl *Flow, e IntoEdge, p Place) bool {
-	if e.Name == "" || e.Name[0] == '\'' || len(p.Proj) != 0 {
+	if e.Name == "" || len(p.Proj) != 0 {
 		return false
+	}
+	if e.Name[0] == '\'' {
+		// a lifetime: only when everything the argument holds from its
+		// depth down is of that lifetime (`b: &'b str`)
+		if e.Src >= len(fl.ArgLabels) || e.Src >= len(fl.ArgLays) || fl.ArgLays[e.Src] == nil {
+			return false
+		}
+		sl, labels := fl.ArgLays[e.Src], fl.ArgLabels[e.Src]
+		if sl.flat || len(labels) != sl.n() {
+			return false
+		}
+		for k, d := range sl.depth {
+			if d >= e.SrcDepth && labels[k] != e.Name {
+				return false
+			}
+		}
 	}
 	dl := fl.ArgLays[e.Dst]
 	if dl == nil || dl.flat || dl.root.ty == nil || dl.root.ty.Kind != TRef {

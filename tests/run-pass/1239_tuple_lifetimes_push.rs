@@ -143,7 +143,31 @@ pub fn main_4() {
 }
 
 }
+mod m5 {
+use std::collections::{BinaryHeap, HashSet, BTreeSet, HashMap};
+type P<'s> = (&'static str, &'s str);
+fn a1<'s>(s: &'s str) -> Option<P<'s>> { let mut o = None; o.get_or_insert(("g", s)); o }
+fn a2<'s>(s: &'s str) -> P<'s> { let mut x = ("", ""); let old = std::mem::replace(&mut x, ("r", s)); let _ = old; x }
+fn a3<'s>(s: &'s str) -> Vec<P<'s>> { let mut v = Vec::new(); v.resize(2, ("z", s)); let mut w = vec![("w", s)]; v.append(&mut w); v }
+fn a4<'s>(s: &'s str) -> BinaryHeap<P<'s>> { let mut h = BinaryHeap::new(); h.push(("h", s)); h }
+fn a5<'s>(s: &'s str) -> HashSet<P<'s>> { let mut h = HashSet::new(); h.insert(("h", s)); h }
+fn a6<'s>(s: &'s str) -> BTreeSet<P<'s>> { let mut h = BTreeSet::new(); h.insert(("b", s)); h }
+fn a7<'s>(s: &'s str) -> HashMap<u8, P<'s>> { let mut m = HashMap::new(); m.insert(1, ("m", s)); m.entry(2).or_insert(("e", s)); m }
+fn a8<'s>(s: &'s str) -> Vec<P<'s>> { let v: Vec<P<'s>> = vec![("c", s)]; v.iter().cloned().collect() }
+fn a9<'s>(s: &'s str) -> Vec<P<'s>> { let mut v = Vec::new(); for w in s.split(' ') { v.push(("w", w)); } v.retain(|p| !p.1.is_empty()); v.dedup(); v }
+fn a10<'s>(s: &'s str) -> Vec<P<'s>> { let mut v: Vec<P<'s>> = Vec::new(); v.extend_from_slice(&[("x", s)]); v.insert(0, ("y", s)); v.truncate(5); v }
+fn a11<'s>(s: &'s str) -> std::collections::VecDeque<P<'s>> { let mut q = std::collections::VecDeque::new(); q.extend(s.split(' ').map(|w| ("q", w))); q }
+pub fn main_5() {
+    let s = String::from("hi there");
+    println!("{:?} {:?} {:?}", a1(&s), a2(&s), a3(&s));
+    println!("{:?} {:?} {:?}", a4(&s).into_sorted_vec(), a5(&s).len(), a6(&s));
+    println!("{:?} {:?} {:?}", a7(&s).len(), a8(&s), a9(&s));
+    println!("{:?} {:?}", a10(&s), a11(&s));
+}
+
+}
 fn main() {
+    m5::main_5();
     m4::main_4();
     m0::main_0();
     m1::main_1();
