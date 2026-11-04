@@ -1,0 +1,15 @@
+6 10
+-4
+100
+700
+3
+9
+200
+8
+1
+3
+drop a
+drop b
+dyn core::marker::Send + core::marker::Sync
+alloc::boxed::Box<dyn core::marker::Send>
+1

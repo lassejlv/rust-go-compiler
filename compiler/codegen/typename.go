@@ -238,7 +238,8 @@ func writeTypeName(b *strings.Builder, t Ty) {
 		b.WriteString("{{closure}}")
 	case TDyn:
 		b.WriteString("dyn ")
-		if t.Def != nil {
+		autoOnly := t.Def != nil && t.Def.LangItem == "any_trait"
+		if t.Def != nil && !autoOnly {
 			b.WriteString(defTypeNamePath(t.Def))
 			name := t.Def.Name
 			isFn := (name == "Fn" || name == "FnMut" || name == "FnOnce") && len(t.Args) == 1 && t.Args[0].Kind == TTuple
@@ -266,14 +267,20 @@ func writeTypeName(b *strings.Builder, t Ty) {
 				b.WriteByte('>')
 			}
 		}
-		if t.Sub&DynSend != 0 {
-			b.WriteString(" + core::marker::Send")
-		}
-		if t.Sub&DynSync != 0 {
-			b.WriteString(" + core::marker::Sync")
-		}
-		if t.Sub&DynUnpin != 0 {
-			b.WriteString(" + core::marker::Unpin")
+		sep := " + "
+		for _, a := range []struct {
+			bit  uint8
+			name string
+		}{{DynSend, "core::marker::Send"}, {DynSync, "core::marker::Sync"}, {DynUnpin, "core::marker::Unpin"}} {
+			if uint8(t.Sub)&a.bit != 0 {
+				if autoOnly {
+					// `dyn Send + Sync`: the first auto trait is the head
+					autoOnly = false
+				} else {
+					b.WriteString(sep)
+				}
+				b.WriteString(a.name)
+			}
 		}
 	default:
 		b.WriteString(t.String())

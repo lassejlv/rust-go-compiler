@@ -807,6 +807,21 @@ func (t *TyS) write(b *strings.Builder) {
 		fmt.Fprintf(b, "{closure#%d}", t.Index)
 	case TDyn:
 		b.WriteString("dyn ")
+		if t.Def != nil && t.Def.LangItem == "any_trait" {
+			// only auto traits (`dyn Send + Sync`)
+			sep := ""
+			for _, a := range []struct {
+				bit  uint8
+				name string
+			}{{DynSend, "Send"}, {DynSync, "Sync"}, {DynUnpin, "Unpin"}} {
+				if uint8(t.Sub)&a.bit != 0 {
+					b.WriteString(sep)
+					b.WriteString(a.name)
+					sep = " + "
+				}
+			}
+			break
+		}
 		if t.Def != nil {
 			b.WriteString(t.Def.Name)
 		}

@@ -320,3 +320,44 @@ func (t *Tcx) fnItemHeader(d *Def) (unsafe bool, abi string, variadic bool) {
 	}
 	return unsafeFn(d), NormalizeAbi(abi), t.FnSig(d).Variadic
 }
+
+// fnPtrLub is rustc's LUB coercion of two distinct fn items and/or
+// non-capturing closures (`if c { f } else { g }`, match arms): their
+// common type is the fn pointer of the shared signature. It returns that
+// fn pointer type, or nil when the two cannot meet there.
+func (fcx *FnCtxt) fnPtrLub(a, b Ty, sp ast.Span) Ty {
+	a, b = fcx.shallow(a), fcx.shallow(b)
+	sigOf := func(t Ty) (Ty, bool) {
+		switch t.Kind {
+		case TFnDef:
+			ins, out := fcx.instantiateSig(t.Def, t.Args, sp)
+			unsafe, abi, variadic := fcx.t.fnItemHeader(t.Def)
+			return FnPtrSig(ins, out, variadic, unsafe, abi), true
+		case TClosure:
+			ci := fcx.t.Closures[t]
+			if ci == nil {
+				return nil, false
+			}
+			return FnPtrSig(ci.Inputs, ci.Output, false, false, ""), true
+		}
+		return nil, false
+	}
+	if a == b || (a.Kind != TFnDef && a.Kind != TClosure) || (b.Kind != TFnDef && b.Kind != TClosure) {
+		return nil
+	}
+	pa, ok1 := sigOf(a)
+	pb, ok2 := sigOf(b)
+	if !ok1 || !ok2 {
+		return nil
+	}
+	if pa.FnUnsafe() != pb.FnUnsafe() {
+		// a safe fn meets an unsafe one at the unsafe pointer
+		pa, pb = pa.WithFnSafety(true), pb.WithFnSafety(true)
+	}
+	s := fcx.ic.snapshot()
+	if !fcx.ic.unify(pa, pb) {
+		fcx.ic.rollback(s)
+		return nil
+	}
+	return pa
+}

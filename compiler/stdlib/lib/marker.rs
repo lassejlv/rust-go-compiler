@@ -22,6 +22,12 @@ pub unsafe auto trait Sync {}
 /// Types that do not require pinning.
 pub auto trait Unpin {}
 
+/// The principal of a trait object with only auto traits (`dyn Send`,
+/// `dyn Send + Sync`): implemented by every type, it has no methods.
+#[lang = "any_trait"]
+#[doc(hidden)]
+pub trait __AutoOnlyObject {}
+
 /// Tuple types (used by the `Fn*` traits).
 #[lang = "tuple_trait"]
 pub trait Tuple {}

@@ -1105,7 +1105,13 @@ func (fcx *FnCtxt) checkIf(x *ast.IfExpr, expected Ty, coerce bool) Ty {
 		return fcx.record(x.ID, target)
 	}
 	ts := fcx.shallow(thenTy)
-	elseTy := fcx.checkExpr(x.Else, hintFor(ts, expected))
+	elseHint := hintFor(ts, expected)
+	if ts.Kind == TFnDef || ts.Kind == TClosure {
+		// the else may be a different fn item/closure: the two meet at a
+		// fn pointer (fnPtrLub), so the then type is no requirement
+		elseHint = expected
+	}
+	elseTy := fcx.checkExpr(x.Else, elseHint)
 	es := fcx.shallow(elseTy)
 	if ts.Kind == TNever {
 		return fcx.record(x.ID, elseTy)
@@ -1120,8 +1126,43 @@ func (fcx *FnCtxt) checkIf(x *ast.IfExpr, expected Ty, coerce bool) Ty {
 	if tail := blockTail(x.Then); tail != nil && fcx.coerce(tail, thenTy, elseTy) {
 		return fcx.record(x.ID, elseTy)
 	}
+	if tail := blockTail(x.Then); tail != nil {
+		if ptr := fcx.fnPtrLub(thenTy, elseTy, x.Span); ptr != nil && fcx.coerce(tail, thenTy, ptr) && fcx.coerce(elseValueExpr(x.Else), elseTy, ptr) {
+			return fcx.record(x.ID, ptr)
+		}
+	}
 	fcx.errorf(x.Span, "`if` and `else` have incompatible types: `%s` vs `%s`", fcx.resolve(thenTy), fcx.resolve(elseTy))
 	return fcx.record(x.ID, thenTy)
+}
+
+// elseValueExpr is the expression producing an else branch's value: the
+// tail of an `else { .. }` block (codegen emits the block in place, so an
+// adjustment must sit on its tail), or the `else if` expression itself.
+func elseValueExpr(e ast.Expr) ast.Expr {
+	if b, ok := e.(*ast.BlockExpr); ok && b.Label == "" && !b.Async && !b.Const {
+		if t := blockTail(b.Block); t != nil {
+			return t
+		}
+	}
+	return e
+}
+
+// coerceArmsTo coerces the bodies of the arms before cur (all of type
+// prev, or diverging) and cur's body to the LUB fn pointer ptr.
+func (fcx *FnCtxt) coerceArmsTo(arms []*ast.Arm, cur *ast.Arm, prev, ptr Ty) bool {
+	for _, a := range arms {
+		bt := fcx.r.NodeTypes[a.Body.GetID()]
+		if a == cur {
+			return fcx.coerce(a.Body, bt, ptr)
+		}
+		if bt == nil || fcx.shallow(bt).Kind == TNever {
+			continue
+		}
+		if !fcx.coerce(a.Body, prev, ptr) {
+			return false
+		}
+	}
+	return false
 }
 
 func hintFor(t Ty, expected Ty) Ty {
@@ -1162,7 +1203,10 @@ func (fcx *FnCtxt) checkMatch(x *ast.MatchExpr, expected Ty, coerce bool) Ty {
 				allNever = false
 				if result == nil {
 					result = at
-				} else if !fcx.coerce(arm.Body, at, result) {
+				} else if fcx.coerce(arm.Body, at, result) {
+				} else if ptr := fcx.fnPtrLub(result, at, arm.Body.GetSpan()); ptr != nil && fcx.coerceArmsTo(x.Arms, arm, result, ptr) {
+					result = ptr
+				} else {
 					fcx.errorf(arm.Body.GetSpan(), "`match` arms have incompatible types: expected `%s`, found `%s`", fcx.resolve(result), fcx.resolve(at))
 				}
 			}
