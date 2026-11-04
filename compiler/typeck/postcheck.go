@@ -20,10 +20,15 @@ func (t *Tcx) checkBodyMisc(r *Results, def *Def) {
 		return
 	}
 	std := t.isStd(def)
+	t.checkLints(r, def, root)
 	ast.Walk(root, func(n any) bool {
 		switch x := n.(type) {
 		case *ast.ItemStmt:
 			return false
+		case *ast.UnaryExpr:
+			if !std {
+				t.checkNegUnsigned(r, x)
+			}
 		case *ast.CastExpr:
 			t.checkCast(r, x)
 		case *ast.AssignExpr:
@@ -138,6 +143,11 @@ func (t *Tcx) checkAssignLHS(r *Results, l ast.Expr, code string) {
 			return
 		}
 	case *ast.MethodCallExpr, *ast.LitExpr, *ast.BinaryExpr:
+	case *ast.PathExpr:
+		vr := r.Paths[x.ID]
+		if vr == nil || (vr.Kind != VConst && vr.Kind != VFn && vr.Kind != VConstParam) {
+			return
+		}
 	case *ast.UnaryExpr:
 		if x.Op == ast.UnDeref {
 			return

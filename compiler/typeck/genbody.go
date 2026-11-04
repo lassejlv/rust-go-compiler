@@ -117,6 +117,20 @@ func (t *Tcx) CheckGenericBodies() {
 		}
 		errs := t.polyCheck(d)
 		if len(errs) == 0 {
+			if r := t.polyResults; r != nil {
+				// a body without errors: the deny-by-default lints
+				t.polyResults = nil
+				t.checkLints(r, d, d.Fn.Ast.Body)
+				ast.Walk(d.Fn.Ast.Body, func(n any) bool {
+					switch x := n.(type) {
+					case *ast.ItemStmt:
+						return false
+					case *ast.UnaryExpr:
+						t.checkNegUnsigned(r, x)
+					}
+					return true
+				})
+			}
 			continue
 		}
 		all := true
@@ -158,6 +172,14 @@ func (t *Tcx) polyCheck(def *Def) (errs []polyErr) {
 	fcx := t.newFnCtxt(def, t.Generics(def).Identity())
 	t.polyUnsizedSig(def, ps)
 	fcx.checkFn()
+	t.polyResults = nil
+	if len(ps.errs) == 0 && len(fcx.r.Closures) == 0 {
+		fcx.writeback()
+		if len(ps.errs) == 0 {
+			t.polyResults = fcx.r
+		}
+		return ps.errs
+	}
 	if fcx.r.Body != nil && len(fcx.r.Closures) > 0 && polyAllOk(ps.errs) {
 		// Send/Sync bounds need the closures' captures; errors of the
 		// capture analysis itself only stop this check
@@ -165,6 +187,9 @@ func (t *Tcx) polyCheck(def *Def) (errs []polyErr) {
 		fcx.writeback()
 		if len(ps.errs) == n {
 			fcx.polyAutoBounds(fcx.r.Body)
+			if len(ps.errs) == 0 {
+				t.polyResults = fcx.r
+			}
 		} else {
 			ps.errs = ps.errs[:n]
 		}
@@ -479,13 +504,43 @@ func (fcx *FnCtxt) polyMismatch(expected, actual Ty) {
 		return
 	}
 	e, a := fcx.resolve(expected), fcx.resolve(actual)
-	if fcx.polyParamMismatch(e, a, 0) {
+	if fcx.polyParamMismatch(e, a, 0) || fcx.polyConcreteClash(e, a) {
 		fcx.polyClassify("E0308", "mismatched types: expected `%s`, found `%s`", e, a)
 		return
 	}
 	if fcx.unboundProj(e) || fcx.unboundProj(a) {
 		fcx.t.poly.next = &polyErr{ok: true} // (consequence)
 	}
+}
+
+// polyConcreteClash reports whether e and a are types without type
+// parameters (nor projections, closures, trait objects, ...) with different
+// outermost constructors, which no coercion relates (`i32` against
+// `&str`): a mismatch that does not depend on the bounds of the body.
+func (fcx *FnCtxt) polyConcreteClash(e, a Ty) bool {
+	if !fcx.rigidTy(e) || !fcx.rigidTy(a) || e.HasParam() || a.HasParam() || e.HasProj() || a.HasProj() {
+		return false
+	}
+	class := func(x Ty) (TyKind, int) {
+		switch {
+		case x.Kind == TInfer && x.Sub == 1:
+			return TInt, -1
+		case x.Kind == TInfer && x.Sub == 2:
+			return TFloat, -1
+		case x.Kind == TInt || x.Kind == TFloat:
+			return x.Kind, int(x.Sub)
+		case x.Kind == TAdt:
+			return x.Kind, x.Def.ID
+		}
+		return x.Kind, -1
+	}
+	ek, es := class(e)
+	ak, as := class(a)
+	if ek != ak {
+		// (fn items coerce to fn pointers)
+		return !(ek == TFnPtr && ak == TFnDef)
+	}
+	return es != as && es != -1 && as != -1
 }
 
 // polyParamMismatch reports whether e and a certainly differ because of a

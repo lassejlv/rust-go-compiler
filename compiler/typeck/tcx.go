@@ -22,6 +22,9 @@ import (
 
 // Tcx is the global typing context.
 type Tcx struct {
+	// polyResults: the results of the last polymorphic body check, when
+	// it found no error (see CheckGenericBodies)
+	polyResults *Results
 	autoTraits map[string]*Def // std's Send and Sync (see autotrait.go)
 	R *resolve.Resolver
 
@@ -279,7 +282,7 @@ func (t *Tcx) checkCoherence() {
 				if b == a || b.Impl.Negative || t.isStd(b) || (len(t.Generics(b).Params) > 0 && b.ID < a.ID) {
 					continue
 				}
-				if t.blanketCovers(a, b) {
+				if t.blanketCovers(a, b) || (len(t.Generics(b).Params) > 0 && t.genericImplsOverlap(a, b)) {
 					later := b
 					if a.ID > b.ID {
 						later = a

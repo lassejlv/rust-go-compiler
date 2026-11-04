@@ -210,6 +210,9 @@ func (fcx *FnCtxt) checkPatInner(p ast.Pat, expected Ty, bm bindingMode, oc *orC
 				continue
 			}
 			fcx.checkFieldPrivacy(f.Name, adt, v.Fields[fi], v)
+			if mentioned[f.Name.Name] {
+				fcx.t.ErrorCode(f.Name.Span, "E0025", "field `%s` bound multiple times in the pattern", f.Name.Name)
+			}
 			mentioned[f.Name.Name] = true
 			ft := fcx.normalizeInBody(Subst(v.Fields[fi].Ty, adt.Args), f.Span)
 			fcx.checkPatInner(f.Pat, ft, bm, oc)

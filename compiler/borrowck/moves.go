@@ -641,6 +641,11 @@ func (c *checker) isMutable(p Place, localOK bool) (bool, Place, string) {
 		case DRawMut:
 			return true, p, ""
 		case DRefMut:
+			if ld := c.body.Locals[p.Local]; !localOK && ld.Kind == LUpvar && len(base.Proj) == 0 && !ld.UpvarByRef && !ld.Mut {
+				// a by-value capture (reached through the FnMut
+				// closure's `&mut self`) is as mutable as the binding
+				return false, base, "local"
+			}
 			return c.isMutable(base, true)
 		case DBox:
 			return c.isMutable(base, localOK)

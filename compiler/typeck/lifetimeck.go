@@ -35,6 +35,12 @@ func (t *Tcx) checkLifetimes() {
 					t.ErrorCode(r.Span, "E0106", "missing lifetime specifier")
 				}
 			}
+		case DefTyAlias:
+			if ta, ok := d.Item.Kind.(*ast.TypeAliasItem); ok && ta.Ty != nil && !d.IsAssoc() {
+				if r := elidedRef(ta.Ty); r != nil {
+					t.ErrorCode(r.Span, "E0106", "missing lifetime specifier")
+				}
+			}
 		case DefFn:
 			if d.Fn == nil || d.Fn.Ast == nil || d.Fn.Ast.Decl.Output == nil {
 				continue

@@ -570,6 +570,16 @@ func (e *ExprBase) exprNode()     {}
 func (e *ExprBase) GetSpan() Span { return e.Span }
 func (e *ExprBase) GetID() NodeID { return e.ID }
 
+// ExprAttrs returns the outer attributes of an expression (nil if none).
+func ExprAttrs(e Expr) []*Attr {
+	if b, ok := e.(interface{ exprBase() *ExprBase }); ok {
+		return b.exprBase().Attrs
+	}
+	return nil
+}
+
+func (e *ExprBase) exprBase() *ExprBase { return e }
+
 type LitKind int
 
 const (

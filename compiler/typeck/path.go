@@ -726,6 +726,9 @@ func (fcx *FnCtxt) checkStructExpr(x *ast.StructExpr, expected Ty) Ty {
 			fcx.checkExpr(f.Expr, nil)
 			continue
 		}
+		if seen[f.Name.Name] {
+			fcx.t.ErrorCode(f.Name.Span, "E0062", "field `%s` specified more than once", f.Name.Name)
+		}
 		seen[f.Name.Name] = true
 		fcx.checkFieldPrivacy(f.Name, adt, v.Fields[fi], v)
 		ft := fcx.normalizeInBody(Subst(v.Fields[fi].Ty, adt.Args), f.Span)

@@ -24,7 +24,10 @@ func (t *Tcx) checkImpls() {
 	// methods are compared with the trait's quietly)
 	for _, d := range t.R.Defs {
 		if d.Kind == DefFn && d.Fn != nil && d.Fn.Ast != nil && !t.isStd(d) && d.Intrinsic == "" {
-			t.FnSig(d)
+			sig := t.FnSig(d)
+			if out := d.Fn.Ast.Decl.Output; sig != nil && sig.Output != nil && out != nil && d.Fn.Ast.Body != nil && sig.Output.IsUnsized() {
+				t.ErrorCode(out.GetSpan(), "E0277", "the size for values of type `%s` cannot be known at compilation time", sig.Output)
+			}
 		}
 	}
 	for _, impl := range t.R.Impls {
@@ -40,6 +43,7 @@ func (t *Tcx) checkImpls() {
 		t.checkImplRules(impl)
 	}
 	t.checkInherentDups()
+	t.checkAdtDefs()
 	t.checkLifetimes()
 	t.checkGenericParams()
 	// constants and statics are checked even when unused (their
@@ -172,7 +176,19 @@ func (t *Tcx) checkTraitImplItems(impl *Def) {
 	}
 	for _, it := range impl.Impl.Order {
 		ti := tr.Trait.Items[it.Name]
-		if ti == nil || ti.Kind != it.Kind {
+		if ti != nil && ti.Kind != it.Kind {
+			// the name is a trait item of another kind
+			code := "E0324"
+			switch it.Kind {
+			case DefAssocTy:
+				code = "E0325"
+			case DefConst:
+				code = "E0323"
+			}
+			t.ErrorCode(it.Item.Name.Span, code, "item `%s` is an associated %s, which doesn't match its trait `%s`", it.Name, itemKindWord(it), tr.Name)
+			continue
+		}
+		if ti == nil {
 			code := "E0407"
 			switch it.Kind {
 			case DefAssocTy:
@@ -185,6 +201,9 @@ func (t *Tcx) checkTraitImplItems(impl *Def) {
 		}
 		if it.Kind == DefFn {
 			t.compareImplMethod(impl, it, ti)
+		}
+		if it.Kind == DefConst {
+			t.compareImplConst(impl, it, ti)
 		}
 	}
 	var missing []string
@@ -322,6 +341,34 @@ func (t *Tcx) compareImplMethod(impl, im, tm *Def) {
 	if eq, cmp := same(tsig.Output, isig.Output); cmp && !eq {
 		t.ErrorCode(im.Item.Name.Span, "E0053", "method `%s` has an incompatible type for trait", im.Name)
 	}
+}
+
+// compareImplConst compares the type of an impl's associated const with
+// the trait's (E0326).
+func (t *Tcx) compareImplConst(impl, ic, tc *Def) {
+	if ic.Const == nil || tc.Const == nil {
+		return
+	}
+	trArgs := impl.Impl.TraitRef.Args
+	if tg := t.Generics(tc); tg == nil || len(trArgs) != tg.OwnStart || tg.Count() != tg.OwnStart {
+		return
+	}
+	var x, y Ty
+	if !t.quietly(func() {
+		x = t.Normalize(Subst(t.ConstTy(tc), trArgs))
+		y = t.Normalize(t.ConstTy(ic))
+	}) {
+		return
+	}
+	if x == y {
+		return
+	}
+	for _, z := range []Ty{x, y} {
+		if z == nil || z.HasProj() || z.HasOpaque() || z.HasError() || z.HasInfer() {
+			return
+		}
+	}
+	t.ErrorCode(ic.Item.Name.Span, "E0326", "implemented const `%s` has an incompatible type for trait: expected `%s`, found `%s`", ic.Name, x, y)
 }
 
 // earlyBoundLifetimes counts the early-bound lifetime parameters of a
@@ -613,6 +660,166 @@ func (t *Tcx) blanketCovers(a, b *Def) bool {
 	return true
 }
 
+// genericImplsOverlap reports whether two generic impls of a trait
+// certainly overlap: their trait refs unify (each impl's parameters taken
+// as unknowns) and every where-clause then still constrains a parameter
+// left unknown, so it cannot be refuted (rustc's coherence treats such
+// ambiguous obligations as overlapping). Anything less clear-cut (bounds
+// on concrete types, associated type bindings, const parameters) is not
+// reported.
+func (t *Tcx) genericImplsOverlap(a, b *Def) bool {
+	ga, gb := t.Generics(a), t.Generics(b)
+	for _, g := range []*Generics{ga, gb} {
+		for _, p := range g.Params {
+			if p.Const {
+				return false
+			}
+		}
+	}
+	type term struct {
+		ty   Ty
+		side int
+	}
+	binds := [2]map[int]term{{}, {}}
+	isParam := func(x term) bool {
+		g := ga
+		if x.side == 1 {
+			g = gb
+		}
+		return x.ty.Kind == TParam && x.ty.Index < len(g.Params) && g.Params[x.ty.Index].Name == x.ty.Name
+	}
+	var walk func(x term) term
+	walk = func(x term) term {
+		for isParam(x) {
+			b, ok := binds[x.side][x.ty.Index]
+			if !ok {
+				return x
+			}
+			x = b
+		}
+		return x
+	}
+	// occurs reports whether parameter p appears in y (through bindings)
+	var occurs func(p, y term, d int) bool
+	occurs = func(p, y term, d int) bool {
+		if d > 50 {
+			return true
+		}
+		y = walk(y)
+		if isParam(y) {
+			return y.side == p.side && y.ty.Index == p.ty.Index
+		}
+		if !y.ty.HasParam() {
+			return false
+		}
+		var kids []Ty
+		switch y.ty.Kind {
+		case TRef, TPtr, TSlice, TArray:
+			kids = []Ty{y.ty.Elem}
+		case TAdt, TFnDef:
+			kids = y.ty.Args
+		case TTuple:
+			kids = y.ty.Elems
+		default:
+			return true
+		}
+		for _, k := range kids {
+			if occurs(p, term{k, y.side}, d+1) {
+				return true
+			}
+		}
+		return false
+	}
+	depth := 0
+	var unify func(x, y term) bool
+	unify = func(x, y term) bool {
+		depth++
+		if depth > 1000 {
+			return false
+		}
+		x, y = walk(x), walk(y)
+		if isParam(y) && !isParam(x) {
+			x, y = y, x
+		}
+		if isParam(x) {
+			if isParam(y) && x.side == y.side && x.ty.Index == y.ty.Index {
+				return true
+			}
+			if !isParam(y) && occurs(x, y, 0) {
+				return false
+			}
+			binds[x.side][x.ty.Index] = y
+			return true
+		}
+		if x.ty.HasProj() || y.ty.HasProj() || x.ty.HasOpaque() || y.ty.HasOpaque() || x.ty.HasError() || y.ty.HasError() || x.ty.Kind == TParam || y.ty.Kind == TParam {
+			return false
+		}
+		if !x.ty.HasParam() && !y.ty.HasParam() {
+			return x.ty == y.ty
+		}
+		if x.ty.Kind != y.ty.Kind || x.ty.Mut != y.ty.Mut {
+			return false
+		}
+		switch x.ty.Kind {
+		case TRef, TPtr, TSlice:
+			return unify(term{x.ty.Elem, x.side}, term{y.ty.Elem, y.side})
+		case TAdt:
+			if x.ty.Def != y.ty.Def || len(x.ty.Args) != len(y.ty.Args) {
+				return false
+			}
+			for i := range x.ty.Args {
+				if !unify(term{x.ty.Args[i], x.side}, term{y.ty.Args[i], y.side}) {
+					return false
+				}
+			}
+			return true
+		case TTuple:
+			if len(x.ty.Elems) != len(y.ty.Elems) {
+				return false
+			}
+			for i := range x.ty.Elems {
+				if !unify(term{x.ty.Elems[i], x.side}, term{y.ty.Elems[i], y.side}) {
+					return false
+				}
+			}
+			return true
+		}
+		return false
+	}
+	ar, br := a.Impl.TraitRef.Args, b.Impl.TraitRef.Args
+	if len(ar) != len(br) {
+		return false
+	}
+	for i := range ar {
+		if !unify(term{ar[i], 0}, term{br[i], 1}) {
+			return false
+		}
+	}
+	for side, g := range []*Generics{ga, gb} {
+		for _, p := range g.Predicates {
+			if p.Maybe || p.Trait == nil {
+				continue
+			}
+			if len(p.Bindings) > 0 {
+				return false
+			}
+			if p.Trait.Trait.LangItem == "sized" {
+				// an unknown type may be sized
+				if x := walk(term{p.Trait.Args[0], side}); !isParam(x) && x.ty.IsUnsized() {
+					return false
+				}
+				continue
+			}
+			for _, arg := range p.Trait.Args {
+				if x := walk(term{arg, side}); !isParam(x) {
+					return false
+				}
+			}
+		}
+	}
+	return true
+}
+
 // stdRequired lists required items of std traits (rustgo's std does not
 // mirror every trait item by item, so only these are checked). An entry
 // applies only when the trait has all the listed items.
@@ -722,6 +929,18 @@ func (t *Tcx) checkImplRules(impl *Def) {
 		}
 	}
 	tr := ii.TraitRef.Trait
+	if tr != nil && tr.Item != nil && !impl.HasAttr("automatically_derived") {
+		if ta, ok := tr.Item.Kind.(*ast.TraitItem); ok {
+			switch {
+			case ta.Unsafe && !ia.Unsafe:
+				t.ErrorCode(impl.Span, "E0200", "the trait `%s` requires an `unsafe impl` declaration", tr.Name)
+			case !ta.Unsafe && ia.Unsafe && !t.isStd(tr):
+				// (only for non-std traits: rustgo's std may not mark
+				// every unsafe trait of the real std as unsafe)
+				t.ErrorCode(impl.Span, "E0199", "implementing the trait `%s` is not unsafe", tr.Name)
+			}
+		}
+	}
 	self := ii.SelfTy
 	if self == nil {
 		return
