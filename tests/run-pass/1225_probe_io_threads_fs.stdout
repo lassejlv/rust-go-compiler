@@ -1,0 +1,55 @@
+== t01
+0: "line one"
+1: "line two"
+2: ""
+3: "last"
+"5 world" pos=13
+"hello 5 world"
+Ok("abcd")
+3 [101, 102, 103]
+Err(UnexpectedEof)
+"a,"
+"b,"
+"c"
+[[120], [121], [122]]
+row 0
+row 1
+row 2
+"first\nsecond"
+Ok("abcd")
+abc
+locked write
+custom Other
+true
+copied
+""
+== t02
+4000 [0, 1, 2, 3] [0, 10, 20, 30]
+[0, 1, 2, 100, 101, 102, 200, 201, 202]
+["a", "b", "c"] true
+10
+6
+[2, 4, 6, 8] 20
+true
+ready true
+true
+true true
+1
+Ok(5) Err(7) 7
+Ok(1) 11
+main
+Some("worker")
+== t04
+"hello\nworld\nmore\n"
+17
+true
+false true
+["b.txt"]
+Err(NotFound)
+Some("libfoo.so.1") Some("1") Some("libfoo.so") Some("/usr/lib")
+a/b/c.txt 3
+["x/y/z", "x/y", "x", ""]
+true
+"a/b.tar.zip"
+Ok("b")
+"/c"

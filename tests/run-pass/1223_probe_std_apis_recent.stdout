@@ -1,0 +1,116 @@
+== q01
+[[1, 1], [2], [3, 3, 3], [4], [1]]
+[[1, 1, 2, 3, 3, 3, 4], [1]]
+[3, 6] [1, 2, 4, 5, 7]
+["a\n", "b\n", "c"]
+4 20 9
+Some(3) None 5
+8 254
+Some(([1, 2], [3, 4, 5])) Some([3, 4, 5])
+None
+[[1, 2], [3, 4]] [5]
+"xxx"
+false
+== q02
+true false
+None Some(4)
+Some(4) None
+Some([1])
+Some("hey") Some(3)
+Ok(Some(3))
+Some(1) Some((1, 'a'))
+(Some(1), Some('b')) Some(1)
+None Some(9)
+saw 3
+Some(4)
+Ok(5)
+Err("e1")
+106
+Some(1) 8 Some(8)
+true false
+err=bad
+Err(3)
+None Some("bad")
+Ok(0)
+Err("big")
+0
+Ok(5) Ok(1)
+iter 7
+[4]
+== q03
+Some(6) None Ok(10)
+Some([1, 2]) Ok("ab") Err("x")
+[1, 2, 3] boxed [1, 2] rcs 8
+['a', 'b', 'c'] {0: 'x', 1: 'y', 2: 'z'} {"a", "b", "c"}
+[1, 3] {2}
+abcd xy ab cow
+{"j": 2, "k": 1} [0, 5, 6, 7]
+[1, 3]
+3
+[1, 3] ["a", "b"] ["a", "b"] ["A", "B"] [false, true] [true, false]
+2
+[1, 2, 3]
+[Some(1), Some(2)]
+== q04
+None
+Some("cfg") true
+before
+init table
+9 5
+3
+5 5
+x
+lazy
+11
+[1, 2] a b
+true
+false
+2 1
+== q05
+("abc", "abc") (3, 3)
+3
+4
+2
+10
+4 [NaN, 4.0, -8.0]
+[2, 3, 4]
+== q06
+None
+Some(Greater)
+[P { x: 0.5, y: 9.0 }, P { x: 1.0, y: 2.0 }, P { x: 1.0, y: NaN }]
+Ver { major: 0, minor: 0, tag: None }
+Ver { major: 0, minor: 9, tag: Some("a") }
+Ver { major: 1, minor: 2, tag: None }
+Ver { major: 1, minor: 2, tag: Some("beta") }
+Some(Ver { major: 0, minor: 9, tag: Some("a") })
+true
+7.25
+[7.25, 2.5, -1.0]
+== q07
+[("a", 1), ("b", 2)]
+5
+Cfg { depth: 3, name: "n" }
+9
+5 -1 6
+[[10, 20], [30], []]
+<x>
+7
+true false
+6
+hello true
+a + b * c
+12.5xtruec
+1223_probe_std_apis_recent::q07
+true
+== q08
+ok 10
+err negative: -3 | "negative: -3" | src=None
+err parse: invalid digit found in string | "parse: invalid digit found in string" | src=Some("invalid digit found in string")
+err zero not allowed | "zero not allowed" | src=None
+err one: 1 | "one: 1" | src=None
+ok 14
+Err(Parse(ParseIntError { kind: InvalidDigit }))
+Some(7) None None
+plain "plain"
+io: disk
+downcast ok Io("disk")
