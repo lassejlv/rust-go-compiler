@@ -1030,6 +1030,26 @@ func (ic *InferCtxt) normalizeParamByImpl(trait *Def, args []Ty, name string, de
 		gat = args[n:]
 		args = args[:n]
 	}
+	// a where-clause providing the trait for the parameter (directly or
+	// through a supertrait) keeps the projection rigid, as in rustc; it is
+	// also what keeps this from re-entering selection on `T: Trait`
+	self := ic.shallow(args[0])
+	for _, e := range ic.env {
+		for _, st := range t.AllSupertraits(e) {
+			if st.Trait == trait && len(st.Args) > 0 && ic.shallow(st.Args[0]) == self {
+				return nil
+			}
+		}
+	}
+	key := fmt.Sprintf("%p:%d", trait, self.ID())
+	if ic.paramNormActive[key] {
+		return nil
+	}
+	if ic.paramNormActive == nil {
+		ic.paramNormActive = map[string]bool{}
+	}
+	ic.paramNormActive[key] = true
+	defer delete(ic.paramNormActive, key)
 	sel := ic.selectTrait(&TraitRef{Trait: trait, Args: args}, depth+1)
 	if sel.Kind != SelImpl {
 		return nil
