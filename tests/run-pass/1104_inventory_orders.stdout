@@ -1,0 +1,44 @@
+Initial stock:
+  B-777  Rust book       6  5  5 = 16
+  B-778  Go book         3  5  7 = 15
+  E-100  USB cable       3  2  2 =  7
+  E-200  Headphones      4  8  0 = 12
+  E-300  Monitor         2  7  1 = 10
+  G-001  Coffee beans    7  1  2 = 10
+  G-002  Tea             6  7  8 = 21
+  T-010  Puzzle          8  3  2 = 13
+  T-020  Kite            7  8  4 = 19
+order #4  p0 amy  SHIPPED 1 picks from [North], total $38.50, shipping $0.00
+order #2  p1 amy  SHIPPED 2 picks from [North, South], total $229.94, shipping $22.99
+order #5  p1 cat  REJECTED: empty order
+order #7  p1 eve  SHIPPED 2 picks from [South], total $191.94, shipping $0.00
+order #9  p1 fay  PARTIAL shipped 8 units, backordered E-100x43
+order #10 p1 zed  SHIPPED 3 picks from [North, South, West], total $171.35, shipping $18.49
+order #1  p2 zed  PARTIAL shipped 2 units, backordered E-100x3
+order #6  p2 dan  REJECTED: unknown sku X-999
+order #8  p2 bob  REJECTED: zero quantity for B-778
+order #3  p3 bob  PARTIAL shipped 13 units, backordered T-010x17
+
+Revenue by customer:
+  amy     $268.44
+  eve     $191.94
+  zed     $171.35
+
+Sales by category:
+  Electronics   11 units    $432.89
+  Grocery        6 units     $63.00
+  Toys          17 units    $357.96
+  Books          4 units    $149.80
+
+Backorders:
+  order 9 needs 43 more of E-100
+  order 3 needs 17 more of T-010
+  order 1 needs 3 more of E-100
+
+Remaining stock (non-zero), grouped by warehouse:
+  North (30 units): B-777:4 B-778:3 E-200:4 E-300:2 G-001:4 G-002:6 T-020:7
+  South (31 units): B-777:5 B-778:5 E-200:5 E-300:6 G-001:1 G-002:5 T-020:4
+  West (24 units): B-777:5 B-778:5 E-300:1 G-001:2 G-002:7 T-020:4
+sold out: ["E-100", "T-010"]
+top inventory value: ["E-300=$1709.91", "B-777=$559.30", "E-200=$539.91"]
+heaviest product: Monitor (4200g, E-300)

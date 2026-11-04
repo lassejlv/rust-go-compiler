@@ -1,0 +1,187 @@
+Ok(Cents(-7500))
+Err("ACC-0003: insufficient funds (needed $20.00, available -$75.00)")
+Err(InvalidAmount(Cents(-5)))
+Err(SameAccount)
+Err(AccountNotFound(AccountId(99)))
+ACC-0002: daily limit $2,000.00 exceeded
+Ok(Cents(850000))
+Statement for ACC-0001 (Alice, checking)
+     tx  day  description                  amount      balance
+   1000    1  deposit                   $1,500.00    $1,500.00
+   1009    3  withdrawal                 -$495.90    $1,004.10
+   1013    4  transfer from ACC-0004      $267.95    $1,272.05
+   1015    4  transfer from ACC-0002      $768.52    $2,040.57
+   1018    5  transfer from ACC-0004      $526.14    $2,566.71
+   1020    6  withdrawal                  -$30.23    $2,536.48
+   1022    6  withdrawal                 -$272.78    $2,263.70
+   1023    6  transfer to ACC-0003       -$493.44    $1,770.26
+   1037    9  withdrawal                 -$759.13    $1,011.13
+   1039   10  transfer to ACC-0003       -$718.74      $292.39
+   1045   12  deposit                     $492.44      $784.83
+   1048   12  transfer from ACC-0004      $647.15    $1,431.98
+   1050   13  transfer to ACC-0002       -$532.88      $899.10
+   1055   13  transfer from ACC-0005      $273.20    $1,172.30
+   1059   14  withdrawal                 -$659.01      $513.29
+   1066   16  deposit                     $530.96    $1,044.25
+   1076   19  transfer to ACC-0002        -$61.95      $982.30
+   1084   20  transfer from ACC-0002      $302.28    $1,284.58
+   1085   20  deposit                     $433.76    $1,718.34
+   1087   21  deposit                     $513.99    $2,232.33
+   1094   22  withdrawal                  -$56.28    $2,176.05
+   1108   26  withdrawal                 -$461.09    $1,714.96
+   1115   28  deposit                      $37.13    $1,752.09
+   1120   29  deposit                     $270.00    $2,022.09
+  in: $6,563.52 (13 tx)  out: -$4,541.43 (11 tx)  closing: $2,022.09
+
+Statement for ACC-0002 (Alice, savings@4.25%)
+     tx  day  description                  amount      balance
+   1001    1  deposit                  $10,000.00   $10,000.00
+   1006    2  withdrawal               -$1,500.00    $8,500.00
+   1007    3  withdrawal                 -$305.03    $8,194.97
+   1008    3  withdrawal                  -$51.10    $8,143.87
+   1014    4  transfer to ACC-0001       -$768.52    $7,375.35
+   1016    4  withdrawal                 -$771.88    $6,603.47
+   1019    5  deposit                     $748.37    $7,351.84
+   1026    7  transfer to ACC-0005       -$271.16    $7,080.68
+   1028    7  deposit                     $121.98    $7,202.66
+   1034    8  transfer from ACC-0004      $717.37    $7,920.03
+   1043   11  deposit                     $333.77    $8,253.80
+   1044   11  deposit                     $553.47    $8,807.27
+   1051   13  transfer from ACC-0001      $532.88    $9,340.15
+   1060   15  transfer to ACC-0003       -$551.30    $8,788.85
+   1062   15  withdrawal                 -$101.07    $8,687.78
+   1064   15  transfer from ACC-0003      $618.01    $9,305.79
+   1067   16  deposit                     $790.69   $10,096.48
+   1068   16  transfer to ACC-0004        -$85.26   $10,011.22
+   1070   17  withdrawal                 -$168.13    $9,843.09
+   1073   18  deposit                     $802.35   $10,645.44
+   1074   19  deposit                     $872.56   $11,518.00
+   1075   19  deposit                     $438.57   $11,956.57
+   1077   19  transfer from ACC-0001       $61.95   $12,018.52
+   1078   19  deposit                     $638.76   $12,657.28
+   1080   20  transfer from ACC-0004      $307.78   $12,965.06
+   1083   20  transfer to ACC-0001       -$302.28   $12,662.78
+   1088   21  transfer to ACC-0004       -$864.97   $11,797.81
+   1093   22  withdrawal                 -$386.92   $11,410.89
+   1102   24  withdrawal                 -$270.48   $11,140.41
+   1103   25  deposit                      $33.76   $11,174.17
+   1112   27  transfer from ACC-0005      $698.18   $11,872.35
+   1116   28  deposit                     $809.31   $12,681.66
+   1119   29  transfer from ACC-0003      $102.47   $12,784.13
+   1123   30  deposit                     $424.39   $13,208.52
+   1126   30  adj: interest                $46.23   $13,254.75
+  in: $19,652.85 (21 tx)  out: -$6,398.10 (14 tx)  closing: $13,254.75
+
+Statement for ACC-0003 (Bob, checking)
+     tx  day  description                  amount      balance
+   1002    1  deposit                      $20.00       $20.00
+   1004    1  withdrawal                  -$60.00      -$40.00
+   1005    1  adj: NSF fee                -$35.00      -$75.00
+   1024    6  transfer from ACC-0001      $493.44      $418.44
+   1025    7  deposit                     $746.88    $1,165.32
+   1035    9  transfer to ACC-0004       -$543.86      $621.46
+   1040   10  transfer from ACC-0001      $718.74    $1,340.20
+   1049   13  withdrawal                 -$559.29      $780.91
+   1058   14  withdrawal                 -$149.40      $631.51
+   1061   15  transfer from ACC-0002      $551.30    $1,182.81
+   1063   15  transfer to ACC-0002       -$618.01      $564.80
+   1065   15  withdrawal                 -$192.29      $372.51
+   1071   17  withdrawal                  -$11.79      $360.72
+   1082   20  transfer from ACC-0004      $858.09    $1,218.81
+   1090   21  withdrawal                 -$683.79      $535.02
+   1092   22  transfer from ACC-0004      $228.41      $763.43
+   1096   23  withdrawal                 -$308.10      $455.33
+   1101   24  transfer from ACC-0005      $488.72      $944.05
+   1109   26  withdrawal                 -$443.42      $500.63
+   1114   28  deposit                     $399.73      $900.36
+   1118   29  transfer to ACC-0002       -$102.47      $797.89
+   1122   30  withdrawal                 -$644.98      $152.91
+   1125   30  deposit                     $886.08    $1,038.99
+  in: $5,391.39 (10 tx)  out: -$4,352.40 (13 tx)  closing: $1,038.99
+
+Statement for ACC-0004 (Carol, credit(limit $3,000.00))
+     tx  day  description                  amount      balance
+   1012    4  transfer to ACC-0001       -$267.95     -$267.95
+   1017    5  transfer to ACC-0001       -$526.14     -$794.09
+   1021    6  deposit                      $15.28     -$778.81
+   1030    8  deposit                      $92.94     -$685.87
+   1031    8  withdrawal                 -$177.55     -$863.42
+   1033    8  transfer to ACC-0002       -$717.37   -$1,580.79
+   1036    9  transfer from ACC-0003      $543.86   -$1,036.93
+   1042   11  transfer from ACC-0005      $644.13     -$392.80
+   1047   12  transfer to ACC-0001       -$647.15   -$1,039.95
+   1053   13  transfer from ACC-0005       $73.43     -$966.52
+   1056   14  deposit                     $752.52     -$214.00
+   1069   16  transfer from ACC-0002       $85.26     -$128.74
+   1072   17  withdrawal                 -$821.10     -$949.84
+   1079   20  transfer to ACC-0002       -$307.78   -$1,257.62
+   1081   20  transfer to ACC-0003       -$858.09   -$2,115.71
+   1089   21  transfer from ACC-0002      $864.97   -$1,250.74
+   1091   22  transfer to ACC-0003       -$228.41   -$1,479.15
+   1097   23  withdrawal                 -$371.83   -$1,850.98
+   1104   25  deposit                     $191.51   -$1,659.47
+   1105   25  withdrawal                 -$127.58   -$1,787.05
+   1106   26  transfer to ACC-0005       -$881.23   -$2,668.28
+   1117   29  deposit                     $279.74   -$2,388.54
+   1121   29  deposit                     $818.45   -$1,570.09
+   1124   30  deposit                     $863.51     -$706.58
+   1127   30  adj: finance charge         -$11.73     -$718.31
+  in: $5,225.60 (12 tx)  out: -$5,943.91 (13 tx)  closing: -$718.31
+
+Statement for ACC-0005 (Dave, savings@1.00%)
+     tx  day  description                  amount      balance
+   1003    1  deposit                      $50.00       $50.00
+   1010    3  deposit                     $751.09      $801.09
+   1011    4  deposit                     $483.44    $1,284.53
+   1027    7  transfer from ACC-0002      $271.16    $1,555.69
+   1029    7  withdrawal                 -$880.61      $675.08
+   1032    8  withdrawal                 -$520.28      $154.80
+   1038   10  deposit                     $690.87      $845.67
+   1041   11  transfer to ACC-0004       -$644.13      $201.54
+   1046   12  deposit                     $734.16      $935.70
+   1052   13  transfer to ACC-0004        -$73.43      $862.27
+   1054   13  transfer to ACC-0001       -$273.20      $589.07
+   1057   14  deposit                     $253.13      $842.20
+   1086   21  withdrawal                 -$244.94      $597.26
+   1095   22  withdrawal                  -$99.94      $497.32
+   1098   23  withdrawal                 -$188.21      $309.11
+   1099   24  deposit                     $500.36      $809.47
+   1100   24  transfer to ACC-0003       -$488.72      $320.75
+   1107   26  transfer from ACC-0004      $881.23    $1,201.98
+   1110   27  withdrawal                 -$486.17      $715.81
+   1111   27  transfer to ACC-0002       -$698.18       $17.63
+   1113   27  deposit                     $274.73      $292.36
+   1128   30  adj: interest                 $0.23      $292.59
+  in: $4,890.40 (11 tx)  out: -$4,597.81 (11 tx)  closing: $292.59
+
+Errors (19):
+  day  5: ACC-0003: insufficient funds (needed $753.90, available -$75.00)
+  day  5: cannot transfer to the same account
+  day  9: ACC-0005: insufficient funds (needed $287.95, available $154.80)
+  day  9: ACC-0005: insufficient funds (needed $675.44, available $154.80)
+  day 10: ACC-0005: insufficient funds (needed $241.61, available $154.80)
+  day 10: cannot transfer to the same account
+  day 11: cannot transfer to the same account
+  day 12: ACC-0005: insufficient funds (needed $760.63, available $201.54)
+  day 16: ACC-0005 is frozen
+  day 17: ACC-0003: insufficient funds (needed $770.26, available $360.72)
+  day 18: ACC-0005 is frozen
+  day 18: ACC-0003: insufficient funds (needed $421.06, available $360.72)
+  day 18: ACC-0005 is frozen
+  day 23: cannot transfer to the same account
+  day 24: ACC-0005: insufficient funds (needed $719.89, available $309.11)
+  day 25: cannot transfer to the same account
+  day 26: cannot transfer to the same account
+  day 27: ACC-0005: insufficient funds (needed $110.81, available $17.63)
+  day 28: ACC-0004: insufficient funds (needed $619.03, available -$2,668.28)
+error kinds: [("insufficient", 10), ("same", 6), ("frozen", 3)]
+owner   |accts|           net
+-----------------------------
+Alice   |    2|    $15,276.84
+Bob     |    1|     $1,038.99
+Carol   |    1|      -$718.31
+Dave    |    1|       $292.59
+TOTAL   |    5|    $15,890.11
+richest ACC-0002 $13,254.75  poorest ACC-0004 -$718.31
+rounding: $1.25 $1.75 -$1.25 $4.11
+[-$1,234,567.89] [    $0.05     ] [     $1,000.00]

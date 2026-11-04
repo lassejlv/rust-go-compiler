@@ -1,0 +1,91 @@
+puzzle 1 (30 givens):
+5 3 . | . 7 . | . . .
+6 . . | 1 9 5 | . . .
+. 9 8 | . . . | . 6 .
+------+-------+------
+8 . . | . 6 . | . . 3
+4 . . | 8 . 3 | . . 1
+7 . . | . 2 . | . . 6
+------+-------+------
+. 6 . | . . . | 2 8 .
+. . . | 4 1 9 | . . 5
+. . . | . 8 . | . 7 9
+
+cnf: 729 vars, 12018 clauses
+SAT=true verified=true decisions=0 propagations=729 conflicts=0
+bitmask solved=true nodes=52 agree=true
+5 3 4 | 6 7 8 | 9 1 2
+6 7 2 | 1 9 5 | 3 4 8
+1 9 8 | 3 4 2 | 5 6 7
+------+-------+------
+8 5 9 | 7 6 1 | 4 2 3
+4 2 6 | 8 5 3 | 7 9 1
+7 1 3 | 9 2 4 | 8 5 6
+------+-------+------
+9 6 1 | 5 3 7 | 2 8 4
+2 8 7 | 4 1 9 | 6 3 5
+3 4 5 | 2 8 6 | 1 7 9
+row sums: [45, 45, 45, 45, 45, 45, 45, 45, 45]
+
+puzzle 2 (27 givens):
+. . 9 | 7 4 8 | . . .
+7 . . | . . . | . . .
+. 2 . | 1 . 9 | . . .
+------+-------+------
+. . 7 | . . . | 2 4 .
+. 6 4 | . 1 . | 5 9 .
+. 9 8 | . . . | 3 . .
+------+-------+------
+. . . | 8 . 3 | . 2 .
+. . . | . . . | . . 6
+. . . | 2 7 5 | 9 . .
+
+cnf: 729 vars, 12015 clauses
+SAT=true verified=true decisions=8 propagations=916 conflicts=7
+bitmask solved=true nodes=104 agree=true
+5 1 9 | 7 4 8 | 6 3 2
+7 8 3 | 6 5 2 | 4 1 9
+4 2 6 | 1 3 9 | 8 7 5
+------+-------+------
+3 5 7 | 9 8 6 | 2 4 1
+2 6 4 | 3 1 7 | 5 9 8
+1 9 8 | 5 2 4 | 3 6 7
+------+-------+------
+9 7 5 | 8 6 3 | 1 2 4
+8 3 2 | 4 9 1 | 7 5 6
+6 4 1 | 2 7 5 | 9 8 3
+row sums: [45, 45, 45, 45, 45, 45, 45, 45, 45]
+
+contradictory puzzle SAT=false decisions=0 propagations=401 conflicts=1
+1-queens: [0]
+2-queens: UNSAT
+3-queens: UNSAT
+4-queens: [1, 3, 0, 2]
+5-queens: [1, 4, 2, 0, 3]
+6-queens: [3, 0, 4, 1, 5, 2]
+8-queens: [4, 6, 1, 3, 7, 0, 2, 5]
+  ....Q...
+  ......Q.
+  .Q......
+  ...Q....
+  .......Q
+  Q.......
+  ..Q.....
+  .....Q..
+pigeonhole 2->1: SAT=false decisions=0 propagations=2 conflicts=1
+pigeonhole 3->2: SAT=false decisions=1 propagations=10 conflicts=2
+pigeonhole 4->3: SAT=false decisions=5 propagations=46 conflicts=6
+pigeonhole 5->4: SAT=false decisions=23 propagations=231 conflicts=24
+3-SAT #0  vars=20 clauses=70 -> true  decisions=6 propagations=14 conflicts=0
+3-SAT #1  vars=20 clauses=73 -> true  decisions=5 propagations=15 conflicts=0
+3-SAT #2  vars=20 clauses=76 -> true  decisions=13 propagations=47 conflicts=5
+3-SAT #3  vars=20 clauses=79 -> true  decisions=7 propagations=19 conflicts=1
+3-SAT #4  vars=20 clauses=82 -> true  decisions=4 propagations=16 conflicts=0
+3-SAT #5  vars=20 clauses=85 -> true  decisions=9 propagations=67 conflicts=5
+3-SAT #6  vars=20 clauses=88 -> false decisions=15 propagations=149 conflicts=16
+3-SAT #7  vars=20 clauses=91 -> true  decisions=13 propagations=67 conflicts=8
+3-SAT #8  vars=20 clauses=94 -> false decisions=12 propagations=132 conflicts=13
+3-SAT #9  vars=20 clauses=97 -> false decisions=8 propagations=90 conflicts=9
+3-SAT #10 vars=20 clauses=100 -> false decisions=6 propagations=72 conflicts=7
+3-SAT #11 vars=20 clauses=103 -> false decisions=6 propagations=63 conflicts=7
+sat=7 unsat=5

@@ -1,0 +1,38 @@
+a*b                    prog=5   "b"=Y "aaab"=Y "aaa"=n "ab"=Y ""=n
+(a|b)*abb              prog=10  "abb"=Y "aababb"=Y "abab"=n "babb"=Y
+colou?r                prog=8   "color"=Y "colour"=Y "colouur"=n
+[a-c]{2,3}x            prog=6   "abx"=Y "abcx"=Y "ax"=n "abcax"=n
+\d{3}-\d{4}            prog=9   "555-1234"=Y "55-1234"=n "555-12345"=n
+[^aeiou]+              prog=5   "rhythm"=Y "strength"=n ""=n
+(?:ab|cd)+e?           prog=17  "ab"=Y "cdabe"=Y "abc"=n "e"=n
+x{0}y                  prog=2   "y"=Y "xy"=n
+(a+)+b                 prog=12  "aaaaaaaaaaaaaaaaaaaaab"=Y "aaaaaaaaaaaaaaaaaaaa"=n
+é.ü                    prog=4   "éxü"=Y "é\nü"=n "eü"=n
+[\w.]+@\w+\.(com|org)  prog=19  "a.b_c@site.org"=Y "x@y.net"=n
+"(ab"    error: missing )
+"a)"     error: unexpected ')' at 1
+"*a"     error: nothing to repeat at 0
+"a{3,1}" error: bad range {3,1}
+"[z-a]"  error: bad class range z-a
+"a{x}"   error: bad repetition at 1
+"^*"     error: cannot repeat anchor
+"[abc"   error: unclosed [
+"a\\"    error: trailing backslash
+ast: (#1 [0-9]{4,4})-(#2 [0-9][0-9])-(#3 [0-9][0-9])
+find "on 2024-02-29 we" -> Some((3, 13, [Some("2024"), Some("02"), Some("29")]))
+find "none here" -> None
+find "1999-12-31/2000-01-01" -> Some((0, 10, [Some("1999"), Some("12"), Some("31")]))
+all dates: ["2001-01-01", "2002-02-02", "2004-04-04"]
+swap: from 15/03/2024 to 01/12/2024.
+lazy:   ["<b>", "</b>", "<i>", "</i>"]
+greedy: ["<b>bold</b> and <i>it</i>"]
+words: ["Hello", "w", "rld", "It", "s", "am", "b", "lunch"]
+"c" -> Some([None, None])
+"ac" -> Some([Some("a"), None])
+"bc" -> Some([None, Some("b")])
+"abc" -> Some([Some("a"), Some("b")])
+"xxabcx" -> Some([Some("a"), Some("b")])
+anchored: ["first", "last"]
+empty matches: ["", "xx", "", "x", ""]
+squash:  lots of space here 
+nested: Some((2, 9, [Some("ab"), Some("a"), Some("b"), Some("c")]))

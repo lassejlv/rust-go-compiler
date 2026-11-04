@@ -1,0 +1,136 @@
+--- winning run ---
+  Cellar: It is pitch dark. You might be eaten by a grue.
+> take lamp
+  Taken: lamp.
+> use lamp
+  The lamp is now on.
+> take lamp
+  No lamp here.
+> take coin
+  Taken: coin #1.
+> look
+  Cellar. Exits: up. Items: none
+> up
+  Hall. Exits: down, east, north, west. Items: none
+> west
+  Kitchen. Exits: east. Items: bread, coin #2
+> take bread
+  Taken: bread.
+> take coin
+  Taken: coin #2.
+> go east
+  Hall. Exits: down, east, north, west. Items: none
+> east
+  Library. Exits: down*, west. Items: book
+> take book
+  Taken: book.
+> read
+  The book reads: 'The key lies above the garden.'
+> go down
+  The way is locked.
+> path tower
+  No known route to Tower.
+> west
+  Hall. Exits: down, east, north, west. Items: none
+> north
+  Garden. Exits: south, up*. Items: rope, coin #3
+> take rope
+  Taken: rope.
+> use rope
+  You throw the rope up to the tower window.
+> path tower
+  Route: [Up]
+> up
+  Tower. Exits: down. Items: key
+> take key
+  Taken: key.
+> down
+  Garden. Exits: south, up. Items: coin #3
+> south
+  Hall. Exits: down, east, north, west. Items: none
+> east
+  Library. Exits: down*, west. Items: none
+> use key
+  The trapdoor unlocks with a click.
+> eat
+  Delicious.
+> d
+  Vault. Exits: up. Items: gem, coin #4, coin #5
+> look
+  Vault. Exits: up. Items: gem, coin #4, coin #5
+> take gem
+  Taken: gem.
+> grab coin
+  Taken: coin #4.
+> get coin
+  Taken: coin #5.
+> i
+  You carry: [lamp; key; book; rope; gem; coin #1; coin #2; coin #4; coin #5]
+> path hall
+  Route: [Up, West]
+> u
+  Library. Exits: down, west. Items: none
+> dance wildly
+  I don't understand "dance wildly".
+> w
+  Hall. Exits: down, east, north, west. Items: none
+  You escape with the gem!
+result: Won, score 220, moves 36, hunger 3, coins 4, visited {Cellar, Hall, Library, Kitchen, Garden, Tower, Vault}, messages 39
+--- grue ---
+  Cellar: It is pitch dark. You might be eaten by a grue.
+> up
+  Hall. Exits: down, east, north, west. Items: none
+> down
+  Cellar: It is pitch dark. You might be eaten by a grue.
+> take lamp
+  Taken: lamp.
+> north
+  You can't go that way.
+> north
+  You can't go that way.
+> north
+  Something grabs you in the dark!
+result: Dead("eaten by a grue"), score 5, moves 6, hunger 2, coins 0, visited {Cellar, Hall}, messages 7
+--- starve ---
+  Cellar: It is pitch dark. You might be eaten by a grue.
+> take lamp
+  Taken: lamp.
+> use lamp
+  The lamp is now on.
+> up
+  Hall. Exits: down, east, north, west. Items: none
+> e
+  Library. Exits: down*, west. Items: book
+> w
+  Hall. Exits: down, east, north, west. Items: none
+> w
+  Kitchen. Exits: east. Items: bread, coin #2
+> e
+  Hall. Exits: down, east, north, west. Items: none
+> n
+  Garden. Exits: south, up*. Items: rope, coin #3
+> s
+  Hall. Exits: down, east, north, west. Items: none
+> n
+  Garden. Exits: south, up*. Items: rope, coin #3
+> s
+  Hall. Exits: down, east, north, west. Items: none
+> n
+  Garden. Exits: south, up*. Items: rope, coin #3
+> s
+  Hall. Exits: down, east, north, west. Items: none
+> n
+  Garden. Exits: south, up*. Items: rope, coin #3
+> s
+  Hall. Exits: down, east, north, west. Items: none
+  You collapse from hunger.
+result: Dead("starved"), score 20, moves 15, hunger 13, coins 0, visited {Cellar, Hall, Library, Kitchen, Garden}, messages 17
+--- quitter ---
+  Cellar: It is pitch dark. You might be eaten by a grue.
+> inventory
+  You carry: []
+> drop lamp
+  You don't have that.
+> UP
+  Something grabs you in the dark!
+result: Dead("eaten by a grue"), score 0, moves 3, hunger 0, coins 0, visited {Cellar}, messages 4

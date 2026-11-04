@@ -1,0 +1,24 @@
+["c", "b", "a"]
+get a = Some(1)
+after d: ["d", "a", "c"], evicted ["b"]
+put b again -> None
+get c = None
+["a", "b", "d"] a=Some(100)
+remove d: true remove z: false
+["f", "e", "a"] len=3 evicted=["b", "c", "b"] slab=3 free=0
+hits=2 misses=1 rate=0.667
+rc order [4, 3, 2, 1] rev [1, 2, 3, 4]
+get 2 -> Some("v2")
+get 9 -> None
+rc order [3, 5, 2, 4] rev [4, 2, 5, 3] get3=Some("v3b")
+rc order [19, 16, 18, 17] rev [17, 18, 16, 19]
+strong counts [2, 2, 2, 2] weak counts [1, 1, 1, 1]
+   cap   lru-hit%   lfu-hit%   checksum
+     4      0.68%      0.96%  654669688
+        most evicted: [(8, 71), (0, 67), (63, 63)], mru head: [322, 389, 189, 896]
+    16      2.55%      3.35%  654669688
+        most evicted: [(8, 68), (0, 65), (63, 60)], mru head: [322, 389, 189, 896]
+    64     10.42%     12.26%  654669688
+        most evicted: [(8, 57), (63, 54), (52, 51)], mru head: [322, 389, 189, 896]
+   256     38.52%     44.98%  654669688
+        most evicted: [(82, 28), (90, 27), (18, 26)], mru head: [322, 389, 189, 896]

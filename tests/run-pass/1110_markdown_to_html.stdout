@@ -1,0 +1,67 @@
+<h1 id="project-nebula--notes">Project <em>Nebula</em> — Notes</h1>
+<p>Nebula is a <strong>fast</strong>, <em>small</em> &amp; &quot;friendly&quot; tool.
+It handles <code>a &lt; b &amp;&amp; c</code> and <code>code with ` tick</code>.
+Line with hard break
+next line.</p>
+<h2 id="install">Install</h2>
+<ol>
+<li>Download from <a href="https://example.com/dl?x=1&amp;y=2">https://example.com/dl?x=1&amp;y=2</a></li>
+<li>Run <code>make</code>
+<ul>
+<li>on <em>Linux</em>: use gcc</li>
+<li>on macOS: use clang</li>
+</ul>
+</li>
+<li>Profit</li>
+<li>five</li>
+<li>six</li>
+</ol>
+<ul>
+<li>star item with <a href="http://a.b/c" title="Title here">a link</a></li>
+<li>see <a href="https://docs.example.org">the docs</a> or <a href="https://docs.example.org">Docs</a></li>
+<li>plus is still a bullet</li>
+</ul>
+<blockquote>
+<p>Quote level one
+with <strong>bold</strong></p>
+<blockquote>
+<p>nested quote</p>
+</blockquote>
+<ul>
+<li>list in quote</li>
+</ul>
+</blockquote>
+<hr>
+<pre><code class="language-rust">fn main() {
+    println!(&quot;&lt;hi&gt; &amp; bye&quot;);
+}
+</code></pre>
+<table>
+<thead>
+<tr><th align="left">Name</th><th align="center">Qty</th><th align="right">Price</th></tr>
+</thead>
+<tbody>
+<tr><td align="left">Apple</td><td align="center">3</td><td align="right">$1.20</td></tr>
+<tr><td align="left">Kiwi \</td><td align="center">Lime</td><td align="right">10</td></tr>
+<tr><td align="left">Only</td><td align="center"></td><td align="right"></td></tr>
+</tbody>
+</table>
+<p><img src="/img/logo.png" alt="logo" title="Logo"> and escaped *not em* and 2 * 3 * 4.
+Unclosed **bold and [bracket and &lt;tag&gt;.</p>
+<hr>
+<h6 id="six">Six</h6>
+<p>####### Seven is a paragraph</p>
+--- stats ---
+<p>            5
+<li>           11
+<h             5
+<a             4
+<code          4
+<strong>       2
+<em>           3
+<td            9
+<blockquote>   2
+<p>plain</p>
+
+""
+"<ul>\n<li>a</li>\n<li>b</li>\n<li>c</li>\n</ul>\n<p>after</p>\n"

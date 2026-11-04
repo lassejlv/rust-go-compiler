@@ -1,0 +1,98 @@
+{
+  "empty": {
+    "a": [],
+    "b": {}
+  },
+  "exp": 1500,
+  "neg": -0.125,
+  "store": {
+    "address": {
+      "geo": [42.35,-71.06],
+      "street": "1 Main St\nSuite 2",
+      "zip": "02134"
+    },
+    "books": [
+      {
+        "author": "Herbert",
+        "price": 9.99,
+        "stock": 3,
+        "title": "Dune",
+        "year": 1965
+      },
+      {
+        "author": "Gibson",
+        "price": 7.5,
+        "stock": 0,
+        "title": "Neuromancer",
+        "year": 1984
+      },
+      {
+        "author": "Simmons",
+        "price": 12,
+        "stock": 7,
+        "title": "Hyperion",
+        "year": 1989
+      },
+      {
+        "author": "Stephenson",
+        "price": 10.25,
+        "reviews": [
+          {
+            "by": "ann",
+            "stars": 5
+          },
+          {
+            "by": "bo",
+            "stars": 3
+          }
+        ],
+        "stock": 2,
+        "title": "Snow Crash",
+        "year": 1992
+      }
+    ],
+    "manager": null,
+    "name": "Ye Olde \"Shoppe\"",
+    "open": true,
+    "rating": 4.25,
+    "tags": ["books","music","café","😀"]
+  },
+  "version": 3
+}
+compact length: 625
+round trip equal: true
+pretty round trip equal: true
+$.store.name                                  => ["Ye Olde \"Shoppe\""]
+$.store.books[0].title                        => ["Dune"]
+$.store.books[-1].reviews[*].by               => ["ann", "bo"]
+$.store.books[*].price                        => [9.99, 7.5, 12, 10.25]
+$.store.books[?price > 9].title               => ["Dune", "Hyperion", "Snow Crash"]
+$.store.books[?author == "Gibson"].year       => [1984]
+$.store.books[?stock != 0].title              => ["Dune", "Hyperion", "Snow Crash"]
+$..stars                                      => [5, 3]
+$..zip                                        => ["02134"]
+$.store.tags.length                           => [4]
+$.store.books.length                          => [4]
+$.store.tags[2]                               => ["café"]
+$.store.tags[3].length                        => [1]
+$.store.address.geo                           => [[42.35,-71.06]]
+$.empty.*                                     => error: empty key at 8
+$.store.missing                               => []
+$.store.books[x]                              => error: bad index "x"
+$.store.books[?price]                         => error: filter needs operator
+total price = 39.74, avg = 9.935
+census: {"array": 5, "bool": 1, "null": 1, "number": 20, "object": 11, "string": 17}
+""             -> parse error at byte 0: unexpected end of input
+"[1, 2"        -> parse error at byte 5: expected ',' or ']'
+"{\"a\" 1}"    -> parse error at byte 5: expected ':'
+"[1,]"         -> parse error at byte 3: unexpected character ']'
+"tru"          -> parse error at byte 0: expected 'true'
+"\"abc"        -> parse error at byte 4: unterminated string
+"{\"k\": \"\   -> parse error at byte 9: unknown escape
+"[1] 2"        -> parse error at byte 4: trailing characters
+"-"            -> parse error at byte 0: invalid number "-"
+"\"\\ud800\"   -> parse error at byte 7: lone surrogate
+"{1: 2}"       -> parse error at byte 1: expected string key
+"[[[[[[[[[[[   -> parse error at byte 64: nesting too deep
+["\u0001\u001f","tab\there",0.1,0.0000001,123456789012,0,100]
+Str("\u{1}\u{1f}") Str("tab\there") Num(0.1) Num(1e-7) Num(123456789012.0) Num(-0.0) Num(100.0) 
