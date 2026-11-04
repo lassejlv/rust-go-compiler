@@ -1,0 +1,37 @@
+"12.5" -> 12.5000 | 12 | +12.5
+"-0.0001" -> 0.0000 | 0 | +0.0
+"1,234,567.89" -> 1,234,567.8900 | 1234568 | +1234567.9
+"+3" -> 3.0000 | 3 | +3.0
+"" -> error Empty
+"1.23456" -> error TooPrecise(5)
+"12a" -> error BadChar('a')
+"99999999999999999999999999999999999999" -> error Overflow
+HalfEven: 2.34 -2.34 2.36 0.00
+HalfUp: 2.35 -2.35 2.36 1.00
+Down: 2.34 -2.34 2.35 0.00
+3.33 0.67 3.00 Dec(2.2500)
+     1234.50|-1234.50    |    7.00    |-00000042.12
+100/7 x7 = 100.0000 (residual 0.0002)
+rejected "typo": Unbalanced { memo: "typo", currency: "USD", off_by: Dec(9.0000) }
+rejected "bad account": UnknownAccount("expenses:fun")
+rejected "empty": Empty("empty")
+sold 12 @ 105.00 gain 50.70
+sell failed: cannot sell 20 shares, only 11 held
+sold 6 @ 95.50 gain -52.50
+realized -1.80 remaining lots [(5, Dec(110.1000))]
+assets:bank            USD        6701.32        6701.32 Asset
+assets:brokerage       USD         550.50         550.50 Asset
+assets:eur-wallet      EUR         187.60         203.08 Asset
+equity:opening         EUR        -500.00        -541.25 Equity
+equity:opening         USD       -4458.75       -4458.75 Equity
+expenses:food          USD         100.00         100.00 Expense
+expenses:rent          USD        1450.00        1450.00 Expense
+expenses:travel        EUR         312.40         338.17 Expense
+income:capital-gains   USD           1.80           1.80 Income (contra)
+income:interest        USD        -134.50        -134.50 Income
+income:salary          USD       -4210.37       -4210.37 Income
+debits 9,344.87 credits 9,344.87 diff 0.0000
+{Asset: Dec(7454.8970), Liability: Dec(0.0000), Equity: Dec(-5000.0000), Income: Dec(-4343.0700), Expense: Dec(1888.1730)}
+net income 2,454.90; journal 17 txns, first Some((2024, 1, 1)) last Some("sell 6")
+EUR->USD 108.25 USD->EUR 100.00
+-1,234,567.89

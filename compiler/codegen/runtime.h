@@ -23,6 +23,7 @@ typedef struct { void* ptr; uint64_t meta; } Fat;
 #include <sys/syscall.h>
 #include <linux/futex.h>
 #include <signal.h>
+#include <sys/resource.h>
 #include <stdio_ext.h>
 #include <cpuid.h>
 
@@ -67,6 +68,9 @@ RG_GLOBAL __thread int rg_is_main;
 RG_GLOBAL __thread char* rg_tname;          /* thread name (NULL: "main" / "<unnamed>") */
 RG_GLOBAL __thread size_t rg_tname_len;
 RG_GLOBAL __thread void* rg_altstack;     /* sigaltstack for stack overflow reports */
+/* the stack limit the process started with, when rg_init raised it */
+RG_GLOBAL struct rlimit rg_stack_rlim0;
+RG_GLOBAL int rg_stack_rlim_raised;
 /* the payload message of the last caught panic of this thread */
 RG_GLOBAL __thread char* rg_pmsg;
 RG_GLOBAL __thread size_t rg_pmsg_len;
@@ -149,9 +153,31 @@ static void rg_install_stack_guard(void) {
   }
 }
 
+/* The generated C keeps more of a function's temporaries in its frame than
+   rustc does (drop flags, values registered for unwinding), so recursion
+   reaches the end of the stack 2-3x sooner. Like the 8MB default for
+   spawned threads (rustc: 2MB), give the main thread 4x the stack it was
+   started with (it grows on demand; at most 64MB, within the hard limit).
+   Child processes get the original limit back (rg_restore_stack_limit). */
+static void rg_raise_main_stack(void) {
+  struct rlimit rl;
+  if (getrlimit(RLIMIT_STACK, &rl) != 0 || rl.rlim_cur == RLIM_INFINITY) return;
+  rlim_t want = rl.rlim_cur * 4;
+  if (want > ((rlim_t)64 << 20)) want = (rlim_t)64 << 20;
+  if (rl.rlim_max != RLIM_INFINITY && want > rl.rlim_max) want = rl.rlim_max;
+  if (want <= rl.rlim_cur) return;
+  struct rlimit raised = rl;
+  raised.rlim_cur = want;
+  if (setrlimit(RLIMIT_STACK, &raised) == 0) { rg_stack_rlim0 = rl; rg_stack_rlim_raised = 1; }
+}
+static void rg_restore_stack_limit(void) {
+  if (rg_stack_rlim_raised) setrlimit(RLIMIT_STACK, &rg_stack_rlim0);
+}
+
 static void rg_init(int argc, char** argv) {
   rg_argc = argc; rg_argv = argv;
   rg_is_main = 1;
+  rg_raise_main_stack();
   setvbuf(stdout, rg_outbuf, _IOFBF, sizeof rg_outbuf);
   atexit(rg_atexit);
   /* like Rust's runtime: writes to closed pipes fail with EPIPE instead of killing the process */

@@ -1,0 +1,11 @@
+versions 401 all match model & balanced: true size 101 height 8
+get 42 in v100 None / last None; nth(0) Some((0, "v332")) nth(10) Some(20) nth(999) None
+distinct nodes across all versions 2450 vs 29776 if fully copied
+rc counts a=1 b=1 c=1 shared-left=true
+rope "Oh,+++ hworlded text buffer (with ünïcödé)" len 42 depth 3 char_at(7) Some('h')
+  undo to v1: "Hello world"
+  undo to v3: "Hello, world! This is a rope-based text buffer"
+  undo to v5: "Oh, hworld! This is a rope-based text buffer"
+big len 2390 depth 495 split 1000 + 1390 char Some(']')Some('[')
+queue pops 1 2 old 1 rest [3, 4] empty true
+["c", "b", "a"] ["d", "b", "a"] ["b", "a"] shared tail rc=3

@@ -1026,8 +1026,9 @@ impl Command {
                     return sys::errno();
                 }
             }
-            // restore the default SIGPIPE disposition
+            // restore the default SIGPIPE disposition and stack limit
             sys::c_signal(sys::SIGPIPE, 0);
+            unsafe { crate::intrinsics::restore_stack_limit() };
             for c in self.closures.iter_mut() {
                 if let Err(e) = c() {
                     return match e.raw_os_error() {

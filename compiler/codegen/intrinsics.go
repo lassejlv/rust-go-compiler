@@ -222,6 +222,8 @@ func (fc *fnGen) intrinsic(d *Def, args []Ty, v []string, ret Ty, sp ast.Span) s
 		return fmt.Sprintf("(rg_write_stderr(%s, %s), (Unit){})", v[0], v[1])
 	case "flush_stdout":
 		return "(rg_flush_stdout(), (Unit){})"
+	case "restore_stack_limit":
+		return "(rg_restore_stack_limit(), (Unit){})"
 	case "panic_impl":
 		return fmt.Sprintf("(rg_panic_impl(%s, %s, %s, %s), (Unit){})", v[0], v[1], v[2], v[3])
 	case "wrapping_add", "wrapping_sub", "wrapping_mul":
