@@ -195,20 +195,38 @@ func (e *Expander) litString(tts []ast.TokenTree, mac *ast.MacCall) (string, boo
 		if path := macroCallPath(tts[:len(tts)-2]); path != nil && e.litDepth < e.RecursionLimit {
 			g := tts[len(tts)-1]
 			inner := &ast.MacCall{Path: path, Delim: g.Delim, Args: g.Inner, Span: ttsSpan(tts, mac.Span)}
-			e.litDepth++
-			res, _, err := e.macTokens(inner)
-			if err == nil {
-				var s string
-				var isStr bool
+			var s string
+			var isStr bool
+			err := e.eager(inner, func(res []ast.TokenTree) (err error) {
 				s, isStr, err = e.litString(res, inner)
-				e.litDepth--
-				return s, isStr, err
-			}
-			e.litDepth--
-			return "", false, err
+				return err
+			})
+			return s, isStr, err
 		}
 	}
 	return "", false, errAt(ttsSpan(tts, mac.Span), "expected a literal")
+}
+
+// eager expands the macro call mac (an argument of a builtin) and passes
+// its tokens to f; a macro_rules! call is the call site of line!() and
+// the like in its expansion (as for any user macro call).
+func (e *Expander) eager(mac *ast.MacCall, f func([]ast.TokenTree) error) error {
+	e.litDepth++
+	defer func() { e.litDepth-- }()
+	var res []ast.TokenTree
+	var user bool
+	run := func() error {
+		var err error
+		if res, user, err = e.macTokens(mac); err != nil {
+			return err
+		}
+		return f(res)
+	}
+	if def, _ := e.lookupMacroCall(mac); def != nil && realSpan(mac.Span) {
+		return e.withSite(mac.Span, run)
+	}
+	_ = user
+	return run()
 }
 
 // macroCallPath parses the path of a macro call (`a::b`, `::a`, `$crate`
@@ -266,12 +284,11 @@ func (e *Expander) literalMacArg(tts []ast.TokenTree) []ast.TokenTree {
 			return tts
 		}
 	}
-	e.litDepth++
-	res, _, err := e.macTokens(mac)
-	if err == nil {
-		res = e.literalMacArg(res)
-	}
-	e.litDepth--
+	var res []ast.TokenTree
+	err := e.eager(mac, func(r []ast.TokenTree) error {
+		res = e.literalMacArg(r)
+		return nil
+	})
 	for len(res) == 1 && isInvisibleGroup(res[0]) {
 		res = res[0].Inner
 	}
