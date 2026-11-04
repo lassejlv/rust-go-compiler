@@ -213,20 +213,14 @@ func (e *Expander) litString(tts []ast.TokenTree, mac *ast.MacCall) (string, boo
 func (e *Expander) eager(mac *ast.MacCall, f func([]ast.TokenTree) error) error {
 	e.litDepth++
 	defer func() { e.litDepth-- }()
-	var res []ast.TokenTree
-	var user bool
-	run := func() error {
-		var err error
-		if res, user, err = e.macTokens(mac); err != nil {
-			return err
-		}
-		return f(res)
+	res, user, err := e.macTokens(mac)
+	if err != nil {
+		return err
 	}
-	if def, _ := e.lookupMacroCall(mac); def != nil && realSpan(mac.Span) {
-		return e.withSite(mac.Span, run)
+	if user && realSpan(mac.Span) {
+		return e.withSite(mac.Span, func() error { return f(res) })
 	}
-	_ = user
-	return run()
+	return f(res)
 }
 
 // macroCallPath parses the path of a macro call (`a::b`, `::a`, `$crate`
