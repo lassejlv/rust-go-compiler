@@ -587,7 +587,7 @@ impl OpenOptions {
             (true, true, false) => Ok(sys::O_RDWR),
             (false, _, true) => Ok(sys::O_WRONLY | sys::O_APPEND),
             (true, _, true) => Ok(sys::O_RDWR | sys::O_APPEND),
-            (false, false, false) => Err(io::Error::from_raw_os_error(sys::EINVAL)),
+            (false, false, false) => Err(io::const_io_error(io::ErrorKind::InvalidInput, "must specify at least one of read, write, or append access")),
         }
     }
 
@@ -596,12 +596,12 @@ impl OpenOptions {
             (true, false) => {}
             (false, false) => {
                 if self.truncate || self.create || self.create_new {
-                    return Err(io::Error::from_raw_os_error(sys::EINVAL));
+                    return Err(io::const_io_error(io::ErrorKind::InvalidInput, "creating or truncating a file requires write or append access"));
                 }
             }
             (_, true) => {
                 if self.truncate && !self.create_new {
-                    return Err(io::Error::from_raw_os_error(sys::EINVAL));
+                    return Err(io::const_io_error(io::ErrorKind::InvalidInput, "creating or truncating a file requires write or append access"));
                 }
             }
         }

@@ -1,6 +1,6 @@
 //! An in-memory reader/writer with a seek position.
 
-use super::{const_io_error, BufRead, ErrorKind, IoSlice, Read, Result, Seek, SeekFrom, Write};
+use super::{const_io_error, BufRead, ErrorKind, IoSlice, IoSliceMut, Read, Result, Seek, SeekFrom, Write};
 
 /// A `Cursor` wraps an in-memory buffer and provides it with a `Seek` implementation.
 #[derive(Debug, Default, Eq, PartialEq)]
@@ -94,6 +94,22 @@ impl<T: AsRef<[u8]>> Read for Cursor<T> {
         let n = Read::read(&mut self.remaining_slice(), buf)?;
         self.pos += n as u64;
         Ok(n)
+    }
+
+    fn read_vectored(&mut self, bufs: &mut [IoSliceMut<'_>]) -> Result<usize> {
+        let mut nread = 0;
+        for buf in bufs.iter_mut() {
+            let n = self.read(&mut **buf)?;
+            nread += n;
+            if n < buf.len() {
+                break;
+            }
+        }
+        Ok(nread)
+    }
+
+    fn is_read_vectored(&self) -> bool {
+        true
     }
 
     fn read_exact(&mut self, buf: &mut [u8]) -> Result<()> {

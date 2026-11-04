@@ -1,0 +1,10 @@
+Err("InvalidInput: creating or truncating a file requires write or append access")
+Err("InvalidInput: must specify at least one of read, write, or append access")
+Err("InvalidInput: creating or truncating a file requires write or append access")
+Err("InvalidInput: creating or truncating a file requires write or append access")
+Ok(())
+Err("AlreadyExists: File exists (os error 17)")
+InputOutputError input/output error / Input/output error (os error 5)
+input/output error Kind(InputOutputError)
+6 [97, 98] [99, 100, 101] [102, 0, 0, 0] 6
+Ok(0) [0, 0, 0, 0]

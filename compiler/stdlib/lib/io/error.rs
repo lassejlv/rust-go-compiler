@@ -51,6 +51,9 @@ pub enum ErrorKind {
     UnexpectedEof,
     OutOfMemory,
     InProgress,
+    /// An I/O error (EIO); unstable in std (`io_error_input_output_error`).
+    #[doc(hidden)]
+    InputOutputError,
     Other,
     #[doc(hidden)]
     Uncategorized,
@@ -77,6 +80,7 @@ impl ErrorKind {
             ErrorKind::HostUnreachable => "host unreachable",
             ErrorKind::Interrupted => "operation interrupted",
             ErrorKind::InProgress => "in progress",
+            ErrorKind::InputOutputError => "input/output error",
             ErrorKind::InvalidData => "invalid data",
             ErrorKind::InvalidFilename => "invalid filename",
             ErrorKind::InvalidInput => "invalid input parameter",
@@ -150,6 +154,7 @@ pub(crate) fn decode_error_kind(errno: i32) -> ErrorKind {
         26 => ErrorKind::ExecutableFileBusy,
         18 => ErrorKind::CrossesDevices,
         115 => ErrorKind::InProgress,
+        5 => ErrorKind::InputOutputError,
         1 | 13 => ErrorKind::PermissionDenied,
         11 => ErrorKind::WouldBlock,
         _ => ErrorKind::Uncategorized,
