@@ -1008,6 +1008,47 @@ func (lc *loanChecker) store(st *lstate, p Place, v lval) {
 			lc.or(st, skey(p.Local, r), v.s[j])
 		}
 	}
+	lc.storeThroughRef(st, p, v, 0)
+}
+
+// storeThroughRef: a write through a `&mut` (`*x = &s`, `(*x).f = ..`)
+// also reaches the places x borrows (`x = v.last_mut()`): their slots
+// receive the value's loans (weakly).
+func (lc *loanChecker) storeThroughRef(st *lstate, p Place, v lval, nest int) {
+	if nest > 4 || len(p.Proj) == 0 || p.Proj[0].Kind != PDeref || p.Proj[0].Deref != DRefMut {
+		return
+	}
+	for _, pr := range p.Proj[1:] {
+		if pr.Kind == PDeref {
+			return
+		}
+	}
+	for _, bp := range lc.borrowedPlaces(lc.placeVal(st, Place{Local: p.Local})) {
+		if bp.Local == p.Local {
+			continue
+		}
+		np := Place{Local: bp.Local, Proj: append(append([]Proj(nil), bp.Proj...), p.Proj[1:]...)}
+		if !carriesBorrows(lc.body.Locals[np.Local].Ty) {
+			continue
+		}
+		pi := lc.placeInfo(np)
+		if pi.raw {
+			continue
+		}
+		w := lc.conv(v, pi.lay)
+		if len(np.Proj) == 0 {
+			for j := range w.s {
+				lc.or(st, skey(np.Local, j), w.s[j])
+			}
+		} else {
+			for j, rs := range pi.m {
+				for _, r := range rs {
+					lc.or(st, skey(np.Local, r), w.s[j])
+				}
+			}
+		}
+		lc.storeThroughRef(st, np, v, nest+1)
+	}
 }
 
 // killDerefLoans removes loans of places reached through a deref of local l
