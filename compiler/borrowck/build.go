@@ -784,6 +784,54 @@ func (b *builder) operandNow(e ast.Expr) Operand {
 	return Operand{Kind: OMove, Place: t.p}
 }
 
+// readNow: an operand evaluated before the operands of exprs rest (of the
+// same rvalue or call). A Copy place operand is read at its position in
+// evaluation order, into a temporary, as the later operands may move or
+// mutate the place (`(l.e, W(l))`, `(v[0], { v[0] = 9; 0 })`).
+func (b *builder) readNow(op Operand, e ast.Expr, rest []ast.Expr) Operand {
+	if op.Kind != OCopy || (len(op.Place.Proj) == 0 && b.isTempLocal(op.Place.Local)) || b.allInert(rest) {
+		return op
+	}
+	ty := op.Ty
+	if ty == nil {
+		ty = b.adjTy(e)
+	}
+	t := b.temp(ty, e.GetSpan())
+	b.assign(t.p, Rvalue{Kind: RUse, Ops: []Operand{op}}, e.GetSpan())
+	return Operand{Kind: OMove, Place: t.p, Ty: ty}
+}
+
+// allInert reports whether evaluating es can neither move, borrow nor
+// mutate anything (literals and plain places).
+func (b *builder) allInert(es []ast.Expr) bool {
+	for _, e := range es {
+		if !b.inert(e) {
+			return false
+		}
+	}
+	return true
+}
+
+func (b *builder) inert(e ast.Expr) bool {
+	if e == nil {
+		return true
+	}
+	if len(b.r.Adjust[e.GetID()]) > 0 {
+		return false
+	}
+	switch x := e.(type) {
+	case *ast.LitExpr, *ast.PathExpr:
+		return true
+	case *ast.ParenExpr:
+		return b.inert(x.X)
+	case *ast.FieldExpr:
+		return b.inert(x.X)
+	case *ast.UnaryExpr:
+		return x.Op == ast.UnDeref && b.r.Callees[x.ID] == nil && b.inert(x.X)
+	}
+	return false
+}
+
 // argOperand evaluates a call argument: a `&mut` place passed to a call is
 // implicitly reborrowed (`&mut *x`), not moved.
 func (b *builder) argOperand(e ast.Expr) Operand {
@@ -976,8 +1024,8 @@ func (b *builder) lowerValue(e ast.Expr, dest tplace) {
 
 func (b *builder) aggregate(es []ast.Expr, dest tplace, sp lexer.Span) {
 	var ops []Operand
-	for _, e := range es {
-		ops = append(ops, b.argOperand(e))
+	for i, e := range es {
+		ops = append(ops, b.readNow(b.argOperand(e), e, es[i+1:]))
 	}
 	b.assign(dest.p, Rvalue{Kind: RAggregate, Ops: ops}, sp)
 }
@@ -996,7 +1044,7 @@ func (b *builder) binary(x *ast.BinaryExpr, dest tplace) {
 			b.call(dest.p, []Operand{{Kind: OMove, Place: lr.p}, {Kind: OMove, Place: rr.p}}, noFlow(), "cmp", sp, false)
 			return
 		}
-		l := b.operand(x.L)
+		l := b.readNow(b.operand(x.L), x.L, []ast.Expr{x.R})
 		r := b.operand(x.R)
 		b.callTo(c, []Operand{l, r}, dest, sp, "binop")
 		return
@@ -1016,7 +1064,7 @@ func (b *builder) binary(x *ast.BinaryExpr, dest tplace) {
 		b.assign(dest.p, Rvalue{Kind: ROther, Ops: []Operand{{Kind: OCopy, Place: t.p}}}, sp)
 		return
 	}
-	l := b.operand(x.L)
+	l := b.readNow(b.operand(x.L), x.L, []ast.Expr{x.R})
 	r := b.operand(x.R)
 	if x.Op >= ast.BinEq {
 		// comparisons take their operands by reference (PartialEq::eq)
@@ -1091,8 +1139,8 @@ func (b *builder) callExpr(x *ast.CallExpr, dest tplace) {
 	c := b.r.Callees[x.ID]
 	if c == nil {
 		var ops []Operand
-		for _, a := range x.Args {
-			ops = append(ops, b.operand(a))
+		for i, a := range x.Args {
+			ops = append(ops, b.readNow(b.operand(a), a, x.Args[i+1:]))
 		}
 		b.call(dest.p, ops, noFlow(), "?", sp, false)
 		return
@@ -1100,8 +1148,8 @@ func (b *builder) callExpr(x *ast.CallExpr, dest tplace) {
 	switch c.Kind {
 	case typeck.CallCtor:
 		var ops []Operand
-		for _, e := range x.Args {
-			ops = append(ops, b.argOperand(e))
+		for i, e := range x.Args {
+			ops = append(ops, b.readNow(b.argOperand(e), e, x.Args[i+1:]))
 		}
 		rv := Rvalue{Kind: RAggregate, Ops: ops}
 		if d := c.Def; d != nil {
@@ -1147,8 +1195,8 @@ func (b *builder) callExpr(x *ast.CallExpr, dest tplace) {
 			callee = b.operandOf(fp)
 		}
 		ops := []Operand{callee}
-		for _, a := range x.Args {
-			ops = append(ops, b.argOperand(a))
+		for i, a := range x.Args {
+			ops = append(ops, b.readNow(b.argOperand(a), a, x.Args[i+1:]))
 		}
 		diverges := dest.ty != nil && dest.ty.Kind == TNever
 		// the output of a Fn* call cannot borrow from the closure itself;
@@ -1191,14 +1239,25 @@ func (b *builder) callExpr(x *ast.CallExpr, dest tplace) {
 // two-phase borrow afterwards too (a method receiver).
 func (b *builder) twoPhaseArgs(args []ast.Expr, deferred bool) []Operand {
 	ops := make([]Operand, len(args))
+	// later: the places mutably borrowed after the other arguments (with
+	// the borrow's type)
 	later := map[int]tplace{}
 	var resv []LocalID
 	for i, a := range args {
 		t := b.adjTy(a)
 		if t != nil && t.Kind == TRef && t.Mut && (b.isPlaceExpr(a) || len(b.r.Adjust[a.GetID()]) > 0) {
+			if pl, ok := b.derefCoercedPlace(a); ok {
+				// a deref coercion (`&mut &mut S` to `&mut S`): its
+				// final borrow is two-phase too
+				later[i] = tplace{p: pl.p, ty: t}
+				if i+1 < len(args) {
+					resv = append(resv, b.reserve(pl.p, pl.ty, a.GetSpan(), true))
+				}
+				continue
+			}
 			tp := b.placeOf(a)
 			if tp.ty != nil && tp.ty.Kind == TRef && tp.ty.Mut && !(len(tp.p.Proj) == 0 && b.isTempLocal(tp.p.Local)) {
-				later[i] = tp
+				later[i] = tplace{p: tp.deref().p, ty: tp.ty}
 				if i+1 < len(args) {
 					resv = append(resv, b.reserve(tp.deref().p, tp.ty.Elem, a.GetSpan(), true))
 				}
@@ -1208,6 +1267,9 @@ func (b *builder) twoPhaseArgs(args []ast.Expr, deferred bool) []Operand {
 			continue
 		}
 		ops[i] = b.operand(a)
+		if i+1 < len(args) {
+			ops[i] = b.readNow(ops[i], a, args[i+1:])
+		}
 	}
 	if len(later) == 0 && !deferred {
 		return ops
@@ -1225,10 +1287,31 @@ func (b *builder) twoPhaseArgs(args []ast.Expr, deferred bool) []Operand {
 	}
 	for i := range args {
 		if tp, ok := later[i]; ok {
-			ops[i] = b.reborrow(tp, args[i].GetSpan())
+			sp := args[i].GetSpan()
+			t := b.temp(tp.ty, sp)
+			b.assign(t.p, Rvalue{Kind: RRef, Place: tp.p, Mut: true}, sp)
+			ops[i] = Operand{Kind: OMove, Place: t.p}
 		}
 	}
 	return ops
+}
+
+// derefCoercedPlace: for an argument deref-coerced by builtin derefs to a
+// `&mut` (adjustments Deref.., Borrow(mut)), the place the final borrow
+// takes (evaluated now).
+func (b *builder) derefCoercedPlace(a ast.Expr) (tplace, bool) {
+	adjs := b.r.Adjust[a.GetID()]
+	n := len(adjs)
+	if n < 2 || adjs[n-1].Kind != typeck.AdjBorrow || !adjs[n-1].Mut {
+		return tplace{}, false
+	}
+	for _, x := range adjs[:n-1] {
+		if x.Kind != typeck.AdjDeref {
+			return tplace{}, false
+		}
+	}
+	tp := b.applyAdjusts(a, b.unadjPlace(a), adjs[:n-1])
+	return tp, true
 }
 
 // reserve borrows p (of type t) before a call's arguments are evaluated,
@@ -1331,8 +1414,15 @@ func (b *builder) structExpr(x *ast.StructExpr, dest tplace) {
 	var ops []Operand
 	v := b.r.Variants[x.ID]
 	var fields []int
-	for _, f := range x.Fields {
-		ops = append(ops, b.argOperand(f.Expr))
+	for i, f := range x.Fields {
+		var rest []ast.Expr
+		for _, g := range x.Fields[i+1:] {
+			rest = append(rest, g.Expr)
+		}
+		if x.Base != nil {
+			rest = append(rest, x.Base)
+		}
+		ops = append(ops, b.readNow(b.argOperand(f.Expr), f.Expr, rest))
 		if v != nil {
 			fields = append(fields, v.FieldIndex(f.Name.Name))
 		}

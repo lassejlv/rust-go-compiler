@@ -26,6 +26,9 @@ type IntoEdge struct {
 type occ struct {
 	name  string
 	depth int
+	// inSelf: found in the expansion of `Self` (the impl's self type):
+	// not an input lifetime position for elision
+	inSelf bool
 }
 
 type sigWalker struct {
@@ -42,7 +45,7 @@ type sigWalker struct {
 }
 
 func (w *sigWalker) add(name string, depth int) {
-	w.occs = append(w.occs, occ{name, depth})
+	w.occs = append(w.occs, occ{name, depth, w.inSelf > 0})
 }
 
 func (w *sigWalker) lifetime(lt string, depth int) {
@@ -355,10 +358,12 @@ func (b *builder) sigFlow(c *typeck.Callee, nargs int, ret Ty, argTys []Ty) *Flo
 			elided = "'self"
 		}
 	} else {
+		// lifetimes inside `Self` (a by-value `self`, `Box<Self>`) are
+		// not input lifetime positions
 		names := map[string]bool{}
 		for _, os := range ins {
 			for _, o := range os {
-				if o.name[0] == '\'' {
+				if o.name[0] == '\'' && !o.inSelf {
 					names[o.name] = true
 				}
 			}
@@ -385,14 +390,14 @@ func (b *builder) sigFlow(c *typeck.Callee, nargs int, ret Ty, argTys []Ty) *Flo
 		for _, os := range ins {
 			for _, o := range os {
 				if all || o.name[0] != '\'' {
-					outs = append(outs, occ{o.name, 0})
+					outs = append(outs, occ{name: o.name})
 				}
 			}
 		}
 	}
 	if len(outs) == 0 && !w.named && !w.implAll && carriesBorrows(ret) && hasLifetimeAdt(ret) {
 		// a hidden elided lifetime in a path (`-> Iter<T>`)
-		outs = append(outs, occ{"'?", 0})
+		outs = append(outs, occ{name: "'?"})
 	}
 	// output type parameters no input mentions (`collect::<B>()`): built
 	// from what the arguments hold
@@ -1070,6 +1075,14 @@ func (c *checker) checkLoans() {
 	var origins []originAt
 	if c.ctx.fn != nil && body.ClosureKind < 0 {
 		lc.regions = fnRegions(c.ctx.fn)
+		if r := lc.regions; r != nil && len(r.out) == 0 && r.outAst != nil && len(body.Locals) > 0 && carriesBorrows(body.Locals[0].Ty) {
+			// the output's lifetimes are all hidden in paths (a type
+			// alias or struct written without its lifetime arguments,
+			// `-> Res`): elided ones
+			for d := 0; d < max(1, refLevels(body.Locals[0].Ty, 0)); d++ {
+				r.out = append(r.out, occ{name: "'?", depth: d})
+			}
+		}
 	}
 	for i, ld := range body.Locals {
 		if ld.Kind == LArg {

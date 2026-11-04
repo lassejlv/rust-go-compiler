@@ -246,17 +246,19 @@ type initState struct {
 	uninit bitset // maybe uninitialized
 	moved  bitset // maybe moved
 	ever   bitset // ever initialized (since StorageLive)
+	minit  bitset // maybe initialized
 }
 
 func (st *initState) clone() *initState {
-	return &initState{st.uninit.clone(), st.moved.clone(), st.ever.clone()}
+	return &initState{st.uninit.clone(), st.moved.clone(), st.ever.clone(), st.minit.clone()}
 }
 
 func (st *initState) join(o *initState) bool {
 	a := st.uninit.union(o.uninit)
 	b := st.moved.union(o.moved)
 	c := st.ever.union(o.ever)
-	return a || b || c
+	d := st.minit.union(o.minit)
+	return a || b || c || d
 }
 
 func successors(t Term) []int { return t.Targets }
@@ -265,11 +267,11 @@ func (c *checker) checkMoves() {
 	body := c.body
 	md := c.md
 	n := len(md.paths)
-	entry := &initState{newBitset(n), newBitset(n), newBitset(n)}
+	entry := &initState{newBitset(n), newBitset(n), newBitset(n), newBitset(n)}
 	for i, ld := range body.Locals {
 		root := md.roots[LocalID(i)]
 		if ld.Kind == LArg || ld.Kind == LUpvar {
-			md.forEachDesc(root, func(j int) { entry.ever.set(j) })
+			md.forEachDesc(root, func(j int) { entry.ever.set(j); entry.minit.set(j) })
 			continue
 		}
 		md.forEachDesc(root, func(j int) { entry.uninit.set(j) })
@@ -279,10 +281,20 @@ func (c *checker) checkMoves() {
 	work := []int{0}
 	queued := map[int]bool{0: true}
 	report := false
+	// drops of locals that are definitely not initialized there (moved
+	// out): no-ops, which use nothing
+	var deadDrops [][2]int
 	run := func(bi int, st *initState) *initState {
 		st = st.clone()
 		bl := body.Blocks[bi]
-		for _, s := range bl.Stmts {
+		for si, s := range bl.Stmts {
+			if report && s.Kind == SDrop && len(s.Place.Proj) == 0 {
+				live := false
+				md.forEachDesc(md.roots[s.Place.Local], func(j int) { live = live || st.minit.has(j) })
+				if !live {
+					deadDrops = append(deadDrops, [2]int{bi, si})
+				}
+			}
 			c.stmtMoves(st, s, report)
 		}
 		c.termMoves(st, bl.Term, report)
@@ -311,6 +323,9 @@ func (c *checker) checkMoves() {
 			run(bi, in[bi])
 		}
 	}
+	for _, d := range deadDrops {
+		body.Blocks[d[0]].Stmts[d[1]].Kind = SNop
+	}
 }
 
 func (st *initState) assignPath(md *moveData, i int) {
@@ -318,6 +333,7 @@ func (st *initState) assignPath(md *moveData, i int) {
 		st.uninit.clear(j)
 		st.moved.clear(j)
 		st.ever.set(j)
+		st.minit.set(j)
 	})
 }
 
@@ -325,6 +341,7 @@ func (st *initState) movePath(md *moveData, i int) {
 	md.forEachDesc(i, func(j int) {
 		st.uninit.set(j)
 		st.moved.set(j)
+		st.minit.clear(j)
 	})
 }
 
@@ -496,6 +513,7 @@ func (c *checker) stmtMoves(st *initState, s Stmt, report bool) {
 			st.uninit.set(j)
 			st.moved.clear(j)
 			st.ever.clear(j)
+			st.minit.clear(j)
 		})
 	}
 }
