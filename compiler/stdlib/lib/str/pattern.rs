@@ -156,35 +156,37 @@ impl Pattern for char {
     #[inline]
     fn find_in(&mut self, haystack: &str, start: usize, end: usize) -> Option<(usize, usize)> {
         let c = *self as u32;
+        if start >= end {
+            return None;
+        }
         if c < 0x80 {
-            let b = c as u8;
-            let bytes = haystack.as_bytes();
-            let mut i = start;
-            while i < end {
-                if bytes[i] == b {
-                    return Some((i, i + 1));
-                }
-                i += 1;
+            let p = unsafe { crate::intrinsics::ptr_add(haystack.as_ptr(), start) };
+            let i = unsafe { crate::intrinsics::memchr(p, c as u8, end - start) };
+            if i < end - start {
+                Some((start + i, start + i + 1))
+            } else {
+                None
             }
-            None
         } else {
-            pred_find(self, haystack, start, end)
+            let mut buf = [0u8; 4];
+            let s = self.encode_utf8(&mut buf);
+            substr_find(haystack, s, start, end)
         }
     }
     #[inline]
     fn rfind_in(&mut self, haystack: &str, start: usize, end: usize) -> Option<(usize, usize)> {
         let c = *self as u32;
+        if start >= end {
+            return None;
+        }
         if c < 0x80 {
-            let b = c as u8;
-            let bytes = haystack.as_bytes();
-            let mut i = end;
-            while i > start {
-                i -= 1;
-                if bytes[i] == b {
-                    return Some((i, i + 1));
-                }
+            let p = unsafe { crate::intrinsics::ptr_add(haystack.as_ptr(), start) };
+            let i = unsafe { crate::intrinsics::memrchr(p, c as u8, end - start) };
+            if i < end - start {
+                Some((start + i, start + i + 1))
+            } else {
+                None
             }
-            None
         } else {
             pred_rfind(self, haystack, start, end)
         }
@@ -292,31 +294,35 @@ pub(crate) fn substr_find(haystack: &str, needle: &str, start: usize, end: usize
     if end - start < n {
         return None;
     }
-    let h = haystack.as_bytes();
-    let nb = needle.as_bytes();
-    let first = nb[0];
-    let last_start = end - n;
-    let mut i = start;
-    // naive search; when partial matches make it too slow (periodic texts
-    // like "aaaa…ab"), switch to KMP, which is linear in the worst case
-    let mut budget = 64 + 4 * (end - start);
-    while i <= last_start {
-        if h[i] == first {
-            let mut j = 1;
-            while j < n && h[i + j] == nb[j] {
-                j += 1;
+    use crate::intrinsics::{compare_bytes, memchr, memmem, ptr_add};
+    let h = haystack.as_ptr();
+    let nb = needle.as_ptr();
+    unsafe {
+        let first = *nb;
+        let last_start = end - n;
+        // candidates by the first byte (memchr) while comparing them stays
+        // cheap (at most n bytes each); then the C library's memmem (linear
+        // in the worst case, but slower to start)
+        let mut i = start;
+        let mut budget = (64 + 2 * (end - start)) / n;
+        while i <= last_start {
+            let k = memchr(ptr_add(h, i), first, last_start + 1 - i);
+            if k > last_start - i {
+                return None;
             }
-            if j == n {
+            i += k;
+            if compare_bytes(ptr_add(h, i + 1), ptr_add(nb, 1), n - 1) == 0 {
                 return Some((i, i + n));
             }
-            if j > budget {
-                return kmp_find(h, nb, i + 1, end);
+            i += 1;
+            if budget == 0 {
+                let r = memmem(ptr_add(h, i), end - i, nb, n);
+                return if r == usize::MAX { None } else { Some((i + r, i + r + n)) };
             }
-            budget -= j;
+            budget -= 1;
         }
-        i += 1;
+        None
     }
-    None
 }
 
 /// KMP failure function of `nb` read forwards (`rev`: backwards).
@@ -337,26 +343,6 @@ fn kmp_table(nb: &[u8], rev: bool) -> Vec<usize> {
         i += 1;
     }
     fail
-}
-
-fn kmp_find(h: &[u8], nb: &[u8], start: usize, end: usize) -> Option<(usize, usize)> {
-    let n = nb.len();
-    let fail = kmp_table(nb, false);
-    let mut k = 0;
-    let mut i = start;
-    while i < end {
-        while k > 0 && h[i] != nb[k] {
-            k = fail[k - 1];
-        }
-        if h[i] == nb[k] {
-            k += 1;
-        }
-        if k == n {
-            return Some((i + 1 - n, i + 1));
-        }
-        i += 1;
-    }
-    None
 }
 
 fn kmp_rfind(h: &[u8], nb: &[u8], start: usize, end: usize) -> Option<(usize, usize)> {

@@ -454,6 +454,21 @@ func unitCount(fnBytes int) int {
 	return n
 }
 
+// releaseUnitCount picks the number of translation units of a release
+// build: functions called across units cannot be inlined, which costs
+// rustgo's C (many small functions) about half its speed, so release builds
+// stay in one unit up to releaseOneUnitBytes of function definitions (a
+// single unit also takes less CPU time in total) and larger programs get
+// units several times larger than debug builds.
+const releaseOneUnitBytes = 4 << 20
+
+func releaseUnitCount(fnBytes int) int {
+	if fnBytes <= releaseOneUnitBytes {
+		return 1
+	}
+	return unitCount(fnBytes / 8)
+}
+
 // debugCFlags turn off the gcc -O1 passes that cost the most compile time
 // for the least speed of rustgo's C (IPA analyses and points-to, scalar
 // replacement, dead stores, jump threading, loop header copying, value
@@ -512,7 +527,11 @@ func compileC(opts *Options, prog *codegen.Program) error {
 	// extra flags for the C compiler (experiments)
 	cflags = append(cflags, strings.Fields(os.Getenv("RUSTGO_CFLAGS"))...)
 	libs := append(append([]string{"-lm", "-lpthread"}, opts.LinkArgs...), prog.LinkArgs...)
-	units := prog.Units(unitCount(prog.FnBytes()))
+	nu := unitCount(prog.FnBytes())
+	if opts.Release && os.Getenv("RUSTGO_CC_UNITS") == "" {
+		nu = releaseUnitCount(prog.FnBytes())
+	}
+	units := prog.Units(nu)
 	if len(units) == 1 {
 		tmp, err := os.CreateTemp("", "rustgo-*.c")
 		if err != nil {

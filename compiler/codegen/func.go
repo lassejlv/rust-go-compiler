@@ -1379,6 +1379,9 @@ func (fc *fnGen) letStmt(x *ast.LetStmt) {
 func (fc *fnGen) letInit(x *ast.LetStmt) {
 	if ip, ok := x.Pat.(*ast.IdentPat); ok && ip.Sub == nil && x.Else == nil {
 		if l := fc.r.Locals[ip.ID]; l != nil && !l.ByRef {
+			if rep, ok := unparen(x.Init).(*ast.RepeatExpr); ok && fc.repeatInPlace(rep, l) {
+				return
+			}
 			fc.pushScope()
 			v := fc.value(x.Init)
 			if !isSimple(v) {
@@ -1425,6 +1428,27 @@ func (fc *fnGen) letInit(x *ast.LetStmt) {
 	} else {
 		fc.bindOwnedPat(x.Pat, op.s, it, nil, true)
 	}
+}
+
+// repeatInPlace lowers `let l = [e; N]` (of a Copy element, an array
+// without drop glue) by filling the local itself: a temporary array and a
+// copy of it would cost as much again (C compilers do not elide copies of
+// large arrays).
+func (fc *fnGen) repeatInPlace(rep *ast.RepeatExpr, l *typeck.Local) bool {
+	t := l.Ty
+	if t == nil || t.Kind != TArray || len(fc.r.Adjust[rep.ID]) > 0 || fc.aty(rep) != t ||
+		!fc.g.tcx.IsCopy(t.Elem) || fc.g.needsDrop(t) || isZST(t) {
+		return false
+	}
+	fc.pushScope()
+	v := fc.spill(fc.value(rep.Elem), fc.aty(rep.Elem))
+	fc.popScope()
+	fc.declLocal(l)
+	if cnt := fc.g.arrayLen(t); cnt > 0 {
+		fc.line("for (uint64_t i = 0; i < %d; i++) %s.a[i] = %s;", cnt, fc.localName(l), v)
+	}
+	fc.markInit(l)
+	return true
 }
 
 // materializeNoDrop stores a value whose ownership is transferred into

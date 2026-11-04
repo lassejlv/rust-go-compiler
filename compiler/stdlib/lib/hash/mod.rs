@@ -237,7 +237,27 @@ impl Hasher for DefaultHasher {
     #[inline]
     fn write_str(&mut self, s: &str) {
         self.0.write(s.as_bytes());
-        self.0.write(&[0xff]);
+        self.0.short_write(0xff, 1);
+    }
+    #[inline]
+    fn write_u8(&mut self, i: u8) {
+        self.0.short_write(i as u64, 1)
+    }
+    #[inline]
+    fn write_u16(&mut self, i: u16) {
+        self.0.short_write(i as u64, 2)
+    }
+    #[inline]
+    fn write_u32(&mut self, i: u32) {
+        self.0.short_write(i as u64, 4)
+    }
+    #[inline]
+    fn write_u64(&mut self, i: u64) {
+        self.0.short_write(i, 8)
+    }
+    #[inline]
+    fn write_usize(&mut self, i: usize) {
+        self.0.short_write(i as u64, 8)
     }
     #[inline]
     fn finish(&self) -> u64 {
@@ -275,6 +295,26 @@ impl Hasher for SipHasher {
         self.0.write(msg)
     }
     #[inline]
+    fn write_u8(&mut self, i: u8) {
+        self.0.short_write(i as u64, 1)
+    }
+    #[inline]
+    fn write_u16(&mut self, i: u16) {
+        self.0.short_write(i as u64, 2)
+    }
+    #[inline]
+    fn write_u32(&mut self, i: u32) {
+        self.0.short_write(i as u64, 4)
+    }
+    #[inline]
+    fn write_u64(&mut self, i: u64) {
+        self.0.short_write(i, 8)
+    }
+    #[inline]
+    fn write_usize(&mut self, i: usize) {
+        self.0.short_write(i as u64, 8)
+    }
+    #[inline]
     fn finish(&self) -> u64 {
         self.0.finish()
     }
@@ -299,7 +339,7 @@ impl BuildHasher for RandomState {
     type Hasher = DefaultHasher;
     #[inline]
     fn build_hasher(&self) -> DefaultHasher {
-        DefaultHasher(sip::SipCore::new(self.k0, self.k1, 1, 3))
+        DefaultHasher(sip::SipCore::new_fast(self.k0, self.k1))
     }
 }
 

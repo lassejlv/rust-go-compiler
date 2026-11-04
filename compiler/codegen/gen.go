@@ -32,7 +32,10 @@ type Gen struct {
 	vtdefs  strings.Builder // vtable definitions
 	statics strings.Builder
 	locs    map[string]string // track_caller locations (locStatic)
-	usesAsm bool              // asm! present (see Program.UsesAsm)
+	// #[track_caller] wrappers (see genFunction) and those referred to
+	tcWrappers []tcWrapper
+	tcUsed     map[string]bool
+	usesAsm    bool // asm! present (see Program.UsesAsm)
 	// scalarConsts caches literal renderings of scalar const items.
 	scalarConsts map[string]string
 	fns          chunkBuf // function bodies (one chunk per function)
@@ -95,6 +98,19 @@ func (g *Gen) errorf(sp lexer.Span, format string, args ...any) {
 
 // fnName returns the C name of a function instance, queueing it.
 func (g *Gen) fnName(d *Def, args []Ty) string {
+	n := g.fnNameDirect(d, args)
+	if hasTrackCaller(d) {
+		if g.tcUsed == nil {
+			g.tcUsed = map[string]bool{}
+		}
+		g.tcUsed[n] = true // (the plain-ABI wrapper is needed)
+	}
+	return n
+}
+
+// fnNameDirect is fnName for a direct call (of NAME_tc for a
+// #[track_caller] fn).
+func (g *Gen) fnNameDirect(d *Def, args []Ty) string {
 	key := typeck.InstKey(d, args)
 	if n, ok := g.fnNames[key]; ok {
 		return n
@@ -156,6 +172,7 @@ func (g *Gen) GenerateProgram(mainDef *Def) (prog *Program, err error) {
 	}
 	ctors := g.initArrayCtors()
 	g.drain()
+	g.emitTrackCallerWrappers()
 	g.checkUnreached()
 	g.staticInit = append(g.staticInit, ctors...) // after every static's init
 	if len(g.tcx.Errors) > 0 {
@@ -318,17 +335,43 @@ func (g *Gen) genFunction(inst instance) {
 	g.borrowck(d, r)
 	fg := newFnGen(g, r)
 	fg.computeSplit(d.Fn.Ast.Body)
-	if hasTrackCaller(d) {
-		// the caller stored its location right before calling us
-		fg.trackCaller = true
-		fg.line("const RgLoc* __loc = rg_caller_loc; int __loc_tracked = rg_caller_tracked;")
-	}
-	var params []string
+	var params, pnames []string
 	for i, pt := range r.ParamTys {
 		params = append(params, fmt.Sprintf("%s p%d", g.ctype(pt), i))
+		pnames = append(pnames, fmt.Sprintf("p%d", i))
 	}
-	sig := fmt.Sprintf("static %s %s(%s)", g.ctype(r.RetTy), name, joinParams(params))
-	fmt.Fprintf(&g.protos, "%s;\n", sig)
+	inl, attrs := fnAttrs(d)
+	if r.RetTy.Kind == TNever && d.Crate != nil && d.Crate == g.tcx.R.Std {
+		// std's diverging fns are its panic/abort/exit paths
+		if attrs == "" {
+			attrs = " __attribute__((cold, noreturn))"
+		} else if !strings.Contains(attrs, "cold") {
+			attrs = strings.Replace(attrs, "((", "((cold, noreturn, ", 1)
+		} else {
+			attrs = strings.Replace(attrs, "((", "((noreturn, ", 1)
+		}
+	}
+	cname, cparams := name, joinParams(params)
+	if hasTrackCaller(d) {
+		// #[track_caller]: direct calls pass the location explicitly to
+		// NAME_tc (a constant after inlining, so that it only materializes
+		// on the panic paths). NAME itself (fn pointers, vtables, Fn trait
+		// shims; emitted when used, see emitTrackCallerWrappers) takes the
+		// location a virtual call stored in rg_caller_loc, or else the
+		// function's own definition (like rustc's reify shim).
+		fg.trackCaller = true
+		cname = name + "_tc"
+		cparams = strings.Join(append(params, "const RgLoc* __loc", "int __loc_tracked"), ", ")
+		dsp := d.Span // (after the attributes, like rustc's def_span)
+		if d.Item != nil && len(d.Item.Tokens) > 0 {
+			dsp = d.Item.Tokens[0].Span
+		}
+		def := g.locStatic(dsp)
+		wsig := fmt.Sprintf("static %s %s(%s)", g.ctype(r.RetTy), name, joinParams(params))
+		g.tcWrappers = append(g.tcWrappers, tcWrapper{name: name, proto: wsig + ";\n",
+			def: fmt.Sprintf("%s {\n  const RgLoc* l = rg_caller_loc; int t = rg_caller_tracked; rg_caller_loc = 0;\n  if (!l) { l = &%s; t = 0; }\n  return %s(%s);\n}\n",
+				wsig, def, cname, strings.Join(append(pnames, "l", "t"), ", "))})
+	}
 	fg.retTy = r.RetTy
 	fg.pushScope()
 	for i, l := range r.Params {
@@ -352,7 +395,36 @@ func (g *Gen) genFunction(inst instance) {
 	v := fg.blockValue(fa.Body, r.RetTy, true)
 	fg.emitReturn(v)
 	fg.popScopeNoDrop()
-	fmt.Fprintf(&g.fns, "%s {\n%s}\n", sig, fg.body())
+	body := fg.body()
+	if inl != "" && len(body) > inlineSmallBytes {
+		inl = "RG_INLINE_BIG "
+	}
+	sig := fmt.Sprintf("static %s%s %s(%s)", inl, g.ctype(r.RetTy), cname, cparams)
+	fmt.Fprintf(&g.protos, "%s%s;\n", sig, attrs)
+	fmt.Fprintf(&g.fns, "%s {\n%s}\n", sig, body)
+}
+
+// inlineSmallBytes: #[inline] functions whose C body is larger are declared
+// RG_INLINE_BIG, which is `inline` in release builds only: at -O1 gcc
+// inlines every function declared inline that it can, and inlining the
+// larger ones costs debug builds compile time for little speed.
+const inlineSmallBytes = 600
+
+// tcWrapper is the plain-ABI wrapper of a #[track_caller] fn (see
+// genFunction), emitted only when something refers to it.
+type tcWrapper struct {
+	name, proto, def string
+}
+
+// emitTrackCallerWrappers emits the wrappers that are referred to (by
+// fnName from anything but a direct call).
+func (g *Gen) emitTrackCallerWrappers() {
+	for _, w := range g.tcWrappers {
+		if g.tcUsed[w.name] {
+			g.protos.WriteString(w.proto)
+			g.fns.WriteString(w.def)
+		}
+	}
 }
 
 func joinParams(ps []string) string {
@@ -514,6 +586,39 @@ func (g *Gen) initArrayCtors() (calls []string) {
 		}
 	}
 	return calls
+}
+
+// fnAttrs maps a fn's #[inline] / #[inline(always)] / #[inline(never)] /
+// #[cold] attributes to C: an `inline ` specifier (a hint: at -O1 gcc only
+// inlines functions declared inline or called once) and prototype
+// attributes (cold functions are optimized for size and the branches
+// leading to their calls predicted not taken).
+func fnAttrs(d *Def) (inl, attrs string) {
+	var as []string
+	for _, a := range d.Attrs {
+		switch a.Path {
+		case "inline":
+			never := false
+			for _, tt := range a.Tokens {
+				for _, in := range tt.Inner {
+					if in.Tok.Text == "never" {
+						never = true
+					}
+				}
+			}
+			if never {
+				as = append(as, "noinline")
+			} else {
+				inl = "inline "
+			}
+		case "cold":
+			as = append(as, "cold")
+		}
+	}
+	if len(as) > 0 {
+		attrs = " __attribute__((" + strings.Join(as, ", ") + "))"
+	}
+	return
 }
 
 // hasTrackCaller reports #[track_caller] on a fn (or on the trait method an

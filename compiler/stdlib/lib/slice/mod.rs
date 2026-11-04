@@ -1094,7 +1094,7 @@ impl<T> [T] {
     where
         T: Ord,
     {
-        sort::merge_sort(self, &mut |a: &T, b: &T| a.lt(b));
+        sort::unstable_sort(self, &mut |a: &T, b: &T| a.lt(b));
     }
 
     /// Sorts the slice with a comparison function (the order of equal elements is unspecified).
@@ -1104,7 +1104,7 @@ impl<T> [T] {
         F: FnMut(&T, &T) -> Ordering,
     {
         let mut compare = compare;
-        sort::merge_sort(self, &mut |a: &T, b: &T| compare(a, b) == Ordering::Less);
+        sort::unstable_sort(self, &mut |a: &T, b: &T| compare(a, b) == Ordering::Less);
     }
 
     /// Sorts the slice with a key extraction function (the order of equal elements is unspecified).
@@ -1115,7 +1115,7 @@ impl<T> [T] {
         K: Ord,
     {
         let mut f = f;
-        sort::merge_sort(self, &mut |a: &T, b: &T| f(a).lt(&f(b)));
+        sort::unstable_sort(self, &mut |a: &T, b: &T| f(a).lt(&f(b)));
     }
 
     /// Reorders the slice such that the element at `index` is at its final sorted position.
@@ -1132,7 +1132,7 @@ impl<T> [T] {
                 column!(),
             );
         }
-        self.sort_unstable();
+        sort::select_nth(self, index, &mut |a: &T, b: &T| a.lt(b));
         let (left, rest) = self.split_at_mut(index);
         let (pivot, right) = rest.split_first_mut().unwrap();
         (left, pivot, right)
@@ -1152,7 +1152,8 @@ impl<T> [T] {
                 column!(),
             );
         }
-        self.sort_unstable_by(compare);
+        let mut compare = compare;
+        sort::select_nth(self, index, &mut |a: &T, b: &T| compare(a, b) == Ordering::Less);
         let (left, rest) = self.split_at_mut(index);
         let (pivot, right) = rest.split_first_mut().unwrap();
         (left, pivot, right)

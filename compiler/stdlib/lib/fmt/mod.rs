@@ -335,6 +335,16 @@ impl<'a> Formatter<'a> {
     /// Writes some data to the underlying buffer.
     #[inline]
     pub fn write_str(&mut self, data: &str) -> Result {
+        if self.marks.is_null() && self.depth == 0 {
+            self.buf.push_str(data);
+            return Ok(());
+        }
+        self.write_str_slow(data)
+    }
+
+    /// `write_str` when recording pieces or indenting (`{:#?}`).
+    #[inline(never)]
+    fn write_str_slow(&mut self, data: &str) -> Result {
         if !self.marks.is_null() {
             if data.is_empty() {
                 return Ok(());
@@ -799,6 +809,7 @@ pub struct __Spec {
 #[inline(never)]
 pub fn __format(pieces: &[&'static str], specs: &[__Spec], args: &[__Arg<'_>]) -> crate::string::String {
     let mut f = Formatter::new();
+    f.buf = crate::string::String::with_capacity(estimated_capacity(pieces, args.len()));
     if __format_into(&mut f, pieces, specs, args).is_err() {
         format_error_panic();
     }
@@ -812,9 +823,31 @@ pub fn __format(pieces: &[&'static str], specs: &[__Spec], args: &[__Arg<'_>]) -
 pub fn __format_args<'a>(pieces: &[&'static str], specs: &[__Spec], args: &[__Arg<'_>]) -> Arguments<'a> {
     let mut marks = Marks::new();
     let mut f = Formatter::new();
+    f.buf = crate::string::String::with_capacity(estimated_capacity(pieces, args.len()));
     f.marks = &mut marks;
     let err = __format_into(&mut f, pieces, specs, args).is_err();
     Arguments { s: f.buf, lit: None, marks, err, _marker: PhantomData }
+}
+
+/// The capacity `format!` starts its string with (the real library's
+/// `Arguments::estimated_capacity`): the length of the literal pieces,
+/// doubled when there are arguments, unless the text starts with an
+/// argument and the pieces are short.
+#[inline]
+fn estimated_capacity(pieces: &[&'static str], nargs: usize) -> usize {
+    let mut len = 0usize;
+    let mut i = 0;
+    while i < pieces.len() {
+        len += pieces[i].len();
+        i += 1;
+    }
+    if nargs == 0 {
+        len
+    } else if !pieces.is_empty() && pieces[0].is_empty() && len < 16 {
+        0
+    } else {
+        len.checked_mul(2).unwrap_or(0)
+    }
 }
 
 fn __format_into(f: &mut Formatter<'_>, pieces: &[&'static str], specs: &[__Spec], args: &[__Arg<'_>]) -> Result {
