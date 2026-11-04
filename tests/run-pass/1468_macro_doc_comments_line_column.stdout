@@ -1,0 +1,15 @@
+1.50|16|1000|a|1|-7|2.5e3|false
+abcd e
+(23, 22)
+(24, 22)
+25:20
+26 18
+4
+[1, 2]
+1468_macro_doc_comments_line_column::a::b
+#[doc = r" doc line"] fn documented() {}
+#[doc = r" outer doc"] #[inline] fn f () {}
+#![doc = r" inner doc"]
+#[doc = r" block "] x
+4637
+a b c

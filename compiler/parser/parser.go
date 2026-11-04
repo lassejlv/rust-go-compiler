@@ -131,9 +131,14 @@ func docCommentTokens(t lexer.Token) []lexer.Token {
 	mk := func(k lexer.Kind, s string) lexer.Token { return lexer.Token{Kind: k, Text: s, Span: sp} }
 	out := []lexer.Token{mk(lexer.Punct, "#")}
 	if t.Inner {
-		out = append(out, mk(lexer.Punct, "!"))
+		out[0].JointNext = true // `#![doc ..]`
+		bang := mk(lexer.Punct, "!")
+		bang.JointNext = true
+		out = append(out, bang)
 	}
-	out = append(out, mk(lexer.Punct, "["), mk(lexer.Ident, "doc"), mk(lexer.Punct, "="), mk(lexer.Str, t.Text), mk(lexer.Punct, "]"))
+	doc := mk(lexer.Str, t.Text)
+	doc.Raw = true // rustc: `#[doc = r" text"]`
+	out = append(out, mk(lexer.Punct, "["), mk(lexer.Ident, "doc"), mk(lexer.Punct, "="), doc, mk(lexer.Punct, "]"))
 	return out
 }
 

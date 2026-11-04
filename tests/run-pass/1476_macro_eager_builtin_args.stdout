@@ -1,0 +1,8 @@
+v3-beta
+1476_macro_eager_builtin_args.rs
+// eager expansion of user macros inside concat!/include_str!/env!/stringify-like builtins
+true
+m:local:exp
+1476_macro_eager_builtin_args/1/true/x/
+26:42
+None

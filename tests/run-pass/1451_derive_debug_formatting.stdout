@@ -1,0 +1,68 @@
+Empty EmptyTuple UnitS
+Empty EmptyTuple UnitS
+Ref { r: 5, p: PhantomData<i32> }
+Ref { r: "s", p: PhantomData<str> }
+[A, B, C, D(-1, "q\"uote"), F { x: 1.0, y: Some(A) }]
+[
+    A,
+    B,
+    C,
+    D(
+        -1,
+        "q\"uote",
+    ),
+    F {
+        x: 1.0,
+        y: Some(
+            A,
+        ),
+    },
+]
+Nest { v: [(1, 'a'), (2, '\n')], m: {"k0": [], "k1": [1, 2]}, s: {-1, 3}, q: [true] }
+Nest {
+    v: [
+        (
+            1,
+            'a',
+        ),
+        (
+            2,
+            '\n',
+        ),
+    ],
+    m: {
+        "k0": [],
+        "k1": [
+            1,
+            2,
+        ],
+    },
+    s: {
+        -1,
+        3,
+    },
+    q: [
+        true,
+    ],
+}
+Cells { c: Cell { value: 3 }, r: RefCell { value: [9] }, rc: "rc" }
+Cells { c: Cell { value: 3 }, r: RefCell { value: <borrowed> }, rc: "rc" }
+Raw { type: 1, fn: () }
+1.0 1e20 -0.0 NaN 1.5e-7
+0.3 1e16 123456790.0
+"tab\t\u{1b}é\u{7f}\0" '\'' '"'
+    3|"ab"|  +2.2
+(
+    1,
+)
+Some(
+    Some(
+        (),
+    ),
+)
+(Ok(1), Err("e"))
+[
+    0xff,
+    0x10,
+] 0xFF [a, b]
+-001.500 1.5e3

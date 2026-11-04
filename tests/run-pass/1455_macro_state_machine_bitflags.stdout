@@ -1,0 +1,8 @@
+Closed --Open--> Opened
+Opened --Close--> Closed2
+Closed2 --Open--> Opened
+Opened ignores Lock
+Opened ignores Unlock
+Perm(READ | EXEC) Perm(empty) Perm(READ | WRITE | EXEC) 7
+true false
+Perm(empty)

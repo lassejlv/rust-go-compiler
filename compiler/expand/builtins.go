@@ -190,22 +190,53 @@ func (e *Expander) litString(tts []ast.TokenTree, mac *ast.MacCall) (string, boo
 		s, _, err := e.litString(tts[1:], mac)
 		return "-" + s, false, err
 	}
-	// nested macro: name ! (...)
+	// nested macro call, expanded eagerly: `path::name!(...)`
 	if len(tts) >= 3 && tts[len(tts)-1].Delim != 0 && isPunct(tts[len(tts)-2], "!") && isIdentTT(tts[len(tts)-3]) {
-		name := tts[len(tts)-3].Tok.Text
-		switch name {
-		case "concat", "stringify", "file", "line", "column", "module_path", "env":
+		if path := macroCallPath(tts[:len(tts)-2]); path != nil && e.litDepth < e.RecursionLimit {
 			g := tts[len(tts)-1]
-			inner := &ast.MacCall{Path: &ast.Path{Segments: []*ast.PathSegment{{Ident: ast.Ident{Name: name, Span: tts[0].Tok.Span}}}},
-				Delim: g.Delim, Args: g.Inner, Span: ttsSpan(tts, mac.Span)}
-			res, err := builtins[name](e, inner)
-			if err != nil {
-				return "", false, err
+			inner := &ast.MacCall{Path: path, Delim: g.Delim, Args: g.Inner, Span: ttsSpan(tts, mac.Span)}
+			e.litDepth++
+			res, _, err := e.macTokens(inner)
+			if err == nil {
+				var s string
+				var isStr bool
+				s, isStr, err = e.litString(res, inner)
+				e.litDepth--
+				return s, isStr, err
 			}
-			return e.litString(res, inner)
+			e.litDepth--
+			return "", false, err
 		}
 	}
 	return "", false, errAt(ttsSpan(tts, mac.Span), "expected a literal")
+}
+
+// macroCallPath parses the path of a macro call (`a::b`, `::a`, `$crate`
+// expanded to `crate`); nil if tts is not a path.
+func macroCallPath(tts []ast.TokenTree) *ast.Path {
+	p := &ast.Path{}
+	i := 0
+	if len(tts) > 0 && isPunct(tts[0], "::") {
+		p.Global = true
+		i++
+	}
+	for ; i < len(tts); i++ {
+		if !isIdentTT(tts[i]) {
+			return nil
+		}
+		p.Segments = append(p.Segments, &ast.PathSegment{Ident: ast.Ident{Name: tts[i].Tok.Text, Span: tts[i].Tok.Span}})
+		if i+1 < len(tts) {
+			i++
+			if !isPunct(tts[i], "::") {
+				return nil
+			}
+		}
+	}
+	if len(p.Segments) == 0 {
+		return nil
+	}
+	p.Span = p.Segments[0].Ident.Span
+	return p
 }
 
 // strLitHyg returns the hygiene context of a string literal argument.

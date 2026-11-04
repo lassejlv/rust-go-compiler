@@ -1,0 +1,15 @@
+(1, 8, 16, 1, 8)
+abc
+guarded nope
+[2, 6, 4]
+foo
+foo as bar
+foo: Vec<u8>
+foo as bar: (i32, i32)
+["'a", "'static", "'_"]
+["pub|a", "|b", "pub(crate)|c", "pub(super)|d"]
+3
+3
+["a b", "", "1, 2", "(x)"]
+3 12 -5 unknown op div
+None Some(4)

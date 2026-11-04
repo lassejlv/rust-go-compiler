@@ -199,7 +199,7 @@ fn write_stream(f: &mut fmt::Formatter<'_>, trees: &[TokenTree], hidden: &[bool]
             TokenTree::Literal(l) => fmt::Display::fmt(l, f)?,
         }
         if let Some(next) = trees.get(i + 1) {
-            if alone && space_between(t, next) {
+            if alone && space_between(trees, i) {
                 f.write_str(" ")?;
             }
         }
@@ -207,15 +207,24 @@ fn write_stream(f: &mut fmt::Formatter<'_>, trees: &[TokenTree], hidden: &[bool]
     Ok(())
 }
 
-fn space_between(a: &TokenTree, b: &TokenTree) -> bool {
+// space_between(trees, i): whether a space separates trees[i] and
+// trees[i + 1]. Joint puncts are taken as the operator they glue into
+// (`..` is not `.`), as rustc prints the glued tokens.
+fn space_between(trees: &[TokenTree], i: usize) -> bool {
+    let (a, b) = (&trees[i], &trees[i + 1]);
     let is_punct = |t: &TokenTree| matches!(t, TokenTree::Punct(_));
+    let joint_dot = |t: Option<&TokenTree>| matches!(t, Some(TokenTree::Punct(p)) if p.ch == '.' && p.spacing == Spacing::Joint);
+    let is_dot = |t: Option<&TokenTree>| matches!(t, Some(TokenTree::Punct(p)) if p.ch == '.');
+    // a lone `.` (not part of `..`, `...` or `..=`)
+    let a_dot = i == 0 || !joint_dot(trees.get(i - 1));
+    let b_dot = !(joint_dot(Some(b)) && is_dot(trees.get(i + 2)));
     match (a, b) {
         // `.` + NON-PUNCT: `x.y`, `tup.0`
-        (TokenTree::Punct(p), b) if p.ch == '.' && !is_punct(b) => false,
+        (TokenTree::Punct(p), b) if p.ch == '.' && a_dot && !is_punct(b) => false,
         // `$` + IDENT: `$e`
         (TokenTree::Punct(p), TokenTree::Ident(_)) if p.ch == '$' => false,
         // NON-PUNCT + `,` / `;` / `.`
-        (a, TokenTree::Punct(p)) if (p.ch == ',' || p.ch == ';' || p.ch == '.') && !is_punct(a) => false,
+        (a, TokenTree::Punct(p)) if (p.ch == ',' || p.ch == ';' || (p.ch == '.' && b_dot)) && !is_punct(a) => false,
         // IDENT + `(` (not after most keywords): `f(3)`
         (TokenTree::Ident(id), TokenTree::Group(g)) if g.delimiter == Delimiter::Parenthesis => {
             !(id.raw || !is_reserved(&id.sym) || id.sym == "fn" || id.sym == "Self" || id.sym == "pub")
@@ -781,13 +790,13 @@ pub mod __server {
                     top.2.push(TokenTree::Ident(id));
                     top.3.push(tag == 'i' || tag == 'r');
                 }
-                'P' => {
+                'P' | 'p' => {
                     let mut cs = body.chars();
                     let ch = cs.next().unwrap();
                     let sp = if cs.next() == Some('J') { Spacing::Joint } else { Spacing::Alone };
                     let top = stack.last_mut().unwrap();
                     top.2.push(TokenTree::Punct(Punct { ch, spacing: sp, span: Span::call_site() }));
-                    top.3.push(false);
+                    top.3.push(tag == 'p');
                 }
                 _ => {
                     let l = Literal { repr: body.to_string(), span: Span::call_site() };

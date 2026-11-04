@@ -165,7 +165,7 @@ func (s *PMServer) Call(kind ProcMacroKind, fn string, attr, input []ast.TokenTr
 //   ( [ { N  group open      )  group close   (body "H": the delimiter is
 //            immediately followed by the next token in the source)
 //   I ident   R raw ident   P punct (char + 'J' or 'A')   L literal source
-//   i r l    the same, immediately followed by the next token
+//   i r p l  the same, immediately followed by the next token
 
 func serializeTTs(tts []ast.TokenTree) string {
 	var b strings.Builder
@@ -193,7 +193,13 @@ func serializeTTs(tts []ast.TokenTree) string {
 	}
 	adjacent := func(a, b lexer.Pos) bool { return a.File == b.File && a.Off == b.Off && a.Line > 0 }
 	rec = func(tts []ast.TokenTree) {
-		for i, tt := range tts {
+		for i := 0; i < len(tts); i++ {
+			if tts[i].Delim == 0 && tts[i].Tok.Nt&lexer.NtTurbofish != 0 {
+				// not part of the substituted path fragment's tokens
+				tts = append(append([]ast.TokenTree(nil), tts[:i]...), tts[i+1:]...)
+			}
+		}
+		one := func(i int, tt ast.TokenTree) {
 			hidden := i+1 < len(tts) && adjacent(end(tt), start(tts[i+1]))
 			tag := func(c byte) byte {
 				if hidden {
@@ -213,7 +219,7 @@ func serializeTTs(tts []ast.TokenTree) string {
 					cl = "H"
 				}
 				put(')', cl)
-				continue
+				return
 			}
 			t := tt.Tok
 			switch t.Kind {
@@ -227,17 +233,45 @@ func serializeTTs(tts []ast.TokenTree) string {
 				put('P', "'J")
 				put(tag('I'), strings.TrimPrefix(t.Text, "'"))
 			case lexer.Punct:
-				// multi-char operators become joint single-char puncts
-				for i, c := range t.Text {
+				// multi-char operators become joint single-char puncts;
+				// the last one is joint only when another punct follows
+				// immediately (rustc: `Spacing::Joint` is only for that)
+				nextPunct := i+1 < len(tts) && tts[i+1].Delim == 0 && tts[i+1].Tok.Kind == lexer.Punct
+				for k, c := range t.Text {
 					sp := "J"
-					if i == len(t.Text)-1 && !t.JointNext {
+					if k == len(t.Text)-1 && !(t.JointNext && nextPunct) {
 						sp = "A"
 					}
-					put('P', string(c)+sp)
+					if k == len(t.Text)-1 {
+						put(tag('P'), string(c)+sp)
+					} else {
+						put('P', string(c)+sp)
+					}
 				}
 			case lexer.EOF:
 			default:
 				put(tag('L'), literalSource(t))
+			}
+
+		}
+		for i, tt := range tts {
+			// a substituted fragment (other than ident/lifetime/tt) is a
+			// none-delimited group, as in rustc
+			if isInvisibleGroup(tt) {
+				inner := append([]ast.TokenTree(nil), tt.Inner...)
+				inner[0].Tok.Nt &^= lexer.NtStart
+				inner[len(inner)-1].Tok.Nt &^= lexer.NtEnd
+				put('N', "")
+				rec(inner)
+				put(')', "")
+				continue
+			}
+			if tt.Tok.Nt&lexer.NtStart != 0 {
+				put('N', "")
+			}
+			one(i, tt)
+			if tt.Tok.Nt&lexer.NtEnd != 0 {
+				put(')', "")
 			}
 		}
 	}
@@ -295,6 +329,7 @@ func quoteRust(s string, q byte) string {
 // get the call-site span.
 func deserializeTTs(s string, site lexer.Span) ([]ast.TokenTree, error) {
 	var toks []lexer.Token
+	var open []byte // the open groups' tags (`N`: none-delimited)
 	i := 0
 	for i < len(s) {
 		tag := s[i]
@@ -311,11 +346,20 @@ func deserializeTTs(s string, site lexer.Span) ([]ast.TokenTree, error) {
 		tok := lexer.Token{Span: site}
 		switch tag {
 		case '(', '[', '{':
+			open = append(open, tag)
 			tok.Kind, tok.Text = lexer.Punct, string(tag)
 		case 'N':
+			open = append(open, tag)
 			continue // none-delimited groups are transparent
 		case ')':
 			// closing delimiter of the most recent open group
+			if k := len(open); k > 0 {
+				top := open[k-1]
+				open = open[:k-1]
+				if top == 'N' {
+					continue
+				}
+			}
 			tok.Kind = lexer.Punct
 			tok.Text = closeFor(toks)
 			if tok.Text == "" {

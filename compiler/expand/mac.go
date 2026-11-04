@@ -95,9 +95,24 @@ func (e *Expander) lookupMacro(name string) (*macroDef, builtinFn) {
 }
 
 func (e *Expander) lookupMacroName(name string) (*macroDef, builtinFn) {
+	// a macro_rules! of a module (not #[macro_use]) is out of scope after
+	// the module: other macros of that name are used, else it is (a
+	// lenient fallback, e.g. for imports not tracked)
+	var outOfScope *macroDef
 	if d, ok := e.macros[e.crate][name]; ok {
-		return d, nil
+		if e.inTextualScope(d) || e.usedNames[name] {
+			return d, nil
+		}
+		outOfScope = d
 	}
+	d, b := e.lookupMacroNameRest(name)
+	if b != nil || (d != nil && (outOfScope == nil || d.exported || d.crate == "std")) {
+		return d, b
+	}
+	return outOfScope, nil
+}
+
+func (e *Expander) lookupMacroNameRest(name string) (*macroDef, builtinFn) {
 	// a macro imported from another crate shadows the prelude's
 	if imp, ok := e.macroImports[e.crate][strings.Join(e.modPath[1:], "::")+"::"+name]; ok {
 		if d, ok := e.macros[imp.crate][imp.name]; ok {

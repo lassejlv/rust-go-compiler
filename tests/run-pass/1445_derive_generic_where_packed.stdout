@@ -1,0 +1,46 @@
+Pair { a: 1, b: "x" } Pair { a: 0, b: false } true Less
+true
+Node(Leaf, 5, Node(Leaf, 7, Leaf))
+Node(
+    Leaf,
+    5,
+    Node(
+        Leaf,
+        7,
+        Leaf,
+    ),
+)
+true
+Normal Slow { factor: 3 }
+Slow {
+    factor: 3,
+}
+ReprC { x: 0, y: 0 }
+1 16909060
+{A, B, C} 6
+Wrapper("", [])
+Wrapper(
+    3,
+    [
+        1,
+        2,
+    ],
+)
+None
+Unit Unit
+Pair {
+    a: Unit,
+    b: (
+        1,
+        "s",
+    ),
+}
+(
+    1,
+    Some(
+        Unit,
+    ),
+    [
+        Fast,
+    ],
+)

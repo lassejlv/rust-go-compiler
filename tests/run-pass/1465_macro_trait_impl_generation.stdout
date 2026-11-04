@@ -1,0 +1,7 @@
+true false 0 0
+false
+Vec<Option<i32>>
+HashMap<String, Vec<u8>>
+(i32, (u8, String), Option<u8>)
+Some('a')
+10

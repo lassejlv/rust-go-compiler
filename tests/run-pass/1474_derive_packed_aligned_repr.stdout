@@ -1,0 +1,14 @@
+Header { tag: 7, len: 16909060, flags: 65535 } 7
+Header {
+    tag: 7,
+    len: 16909060,
+    flags: 65535,
+}
+false Greater true
+Header { tag: 0, len: 0, flags: 0 }
+P2 { a: 1, b: 18446744073709551615, c: 1.5 } 14 2
+true
+Aligned { x: 1, y: [1, 2, 3] } 16 16
+Tup(1, 2, -3) false
+[Neg, Zero, Pos] [-1, 0, 1]
+A(1) B { x: 2 } true

@@ -1,0 +1,10 @@
+Ok(3) Err("bad z")
+Less Less Equal
+Formatter { f: 1, state: 2, other: 3, __self_0: 4 } true
+Greater
+Option { some: false }
+[Some(1), None, Ok { v: -1 }, Err] true
+Arr { items: [1, 2, 3] } true
+Self_ { cmp: 0, partial_cmp: 0, eq: 0, fmt: 0, hash: 0, clone: 0 }
+B("e") false
+String { s: "inner" }
