@@ -795,7 +795,27 @@ static int rg_shortest(double a, int is_f32, char* digits, int* exp10) {
   rgb_add(&t, &r, &mp);
   { int c = rgb_cmp(&t, &s); if (ok ? c >= 0 : c > 0) { rgb_mul_small(&s, 10); k++; } }
   int n = 0;
-  for (;;) {
+  if (s.n <= 3 && r.n <= 3 && mp.n <= 3 && mm.n <= 3) {
+    /* the same with 128-bit integers (all values stay below 10 s < 2^100):
+       most doubles of moderate magnitude */
+    unsigned __int128 R = 0, S = 0, MP = 0, MM = 0;
+    for (int i = r.n - 1; i >= 0; i--) R = (R << 32) | r.w[i];
+    for (int i = s.n - 1; i >= 0; i--) S = (S << 32) | s.w[i];
+    for (int i = mp.n - 1; i >= 0; i--) MP = (MP << 32) | mp.w[i];
+    for (int i = mm.n - 1; i >= 0; i--) MM = (MM << 32) | mm.w[i];
+    for (;;) {
+      R *= 10; MP *= 10; MM *= 10;
+      int d = (int)(R / S);
+      R -= (unsigned __int128)d * S;
+      int tc1 = ok ? R <= MM : R < MM;
+      int tc2 = ok ? R + MP >= S : R + MP > S;
+      if (!tc1 && !tc2) { digits[n++] = (char)('0' + d); if (n >= 30) break; continue; }
+      if (tc1 && tc2) { if (2 * R >= S) d++; }
+      else if (tc2) d++;
+      digits[n++] = (char)('0' + d);
+      break;
+    }
+  } else for (;;) {
     rgb_mul_small(&r, 10); rgb_mul_small(&mp, 10); rgb_mul_small(&mm, 10);
     int d = 0;
     while (rgb_cmp(&r, &s) >= 0) { rgb_sub(&r, &s); d++; }
@@ -880,7 +900,7 @@ static uint8_t rg_parse_f64(const uint8_t* p, uint64_t len, double* out) {
   int i = 0;
   if (s[i] == '+' || s[i] == '-') i++;
   const char* rest = s + i;
-  if (!strcasecmp(rest, "inf") || !strcasecmp(rest, "infinity") || !strcasecmp(rest, "nan")) {
+  if ((*rest | 0x20) >= 'a' && (!strcasecmp(rest, "inf") || !strcasecmp(rest, "infinity") || !strcasecmp(rest, "nan"))) {
     *out = strtod(s, NULL); return 1;
   }
   int digits = 0;
