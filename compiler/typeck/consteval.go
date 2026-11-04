@@ -376,6 +376,10 @@ func (ev *constEval) eval(fr *cframe, e ast.Expr) (*cval, bool) {
 				return nil, false
 			}
 		}
+		if arithPanics(x.Op, a, b) {
+			ev.panicked = true
+			return nil, false
+		}
 		return binop(x.Op, a, b)
 	case *ast.CallExpr:
 		return ev.evalCall(fr, x, hint)
@@ -549,6 +553,10 @@ func (ev *constEval) eval(fr *cframe, e ast.Expr) (*cval, bool) {
 		if !ok {
 			return nil, false
 		}
+		if arithPanics(x.Op, slot, r) {
+			ev.panicked = true
+			return nil, false
+		}
 		nv, ok := binop(x.Op, slot, r)
 		if !ok {
 			return nil, false
@@ -658,6 +666,9 @@ func (ev *constEval) index(fr *cframe, v *cval, ie ast.Expr) (*cval, bool) {
 		return nil, false
 	}
 	i, ok := smallInt(iv)
+	if ok && (i < 0 || i >= int64(len(v.elems))) {
+		ev.panicked = true // index out of bounds
+	}
 	if !ok || i < 0 || i >= int64(len(v.elems)) {
 		return nil, false
 	}

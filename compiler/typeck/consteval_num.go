@@ -170,6 +170,37 @@ func castTo(v *cval, ty Ty) (*cval, bool) {
 	return nil, false
 }
 
+// arithPanics reports whether integer arithmetic op on a and b panics at
+// run time (and so fails const evaluation): the result overflows a known
+// type, or a division or remainder by zero.
+func arithPanics(op ast.BinOp, a, b *cval) bool {
+	if a == nil || b == nil || a.k != cvInt || b.k != cvInt {
+		return false
+	}
+	it, typed := a.ity, a.typed
+	if !typed {
+		it, typed = b.ity, b.typed
+	}
+	x, y := a.n, b.n
+	r := new(big.Int)
+	switch op {
+	case ast.BinAdd:
+		r.Add(x, y)
+	case ast.BinSub:
+		r.Sub(x, y)
+	case ast.BinMul:
+		r.Mul(x, y)
+	case ast.BinDiv, ast.BinRem:
+		if y.Sign() == 0 {
+			return true
+		}
+		r.Quo(x, y)
+	default:
+		return false
+	}
+	return typed && !inRange(r, it)
+}
+
 func binop(op ast.BinOp, a, b *cval) (*cval, bool) {
 	if a.k == cvFloat && b.k == cvFloat {
 		return floatBinop(op, a, b)

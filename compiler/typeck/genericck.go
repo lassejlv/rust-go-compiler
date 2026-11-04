@@ -36,6 +36,9 @@ func (t *Tcx) checkGenericParams() {
 		t.checkBinderOutputs(ga)
 		t.checkNeverType(d)
 		t.checkGenericConstPatterns(d)
+		if d.Kind != DefVariant {
+			t.checkAttrTargets(d)
+		}
 		for _, a := range d.Item.Attrs {
 			if a.Path != "repr" || len(a.Tokens) == 0 || a.Tokens[0].Delim != '(' {
 				continue
@@ -369,4 +372,72 @@ func (t *Tcx) checkGenericConstPatterns(d *Def) {
 		}
 		return true
 	})
+}
+
+// checkAttrTargets reports built-in attributes on items they do not apply
+// to: `#[inline]` on anything but a function (E0518), `#[repr(..)]` on
+// anything but a struct, enum or union, integer representations on
+// anything but an enum (E0517), and two integer representations (E0566).
+func (t *Tcx) checkAttrTargets(d *Def) {
+	if d.Item == nil || d.Crate == nil || !d.Crate.Local {
+		return
+	}
+	var what string
+	isFn, isEnum, isAdt := false, false, false
+	switch d.Item.Kind.(type) {
+	case *ast.FnItem:
+		what, isFn = "function", true
+	case *ast.StructItem:
+		what, isAdt = "struct", true
+	case *ast.EnumItem:
+		what, isAdt, isEnum = "enum", true, true
+	case *ast.UnionItem:
+		what, isAdt = "union", true
+	case *ast.TraitItem:
+		what = "trait"
+	case *ast.TypeAliasItem:
+		what = "type alias"
+	case *ast.ConstItem:
+		what = "constant"
+	case *ast.StaticItem:
+		what = "static item"
+	case *ast.ModItem:
+		what = "module"
+	default:
+		return
+	}
+	for _, a := range d.Item.Attrs {
+		switch a.Path {
+		case "inline":
+			if !isFn {
+				t.ErrorCode(a.Span, "E0518", "the `inline` attribute cannot be used on %ss", what)
+			}
+		case "repr":
+			if len(a.Tokens) == 0 || a.Tokens[0].Delim != '(' {
+				continue
+			}
+			nint := 0
+			for _, tt := range a.Tokens[0].Inner {
+				if tt.Delim != 0 || tt.Tok.Kind != lexer.Ident {
+					continue
+				}
+				name := tt.Tok.Text
+				_, isInt := IntTyByName(name)
+				switch {
+				case isInt:
+					nint++
+					if !isEnum {
+						t.ErrorCode(tt.Tok.Span, "E0517", "the `repr(%s)` attribute cannot be used on %ss", name, what)
+					}
+				case name == "C" || name == "transparent" || name == "packed" || name == "align" || name == "simd":
+					if !isAdt {
+						t.ErrorCode(a.Span, "E0517", "the `repr(%s)` attribute cannot be used on %ss", name, what)
+					}
+				}
+			}
+			if nint > 1 {
+				t.ErrorCode(a.Span, "E0566", "conflicting representation hints")
+			}
+		}
+	}
 }

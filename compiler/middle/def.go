@@ -492,7 +492,34 @@ func (m *Module) lookup(name string, ns Namespace, seen map[*Module]bool) *NameB
 		return b
 	}
 	for _, g := range m.Globs {
-		if b := g.lookup(name, ns, seen); b != nil && GlobVisible(b, g, m) {
+		if b := g.globLookup(name, ns, seen, m); b != nil {
+			return b
+		}
+	}
+	return nil
+}
+
+// GlobLookup returns the binding for name that a glob import of g into
+// module importer brings: one visible from importer, found in g or
+// (transitively) in the modules g glob-imports.
+func (g *Module) GlobLookup(name string, ns Namespace, importer *Module) *NameBinding {
+	return g.globLookup(name, ns, map[*Module]bool{}, importer)
+}
+
+func (g *Module) globLookup(name string, ns Namespace, seen map[*Module]bool, importer *Module) *NameBinding {
+	if seen[g] {
+		return nil
+	}
+	seen[g] = true
+	tbl := g.Types
+	if ns == ValueNS {
+		tbl = g.Values
+	}
+	if b, ok := tbl[name]; ok && GlobVisible(b, g, importer) {
+		return b
+	}
+	for _, h := range g.Globs {
+		if b := h.globLookup(name, ns, seen, importer); b != nil {
 			return b
 		}
 	}
