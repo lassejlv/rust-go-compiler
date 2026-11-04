@@ -1,0 +1,14 @@
+tab\there \"q\" é\n\u{7f}
+tab\there \"q\" \u{e9}\n\u{7f}
+\u{61}\u{62}
+"a\\tb"
+['x', '\\', 'n', 'y']
+6
+Some('\\') Some('n')
+!
+None
+!
+\u{301}á
+[         q\"]
+13
+linern

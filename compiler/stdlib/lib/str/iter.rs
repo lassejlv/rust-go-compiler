@@ -1034,3 +1034,60 @@ impl<'a> Iterator for EncodeUtf16<'a> {
 }
 
 impl<'a> FusedIterator for EncodeUtf16<'a> {}
+
+// ---------------------------------------------------------------------------
+// EscapeDebug / EscapeDefault / EscapeUnicode
+//
+// The escaped text is produced eagerly; the iterator walks over its chars and
+// `Display` writes the remainder.
+
+macro_rules! str_escape_iter {
+    ($name:ident) => {
+        /// The iterator returned by the corresponding `str::escape_*` method.
+        #[derive(Clone)]
+        pub struct $name<'a> {
+            s: crate::string::String,
+            pos: usize,
+            _m: crate::marker::PhantomData<&'a str>,
+        }
+
+        impl<'a> $name<'a> {
+            pub(crate) fn new(s: crate::string::String) -> $name<'a> {
+                $name { s, pos: 0, _m: crate::marker::PhantomData }
+            }
+        }
+
+        impl<'a> Iterator for $name<'a> {
+            type Item = char;
+            #[inline]
+            fn next(&mut self) -> Option<char> {
+                if self.pos < self.s.len() {
+                    let (c, len) = decode_at(self.s.as_str(), self.pos);
+                    self.pos += len;
+                    Some(c)
+                } else {
+                    None
+                }
+            }
+            // size_hint: the default (0, None), like std's flattening iterators.
+        }
+
+        impl<'a> FusedIterator for $name<'a> {}
+
+        impl<'a> fmt::Display for $name<'a> {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                f.write_str(unsafe { self.s.as_str().get_unchecked(self.pos..self.s.len()) })
+            }
+        }
+
+        impl<'a> fmt::Debug for $name<'a> {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                f.debug_struct(stringify!($name)).finish_non_exhaustive()
+            }
+        }
+    };
+}
+
+str_escape_iter!(EscapeDebug);
+str_escape_iter!(EscapeDefault);
+str_escape_iter!(EscapeUnicode);

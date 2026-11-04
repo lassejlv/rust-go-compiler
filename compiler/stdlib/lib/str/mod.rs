@@ -6,7 +6,7 @@ mod traits;
 mod validation;
 
 pub use self::iter::{
-    Bytes, CharIndices, Chars, EncodeUtf16, Lines, MatchIndices, Matches, RMatchIndices, RMatches, RSplit, RSplitN,
+    Bytes, CharIndices, Chars, EncodeUtf16, EscapeDebug, EscapeDefault, EscapeUnicode, Lines, MatchIndices, Matches, RMatchIndices, RMatches, RSplit, RSplitN,
     RSplitTerminator, Split, SplitAsciiWhitespace, SplitInclusive, SplitN, SplitTerminator, SplitWhitespace,
 };
 pub use self::traits::{FromStr, ParseBoolError};
@@ -122,14 +122,11 @@ pub(crate) fn slice_error_fail(s: &str, begin: usize, end: usize) -> ! {
 
 // Unicode helpers for case conversion.
 fn is_case_ignorable(c: char) -> bool {
-    match c {
-        '\'' | '.' | ':' | '^' | '`' | '\u{B7}' | '\u{2019}' => true,
-        _ => crate::char::is_grapheme_extended(c),
-    }
+    crate::char::is_case_ignorable(c)
 }
 
 fn is_cased(c: char) -> bool {
-    c.is_lowercase() || c.is_uppercase()
+    crate::char::is_cased(c)
 }
 
 impl str {
@@ -784,7 +781,7 @@ impl str {
     }
 
     /// Returns an iterator that escapes each char in `self` with `char::escape_debug`.
-    pub fn escape_debug(&self) -> String {
+    pub fn escape_debug(&self) -> EscapeDebug<'_> {
         let mut s = String::new();
         let mut first = true;
         let mut it = self.chars();
@@ -805,11 +802,11 @@ impl str {
                 s.push(c);
             }
         }
-        s
+        EscapeDebug::new(s)
     }
 
     /// Returns an iterator that escapes each char in `self` with `char::escape_default`.
-    pub fn escape_default(&self) -> String {
+    pub fn escape_default(&self) -> EscapeDefault<'_> {
         let mut s = String::new();
         let mut it = self.chars();
         while let Some(c) = it.next() {
@@ -818,11 +815,11 @@ impl str {
                 s.push(x);
             }
         }
-        s
+        EscapeDefault::new(s)
     }
 
     /// Returns an iterator that escapes each char in `self` with `char::escape_unicode`.
-    pub fn escape_unicode(&self) -> String {
+    pub fn escape_unicode(&self) -> EscapeUnicode<'_> {
         let mut s = String::new();
         let mut it = self.chars();
         while let Some(c) = it.next() {
@@ -831,6 +828,6 @@ impl str {
                 s.push(x);
             }
         }
-        s
+        EscapeUnicode::new(s)
     }
 }

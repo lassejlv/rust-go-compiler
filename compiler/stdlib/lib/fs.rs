@@ -261,10 +261,71 @@ impl File {
         Ok(())
     }
 
+    /// Try to acquire an exclusive advisory lock on the file without blocking.
+    pub fn try_lock(&self) -> Result<(), TryLockError> {
+        self.try_flock(2)
+    }
+
+    /// Try to acquire a shared advisory lock on the file without blocking.
+    pub fn try_lock_shared(&self) -> Result<(), TryLockError> {
+        self.try_flock(1)
+    }
+
+    fn try_flock(&self, op: i32) -> Result<(), TryLockError> {
+        // LOCK_NB = 4
+        if unsafe { c_flock(self.inner.raw(), op | 4) } == 0 {
+            return Ok(());
+        }
+        let err = io::Error::last_os_error();
+        if err.kind() == io::ErrorKind::WouldBlock {
+            Err(TryLockError::WouldBlock)
+        } else {
+            Err(TryLockError::Error(err))
+        }
+    }
+
     /// Release all locks on the file.
     pub fn unlock(&self) -> io::Result<()> {
         sys::cvt(unsafe { c_flock(self.inner.raw(), 8) })?;
         Ok(())
+    }
+}
+
+/// Errors which can be returned by `File::try_lock` and `File::try_lock_shared`.
+pub enum TryLockError {
+    /// The lock could not be acquired due to an I/O error on the file.
+    Error(io::Error),
+    /// The lock could not be acquired at this time because it is held by another handle/process.
+    WouldBlock,
+}
+
+impl fmt::Debug for TryLockError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            TryLockError::Error(err) => fmt::Debug::fmt(err, f),
+            TryLockError::WouldBlock => fmt::Debug::fmt("WouldBlock", f),
+        }
+    }
+}
+
+impl fmt::Display for TryLockError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match self {
+            TryLockError::Error(_) => "lock acquisition failed due to I/O error",
+            TryLockError::WouldBlock => "lock acquisition failed because the operation would block",
+        };
+        fmt::Display::fmt(s, f)
+    }
+}
+
+impl crate::error::Error for TryLockError {}
+
+impl From<TryLockError> for io::Error {
+    fn from(err: TryLockError) -> io::Error {
+        match err {
+            TryLockError::Error(err) => err,
+            TryLockError::WouldBlock => io::ErrorKind::WouldBlock.into(),
+        }
     }
 }
 
