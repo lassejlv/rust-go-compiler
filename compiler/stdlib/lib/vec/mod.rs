@@ -68,12 +68,19 @@ pub struct Vec<T> {
 pub fn from_elem<T: Clone>(elem: T, n: usize) -> Vec<T> {
     let mut v = Vec::with_capacity(n);
     if n > 0 {
-        let mut i = 1;
-        while i < n {
-            v.push(elem.clone());
-            i += 1;
+        // (a plain store loop for Copy elements, which C compilers turn
+        // into memset or vector stores; a panicking clone leaks the clones
+        // made so far)
+        unsafe {
+            let p = v.as_mut_ptr();
+            let mut i = 0;
+            while i + 1 < n {
+                intrinsics::write(p.add(i), elem.clone());
+                i += 1;
+            }
+            intrinsics::write(p.add(i), elem);
+            v.set_len(n);
         }
-        v.push(elem);
     }
     v
 }

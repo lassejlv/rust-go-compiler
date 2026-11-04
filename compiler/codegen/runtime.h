@@ -605,7 +605,31 @@ static void rg_sys_dealloc(uint8_t* p, uint64_t size, uint64_t align) { (void)si
 static uint8_t* rg_alloc(uint64_t size, uint64_t align) { return rg_ga_alloc ? rg_ga_alloc(size, align) : rg_sys_alloc(size, align); }
 static uint8_t* rg_realloc(uint8_t* p, uint64_t old, uint64_t align, uint64_t size) { return rg_ga_realloc ? rg_ga_realloc(p, old, align, size) : rg_sys_realloc(p, old, align, size); }
 static void rg_dealloc(uint8_t* p, uint64_t size, uint64_t align) { if (rg_ga_dealloc) rg_ga_dealloc(p, size, align); else rg_sys_dealloc(p, size, align); }
-static int rg_memcmp(const uint8_t* a, const uint8_t* b, uint64_t n) { return n ? memcmp(a, b, n) : 0; }
+/* memcmp, inline for short strings (most comparisons; a call of the C
+   library's costs more than the comparison) */
+static inline int rg_memcmp(const uint8_t* a, const uint8_t* b, uint64_t n) {
+  if (n <= 16) {
+    if (n >= 8) {
+      uint64_t x, y;
+      memcpy(&x, a, 8); memcpy(&y, b, 8);
+      if (x == y) { memcpy(&x, a + n - 8, 8); memcpy(&y, b + n - 8, 8); }
+      if (x == y) return 0;
+      x = __builtin_bswap64(x); y = __builtin_bswap64(y);
+      return x < y ? -1 : 1;
+    }
+    if (n >= 4) {
+      uint32_t x, y;
+      memcpy(&x, a, 4); memcpy(&y, b, 4);
+      if (x == y) { memcpy(&x, a + n - 4, 4); memcpy(&y, b + n - 4, 4); }
+      if (x == y) return 0;
+      x = __builtin_bswap32(x); y = __builtin_bswap32(y);
+      return x < y ? -1 : 1;
+    }
+    for (uint64_t i = 0; i < n; i++) if (a[i] != b[i]) return a[i] < b[i] ? -1 : 1;
+    return 0;
+  }
+  return memcmp(a, b, n);
+}
 /* count_ones: without -mpopcnt, __builtin_popcountll is a libgcc call */
 static inline uint64_t rg_popcount64(uint64_t x) {
 #ifdef __POPCNT__
@@ -633,7 +657,7 @@ static uint64_t rg_memmem(const uint8_t* h, uint64_t hn, const uint8_t* nd, uint
   return r ? (uint64_t)(r - h) : UINT64_MAX;
 }
 
-static int rg_str_eq(Fat a, Fat b) { return a.meta == b.meta && (a.meta == 0 || memcmp(a.ptr, b.ptr, a.meta) == 0); }
+static inline int rg_str_eq(Fat a, Fat b) { return a.meta == b.meta && rg_memcmp((const uint8_t*)a.ptr, (const uint8_t*)b.ptr, a.meta) == 0; }
 
 /* ---- 128-bit helpers ---- */
 static unsigned __int128 rg_u128_from_str(const char* s) {
