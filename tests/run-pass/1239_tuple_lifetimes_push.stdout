@@ -1,0 +1,16 @@
+Some(("g", "hi there")) ("r", "hi there") [("z", "hi there"), ("z", "hi there"), ("w", "hi there")]
+[("h", "hi there")] 1 {("b", "hi there")}
+2 [("c", "hi there")] [("w", "hi"), ("w", "there")]
+[("y", "hi there"), ("x", "hi there")] [("q", "hi"), ("q", "there")]
+{"k": "src"} {"src": "v"} [("b", "src"), ("a", "src")]
+[("i", "src"), ("e", "src")] Some(("o", "src"))
+z src 1
+[("", ""), ("x", "src")] [(0, "even", "a"), (1, "odd", "b"), (2, "even", "src")]
+["a", "b c", "d"] ["a-b", "c-d"]
+[" x", "x, y", " "]
+"k1"
+Some("cccc")
+[("ident", "foo"), ("num", "42"), ("op", "+"), ("ident", "bar_"), ("num", "9"), ("op", "==")]
+[("x", "foo")] ["foo"] [(1, "foo")] Some(("x", "foo")) [("x", "q")]
+([("x", "a")], [("x", "b")], [("x", "c")], ("x", "d"), [("x", "e")], [("f", "x")])
+a b c 1 e f g

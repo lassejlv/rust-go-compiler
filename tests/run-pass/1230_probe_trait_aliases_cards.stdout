@@ -1,0 +1,28 @@
+== a01
+6 0.75
+1.5|2
+6
+3.5
+3
+3
+8 16 0
+float shape Circle(1.0) 9
+12 true
+-5 5 1024
+-4 4
+1 x
+big 5
+b
+11
+== a02
+2♥ 3♥ 4♥ 5♥ 6♥         cat=8 kick=[6, 5, 4, 3, 2]
+K♦ K♣ K♠ K♥ 2♣         cat=7 kick=[13, 2]
+3♣ 3♦ 3♠ 9♥ 9♦         cat=6 kick=[3, 9]
+A♥ 9♥ 4♥ 2♥ J♥         cat=5 kick=[14, 11, 9, 4, 2]
+5♣ 6♦ 7♠ 8♥ 9♣         cat=4 kick=[9, 8, 7, 6, 5]
+Q♣ Q♦ Q♠ 2♥ 4♦         cat=3 kick=[12, 4, 2]
+J♣ J♦ 4♠ 4♥ A♣         cat=2 kick=[11, 4, 14]
+10♣ 2♦ 2♠ 5♥ 6♣        cat=1 kick=[2, 10, 6, 5]
+A♣ K♦ 9♠ 7♥ 3♣         cat=0 kick=[14, 13, 9, 7, 3]
+  K♥  K♠  A♥  A♠
+Some(Card { rank: 14, suit: Spades })

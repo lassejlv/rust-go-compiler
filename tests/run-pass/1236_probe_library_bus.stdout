@@ -1,0 +1,15 @@
+== h02
+["Dune", "Emma"]
+Some(1815) Some("Neuromancer")
+{1810: ["Emma"], 1960: ["Dune"], 1980: ["Neuromancer"]}
+[("Neuromancer", 1984), ("Dune", 1965), ("Emma", 1816)]
+["Dune", "Emma", "Neuromancer"]
+2
+== h03
+2
+2
+1
+1
+0
+["a1:hi", "a2:hi", "a1:stop", "a2:stop", "a1:again"] 4
+1

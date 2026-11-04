@@ -199,12 +199,31 @@ func staticObjects(a ast.Type, t Ty, depth int, inAdt bool, out *[]int, nest int
 // holds: `&'static T` (T: 'static) and `dyn Trait + 'static`. Default
 // object lifetimes do not apply: in bodies they are inferred.
 func explicitStatics(a ast.Type, t Ty, depth int, out *[]int, nest int) {
+	// loans are tracked per depth, not per tuple element or type argument:
+	// a 'static required at a depth where the type also has other
+	// lifetimes (`(&'static str, &'a str)`) cannot be checked
+	var statics, others []int
+	explicitStaticsRec(a, t, depth, &statics, &others, nest)
+	for _, d := range statics {
+		clash := false
+		for _, o := range others {
+			if o == d {
+				clash = true
+			}
+		}
+		if !clash {
+			*out = append(*out, d)
+		}
+	}
+}
+
+func explicitStaticsRec(a ast.Type, t Ty, depth int, out, others *[]int, nest int) {
 	if a == nil || t == nil || nest > 12 {
 		return
 	}
 	switch x := a.(type) {
 	case *ast.ParenType:
-		explicitStatics(x.Elem, t, depth, out, nest+1)
+		explicitStaticsRec(x.Elem, t, depth, out, others, nest+1)
 	case *ast.RefType:
 		if t.Kind != TRef {
 			return
@@ -213,27 +232,33 @@ func explicitStatics(a ast.Type, t Ty, depth int, out *[]int, nest int) {
 			*out = append(*out, depth)
 			return
 		}
-		explicitStatics(x.Elem, t.Elem, depth+1, out, nest+1)
+		*others = append(*others, depth)
+		explicitStaticsRec(x.Elem, t.Elem, depth+1, out, others, nest+1)
 	case *ast.SliceType:
 		if t.Kind == TSlice {
-			explicitStatics(x.Elem, t.Elem, depth, out, nest+1)
+			explicitStaticsRec(x.Elem, t.Elem, depth, out, others, nest+1)
 		}
 	case *ast.ArrayType:
 		if t.Kind == TArray {
-			explicitStatics(x.Elem, t.Elem, depth, out, nest+1)
+			explicitStaticsRec(x.Elem, t.Elem, depth, out, others, nest+1)
 		}
 	case *ast.TupleType:
 		if t.Kind == TTuple && len(t.Elems) == len(x.Elems) {
 			for i, e := range x.Elems {
-				explicitStatics(e, t.Elems[i], depth, out, nest+1)
+				explicitStaticsRec(e, t.Elems[i], depth, out, others, nest+1)
 			}
 		}
 	case *ast.DynTraitType:
 		if t.Kind == TDyn && dynLifetimeBound(x) == "'static" {
 			*out = append(*out, depth)
+		} else {
+			*others = append(*others, depth)
 		}
 	case *ast.PathType:
 		if x.QSelf != nil || x.Path == nil || len(x.Path.Segments) == 0 || t.Kind != TAdt || t.Def == nil {
+			if carriesBorrows(t) {
+				*others = append(*others, depth)
+			}
 			return
 		}
 		seg := x.Path.Segments[len(x.Path.Segments)-1]
@@ -245,6 +270,12 @@ func explicitStatics(a ast.Type, t Ty, depth int, out *[]int, nest int) {
 			if ga.Type != nil {
 				tys = append(tys, ga.Type)
 			}
+			if ga.Lifetime != "" && ga.Lifetime != "'static" {
+				*others = append(*others, depth)
+			}
+			if ga.Lifetime != "" && ga.Lifetime != "'static" {
+				*others = append(*others, depth)
+			}
 		}
 		if len(tys) > len(t.Args) {
 			return
@@ -254,7 +285,7 @@ func explicitStatics(a ast.Type, t Ty, depth int, out *[]int, nest int) {
 			d++
 		}
 		for i, e := range tys {
-			explicitStatics(e, t.Args[i], d, out, nest+1)
+			explicitStaticsRec(e, t.Args[i], d, out, others, nest+1)
 		}
 	}
 }

@@ -1,0 +1,15 @@
+{"empty":[],"eobj":{},"name":"rustgo","neg":-2500,"nested":{"a":[1,2,{"deep":true}],"b":null,"esc":"line\nnext é \"q\""},"tags":["compiler","go","c"],"version":1.5}
+depth=4
+Some(Bool(true))
+Some("\"go\"")
+Some(Str("line\nnext é \"q\""))
+None
+borrowed: true
+true
+[1, 2          -> at 5: expected , or ]
+{"a" 1}        -> at 5: expected ':', got '1'
+tru            -> at 0: bad keyword, wanted true
+[1,]           -> at 3: unexpected char ']'
+"abc           -> at 4: unterminated string
+-              -> at 0: invalid float literal
+{"k": [nul]}   -> at 7: bad keyword, wanted null

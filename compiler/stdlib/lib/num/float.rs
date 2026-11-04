@@ -24,7 +24,7 @@ mod f64_math {
         copysignf64 as copysign, cosf64 as cos, coshf64 as cosh, exp2f64 as exp2, expf64 as exp, fabsf64 as fabs,
         floorf64 as floor, fmaf64 as fma, hypotf64 as hypot, log10f64 as log10, log2f64 as log2, logf64 as log,
         powff64 as powf, powif64 as powi, roundf64 as round, sinf64 as sin, sinhf64 as sinh, sqrtf64 as sqrt,
-        tanf64 as tan, tanhf64 as tanh, truncf64 as trunc,
+        tanf64 as tan, tanhf64 as tanh, truncf64 as trunc, expm1f64 as expm1, ln1pf64 as ln1p, asinhf64 as asinh, acoshf64 as acosh,
     };
 }
 
@@ -34,7 +34,7 @@ mod f32_math {
         copysignf32 as copysign, cosf32 as cos, coshf32 as cosh, exp2f32 as exp2, expf32 as exp, fabsf32 as fabs,
         floorf32 as floor, fmaf32 as fma, hypotf32 as hypot, log10f32 as log10, log2f32 as log2, logf32 as log,
         powff32 as powf, powif32 as powi, roundf32 as round, sinf32 as sin, sinhf32 as sinh, sqrtf32 as sqrt,
-        tanf32 as tan, tanhf32 as tanh, truncf32 as trunc,
+        tanf32 as tan, tanhf32 as tanh, truncf32 as trunc, expm1f32 as expm1, ln1pf32 as ln1p, asinhf32 as asinh, acoshf32 as acosh,
     };
 }
 
@@ -140,6 +140,10 @@ macro_rules! __std_float_impl {
             /// Converts radians to degrees.
             #[inline]
             pub fn to_degrees(self) -> $t {
+                if $nbits == 32 {
+                    // std uses the correctly rounded literal for f32
+                    return self * (57.2957795130823208767981548141051703_f64 as $t);
+                }
                 self * (180.0 / crate::$t::consts::PI)
             }
 
@@ -208,11 +212,16 @@ macro_rules! __std_float_impl {
             /// Calculates the middle point of `self` and `rhs`.
             #[inline]
             pub fn midpoint(self, other: $t) -> $t {
-                let s = self + other;
-                if s.is_finite() {
-                    s / 2.0
+                // as std on x86_64: f32 through f64, f64 halving only when
+                // the sum could overflow
+                if $nbits == 32 {
+                    return ((self as f64 + other as f64) * 0.5) as $t;
+                }
+                const HI: $t = $t::MAX * 0.5;
+                if self.abs() <= HI && other.abs() <= HI {
+                    (self + other) * 0.5
                 } else {
-                    self / 2.0 + other / 2.0
+                    (self * 0.5) + (other * 0.5)
                 }
             }
 
@@ -443,11 +452,7 @@ macro_rules! __std_float_impl {
             /// Returns `e^(self) - 1`.
             #[inline]
             pub fn exp_m1(self) -> $t {
-                if self.abs() < 1e-5 {
-                    self + self * self / 2.0 + self * self * self / 6.0
-                } else {
-                    self.exp() - 1.0
-                }
+                unsafe { $m::expm1(self) }
             }
 
             /// Returns the natural logarithm of the number.
@@ -459,11 +464,7 @@ macro_rules! __std_float_impl {
             /// Returns `ln(1+n)` more accurately than if the operations were performed separately.
             #[inline]
             pub fn ln_1p(self) -> $t {
-                if self.abs() < 1e-5 {
-                    self - self * self / 2.0 + self * self * self / 3.0
-                } else {
-                    (1.0 + self).ln()
-                }
+                unsafe { $m::ln1p(self) }
             }
 
             /// Returns the logarithm of the number with respect to an arbitrary base.
@@ -567,19 +568,14 @@ macro_rules! __std_float_impl {
             /// Inverse hyperbolic sine function.
             #[inline]
             pub fn asinh(self) -> $t {
-                let ax = self.abs();
-                let r = (ax + (ax * ax + 1.0).sqrt()).ln();
-                r.copysign(self)
+                // libm's, like std
+                unsafe { $m::asinh(self) }
             }
 
             /// Inverse hyperbolic cosine function.
             #[inline]
             pub fn acosh(self) -> $t {
-                if self < 1.0 {
-                    $t::NAN
-                } else {
-                    (self + (self * self - 1.0).sqrt()).ln()
-                }
+                unsafe { $m::acosh(self) }
             }
 
             /// Inverse hyperbolic tangent function.

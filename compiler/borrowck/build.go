@@ -695,6 +695,23 @@ func (b *builder) promotable(e ast.Expr) bool {
 	return false
 }
 
+// promotableClosure: an (unadjusted) closure expression capturing nothing.
+func (b *builder) promotableClosure(e ast.Expr) bool {
+	for {
+		pe, ok := e.(*ast.ParenExpr)
+		if !ok {
+			break
+		}
+		e = pe.X
+	}
+	ce, ok := e.(*ast.ClosureExpr)
+	if !ok || len(b.r.Adjust[ce.ID]) > 0 {
+		return false
+	}
+	ci := b.r.Closures[ce.ID]
+	return ci != nil && len(ci.Captures) == 0
+}
+
 func (b *builder) allPromotable(es []ast.Expr) bool {
 	for _, e := range es {
 		for _, a := range b.r.Adjust[e.GetID()] {
@@ -931,7 +948,16 @@ func (b *builder) lowerValue(e ast.Expr, dest tplace) {
 		op := b.operand(x.X)
 		b.assign(dest.p, Rvalue{Kind: ROther, Ops: []Operand{op}}, sp)
 	case *ast.RefExpr:
-		tp := b.placeOf(x.X)
+		var tp tplace
+		if !x.Mut && !x.Raw && b.promotableClosure(x.X) {
+			// a closure capturing nothing is a constant: `&|x| x + 1` is
+			// promoted to a `&'static`
+			id := b.newLocal(&LocalDecl{Kind: LStatic, Ty: b.nodeTy(x.X), Span: x.X.GetSpan(), Mut: true})
+			tp = tplace{p: Place{Local: id}, ty: b.nodeTy(x.X)}
+			b.assign(tp.p, Rvalue{Kind: RUse, Ops: []Operand{constOp()}}, x.X.GetSpan())
+		} else {
+			tp = b.placeOf(x.X)
+		}
 		kind := RRef
 		if x.Raw {
 			kind = RRawRef

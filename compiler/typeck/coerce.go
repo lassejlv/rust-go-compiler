@@ -86,6 +86,13 @@ func (fcx *FnCtxt) coerce(e ast.Expr, from, to Ty) bool {
 		}
 	case TAdt:
 		if a.Kind == TAdt && a.Def == b.Def && isUnsizableSmartPtr(a.Def) {
+			if fcx.unsizeSizedVar(a.Args[0], b.Args[0]) {
+				// `Box<?T>` -> `Box<dyn Trait>` where `?T` is known to be
+				// sized (the type of a value): unsize, like rustc's
+				// coerce_unsized, instead of making `?T` the trait object
+				fcx.addAdjust(e, Adjustment{Kind: AdjUnsize, Target: b})
+				return true
+			}
 			s := fcx.ic.snapshot()
 			if !fcx.opaqueToDyn(a.Args[0], b.Args[0]) && fcx.ic.unify(a, b) {
 				return true
@@ -103,6 +110,32 @@ func (fcx *FnCtxt) coerce(e ast.Expr, from, to Ty) bool {
 	return fcx.ic.unify(a, b)
 }
 
+// unsizeSizedVar handles `?T: Unsize<dyn Trait>` for an unresolved type
+// variable that is the type of a local (so sized): the trait obligation is
+// left pending.
+func (fcx *FnCtxt) unsizeSizedVar(src, dst Ty) bool {
+	v := fcx.shallow(src)
+	d := fcx.shallow(dst)
+	if v.Kind != TInfer || v.Sub != 0 || d.Kind != TDyn || fcx.pendingOpaque(v) != nil {
+		return false
+	}
+	sized := false
+	for _, l := range fcx.r.Locals {
+		if l != nil && !l.ByRef && l.Ty != nil && fcx.shallow(l.Ty) == v {
+			sized = true
+			break
+		}
+	}
+	if !sized {
+		return false
+	}
+	if d.Def != nil {
+		tr := &TraitRef{Trait: d.Def, Args: append([]Ty{v}, d.Args...)}
+		fcx.ic.obligations = append(fcx.ic.obligations, &Obligation{Pred: &Predicate{Trait: tr, Bindings: d.Bindings}})
+	}
+	return true
+}
+
 func isUnsizableSmartPtr(d *Def) bool {
 	return d.LangItem == "owned_box" || d.HasAttr("rustc_coerce_unsized")
 }
@@ -111,6 +144,10 @@ func isUnsizableSmartPtr(d *Def) bool {
 func (fcx *FnCtxt) coerceRef(e ast.Expr, a, b Ty) bool {
 	if b.Mut && !a.Mut {
 		return false
+	}
+	if fcx.unsizeSizedVar(a.Elem, b.Elem) {
+		fcx.addAdjust(e, Adjustment{Kind: AdjUnsize, Target: b})
+		return true
 	}
 	// direct
 	s := fcx.ic.snapshot()

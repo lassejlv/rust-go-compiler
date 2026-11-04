@@ -1,0 +1,85 @@
+== e01
+tail:
+  drop local
+  drop tail-temp
+9
+tail_block:
+  drop inner
+  drop outer
+  drop inner-tail
+10
+if cond:
+  drop cond
+  in then
+if let:
+  in then iflet
+  drop iflet
+match guard:
+  drop guard
+  arm scrut
+  drop scrut
+while let:
+  drop wl
+  body 0
+  drop wl
+  body 1
+vec order:
+  drop v0
+  drop v1
+  drop v2
+array order:
+  drop a0
+  drop a1
+tuple order:
+  drop t0
+  drop t1
+let tuple pattern:
+  drop q
+  drop p
+truncate:
+  drop w1
+  drop w2
+  drop w3
+  truncated
+  drop w0
+assign through ref:
+  drop old
+  assigned
+  drop new
+option replace:
+  drop o1
+  set none
+  end
+  drop o2
+closure captures:
+  before drop f
+  drop cap2
+  drop cap1
+  after drop f
+box slice:
+  drop b0
+  drop b1
+shadowing:
+  shadowed
+  drop s2
+  drop s1
+struct expr temp:
+  moved a wa
+  drop wa
+  drop wb
+fn arg temps:
+  drop argval
+  12
+  drop argref
+method chain temps:
+  drop chain
+  5
+end
+== e02
+popped 3
+popped 2
+[1]
+last 2
+[5, 6, 2, 9]
+conflict panicked: true
+22 []

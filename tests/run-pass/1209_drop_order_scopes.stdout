@@ -1,0 +1,22 @@
+locals: make(a) make(b) make(underscore) drop(underscore) make(c) drop(c) drop(b) drop(a)
+struct fields: make(b) make(a) make(c0) make(c1) drop(a) drop(b) drop(c0) drop(c1)
+partial move: make(a) make(b) make(c0) make(c1) moved b drop(b) after drop b drop(a) drop(c0) drop(c1)
+match scrutinee temp: make(scrut) arm 5 drop(scrut) after match
+if let temp: make(iflet) then 5 drop(iflet) after iflet make(stmt) make(stmt2) drop(stmt2) drop(stmt) x=9
+vec/enum: make(v0) make(v1) make(v2) make(e0) make(e1) make(o) drop(v0) drop(v1) drop(v2) drop(e0) drop(e1) drop(o)
+reassign: make(x1) reassign make(x2) drop(x1) now x2 drop(x2)
+12
+let else some: make(guard) make(tmp_in_init) drop(tmp_in_init) got 12 drop(guard)
+-1
+let else none: make(guard) else drop(guard)
+tuple partial: make(t0) make(t1) y=t1 drop(t1) drop(t0)
+temp lifetime extension: make(ref-temp-extended) using ref-temp-extended drop(ref-temp-extended)
+into_iter: make(boxed) make(boxed2) got first drop(boxed2) dropped iter drop(boxed)
+unwind: make(in-closure) bomb drop inner drop(in-closure) bomb drop outer caught=true
+index panic caught: true
+payload u32: Some(42)
+payload: None Some("formatted 7")
+payload: Some("static str")
+Some((2, 6)) [1, 2, 3, 4, 5]
+long
+count=7

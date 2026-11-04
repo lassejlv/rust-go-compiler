@@ -166,9 +166,33 @@ pub(crate) fn run_custom_hook(payload: &(dyn Any + Send), file: &str, line: u32,
     true
 }
 
+/// A panic while unwinding (from a destructor run during cleanup): like
+/// std, reported as the non-unwinding panic "panic in a destructor during
+/// cleanup" (through the hook), then the process aborts.
+fn panic_in_cleanup(payload: &(dyn Any + Send), file: &str, line: u32, col: u32, custom: bool) -> ! {
+    // (the first panic already printed the backtrace note)
+    FIRST_PANIC.store(false, Ordering::SeqCst);
+    if !custom {
+        let loc = Location::internal_constructor(file, line, col);
+        default_hook(&PanicHookInfo::new(payload, &loc));
+    }
+    let msg: &'static str = "panic in a destructor during cleanup";
+    let (cf, cl, cc) = ("library/core/src/panicking.rs", 233, 5);
+    if !run_custom_hook(&msg, cf, cl, cc) {
+        let loc = Location::internal_constructor(cf, cl, cc);
+        default_hook(&PanicHookInfo::new(&msg, &loc));
+    }
+    eprint!("thread caused non-unwinding panic. aborting.\n");
+    crate::process::abort()
+}
+
 /// Panic entry for `&'static str` messages (used by `rt`).
 pub(crate) fn begin_panic_static(msg: &'static str, file: &str, line: u32, col: u32) -> ! {
-    if run_custom_hook(&msg, file, line, col) {
+    let custom = run_custom_hook(&msg, file, line, col);
+    if crate::thread::panicking() {
+        panic_in_cleanup(&msg, file, line, col, custom)
+    }
+    if custom {
         unsafe { intrinsics::panic_resume(msg, true) }
     }
     unsafe { intrinsics::panic_impl_static(msg, file, line, col) }
@@ -176,7 +200,11 @@ pub(crate) fn begin_panic_static(msg: &'static str, file: &str, line: u32, col: 
 
 /// Panic entry for formatted messages (used by `rt`).
 pub(crate) fn begin_panic_string(msg: String, file: &str, line: u32, col: u32) -> ! {
-    if run_custom_hook(&msg, file, line, col) {
+    let custom = run_custom_hook(&msg, file, line, col);
+    if crate::thread::panicking() {
+        panic_in_cleanup(&msg, file, line, col, custom)
+    }
+    if custom {
         unsafe { intrinsics::panic_resume(msg.as_str(), false) }
     }
     unsafe { intrinsics::panic_impl(msg.as_str(), file, line, col) }

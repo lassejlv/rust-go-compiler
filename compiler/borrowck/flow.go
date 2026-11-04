@@ -45,6 +45,9 @@ type SlotEdge struct {
 
 type IntoSlot struct {
 	Dst, DstSlot, Src, SrcSlot int
+	// Name: the type parameter both occurrences are (`push(&mut self,
+	// value: T)`), "" for a store a bound relates
+	Name string
 }
 
 func noFlow() *Flow { return &Flow{} }

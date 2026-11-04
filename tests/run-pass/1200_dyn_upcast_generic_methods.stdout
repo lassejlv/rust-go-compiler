@@ -1,0 +1,8 @@
+ann | rex has 4 legs | hello, rex | rex
+Dog { name: "rex", owner: "ann" }
+nobody | bird#7 has 2 legs | tweet | bird#7
+Bird(7)
+tweet
+fido 2
+sum=39
+[13, 9]

@@ -192,6 +192,10 @@ extern "rust-intrinsic" {
     pub fn fmaf64(a: f64, b: f64, c: f64) -> f64;
     pub fn cbrtf64(x: f64) -> f64;
     pub fn hypotf64(x: f64, y: f64) -> f64;
+    pub fn expm1f64(x: f64) -> f64;
+    pub fn ln1pf64(x: f64) -> f64;
+    pub fn asinhf64(x: f64) -> f64;
+    pub fn acoshf64(x: f64) -> f64;
 
     // ---- f32 math
     pub fn sqrtf32(x: f32) -> f32;
@@ -221,6 +225,10 @@ extern "rust-intrinsic" {
     pub fn fmaf32(a: f32, b: f32, c: f32) -> f32;
     pub fn cbrtf32(x: f32) -> f32;
     pub fn hypotf32(x: f32, y: f32) -> f32;
+    pub fn expm1f32(x: f32) -> f32;
+    pub fn ln1pf32(x: f32) -> f32;
+    pub fn asinhf32(x: f32) -> f32;
+    pub fn acoshf32(x: f32) -> f32;
 
     // ---- float text conversion
     pub fn fmt_f64(v: f64, is_f32: bool, mode: u8, precision: isize, buf: *mut u8) -> usize;

@@ -1,0 +1,29 @@
+== y01
+[60, 54, 48, 42]
+he llo
+1<2 2<3 3<4 
+[0, 1, 7, 8, 9]
+[3, 2, 1]
+2 Some(4)
+== y02
+[keys] Key('a') -> typed "a"
+[clicks] Click { x: 1, y: -1 } -> q(true, false)=1
+[ticker] Tick(3) -> tick hits [3]
+[keys] Key('b') -> typed "ab"
+[clicks] Click { x: 2, y: -5 } -> q(true, false)=2
+[ticker] Tick(9) -> tick hits [3, 9]
+["keys", "clicks", "ticker"]
+seen=3
+== y03
+2 2 ["a!", "bb"] ["mut", "mut"]
+["A!", "BB"] 3
+3 HEY
+6
+3 zyx
+== y04
+Ok(25.0)
+Err("div0")
+Err("unbound y")
+Var("a")
+Bin(Num(5.0), '*', Var("z"))
+true

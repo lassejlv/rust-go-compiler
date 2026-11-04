@@ -271,7 +271,9 @@ func (b *builder) sigFlow(c *typeck.Callee, nargs int, ret Ty, argTys []Ty) *Flo
 		switch sp.Kind {
 		case ast.SelfValue:
 			w.path(&ast.Path{Segments: []*ast.PathSegment{{Ident: ast.Ident{Name: "Self"}}}}, 0)
-			mutIn = append(mutIn, false)
+			// map entries hold a `&mut` of their map: what their by-value
+			// methods take (`or_insert(self, default: V)`) is stored there
+			mutIn = append(mutIn, d.Crate != nil && d.Crate.Name == "std" && isMapEntry(selfTy))
 		case ast.SelfRef, ast.SelfRefMut:
 			lt := sp.Lifetime
 			if lt == "" {
@@ -279,7 +281,8 @@ func (b *builder) sigFlow(c *typeck.Callee, nargs int, ret Ty, argTys []Ty) *Flo
 			}
 			w.add(lt, 0)
 			w.path(&ast.Path{Segments: []*ast.PathSegment{{Ident: ast.Ident{Name: "Self"}}}}, 1)
-			mutIn = append(mutIn, sp.Kind == ast.SelfRefMut)
+			// cells store through `&self` (`Cell::set(&self, val: T)`)
+			mutIn = append(mutIn, sp.Kind == ast.SelfRefMut || d.Crate != nil && d.Crate.Name == "std" && isInteriorMut(selfTy))
 		case ast.SelfTyped:
 			w.walk(sp.Ty, 0)
 			rt, ok := sp.Ty.(*ast.RefType)
@@ -303,7 +306,18 @@ func (b *builder) sigFlow(c *typeck.Callee, nargs int, ret Ty, argTys []Ty) *Flo
 	for i, os := range ins {
 		for _, o := range os {
 			if o.name == "'static" {
-				static = append(static, StaticReq{Arg: i, Depth: o.depth})
+				// loans are tracked by depth: a 'static sharing its depth
+				// with another lifetime or type (`(&'static str, &'a str)`)
+				// cannot be required of the whole depth
+				shared := false
+				for _, o2 := range os {
+					if o2.depth == o.depth && o2.name != "'static" {
+						shared = true
+					}
+				}
+				if !shared {
+					static = append(static, StaticReq{Arg: i, Depth: o.depth})
+				}
 			} else if statics[o.name] {
 				static = append(static, StaticReq{Arg: i, Depth: o.depth, Deep: true})
 			}
@@ -999,6 +1013,47 @@ func (lc *loanChecker) store(st *lstate, p Place, v lval) {
 		for _, r := range rs {
 			lc.or(st, skey(p.Local, r), v.s[j])
 		}
+	}
+	lc.storeThroughRef(st, p, v, 0)
+}
+
+// storeThroughRef: a write through a `&mut` (`*x = &s`, `(*x).f = ..`)
+// also reaches the places x borrows (`x = v.last_mut()`): their slots
+// receive the value's loans (weakly).
+func (lc *loanChecker) storeThroughRef(st *lstate, p Place, v lval, nest int) {
+	if nest > 4 || len(p.Proj) == 0 || p.Proj[0].Kind != PDeref || p.Proj[0].Deref != DRefMut {
+		return
+	}
+	for _, pr := range p.Proj[1:] {
+		if pr.Kind == PDeref {
+			return
+		}
+	}
+	for _, bp := range lc.borrowedPlaces(lc.placeVal(st, Place{Local: p.Local})) {
+		if bp.Local == p.Local {
+			continue
+		}
+		np := Place{Local: bp.Local, Proj: append(append([]Proj(nil), bp.Proj...), p.Proj[1:]...)}
+		if !carriesBorrows(lc.body.Locals[np.Local].Ty) {
+			continue
+		}
+		pi := lc.placeInfo(np)
+		if pi.raw {
+			continue
+		}
+		w := lc.conv(v, pi.lay)
+		if len(np.Proj) == 0 {
+			for j := range w.s {
+				lc.or(st, skey(np.Local, j), w.s[j])
+			}
+		} else {
+			for j, rs := range pi.m {
+				for _, r := range rs {
+					lc.or(st, skey(np.Local, r), w.s[j])
+				}
+			}
+		}
+		lc.storeThroughRef(st, np, v, nest+1)
 	}
 }
 
@@ -1886,7 +1941,26 @@ func (lc *loanChecker) transferTerm(st *lstate, t Term) {
 			}
 			src := lc.depthView(args[e.Src])
 			// the places the `&mut` argument borrows receive the loans
-			for _, p := range lc.borrowedPlaces(args[e.Dst]) {
+			// (through a map entry, the map it borrows too)
+			places := lc.borrowedPlaces(args[e.Dst])
+			shift := map[int]int{}
+			for _, p := range places {
+				if len(p.Proj) == 0 && isMapEntryTy(lc.body.Locals[p.Local].Ty) {
+					// the entry's values sit one level down from the map's
+					for _, mp := range lc.borrowedPlaces(lc.placeVal(st, p)) {
+						shift[len(places)] = 1
+						places = append(places, mp)
+					}
+				}
+			}
+			for pi, p := range places {
+				e := e
+				if shift[pi] > 0 && e.DstDepth > 0 {
+					e.DstDepth--
+				}
+				if precise && lc.intoSlotsCover(fl, e, p) {
+					continue // stored slot by slot below
+				}
 				pl := lc.localLayout(p.Local)
 				for k, d := range pl.depth {
 					if d >= e.DstDepth && d-e.DstDepth+e.SrcDepth < maxDepth {
@@ -1918,6 +1992,46 @@ func (lc *loanChecker) transferTerm(st *lstate, t Term) {
 		lc.killDerefLoans(st, t.Dest.Local, v)
 	}
 	lc.store(st, t.Dest, v)
+}
+
+// intoSlotsCover reports whether the store e of a type parameter's value
+// into place p (borrowed by the `&mut` argument) is described slot by slot
+// by fl.IntoSlots, which apply to p.
+func (lc *loanChecker) intoSlotsCover(fl *Flow, e IntoEdge, p Place) bool {
+	if e.Name == "" || len(p.Proj) != 0 {
+		return false
+	}
+	if e.Name[0] == '\'' {
+		// a lifetime: only when everything the argument holds from its
+		// depth down is of that lifetime (`b: &'b str`)
+		if e.Src >= len(fl.ArgLabels) || e.Src >= len(fl.ArgLays) || fl.ArgLays[e.Src] == nil {
+			return false
+		}
+		sl, labels := fl.ArgLays[e.Src], fl.ArgLabels[e.Src]
+		if sl.flat || len(labels) != sl.n() {
+			return false
+		}
+		for k, d := range sl.depth {
+			if d >= e.SrcDepth && labels[k] != e.Name {
+				return false
+			}
+		}
+	}
+	dl := fl.ArgLays[e.Dst]
+	if dl == nil || dl.flat || dl.root.ty == nil || dl.root.ty.Kind != TRef {
+		return false
+	}
+	rl := layoutOf(dl.root.ty.Elem)
+	pi := lc.placeInfo(p)
+	if pi.raw || pi.lay.key != rl.key || pi.lay.n() != rl.n() {
+		return false
+	}
+	for _, is := range fl.IntoSlots {
+		if is.Dst == e.Dst && is.Src == e.Src && is.Name == e.Name {
+			return true
+		}
+	}
+	return false
 }
 
 // borrowedPlaces returns the places (not behind references) a reference
@@ -2003,6 +2117,7 @@ func (lc *loanChecker) checkTerm(st *lstate, t Term, live bitset) {
 					lc.checkStatic(st, t.Args[req.Arg], req, t.Span)
 				}
 			}
+			lc.checkStaticSlots(st, t)
 		}
 	case TReturn:
 		lc.checkReturn(st, t.Span)
@@ -2307,6 +2422,59 @@ func (lc *loanChecker) checkStatic(st *lstate, o Operand, req StaticReq, sp lexe
 	}
 }
 
+// checkStaticSlots checks the argument slots the signature declares
+// 'static (`p: (&'static str, &'a str)`) slot by slot, where the
+// argument's layout is known.
+func (lc *loanChecker) checkStaticSlots(st *lstate, t Term) {
+	fl := t.Flow
+	if len(fl.ArgLabels) != len(t.Args) || len(fl.ArgLays) != len(t.Args) {
+		return
+	}
+	for i, labels := range fl.ArgLabels {
+		lay := fl.ArgLays[i]
+		if lay == nil || lay.flat || len(labels) != lay.n() {
+			continue
+		}
+		has := false
+		for _, lb := range labels {
+			if lb == "'static" {
+				has = true
+			}
+		}
+		if !has || t.Args[i].Kind == OConst {
+			continue
+		}
+		v := lc.opVal(st, t.Args[i])
+		if v.lay.key != lay.key || v.lay.n() != lay.n() || len(v.s) != lay.n() {
+			continue
+		}
+		for k, lb := range labels {
+			if lb != "'static" {
+				continue
+			}
+			for li := 0; li < lc.nLoans; li++ {
+				if !v.s[k].has(li) {
+					continue
+				}
+				ln := lc.loans[li]
+				if ln.origin != "" {
+					if lc.regions != nil && !lc.regions.outlives(ln.origin, "'static") {
+						lc.regionError(ln.origin, t.Span)
+						return
+					}
+					continue
+				}
+				ld := lc.body.Locals[ln.place.Local]
+				if ld.Kind == LStatic || ld.Kind == LUpvar || placeThroughRef(ln.place) {
+					continue
+				}
+				lc.errorf(ln.span, "E0597", "`%s` does not live long enough", lc.describe(Place{Local: ln.place.Local}))
+				return
+			}
+		}
+	}
+}
+
 // returnOK reports whether an origin may be returned in slot (at depth d)
 // of the return value.
 func (lc *loanChecker) returnOK(origin string, slot, d int) bool {
@@ -2387,4 +2555,43 @@ func (ctx *Ctx) dropSignificant(t Ty) bool {
 	}
 	dr := ctx.tcx.LangOpt("drop")
 	return dr != nil && ctx.tcx.Implements(t, dr)
+}
+
+// isMapEntry reports whether t is one of std's map entry types, which hold
+// a mutable borrow of their map.
+func isMapEntry(t ast.Type) bool {
+	pt, ok := t.(*ast.PathType)
+	if !ok || pt.Path == nil || len(pt.Path.Segments) == 0 {
+		return false
+	}
+	switch pt.Path.Segments[len(pt.Path.Segments)-1].Ident.Name {
+	case "Entry", "VacantEntry", "OccupiedEntry":
+		return true
+	}
+	return false
+}
+
+func isMapEntryTy(t Ty) bool {
+	if t == nil || t.Kind != TAdt || t.Def == nil || t.Def.Crate == nil || t.Def.Crate.Name != "std" {
+		return false
+	}
+	switch t.Def.Name {
+	case "Entry", "VacantEntry", "OccupiedEntry":
+		return true
+	}
+	return false
+}
+
+// isInteriorMut reports whether t is one of std's cell types, whose
+// `&self` methods store values (`Cell::set`, `RefCell::replace`).
+func isInteriorMut(t ast.Type) bool {
+	pt, ok := t.(*ast.PathType)
+	if !ok || pt.Path == nil || len(pt.Path.Segments) == 0 {
+		return false
+	}
+	switch pt.Path.Segments[len(pt.Path.Segments)-1].Ident.Name {
+	case "Cell", "RefCell", "OnceCell", "OnceLock":
+		return true
+	}
+	return false
 }

@@ -1,0 +1,4 @@
+[("apple", 1), ("avocado", 1), ("banana", 1), ("blue", 1), ("cherry", 1)]
+{'#': ["apple", "avocado", "banana", "blue", "cherry"], 'a': ["apple", "avocado"], 'b': ["banana", "blue"], 'c': ["cherry"]}
+val
+{"k": "val"} {1: "one", 2: "two!"}

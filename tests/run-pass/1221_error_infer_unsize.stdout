@@ -1,0 +1,18 @@
+Err("invalid digit found in string")
+Ok([2, 4])
+Ok(3)
+Some(9)
+[Err("ovf"), Ok(20)]
+("a", 5)
+["bad value for key \"b\"", "invalid digit found in string"]
+["no '=' in \"noeq\""]
+("c", -12)
+number too large to fit in target type
+Ok(15)
+Ok(24)
+5
+err: invalid digit found in string
+["invalid digit found in string", "number too large to fit in target type"]
+Err("number too large to fit in target type")
+Err("invalid float literal")
+["1", "bad"]
