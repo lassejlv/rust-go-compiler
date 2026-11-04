@@ -3,6 +3,7 @@ package borrowck
 import (
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 
 	"rustgo/compiler/ast"
@@ -154,6 +155,42 @@ func slotFlow(tcx *typeck.Tcx, fl *Flow, d *Def, selfAst ast.Type, params map[st
 	}
 	if len(inAst) != len(argTys) {
 		return
+	}
+	// constant arguments come typed `()` (they hold no loans): one
+	// declared as a type parameter the result also holds (`fold("", f)`)
+	// gets that parameter's instance, so that the parameter is known
+	// to be an input
+	var outOcc map[string][]*lnode
+	for i, t := range argTys {
+		if t.Kind != TTuple || len(t.Elems) != 0 {
+			continue
+		}
+		pt, ok := inAst[i].(*ast.PathType)
+		if !ok || pt.QSelf != nil || pt.Path == nil || len(pt.Path.Segments) != 1 || pt.Path.Segments[0].Args != nil {
+			continue
+		}
+		name := pt.Path.Segments[0].Ident.Name
+		if !params[name] || name == "Self" {
+			continue
+		}
+		if outOcc == nil {
+			ow := newLabeler(params, selfAst)
+			ow.out = true
+			ow.label(decl.Output, rl)
+			outOcc = ow.occ
+		}
+		var inst Ty
+		for _, n := range outOcc[name] {
+			if inst != nil && n.ty != inst {
+				inst = nil
+				break
+			}
+			inst = n.ty
+		}
+		if inst != nil && !inst.HasParam() && !inst.HasInfer() && !layoutOf(inst).flat {
+			argTys = append([]Ty{}, argTys...)
+			argTys[i] = inst
+		}
 	}
 	type argInfo struct {
 		lay       *layout
@@ -536,18 +573,105 @@ func slotFlow(tcx *typeck.Tcx, fl *Flow, d *Def, selfAst ast.Type, params map[st
 		}
 		return ai, an, im
 	}
+	// outputs also made by a closure from themselves (`fold<B, F:
+	// FnMut(B, Self::Item) -> B>(self, init: B, f: F) -> B`): what its
+	// summary says the result holds of the other inputs, and of its own
+	// argument B again (the previous result) slot by slot
+	for name, ns := range out.occ {
+		if !inParams[name] || bad[name] || name == "Self" || len(ns) != 1 {
+			continue
+		}
+		_, producers := boundSources(name, gens, params)
+		if len(producers) != 1 {
+			continue
+		}
+		var bArg int
+		var bNode *lnode
+		for i, a := range args {
+			for _, x := range a.occ[name] {
+				if bNode != nil {
+					bNode = nil
+					break
+				}
+				bArg, bNode = i, x
+			}
+		}
+		if bNode == nil || bNode.ty != ns[0].ty {
+			continue
+		}
+		argOcc := make([]map[string][]*lnode, len(args))
+		for i, a := range args {
+			argOcc[i] = a.occ
+		}
+		n := ns[0]
+		for f, inputs := range producers {
+			es, good := closureProduced(f, inputs, argOcc, n, params, itemsOf)
+			if !good {
+				continue
+			}
+			// result slot j holds what result slot a held (through B)
+			w := n.end - n.start
+			srcs := make([][]SlotEdge, w)
+			deps := make([][]int, w)
+			for _, e := range es {
+				j := e.To - n.start
+				if e.Arg == bArg && e.From >= bNode.start && e.From < bNode.end {
+					deps[j] = append(deps[j], e.From-bNode.start)
+				}
+				srcs[j] = append(srcs[j], e)
+			}
+			for changed := true; changed; {
+				changed = false
+				for j := range deps {
+					for _, a := range deps[j] {
+						for _, e := range srcs[a] {
+							ne := SlotEdge{Arg: e.Arg, From: e.From, To: n.start + j}
+							if !slices.Contains(srcs[j], ne) {
+								srcs[j] = append(srcs[j], ne)
+								changed = true
+							}
+						}
+					}
+				}
+			}
+			for _, ss := range srcs {
+				for _, e := range ss {
+					add(e)
+				}
+			}
+		}
+	}
 	// outputs only the bounds relate to the inputs
 	for name, ns := range out.occ {
 		if inParams[name] || bad[name] || name == "Self" {
 			continue
 		}
 		// collected items (`B: FromIterator<Self::Item>`)
-		if tr, x := itemBoundOf(tcx, d, name, gens, params); tr != nil {
+		if tr, x, a, z := itemBoundOf(tcx, d, name, gens, params); tr != nil {
 			var all []SlotEdge
 			ok := true
 			for _, n := range ns {
 				es := itemEdges(x, n, func(im *itemMap) [][]int {
-					return traitArgSlots(tcx, tr, n.ty, im.lay.root.ty, 0)
+					if z == nil {
+						return traitArgSlots(tcx, tr, n.ty, im.lay.root.ty, 0)
+					}
+					// the part of the items the declared item type z
+					// gives parameter a
+					_, occ, projs := labelAst(params, z, im.lay)
+					if len(projs) > 0 || len(occ[a]) != 1 {
+						return nil
+					}
+					an := occ[a][0]
+					m := traitArgSlots(tcx, tr, n.ty, an.ty, 0)
+					if m == nil {
+						return nil
+					}
+					for j := range m {
+						for k := range m[j] {
+							m[j][k] += an.start
+						}
+					}
+					return m
 				})
 				if es == nil {
 					ok = false
@@ -802,6 +926,12 @@ func slotFlow(tcx *typeck.Tcx, fl *Flow, d *Def, selfAst ast.Type, params map[st
 							continue
 						}
 						for _, s := range xs {
+							// the items of an iterator (`I: IntoIterator<Item
+							// = (K, V)>`), by the impls (items.go)
+							if is := itemStores(tcx, d, x, name, s, si, n, di, gens, params); is != nil {
+								fl.IntoSlots = append(fl.IntoSlots, is...)
+								continue
+							}
 							alignInto(fl, si, s, sa.lay, di, n, a.lay)
 						}
 					}

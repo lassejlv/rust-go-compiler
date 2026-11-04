@@ -123,7 +123,10 @@ merged one does not compile).
   initialized (not after it was moved out), and loans flowing into the return value stay live at every point
   reachable from where they are taken (NLL problem case #3). Types carry no lifetimes after type checking, so regions
   are modeled by loan sets attached to values (by reference depth) and
-  propagated through calls by the callees' declared signatures; whenever
+  propagated through calls by the callees' declared signatures (an
+  iterator's items by the impl defining its `Item`, through adapters'
+  bounds and closure summaries, so `m.keys()` of a
+  `HashMap<&'static str, &'a str>` yields only the keys' regions); whenever
   the model is unsure it drops loans, so valid programs are never rejected
   (some invalid ones are accepted). It checks the crates being developed
   (the input file, cargo path dependencies); `RUSTGO_BORROWCK=all` also

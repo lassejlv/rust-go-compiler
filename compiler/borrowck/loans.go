@@ -2334,6 +2334,9 @@ func (lc *loanChecker) conflict(p Place, k accessKind, ln loan, sp lexer.Span) {
 // checkParamStores checks values stored through `&mut` parameters against
 // the lifetimes the parameter's type declares.
 func (lc *loanChecker) checkParamStores(st *lstate, t Term) {
+	if lc.checkItemStores(st, t) {
+		return
+	}
 	for _, e := range t.Flow.Into {
 		if e.Dst >= len(t.Args) || e.Src >= len(t.Args) {
 			continue
@@ -2469,6 +2472,89 @@ func (lc *loanChecker) checkParamStoreSlots(p Place, pi, k int, e IntoEdge, fl *
 			if src[e.SrcDepth+kk].has(oi) && lc.loans[oi].origin != "" && !lc.regions.originOK(lc.loans[oi].origin, set) {
 				lc.regionError(lc.loans[oi].origin, sp)
 				return true
+			}
+		}
+	}
+	return false
+}
+
+// checkItemStores checks the items an iterator argument stores into the
+// referent of a `&mut` parameter (fl.IntoSlots marked Items) against the
+// regions the parameter's type declares for the slots they land in. It
+// reports whether an error was reported.
+func (lc *loanChecker) checkItemStores(st *lstate, t Term) bool {
+	fl := t.Flow
+	if !lc.sigSlots || len(fl.ArgLays) != len(t.Args) {
+		return false
+	}
+	for _, is := range fl.IntoSlots {
+		if !is.Items || is.Dst >= len(t.Args) || is.Src >= len(t.Args) || is.DstSlot < 1 {
+			continue
+		}
+		dl := fl.ArgLays[is.Dst]
+		if dl == nil || dl.flat || dl.root.ty == nil || dl.root.ty.Kind != TRef {
+			continue
+		}
+		rl := layoutOf(dl.root.ty.Elem)
+		sv := lc.opVal(st, t.Args[is.Src])
+		if sl := fl.ArgLays[is.Src]; sl == nil || sv.lay.key != sl.key || is.SrcSlot >= len(sv.s) {
+			continue
+		}
+		src := sv.s[is.SrcSlot]
+		dv := lc.opVal(st, t.Args[is.Dst])
+		if len(dv.s) == 0 {
+			continue
+		}
+		for li := 0; li < lc.nLoans; li++ {
+			if !dv.s[0].has(li) || lc.loans[li].origin != "" {
+				continue
+			}
+			p := lc.loans[li].place
+			pi := -1
+			for i, l := range lc.params {
+				if l == p.Local {
+					pi = i
+				}
+			}
+			if pi < 0 || pi >= len(lc.paramLabels) || !placeThroughRef(p) {
+				continue
+			}
+			info := lc.placeInfo(p)
+			if info.raw || info.lay.flat || info.lay.key != rl.key || is.DstSlot-1 >= len(info.m) {
+				continue
+			}
+			labels := lc.paramLabels[pi]
+			set := map[string]bool{}
+			any := len(info.m[is.DstSlot-1]) == 0
+			for _, r := range info.m[is.DstSlot-1] {
+				lb := ""
+				if r < len(labels) {
+					lb = labels[r]
+				}
+				switch {
+				case lb == "" || lb[0] != '\'' || strings.HasPrefix(lb, "'#h"):
+					any = true
+				case lb == "'?":
+					if lc.regions.elided == "" {
+						any = true
+					} else {
+						set[lc.regions.elided] = true
+					}
+				default:
+					set[lb] = true
+				}
+			}
+			if any {
+				continue
+			}
+			if lc.localLoanStored(src) {
+				return true
+			}
+			for oi := 0; oi < lc.nLoans; oi++ {
+				if src.has(oi) && lc.loans[oi].origin != "" && !lc.regions.originOK(lc.loans[oi].origin, set) {
+					lc.regionError(lc.loans[oi].origin, t.Span)
+					return true
+				}
 			}
 		}
 	}

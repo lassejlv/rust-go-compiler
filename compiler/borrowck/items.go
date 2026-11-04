@@ -687,15 +687,19 @@ func onlyClosureInputs(y, x string, gens []*ast.Generics, params map[string]bool
 
 // itemBoundOf recognizes an output parameter p made from an iterator's
 // items by a trait (`B: FromIterator<Self::Item>`): its only bound with
-// arguments is `Trait<X::Item>`. It returns the trait and X.
-func itemBoundOf(tcx *typeck.Tcx, d *Def, p string, gens []*ast.Generics, params map[string]bool) (*Def, string) {
+// arguments is `Trait<X::Item>`, or `Trait<A>` with A a parameter in the
+// item type a bound declares (`FromA: Extend<A>` with `Self: Iterator<Item
+// = (A, B)>` of unzip). It returns the trait, X and, in the second form,
+// A and the declared item type.
+func itemBoundOf(tcx *typeck.Tcx, d *Def, p string, gens []*ast.Generics, params map[string]bool) (*Def, string, string, ast.Type) {
 	if tcx == nil || d == nil {
-		return nil, ""
+		return nil, "", "", nil
 	}
 	if _, producers := boundSources(p, gens, params); len(producers) > 0 {
-		return nil, ""
+		return nil, "", "", nil
 	}
-	var trName, x string
+	var trName, x, a string
+	var z ast.Type
 	for _, b := range genericBounds(p, gens) {
 		if b.Path == nil {
 			continue
@@ -705,17 +709,51 @@ func itemBoundOf(tcx *typeck.Tcx, d *Def, p string, gens []*ast.Generics, params
 				continue
 			}
 			if trName != "" || i != len(b.Path.Segments)-1 || seg.Args.Parenthesized || len(seg.Args.Bindings) > 0 || len(seg.Args.Args) != 1 || seg.Args.Args[0].Type == nil {
-				return nil, ""
+				return nil, "", "", nil
 			}
 			pt, ok := seg.Args.Args[0].Type.(*ast.PathType)
-			if !ok || pt.QSelf != nil || pt.Path == nil || len(pt.Path.Segments) != 2 || pt.Path.Segments[1].Ident.Name != "Item" || pt.Path.Segments[0].Args != nil || pt.Path.Segments[1].Args != nil {
-				return nil, ""
+			if !ok || pt.QSelf != nil || pt.Path == nil {
+				return nil, "", "", nil
 			}
-			trName, x = seg.Ident.Name, pt.Path.Segments[0].Ident.Name
+			ss := pt.Path.Segments
+			switch {
+			case len(ss) == 2 && ss[1].Ident.Name == "Item" && ss[0].Args == nil && ss[1].Args == nil:
+				trName, x = seg.Ident.Name, ss[0].Ident.Name
+			case len(ss) == 1 && ss[0].Args == nil && params[ss[0].Ident.Name] && ss[0].Ident.Name != "Self":
+				// the parameter of an item type a bound declares
+				a = ss[0].Ident.Name
+				for _, g := range gens {
+					for _, ib := range implBounds(g) {
+						bs := boundLastSeg(ib.b)
+						if bs == nil || !isIterTraitName(bs.Ident.Name) || bs.Args == nil || bs.Args.Parenthesized {
+							continue
+						}
+						for _, bd := range bs.Args.Bindings {
+							if bd.Name.Name != "Item" || bd.Ty == nil {
+								continue
+							}
+							m := map[string]bool{}
+							typeNames(bd.Ty, params, m)
+							if m[a] {
+								if z != nil {
+									return nil, "", "", nil
+								}
+								x, z = ib.subject, bd.Ty
+							}
+						}
+					}
+				}
+				if z == nil {
+					return nil, "", "", nil
+				}
+				trName = seg.Ident.Name
+			default:
+				return nil, "", "", nil
+			}
 		}
 	}
 	if trName == "" || (x != "Self" && !params[x]) {
-		return nil, ""
+		return nil, "", "", nil
 	}
 	// other bounds mentioning p (`F: FnMut() -> p`, `Q: From<p>`)
 	for _, g := range gens {
@@ -724,7 +762,7 @@ func itemBoundOf(tcx *typeck.Tcx, d *Def, p string, gens []*ast.Generics, params
 		}
 		for _, gp := range g.Params {
 			if gp.Kind == ast.GPType && gp.Name.Name != p && boundMentions(gp.Name.Name, p, gens, params) {
-				return nil, ""
+				return nil, "", "", nil
 			}
 		}
 	}
@@ -735,15 +773,15 @@ func itemBoundOf(tcx *typeck.Tcx, d *Def, p string, gens []*ast.Generics, params
 		}
 		if a := pr.Trait.Args[0]; a != nil && a.Kind == TParam && a.Name == p {
 			if tr != nil && tr != pr.Trait.Trait {
-				return nil, ""
+				return nil, "", "", nil
 			}
 			tr = pr.Trait.Trait
 		}
 	}
 	if tr == nil {
-		return nil, ""
+		return nil, "", "", nil
 	}
-	return tr, x
+	return tr, x, a, z
 }
 
 // projKeyOf names a type parameter X or projection `X::Assoc` of params
@@ -834,4 +872,50 @@ func refAbove(root, n *lnode) *lnode {
 	}
 	walk(root, nil)
 	return found
+}
+
+// itemStores relates, for an argument node s of iterator parameter x
+// whose bound declares `Item = Z`, the slots of the items stored into
+// node n (an instance of type parameter name in the referent of `&mut`
+// argument di) through Z: slot by slot of name's occurrences in Z. nil:
+// not known (the stores are then aligned by type).
+func itemStores(tcx *typeck.Tcx, d *Def, x, name string, s *lnode, si int, n *lnode, di int, gens []*ast.Generics, params map[string]bool) []IntoSlot {
+	var z ast.Type
+	for _, b := range genericBounds(x, gens) {
+		seg := boundLastSeg(b)
+		if seg == nil || !isIterTraitName(seg.Ident.Name) || seg.Args == nil || seg.Args.Parenthesized {
+			continue
+		}
+		for _, bd := range seg.Args.Bindings {
+			if bd.Name.Name == "Item" && bd.Ty != nil {
+				if z != nil {
+					return nil
+				}
+				z = bd.Ty
+			}
+		}
+	}
+	if z == nil || layoutOf(s.ty).n() != s.end-s.start {
+		return nil
+	}
+	im := iterItems(tcx, s.ty, 0)
+	if im == nil {
+		return nil
+	}
+	_, occ, projs := labelAst(params, z, im.lay)
+	if len(projs) > 0 {
+		return nil
+	}
+	out := []IntoSlot{}
+	for _, nn := range occ[name] {
+		if !sameSlots(nn.ty, n.ty) || nn.end-nn.start != n.end-n.start {
+			return nil
+		}
+		for k := 0; k < n.end-n.start; k++ {
+			for _, src := range im.m[nn.start+k] {
+				out = append(out, IntoSlot{Dst: di, DstSlot: n.start + k, Src: si, SrcSlot: s.start + src, Items: true})
+			}
+		}
+	}
+	return out
 }
