@@ -343,6 +343,16 @@ func (fcx *FnCtxt) lookupMethod(recv Ty, name string, sp lexer.Span) *pick {
 							continue
 						}
 					}
+					if foundKind == SelImpl && k == SelImpl && found.item.Parent != tr && !fcx.t.isStd(tr) && !fcx.t.isStd(found.item.Parent) &&
+						fcx.def != nil && fcx.def.Crate != nil && fcx.def.Crate.Local && fcx.t.Generics(fcx.def).Count() == 0 {
+						// two traits of non-std crates provide the method for
+						// this receiver at the same autoref step (std traits
+						// are left out: rustgo's std has methods that are
+						// unstable, and so not candidates, in the real std)
+						if r := fcx.resolve(adjusted); !r.HasInfer() && !r.HasParam() && !r.HasProj() {
+							fcx.t.ErrorCode(sp, "E0034", "multiple applicable items in scope: `%s` is provided by traits `%s` and `%s`", name, found.item.Parent.Name, tr.Name)
+						}
+					}
 					// prefer a definite match over an ambiguous one
 					if foundKind != SelAmbig || k == SelAmbig {
 						fcx.ic.rollback(s)

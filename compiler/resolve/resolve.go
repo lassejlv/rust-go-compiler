@@ -606,7 +606,7 @@ func (r *Resolver) lookupDet(m *Module, name string, ns Namespace, self *Import)
 		return nil, false
 	}
 	for _, g := range m.Globs {
-		if b := g.Lookup(name, ns); b != nil && (self == nil || r.bindingImport[b] != self) {
+		if b := g.Lookup(name, ns); b != nil && (self == nil || r.bindingImport[b] != self) && GlobVisible(b, g, m) {
 			return b, true
 		}
 	}

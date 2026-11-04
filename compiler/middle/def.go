@@ -492,11 +492,43 @@ func (m *Module) lookup(name string, ns Namespace, seen map[*Module]bool) *NameB
 		return b
 	}
 	for _, g := range m.Globs {
-		if b := g.lookup(name, ns, seen); b != nil {
+		if b := g.lookup(name, ns, seen); b != nil && GlobVisible(b, g, m) {
 			return b
 		}
 	}
 	return nil
+}
+
+// GlobVisible reports whether binding b, found through a glob import of
+// module g into module m, is imported: a glob import only brings the names
+// visible from the importing module (private items of an unrelated module
+// are not imported). Enum variants and trait items are always visible.
+func GlobVisible(b *NameBinding, g, m *Module) bool {
+	if b == nil || g == nil || m == nil || b.Vis == ast.VisPub {
+		return true
+	}
+	if g.Def != nil && (g.Def.Kind == DefEnum || g.Def.Kind == DefTrait) {
+		return true
+	}
+	if g.Crate != m.Crate {
+		return false
+	}
+	if b.Vis == ast.VisCrate || b.Vis == ast.VisRestricted {
+		return true
+	}
+	anc := g.Normal
+	if anc == nil {
+		anc = g
+	}
+	if b.Vis == ast.VisSuper {
+		anc = anc.ParentModule()
+	}
+	for x := m; x != nil; x = x.Parent {
+		if x == anc || x.Normal == anc {
+			return true
+		}
+	}
+	return false
 }
 
 // Define adds a binding (later definitions do not override earlier ones

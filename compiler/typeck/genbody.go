@@ -439,6 +439,11 @@ func (fcx *FnCtxt) polyNoItem(recv Ty, name string, assoc bool) {
 		what = "reference"
 	}
 	if !isTyParam(p) {
+		if !assoc && fcx.polyConcrete(r) {
+			// a receiver type without parameters: the lookup does not
+			// depend on the body's bounds
+			fcx.polyClassify("E0599", "no method named `%s` found for `%s` in the current scope", name, r)
+		}
 		return
 	}
 	for _, b := range fcx.paramBounds(p) {
@@ -569,6 +574,16 @@ func (fcx *FnCtxt) polyMismatch(expected, actual Ty) {
 	if fcx.unboundProj(e) || fcx.unboundProj(a) {
 		fcx.t.poly.next = &polyErr{ok: true} // (consequence)
 	}
+}
+
+// polyConcrete reports whether x is a fully known type without type
+// parameters, projections, inference variables, closures or trait objects.
+func (fcx *FnCtxt) polyConcrete(x Ty) bool {
+	x = fcx.resolve(x)
+	if x == nil || !fcx.rigidTy(x) || x.HasParam() || x.HasProj() || x.HasOpaque() || x.HasError() {
+		return false
+	}
+	return true
 }
 
 // polyConcreteClash reports whether e and a are types without type

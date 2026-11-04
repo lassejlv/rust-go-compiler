@@ -81,6 +81,10 @@ func (fcx *FnCtxt) resolveValuePath(qself *ast.QSelf, p *ast.Path, sp lexer.Span
 	}
 	pr, err := fcx.resolvePath(p, ValueNS)
 	if err != nil {
+		if fcx.inPoly() && len(segs) == 1 && qself == nil {
+			// an unresolved name does not depend on the body's bounds
+			fcx.polyClassify("E0425", "cannot find value `%s` in this scope", segs[0].Ident.Name)
+		}
 		fcx.errorf(sp, "%v", err)
 		return nil, TyErr
 	}
@@ -543,6 +547,9 @@ func (fcx *FnCtxt) checkArgs(args []ast.Expr, ins []Ty, variadic bool, sp lexer.
 	fcx.argHints = hints
 	defer func() { fcx.argHints = saved }()
 	if len(args) != len(ins) && !(variadic && len(args) >= len(ins)) {
+		if fcx.inPoly() {
+			fcx.polyClassify("E0061", "this function takes %d argument%s but %d argument%s supplied", len(ins), plural(len(ins)), len(args), map[bool]string{true: " was", false: "s were"}[len(args) == 1])
+		}
 		fcx.errorf(sp, "this function takes %d arguments but %d were supplied", len(ins), len(args))
 	}
 	for pass := 0; pass < 2; pass++ {

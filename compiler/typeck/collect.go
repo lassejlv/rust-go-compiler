@@ -1089,6 +1089,8 @@ func (ac *astConv) findAssocType(cur Ty, name string, sp lexer.Span) Ty {
 	// Bounds on params (and Self in traits).
 	if ac.gen != nil {
 		unsub := cur
+		var found Ty
+		var foundTr *Def
 		for _, p := range ac.gen.Predicates {
 			pself := p.Trait.Args[0]
 			if pself != unsub && ac.sub(pself) != cur {
@@ -1096,9 +1098,20 @@ func (ac *astConv) findAssocType(cur Ty, name string, sp lexer.Span) Ty {
 			}
 			for _, st := range t.AllSupertraits(p.Trait) {
 				if it, ok := st.Trait.Trait.Items[name]; ok && it.Kind == DefAssocTy {
-					return ac.sub(Projection(st.Trait, st.Args, name))
+					pr := ac.sub(Projection(st.Trait, st.Args, name))
+					if found == nil {
+						found, foundTr = pr, st.Trait
+					} else if pr != found && cur.Kind == TParam && ac.scope != nil && ac.scope.Crate != nil && ac.scope.Crate.Local && !pr.HasInfer() && !found.HasInfer() {
+						// two bounds of a type parameter declare the
+						// associated type
+						t.ErrorCode(sp, "E0221", "ambiguous associated type `%s` in bounds of `%s` (from `%s` and `%s`)", name, cur, foundTr.Name, st.Trait.Name)
+					}
+					break
 				}
 			}
+		}
+		if found != nil {
+			return found
 		}
 	}
 	// Self inside an impl of a trait: use the impl's own definition.
