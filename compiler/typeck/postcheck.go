@@ -75,7 +75,8 @@ func (t *Tcx) checkBodyMisc(r *Results, def *Def) {
 		}
 		return true
 	})
-	if !std {
+	// deny-by-default lints; cargo caps lints of registry dependencies
+	if !std && def != nil && def.Crate != nil && def.Crate.Local {
 		t.checkOverflowingLiterals(r, def, root)
 		t.checkKnownPanics(r, def, root)
 	}
