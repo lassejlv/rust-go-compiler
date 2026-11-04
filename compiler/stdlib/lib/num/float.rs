@@ -140,6 +140,10 @@ macro_rules! __std_float_impl {
             /// Converts radians to degrees.
             #[inline]
             pub fn to_degrees(self) -> $t {
+                if $nbits == 32 {
+                    // std uses the correctly rounded literal for f32
+                    return self * (57.2957795130823208767981548141051703_f64 as $t);
+                }
                 self * (180.0 / crate::$t::consts::PI)
             }
 
@@ -208,11 +212,16 @@ macro_rules! __std_float_impl {
             /// Calculates the middle point of `self` and `rhs`.
             #[inline]
             pub fn midpoint(self, other: $t) -> $t {
-                let s = self + other;
-                if s.is_finite() {
-                    s / 2.0
+                // as std on x86_64: f32 through f64, f64 halving only when
+                // the sum could overflow
+                if $nbits == 32 {
+                    return ((self as f64 + other as f64) * 0.5) as $t;
+                }
+                const HI: $t = $t::MAX * 0.5;
+                if self.abs() <= HI && other.abs() <= HI {
+                    (self + other) * 0.5
                 } else {
-                    self / 2.0 + other / 2.0
+                    (self * 0.5) + (other * 0.5)
                 }
             }
 

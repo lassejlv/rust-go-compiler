@@ -68,7 +68,21 @@ fn float_math() {
     println!("{:?} {:?}", f64::NAN.powi(0), 0.0f64.powi(-1));
 }
 
+fn degrees_midpoint() {
+    println!("{}", (57.2957795130823208767981548141051703_f64 as f32).to_bits() == 57.2957795130823208767981548141051703_f32.to_bits());
+    for x in [1.0f32, 0.5, 3.14159265, -2.0, 1e-3, 123.456, 6.2831855] {
+        println!("{:?} {:?} {:?}", x.to_degrees(), x.to_radians(), x.midpoint(1.0000001));
+    }
+    for x in [1.0f64, 0.5, 3.14159265, -2.0, 1e-3, 123.456] {
+        println!("{:?} {:?} {:?}", x.to_degrees(), x.to_radians(), x.midpoint(1e-300));
+    }
+    println!("{:?} {:?}", f64::MAX.midpoint(f64::MAX * 0.75), f32::MAX.midpoint(f32::MAX));
+    println!("{:?} {:?}", 16777216.0f32.midpoint(1.0), 1.0f32.midpoint(2.0f32.powi(-25)));
+    println!("{:?}", f64::MAX.midpoint(5e-324));
+}
+
 fn main() {
+    degrees_midpoint();
     misc_apis();
     float_math();
 }
