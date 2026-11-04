@@ -89,7 +89,7 @@ fn main() {
     println!("newest {:?}", set.iter().next_back().map(|v| (v.major, v.minor)));
 
     println!("tuples: {} {} {} {:?}", (1, "b") < (1, "c"), (2, 0) > (1, 99), (1, 2, 3) == (1, 2, 3), (1, 'z').cmp(&(2, 'a')));
-    println!("slices: {} {} {} {:?}", [1, 2, 3][..] < [1, 3][..], [1, 2][..] < [1, 2, 0][..], Vec::<i32>::new() < vec![i32::MIN], [3].cmp(&[2, 9]));
+    println!("slices: {} {} {} {:?}", [1, 2, 3][..] < [1, 3][..], [1, 2][..] < [1, 2, 0][..], Vec::<i32>::new() < vec![i32::MIN], [3][..].cmp(&[2, 9][..]));
     println!("options: {} {} {:?} results: {}", None < Some(i32::MIN), Some(2) > Some(1), [Some(1), None, Some(0)].iter().min(), Ok::<u8, u8>(9) < Err(0));
     println!("strings: {} {} {} {:?}", "Zebra" < "apple", "apple" < "apples", "é" > "z", "abc".cmp("abd"));
     println!("chars/bools: {} {} {:?}", 'a' < 'b', false < true, [true, false, true].iter().max());

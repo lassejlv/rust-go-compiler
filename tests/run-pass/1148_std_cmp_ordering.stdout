@@ -1,0 +1,31 @@
+ordering ops: Greater Greater Less Greater
+is_*: true true true true false true
+as i8: -1 0 1
+cmp::min/max 3 b min_by_key 4 max_by -2.5
+minmax ties: min((1, 'a'),(1, 'b')) (1, 'a') max (1, 'b')
+clamp 10 f Reverse(7)
+Reverse cmp Greater false
+derived sort: ["2Cl", "2Sp", "10C", "10H", "14D"]
+by suit desc: [(Spades, 2), (Hearts, 10), (Diamonds, 14), (Clubs, 2), (Clubs, 10)]
+max card Some(Card { rank: 14, suit: Diamonds }) min Some(Card { rank: 2, suit: Clubs })
+suit cmp Less true Spades
+enum variant order: [Dot, Line(2), Line(5), Rect { w: 1, h: 9 }, Rect { w: 2, h: 1 }, Poly([1]), Poly([1, 2])]
+stable by level: ["cy", "ann", "dee", "eve", "bob"]
+by score desc (NaN first via total_cmp): ["dee", "cy", "ann", "eve", "bob"]
+partial_cmp fallback: ["bob", "ann", "cy", "dee", "eve"]
+best (last max wins) Some("cy")
+semver: ["0.9.12", "1.2.3-alpha", "1.2.3-beta", "1.2.3", "1.2.10", "1.10.0", "2.0.0"]
+newest Some((2, 0))
+tuples: true true true Less
+slices: true true true Greater
+options: true true Some(None) results: true
+strings: true true true Less
+chars/bools: true true Some(true)
+floats: None Some(Equal) false false Greater
+f32 desc [7.25, 2.5, 0.0, -1.0] max fold 7.25
+heap order: ["9c", "9z", "2a", "2b"]
+len then alpha: ["fig", "date", "kiwi", "apple", "banana", "cherry"]
+desc len (unstable, total key): ["banana", "cherry", "apple", "date", "kiwi", "fig"]
+is_sorted_by: true
+max_by_key last-wins Some("cherry") min_by_key first-wins Some("fig")
+eq impls: true true true
