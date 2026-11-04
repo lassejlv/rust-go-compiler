@@ -642,6 +642,13 @@ func (ac *astConv) lowerTy(at ast.Type) Ty {
 	case *ast.InferType:
 		return ac.newInfer(x.Span)
 	case *ast.FnPtrType:
+		// `impl Trait` is not allowed in fn pointer types, also in a
+		// function's return type (E0562)
+		if ac.opaqueFn != nil {
+			saved := ac.opaqueFn
+			ac.opaqueFn = nil
+			defer func() { ac.opaqueFn = saved }()
+		}
 		ins := make([]Ty, len(x.Inputs))
 		for i, e := range x.Inputs {
 			ins[i] = ac.lowerTy(e)
@@ -670,7 +677,7 @@ func (ac *astConv) lowerTy(at ast.Type) Ty {
 			fd.Fn.OpaqueBounds[idx] = preds
 			return ot
 		}
-		t.Errorf(x.Span, "`impl Trait` is not allowed here")
+		t.ErrorCode(x.Span, "E0562", "`impl Trait` is not allowed here")
 		return TyErr
 	case *ast.DynTraitType:
 		return ac.lowerDyn(x.Bounds, x.Span)

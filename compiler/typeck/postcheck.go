@@ -116,6 +116,12 @@ func (t *Tcx) checkCast(r *Results, x *ast.CastExpr) {
 		t.ErrorCode(x.Span, "E0604", "only `u8` can be cast as `char`, not `%s`", from)
 	case from.Kind == TRef && (isNum(to) || to.Kind == TBool || to.Kind == TChar):
 		t.ErrorCode(x.Span, "E0606", "casting `%s` as `%s` is invalid", from, to)
+	case (from.Kind == TBool || from.Kind == TChar || from.Kind == TFnDef || from.Kind == TFnPtr || from.Kind == TPtr) && to.Kind == TFloat,
+		from.Kind == TFloat && to.Kind == TPtr:
+		t.ErrorCode(x.Span, "E0606", "casting `%s` as `%s` is invalid", from, to)
+	case from.Kind == TAdt && from.Def.Adt != nil && from.Def.Adt.Kind == AdtEnum && !fieldlessEnum(from.Def) && (isNum(to) || to.Kind == TBool || to.Kind == TChar),
+		from.Kind == TClosure && (isNum(to) || to.Kind == TBool || to.Kind == TChar || to.Kind == TPtr):
+		t.ErrorCode(x.Span, "E0605", "non-primitive cast: `%s` as `%s`", from, to)
 	case (isNum(to) || to.Kind == TBool || to.Kind == TChar) &&
 		((from.Kind == TAdt && from.Def.Adt != nil && from.Def.Adt.Kind != AdtEnum) || from.Kind == TStr || from.Kind == TTuple || from.Kind == TArray || from.Kind == TSlice):
 		t.ErrorCode(x.Span, "E0605", "non-primitive cast: `%s` as `%s`", from, to)
@@ -268,6 +274,20 @@ func (t *Tcx) checkCallBounds(r *Results, c *Callee, sp ast.Span) {
 	g := t.Generics(c.Def)
 	if len(c.Args) != len(g.Params) {
 		return
+	}
+	// implicit `Sized` bounds of the callee's type parameters (of callees
+	// outside std, whose `?Sized` relaxations rustgo's std may not mirror,
+	// and of a few std functions)
+	if !t.isStd(c.Def) || (c.Def.Parent != nil && c.Def.Parent.Name == "mem" && sizedMemFns[c.Def.Name]) {
+		for i, gp := range g.Params {
+			if gp.Const || gp.MaybeUnsized || (i == 0 && (g.HasSelf || c.Def.InTrait())) {
+				continue
+			}
+			if a := c.Args[i]; castable(a) && a.IsUnsized() {
+				t.ErrorCode(sp, "E0277", "the size for values of type `%s` cannot be known at compilation time", a)
+				break
+			}
+		}
 	}
 	for _, p := range g.Predicates {
 		if p.Trait == nil || p.Maybe || len(p.Trait.Args) == 0 {
@@ -519,4 +539,21 @@ func (t *Tcx) checkStaticMove(r *Results, e ast.Expr) {
 		return
 	}
 	t.ErrorCode(pe.Span, "E0507", "cannot move out of static item `%s`", d.Name)
+}
+
+// sizedMemFns are std::mem functions whose type parameter is Sized.
+var sizedMemFns = map[string]bool{"size_of": true, "align_of": true, "swap": true, "replace": true, "take": true, "drop": true, "forget": true, "zeroed": true, "transmute": true}
+
+// fieldlessEnum reports whether every variant of enum d is a unit variant
+// (only those enums can be cast to integers).
+func fieldlessEnum(d *Def) bool {
+	if d.Adt == nil {
+		return false
+	}
+	for _, v := range d.Adt.Variants {
+		if len(v.Fields) > 0 {
+			return false
+		}
+	}
+	return true
 }

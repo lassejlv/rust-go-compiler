@@ -728,6 +728,9 @@ func (fcx *FnCtxt) checkStructExpr(x *ast.StructExpr, expected Ty) Ty {
 		}
 	}
 	fcx.r.Variants[x.ID] = v
+	if isUnion(adt) && len(x.Fields) != 1 {
+		fcx.t.ErrorCode(x.Span, "E0784", "union expressions should have exactly one field")
+	}
 	seen := map[string]bool{}
 	for _, f := range x.Fields {
 		fi := v.FieldIndex(f.Name.Name)
