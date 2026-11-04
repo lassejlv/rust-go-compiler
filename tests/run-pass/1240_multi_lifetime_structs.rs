@@ -102,7 +102,27 @@ pub fn main_2() {
 }
 
 }
+mod m3 {
+fn first_static<'a>(p: (&'static str, &'a str)) -> &'static str { let (s, _) = p; s }
+fn pick<'a>(p: Option<(&'static str, &'a str)>) -> &'static str { match p { Some((s, _)) => s, None => "none" } }
+fn from_slice<'a>(v: &[(&'static str, &'a str)]) -> Option<&'static str> { if let [(s, _), ..] = v { Some(*s) } else { None } }
+fn from_vec<'a>(v: Vec<(&'static str, &'a str)>) -> Vec<&'static str> { v.into_iter().map(|(s, _)| s).collect() }
+fn second<'a>(p: &(&'static str, &'a str)) -> &'a str { p.1 }
+struct S<'a> { st: &'static str, a: &'a str }
+fn field<'a>(s: S<'a>) -> &'static str { s.st }
+fn field_ref<'a>(s: &S<'a>) -> &'static str { s.st }
+fn destructure<'a>(s: &S<'a>) -> &'static str { let S { st, .. } = s; st }
+pub fn main_3() {
+    let o = String::from("own");
+    println!("{} {} {:?} {:?} {}", first_static(("x", &o)), pick(Some(("y", &o))), from_slice(&[("z", &o)]), from_vec(vec![("w", &o)]), second(&("q", &o)));
+    let r;
+    { let t = String::from("t"); let s = S { st: "st", a: &t }; r = (field_ref(&s), destructure(&s), field(s)); }
+    println!("{:?}", r);
+}
+
+}
 fn main() {
+    m3::main_3();
     m2::main_2();
     m0::main_0();
     m1::main_1();

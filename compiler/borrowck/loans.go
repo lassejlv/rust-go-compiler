@@ -300,7 +300,18 @@ func (b *builder) sigFlow(c *typeck.Callee, nargs int, ret Ty, argTys []Ty) *Flo
 	for i, os := range ins {
 		for _, o := range os {
 			if o.name == "'static" {
-				static = append(static, StaticReq{Arg: i, Depth: o.depth})
+				// loans are tracked by depth: a 'static sharing its depth
+				// with another lifetime or type (`(&'static str, &'a str)`)
+				// cannot be required of the whole depth
+				shared := false
+				for _, o2 := range os {
+					if o2.depth == o.depth && o2.name != "'static" {
+						shared = true
+					}
+				}
+				if !shared {
+					static = append(static, StaticReq{Arg: i, Depth: o.depth})
+				}
 			} else if statics[o.name] {
 				static = append(static, StaticReq{Arg: i, Depth: o.depth, Deep: true})
 			}
@@ -2033,6 +2044,7 @@ func (lc *loanChecker) checkTerm(st *lstate, t Term, live bitset) {
 					lc.checkStatic(st, t.Args[req.Arg], req, t.Span)
 				}
 			}
+			lc.checkStaticSlots(st, t)
 		}
 	case TReturn:
 		lc.checkReturn(st, t.Span)
@@ -2333,6 +2345,59 @@ func (lc *loanChecker) checkStatic(st *lstate, o Operand, req StaticReq, sp lexe
 		}
 		if !req.Deep {
 			break
+		}
+	}
+}
+
+// checkStaticSlots checks the argument slots the signature declares
+// 'static (`p: (&'static str, &'a str)`) slot by slot, where the
+// argument's layout is known.
+func (lc *loanChecker) checkStaticSlots(st *lstate, t Term) {
+	fl := t.Flow
+	if len(fl.ArgLabels) != len(t.Args) || len(fl.ArgLays) != len(t.Args) {
+		return
+	}
+	for i, labels := range fl.ArgLabels {
+		lay := fl.ArgLays[i]
+		if lay == nil || lay.flat || len(labels) != lay.n() {
+			continue
+		}
+		has := false
+		for _, lb := range labels {
+			if lb == "'static" {
+				has = true
+			}
+		}
+		if !has || t.Args[i].Kind == OConst {
+			continue
+		}
+		v := lc.opVal(st, t.Args[i])
+		if v.lay.key != lay.key || v.lay.n() != lay.n() || len(v.s) != lay.n() {
+			continue
+		}
+		for k, lb := range labels {
+			if lb != "'static" {
+				continue
+			}
+			for li := 0; li < lc.nLoans; li++ {
+				if !v.s[k].has(li) {
+					continue
+				}
+				ln := lc.loans[li]
+				if ln.origin != "" {
+					if lc.regions != nil && !lc.regions.outlives(ln.origin, "'static") {
+						lc.regionError(ln.origin, t.Span)
+						return
+					}
+					continue
+				}
+				ld := lc.body.Locals[ln.place.Local]
+				if ld.Kind == LStatic || ld.Kind == LUpvar || placeThroughRef(ln.place) {
+					continue
+				}
+				lc.errorf(ln.span, "E0597", "`%s` does not live long enough", lc.describe(Place{Local: ln.place.Local}))
+				return
+			}
 		}
 	}
 }
