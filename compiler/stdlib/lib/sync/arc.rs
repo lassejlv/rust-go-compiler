@@ -496,7 +496,9 @@ impl<T> Arc<T> {
     pub fn new_zeroed() -> Arc<mem::MaybeUninit<T>> {
         Arc::new(mem::MaybeUninit::zeroed())
     }
+}
 
+impl<T> Arc<[T]> {
     /// Constructs a new reference-counted slice with uninitialized contents.
     pub fn new_uninit_slice(len: usize) -> Arc<[mem::MaybeUninit<T>]> {
         unsafe {

@@ -372,7 +372,9 @@ impl<T> Box<T> {
             Box { ptr: p }
         }
     }
+}
 
+impl<T> Box<[T]> {
     /// Constructs a new box with uninitialized contents in a slice.
     #[inline]
     pub fn new_uninit_slice(len: usize) -> Box<[MaybeUninit<T>]> {

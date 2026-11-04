@@ -38,4 +38,18 @@ impl<B, C> ControlFlow<B, C> {
             ControlFlow::Break(..) => None,
         }
     }
+    /// Maps `ControlFlow<B, C>` to `ControlFlow<T, C>` by applying a function to the break value.
+    pub fn map_break<T, F: FnOnce(B) -> T>(self, f: F) -> ControlFlow<T, C> {
+        match self {
+            ControlFlow::Continue(x) => ControlFlow::Continue(x),
+            ControlFlow::Break(x) => ControlFlow::Break(f(x)),
+        }
+    }
+    /// Maps `ControlFlow<B, C>` to `ControlFlow<B, T>` by applying a function to the continue value.
+    pub fn map_continue<T, F: FnOnce(C) -> T>(self, f: F) -> ControlFlow<B, T> {
+        match self {
+            ControlFlow::Continue(x) => ControlFlow::Continue(f(x)),
+            ControlFlow::Break(x) => ControlFlow::Break(x),
+        }
+    }
 }

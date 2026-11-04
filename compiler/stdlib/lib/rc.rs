@@ -499,7 +499,9 @@ impl<T> Rc<T> {
     pub fn new_zeroed() -> Rc<mem::MaybeUninit<T>> {
         Rc::new(mem::MaybeUninit::zeroed())
     }
+}
 
+impl<T> Rc<[T]> {
     /// Constructs a new reference-counted slice with uninitialized contents.
     pub fn new_uninit_slice(len: usize) -> Rc<[mem::MaybeUninit<T>]> {
         unsafe {
