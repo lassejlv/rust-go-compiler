@@ -39,6 +39,18 @@ func (t *Tcx) checkGenericParams() {
 		if d.Kind != DefVariant {
 			t.checkAttrTargets(d)
 		}
+		switch d.Kind {
+		case DefStruct, DefEnum, DefUnion, DefTyAlias:
+			t.checkUnusedParams(d)
+		}
+		if d.InTrait() && d.Item.Vis != ast.VisPrivate && d.Crate != nil && d.Crate.Local {
+			t.ErrorCode(d.Item.Span, "E0449", "visibility qualifiers are not permitted here")
+		}
+		if fa, ok := d.Item.Kind.(*ast.FnItem); ok && fa.Const && d.Kind == DefFn && d.Crate != nil && d.Crate.Local {
+			if d.InTrait() || (d.Parent != nil && d.Parent.Kind == DefImpl && d.Parent.Impl != nil && d.Parent.Impl.Ast != nil && d.Parent.Impl.Ast.Trait != nil) {
+				t.ErrorCode(d.Item.Span, "E0379", "functions in traits cannot be declared const")
+			}
+		}
 		for _, a := range d.Item.Attrs {
 			if a.Path != "repr" || len(a.Tokens) == 0 || a.Tokens[0].Delim != '(' {
 				continue

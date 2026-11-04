@@ -28,6 +28,15 @@ func (t *Tcx) checkImpls() {
 			if out := d.Fn.Ast.Decl.Output; sig != nil && sig.Output != nil && out != nil && d.Fn.Ast.Body != nil && sig.Output.IsUnsized() {
 				t.ErrorCode(out.GetSpan(), "E0277", "the size for values of type `%s` cannot be known at compilation time", sig.Output)
 			}
+			if sig != nil && d.Crate != nil && d.Crate.Local {
+				// the signature's types must be well-formed
+				for _, ty := range append(append([]Ty{}, sig.Inputs...), sig.Output) {
+					if bad := t.adtBoundViolation(ty); bad != nil {
+						t.ErrorCode(d.Span, "E0277", "the trait bound `%s: %s` is not satisfied", bad.Args[0], bad.Trait.Name)
+						break
+					}
+				}
+			}
 		}
 	}
 	for _, impl := range t.R.Impls {

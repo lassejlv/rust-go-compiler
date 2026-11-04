@@ -59,7 +59,7 @@ func (t *Tcx) checkBodyMisc(r *Results, def *Def) {
 			}
 		case *ast.MethodCallExpr:
 			if !std {
-				t.checkCallBounds(r, r.Callees[x.ID], x.Span)
+				t.checkCallBounds(r, r.Callees[x.ID], x.Span, def.Crate != nil && def.Crate.Local)
 			}
 			if !std && x.Method.Hyg == 0 {
 				if c := r.Callees[x.ID]; c != nil && isDropMethod(c.Def) {
@@ -68,7 +68,7 @@ func (t *Tcx) checkBodyMisc(r *Results, def *Def) {
 			}
 		case *ast.CallExpr:
 			if !std {
-				t.checkCallBounds(r, r.Callees[x.ID], x.Span)
+				t.checkCallBounds(r, r.Callees[x.ID], x.Span, def.Crate != nil && def.Crate.Local)
 			}
 			if !std {
 				if c := r.Callees[x.ID]; c != nil && isDropMethod(c.Def) {
@@ -80,13 +80,20 @@ func (t *Tcx) checkBodyMisc(r *Results, def *Def) {
 		}
 		return true
 	})
-	// locals must have a statically known size
+	// locals must have a statically known size, and well-formed types
 	if !std {
 		for id, l := range r.Locals {
-			if l == nil || l.ByRef || l.Node != id || l.Ty == nil || !l.Ty.IsUnsized() {
+			if l == nil || l.Node != id || l.Ty == nil {
 				continue
 			}
-			t.ErrorCode(l.Span, "E0277", "the size for values of type `%s` cannot be known at compilation time", l.Ty)
+			if !l.ByRef && l.Ty.IsUnsized() {
+				t.ErrorCode(l.Span, "E0277", "the size for values of type `%s` cannot be known at compilation time", l.Ty)
+			}
+			if def.Crate != nil && def.Crate.Local {
+				if bad := t.adtBoundViolation(l.Ty); bad != nil {
+					t.ErrorCode(l.Span, "E0277", "the trait bound `%s: %s` is not satisfied", bad.Args[0], bad.Trait.Name)
+				}
+			}
 		}
 	}
 }
@@ -267,7 +274,7 @@ func displayName(key string) string {
 // checking accepted before all facts were known: closure kinds (`F: Fn`
 // with a closure that is only FnOnce, E0525) and `Send` bounds on values
 // containing `Rc` (E0277).
-func (t *Tcx) checkCallBounds(r *Results, c *Callee, sp ast.Span) {
+func (t *Tcx) checkCallBounds(r *Results, c *Callee, sp ast.Span, local bool) {
 	if c == nil || c.Kind != CallFn || c.Def == nil || c.Def.Kind != DefFn {
 		return
 	}
@@ -278,9 +285,9 @@ func (t *Tcx) checkCallBounds(r *Results, c *Callee, sp ast.Span) {
 	// implicit `Sized` bounds of the callee's type parameters (of callees
 	// outside std, whose `?Sized` relaxations rustgo's std may not mirror,
 	// and of a few std functions)
-	if !t.isStd(c.Def) || (c.Def.Parent != nil && c.Def.Parent.Name == "mem" && sizedMemFns[c.Def.Name]) {
+	if local && (!t.isStd(c.Def) || (c.Def.Parent != nil && c.Def.Parent.Name == "mem" && sizedMemFns[c.Def.Name])) {
 		for i, gp := range g.Params {
-			if gp.Const || gp.MaybeUnsized || (i == 0 && (g.HasSelf || c.Def.InTrait())) {
+			if gp.Const || gp.MaybeUnsized || gp.Synthetic || (i == 0 && (g.HasSelf || c.Def.InTrait())) {
 				continue
 			}
 			if a := c.Args[i]; castable(a) && a.IsUnsized() {

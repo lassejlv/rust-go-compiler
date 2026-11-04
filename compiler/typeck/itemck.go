@@ -320,3 +320,189 @@ func (t *Tcx) checkImplHeaderLifetimes(impl *Def) {
 		}
 	}
 }
+
+// adtBoundViolation finds, in a fully known type, an ADT of a non-std
+// crate whose where-clauses do not hold for its arguments (`W<u8>` with
+// `struct W<X: Trait>` and no `impl Trait for u8`): the type is not
+// well-formed (E0277). It returns the unsatisfied trait ref, or nil.
+func (t *Tcx) adtBoundViolation(ty Ty) *TraitRef {
+	if ty == nil || ty.HasParam() || ty.HasInfer() || ty.HasProj() || ty.HasOpaque() || ty.HasError() {
+		return nil
+	}
+	var bad *TraitRef
+	seen := map[Ty]bool{}
+	Walk(ty, func(x Ty) bool {
+		if bad != nil {
+			return false
+		}
+		if x.Kind != TAdt || seen[x] || t.isStd(x.Def) || len(x.Args) == 0 {
+			return true
+		}
+		seen[x] = true
+		g := t.Generics(x.Def)
+		if g == nil || len(g.Params) != len(x.Args) {
+			return true
+		}
+		for _, p := range g.Predicates {
+			if p.Maybe || p.Trait == nil || p.Trait.Trait == nil || len(p.Bindings) > 0 {
+				continue
+			}
+			ref := p.Trait.Subst(x.Args)
+			ok := true
+			for _, a := range ref.Args {
+				if a == nil || a.HasParam() || a.HasInfer() || a.HasProj() || a.HasOpaque() || a.HasError() {
+					ok = false
+				}
+			}
+			if !ok {
+				continue
+			}
+			if newInferCtxt(t).evaluate(&Predicate{Trait: ref}, 0) == SelNone {
+				bad = ref
+				return false
+			}
+		}
+		return true
+	})
+	return bad
+}
+
+// typeNamesUsed adds to used the identifiers (first path segments and
+// generic arguments) and lifetimes a type mentions; macro types make it
+// report ok=false (unknown).
+func typeNamesUsed(ty ast.Type, used map[string]bool) (ok bool) {
+	ok = true
+	ast.Walk(ty, func(n any) bool {
+		switch x := n.(type) {
+		case *ast.MacroType:
+			ok = false
+			return false
+		case *ast.RefType:
+			if x.Lifetime != "" {
+				used[x.Lifetime] = true
+			}
+		case *ast.DynTraitType:
+			for _, b := range x.Bounds {
+				if b.Lifetime != "" {
+					used[b.Lifetime] = true
+				}
+			}
+		case *ast.ImplTraitType:
+			for _, b := range x.Bounds {
+				if b.Lifetime != "" {
+					used[b.Lifetime] = true
+				}
+			}
+		case *ast.Path:
+			for _, s := range x.Segments {
+				used[s.Ident.Name] = true
+				if s.Args != nil {
+					for _, a := range s.Args.Args {
+						if a.Lifetime != "" {
+							used[a.Lifetime] = true
+						}
+					}
+				}
+			}
+		}
+		return true
+	})
+	return ok
+}
+
+// checkUnusedParams reports type and lifetime parameters of a struct,
+// enum or union that no field mentions (E0392), and of a type alias that
+// its type does not mention (E0091).
+func (t *Tcx) checkUnusedParams(d *Def) {
+	if d.Item == nil || d.Crate == nil || !d.Crate.Local {
+		return
+	}
+	g := genericsAst(d)
+	if g == nil || len(g.Params) == 0 {
+		return
+	}
+	used := map[string]bool{}
+	var types []ast.Type
+	code, what := "E0392", ""
+	switch k := d.Item.Kind.(type) {
+	case *ast.StructItem:
+		for _, f := range k.Fields {
+			types = append(types, f.Ty)
+		}
+		what = "struct"
+	case *ast.UnionItem:
+		for _, f := range k.Fields {
+			types = append(types, f.Ty)
+		}
+		what = "union"
+	case *ast.EnumItem:
+		for _, v := range k.Variants {
+			for _, f := range v.Fields {
+				types = append(types, f.Ty)
+			}
+		}
+		what = "enum"
+	case *ast.TypeAliasItem:
+		if k.Ty == nil || d.IsAssoc() {
+			return
+		}
+		types = append(types, k.Ty)
+		code, what = "E0091", "type alias"
+	default:
+		return
+	}
+	for _, ty := range types {
+		if !typeNamesUsed(ty, used) {
+			return
+		}
+	}
+	// parameters in associated type bindings of the bounds are
+	// constrained by them (`I: Iterator<Item = &'a T>`)
+	var bounds []*ast.Bound
+	for _, p := range g.Params {
+		bounds = append(bounds, p.Bounds...)
+	}
+	for _, w := range g.Where {
+		bounds = append(bounds, w.Bounds...)
+	}
+	for _, b := range bounds {
+		if b.Path == nil {
+			continue
+		}
+		for _, s := range b.Path.Segments {
+			if s.Args == nil {
+				continue
+			}
+			for _, ab := range s.Args.Bindings {
+				if ab.Ty != nil && !typeNamesUsed(ab.Ty, used) {
+					return
+				}
+			}
+			if s.Args.Parenthesized && s.Args.Output != nil {
+				// `F: Fn() -> T` binds Output
+				if !typeNamesUsed(s.Args.Output, used) {
+					return
+				}
+			}
+		}
+	}
+	for _, p := range g.Params {
+		n := p.Name.Name
+		if used[n] {
+			continue
+		}
+		switch p.Kind {
+		case ast.GPLifetime:
+			if code == "E0091" {
+				continue // unused lifetimes of aliases are allowed
+			}
+			t.ErrorCode(p.Name.Span, code, "lifetime parameter `%s` is never used", n)
+		case ast.GPType:
+			if code == "E0091" {
+				t.ErrorCode(p.Name.Span, code, "type parameter `%s` is never used in %s", n, what)
+			} else {
+				t.ErrorCode(p.Name.Span, code, "type parameter `%s` is never used", n)
+			}
+		}
+	}
+}

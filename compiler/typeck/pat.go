@@ -92,6 +92,17 @@ func (fcx *FnCtxt) checkPatInner(p ast.Pat, expected Ty, bm bindingMode, oc *orC
 	case *ast.ParenPat:
 		fcx.checkPatInner(x.Pat, expected, bm, oc)
 	case *ast.IdentPat:
+		if x.Sub == nil && x.Name.Hyg == 0 && fcx.def != nil && fcx.def.Crate != nil && fcx.def.Crate.Local {
+			// a binding named like a unit variant of the matched enum
+			// (deny-by-default lint bindings_with_variant_name)
+			if et := fcx.shallow(expected); et.Kind == TAdt && et.Def.Adt != nil && et.Def.Adt.Kind == AdtEnum {
+				for _, v := range et.Def.Adt.Variants {
+					if v.Name == x.Name.Name && v.Shape == ast.ShapeUnit {
+						fcx.t.ErrorCode(x.Span, "E0170", "pattern binding `%s` is named the same as one of the variants of the type `%s`", v.Name, et.Def.Name)
+					}
+				}
+			}
+		}
 		mode := bm
 		if x.ByRef {
 			if x.Mut {
@@ -452,7 +463,7 @@ func (fcx *FnCtxt) identPatAsPath(ip *ast.IdentPat) (*ValueRes, Ty, bool) {
 		}
 		fcx.t.AdtFields(adt)
 		if v.Shape != ast.ShapeUnit {
-			if ip.Name.Hyg == 0 && fcx.def != nil && !fcx.t.isStd(fcx.def) {
+			if ip.Name.Hyg == 0 && fcx.def != nil && fcx.def.Crate != nil && fcx.def.Crate.Local {
 				what := "tuple structs"
 				if res.Def.Kind == DefVariant {
 					what = "tuple variants"
@@ -467,7 +478,7 @@ func (fcx *FnCtxt) identPatAsPath(ip *ast.IdentPat) (*ValueRes, Ty, bool) {
 		if res.Def.Kind == DefConst {
 			return &ValueRes{Kind: VConst, Def: res.Def}, fcx.normalizeInBody(fcx.t.ConstTy(res.Def), ip.Span), true
 		}
-		if res.Def.Kind == DefStatic && ip.Name.Hyg == 0 && fcx.def != nil && !fcx.t.isStd(fcx.def) {
+		if res.Def.Kind == DefStatic && ip.Name.Hyg == 0 && fcx.def != nil && fcx.def.Crate != nil && fcx.def.Crate.Local {
 			fcx.t.ErrorCode(ip.Span, "E0530", "bindings cannot shadow statics")
 		}
 	}
