@@ -333,6 +333,16 @@ func (g *Gen) genFunction(inst instance) {
 		pnames = append(pnames, fmt.Sprintf("p%d", i))
 	}
 	inl, attrs := fnAttrs(d)
+	if r.RetTy.Kind == TNever && d.Crate != nil && d.Crate == g.tcx.R.Std {
+		// std's diverging fns are its panic/abort/exit paths
+		if attrs == "" {
+			attrs = " __attribute__((cold, noreturn))"
+		} else if !strings.Contains(attrs, "cold") {
+			attrs = strings.Replace(attrs, "((", "((cold, noreturn, ", 1)
+		} else {
+			attrs = strings.Replace(attrs, "((", "((noreturn, ", 1)
+		}
+	}
 	cname, cparams := name, joinParams(params)
 	if hasTrackCaller(d) {
 		// #[track_caller]: direct calls pass the location explicitly to
