@@ -1,0 +1,46 @@
+words=43 nodes=137
+about:1 and:2 bread:1 brewery:1 brown:2 browns:1 cafeteria:1 café:1 cafés:1 dog:2 fox:2 in:1 is:1 jumps:1 lazy:1 naïve:1 of:1 over:1 quick:2 quiet:1 quilts:1 quizzes:1 quote:1 sleeps:1 straße:1 tea:1 team:1 teammate:1 teams:1 tear:1 tears:1 that:1 the:7 theme:1 then:1 theory:1 there:1 thermal:1 thermometers:1 thesis:1 thinks:1 while:1 über:1
+prefix "the": 8 -> ["the", "theme", "then", "theory", "there", "thermal"]
+prefix "qu": 5 -> ["quick", "quiet", "quilts", "quizzes", "quote"]
+prefix "br": 4 -> ["bread", "brewery", "brown", "browns"]
+prefix "caf": 3 -> ["cafeteria", "café", "cafés"]
+prefix "tea": 6 -> ["tea", "team", "teammate", "teams", "tear", "tears"]
+prefix "x": 0 -> []
+prefix "": 43 -> ["about", "and", "bread", "brewery", "brown", "browns"]
+top3 "the": [("the", 7), ("theme", 1), ("then", 1)]
+top3 "t": [("the", 7), ("tea", 1), ("team", 1)]
+top3 "qui": [("quick", 2), ("quiet", 1), ("quilts", 1)]
+top3 "b": [("brown", 2), ("bread", 1), ("brewery", 1)]
+fuzzy "teh": ["tea(1)", "team(2)", "tear(2)", "the(2)", "then(2)"]
+fuzzy "quik": ["quick(1)", "quiet(2)"]
+fuzzy "thermos": ["thermal(2)"]
+fuzzy "cafe": ["café(1)", "cafés(2)"]
+fuzzy "strasse": ["straße(2)"]
+fuzzy "dgo": ["dog(2)"]
+longest prefix of "thermometers!": Some("thermometers")
+longest prefix of "theorem": Some("the")
+longest prefix of "teammates": Some("teammate")
+longest prefix of "zzz": None
+longest prefix of "tea": Some("tea")
+remove 'thermometers' -> Some(1)
+remove 'thermo' -> None
+remove 'the' -> Some(7)
+get 'then' -> Some(1), get 'the' -> None
+nodes 137 -> 130, words 41
+r = 7
+  om
+    an
+      e = 0
+      us = 1
+    ulus = 2
+  ub
+    e
+      ns = 3
+      r = 4
+    ic
+      on = 5
+      undus = 6
+weighted len sum 161
+None Some(()) 1
+[""]
+Some("") Some(())

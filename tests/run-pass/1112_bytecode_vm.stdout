@@ -1,0 +1,60 @@
+0000  push 1
+0001  push 2
+0002  add
+0003  push 3
+0004  add
+0005  storeg @0
+0006  loadg @0
+0007  push 10
+0008  push 4
+0009  sub
+0010  mul
+0011  print
+0012  loadg @0
+0013  neg
+0014  print
+0015  push 5
+0016  loadg @0
+0017  lt
+0018  print
+0019  loadg @0
+0020  push 6
+0021  eq
+0022  not
+0023  print
+0024  halt
+== arith ==
+  opt=false ops=25   result=Ok((25, 3)) output=[36, -6, 1, 0]
+  opt=true  ops=19   result=Ok((19, 2)) output=[36, -6, 1, 0]
+== folding ==
+  opt=false ops=25   result=Ok((25, 3)) output=[19, 9, 10]
+  opt=true  ops=11   result=Ok((11, 2)) output=[19, 9, 10]
+== loops ==
+  opt=false ops=54   result=Ok((3782, 3)) output=[328350, 111]
+  opt=true  ops=54   result=Ok((3782, 3)) output=[328350, 111]
+== functions ==
+  opt=false ops=82   result=Ok((84046, 41)) output=[2432902008176640000, 2584, 21, 5, 0, 1, 1, 2, 6, 24]
+  opt=true  ops=82   result=Ok((84046, 41)) output=[2432902008176640000, 2584, 21, 5, 0, 1, 1, 2, 6, 24]
+== primes ==
+  opt=false ops=62   result=Ok((290321, 5)) output=[303, 1999]
+  opt=true  ops=62   result=Ok((290321, 5)) output=[303, 1999]
+== overflow wraps ==
+  opt=false ops=17   result=Ok((17, 2)) output=[-9223372036854775808, -2, 9223372036854775807]
+  opt=true  ops=17   result=Ok((17, 2)) output=[-9223372036854775808, -2, 9223372036854775807]
+== div zero ==
+  opt=false ops=7    result=Err(DivZero(4)) output=[]
+  opt=true  ops=7    result=Err(DivZero(4)) output=[]
+== infinite ==
+  opt=false ops=6    result=Err(StepLimit) output=[]
+  opt=true  ops=6    result=Err(StepLimit) output=[]
+== deep recursion ==
+  opt=false ops=11   result=Err(CallDepth) output=[]
+  opt=true  ops=11   result=Err(CallDepth) output=[]
+== unknown var ==
+  compile error: unknown variable q
+== unknown fn ==
+  compile error: unknown function g
+== arity ==
+  compile error: h expects 2 args, got 1
+== parse error ==
+  compile error: missing )

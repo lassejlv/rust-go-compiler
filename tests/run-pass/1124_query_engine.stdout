@@ -1,0 +1,104 @@
+sql> SELECT * FROM dept
+dept.id | dept.title  | dept.budget
+--------+-------------+------------
+     10 | Engineering |  1500000.00
+     20 | Research    |   750000.00
+     30 | Sales       |   300000.00
+     40 | Legal       | NULL       
+(4 rows)
+
+sql> SELECT name, salary FROM emp WHERE salary >= 100000 ORDER BY salary DESC, name
+name  | salary
+------+-------
+Ada   | 185000
+Brian | 120000
+Femi  | 120000
+Dana  | 105500
+(4 rows)
+
+sql> SELECT name, salary * 2 AS double, salary / 0 FROM emp WHERE dept = 20
+name | double | salary/0
+-----+--------+---------
+Chen | 198000 | NULL    
+Dana | 211000 | NULL    
+(2 rows)
+
+sql> SELECT name FROM emp WHERE manager IS NULL OR salary < 50000
+name
+----
+Ada 
+Gus 
+(2 rows)
+
+sql> SELECT name, dept FROM emp WHERE NOT dept = 10 ORDER BY dept DESC
+name | dept
+-----+-----
+Eve  |   30
+Chen |   20
+Dana |   20
+(3 rows)
+
+sql> SELECT COUNT(*), COUNT(salary), SUM(salary), AVG(salary), MIN(name), MAX(salary) FROM emp
+COUNT(*) | COUNT(salary) | SUM(salary) | AVG(salary) | MIN(name) | MAX(salary)
+---------+---------------+-------------+-------------+-----------+------------
+       7 |             6 |      674500 |   112416.67 | Ada       |      185000
+(1 row)
+
+sql> SELECT dept, COUNT(*) AS n, SUM(salary) AS total, AVG(salary) AS avg FROM emp GROUP BY dept ORDER BY total DESC
+dept | n | total  | avg      
+-----+---+--------+----------
+  10 | 3 | 425000 | 141666.67
+  20 | 2 | 204500 | 102250.00
+NULL | 1 |  45000 |  45000.00
+  30 | 1 | NULL   | NULL     
+(4 rows)
+
+sql> SELECT emp.name, dept.title, dept.budget FROM emp JOIN dept ON emp.dept = dept.id ORDER BY title, name
+emp.name | dept.title  | dept.budget
+---------+-------------+------------
+Ada      | Engineering |  1500000.00
+Brian    | Engineering |  1500000.00
+Femi     | Engineering |  1500000.00
+Chen     | Research    |   750000.00
+Dana     | Research    |   750000.00
+Eve      | Sales       |   300000.00
+(6 rows)
+
+sql> SELECT title, COUNT(*) AS headcount, MAX(salary) AS top FROM emp JOIN dept ON emp.dept = dept.id GROUP BY title ORDER BY headcount DESC LIMIT 2
+title       | headcount | top   
+------------+-----------+-------
+Engineering |         3 | 185000
+Research    |         2 | 105500
+(2 rows)
+
+sql> SELECT COUNT(*) FROM emp WHERE salary > 1000000
+COUNT(*)
+--------
+       0
+(1 row)
+
+sql> SELECT name, (salary + 1000) * 2 - 1 AS x FROM emp WHERE salary IS NOT NULL AND (dept = 10 OR dept = 30) LIMIT 2
+name  | x     
+------+-------
+Ada   | 371999
+Brian | 241999
+(2 rows)
+
+sql> SELECT id FROM emp JOIN dept ON emp.dept = dept.id
+ERROR: ambiguous column id
+
+sql> SELECT name FROM nope
+ERROR: no such table nope
+
+sql> SELECT name FROM emp ORDER BY wage
+ERROR: cannot order by wage
+
+sql> SELECT name FROM emp LIMIT x
+ERROR: bad limit: invalid digit found in string
+
+sql> SELECT name emp
+ERROR: expected FROM at Some("emp")
+
+sql> SELECT name FROM emp WHERE
+ERROR: unexpected end of query
+

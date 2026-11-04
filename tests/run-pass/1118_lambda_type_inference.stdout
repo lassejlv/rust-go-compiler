@@ -1,0 +1,54 @@
+> \x. x
+  : a -> a   [1 vars, 0 unifications]
+  = <closure>   (fuel used 1)
+> \f g x. f (g x)
+  : (a -> b) -> (c -> a) -> c -> b   [5 vars, 2 unifications]
+  = <closure>   (fuel used 1)
+> \x y. x
+  : a -> b -> a   [2 vars, 0 unifications]
+  = <closure>   (fuel used 1)
+> let id = \x. x in (id 1, id true)
+  : (Int, Bool)   [5 vars, 6 unifications]
+  = (1, true)   (fuel used 11)
+> let twice f x = f (f x) in twice (\n. n * 2) 5
+  : Int   [10 vars, 18 unifications]
+  = 20   (fuel used 23)
+> \p. (snd p, fst p)
+  : (a, b) -> (b, a)   [7 vars, 8 unifications]
+  = <closure>   (fuel used 1)
+> fix (\fact n. if n < 2 then 1 else n * fact (n - 1)) 10
+  : Int   [11 vars, 29 unifications]
+  = 3628800   (fuel used 183)
+> let map = fix (\map f xs. if null xs then [] else cons (f (head xs)) (map f (tail xs))) in map (\x. (x, x == 3)) (cons 1 (cons 2 (cons 3 [])))
+  : [(Int, Bool)]   [34 vars, 70 unifications]
+  = [(1, false), (2, false), (3, true)]   (fuel used 114)
+> let foldr = fix (\foldr f z xs. if null xs then z else f (head xs) (foldr f z (tail xs))) in foldr (\a b. a + b) 0 (cons 10 (cons 20 (cons 12 [])))
+  : Int   [35 vars, 73 unifications]
+  = 42   (fuel used 117)
+> let compose f g x = f (g x) in let inc x = x + 1 in compose inc inc 40
+  : Int   [14 vars, 21 unifications]
+  = 42   (fuel used 28)
+> \x. x x
+  type error: infinite type: t0 occurs in a -> b (after 1 unifications)
+> 1 + true
+  type error: cannot unify Int with Bool (after 5 unifications)
+> if 1 then 2 else 3
+  type error: cannot unify Int with Bool (after 1 unifications)
+> \f. (f 1, f true)
+  type error: cannot unify Int with Bool (after 3 unifications)
+> let f = \x. y in f
+  type error: unbound variable y (after 0 unifications)
+> let fib = fix (\fib n. if n < 2 then n else fib (n - 1) + fib (n - 2)) in fib 20
+  : Int   [14 vars, 38 unifications]
+  runtime error: out of fuel
+> let s f g x = f x (g x) in let k x y = x in s k k
+  : a -> a   [17 vars, 15 unifications]
+  = <closure>   (fuel used 11)
+> head []
+  : a   [3 vars, 4 unifications]
+  runtime error: head of empty list
+> (\x. ) 1
+  parse error: unexpected token ")"
+> let pair = \a b. (a, b) in pair [] (pair 1 [])
+  : ([a], (Int, [b]))   [12 vars, 12 unifications]
+  = ([], (1, []))   (fuel used 19)

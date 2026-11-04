@@ -1,0 +1,10 @@
+2.5 KG APPLES
+1 PCS BREAD
+2 L MILK
+total kg 2.5
+"eggs, many" -> invalid float literal
+", 3" -> cannot parse item: missing name
+"fish, 1, oz" -> cannot parse item: unknown unit "oz"
+"rice" -> cannot parse item: missing qty
+n = 12
+plain string error

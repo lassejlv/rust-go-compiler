@@ -1,0 +1,18 @@
+"42" -> ok 42
+" 7 " -> ok 7
+"-3" -> err negative value -3 (app error)
+"5000" -> err 5000 exceeds 1000 (app error)
+"abc" -> err parse error: invalid digit found in string (app error)
+"" -> err parse error: cannot parse integer from empty string (app error)
+Some(6)
+sum failed: parse error: invalid digit found in string
+total area 9.75
+#0 circle r=2
+#1 rect 4x6
+#2 circle r=1
+largest: rect 4x6
+total area 39
+dyn=10 async=20 await=21 try(2)=42
+apply: 42 105
+[8, 49, -3]
+as &Error: negative value -1

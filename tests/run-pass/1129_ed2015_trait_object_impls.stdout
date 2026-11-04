@@ -1,0 +1,13 @@
+rex says woof on 4 legs
+bird says tweet on 2 legs
+snake(2.5m) says hiss on 0 legs
+legs: 6
+[Animal(rex), Animal(bird), Animal(snake(2.5m))]
+rc count: 2
+drained: 10
+evens: 20
+job done
+d -> fido says woof on 4 legs / WOOF
+s -> snake(0.75m) says hiss on 0 legs / HISS
+x -> none
+pick: bird

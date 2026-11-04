@@ -1,0 +1,60 @@
+columns: id | date | region | rep | product | units | unit_price | notes
+raw rows: 20
+skip: row 18: column units: invalid digit found in string
+notes: [(2, "rush, priority"), (4, "said \"maybe\" twice"), (5, "bulk"), (9, "multi\nline note"), (12, "cancelled")]
+valid sales: 19, total revenue 1464.46
+
+By region:
+region     n  units    revenue      min      max  share
+East       5     16     425.47     0.00   199.98  29.1%
+North      6     52     274.99    17.50    99.99  18.8%
+South      5     33     446.50    10.00   292.50  30.5%
+West       3     38     317.50    60.00   190.00  21.7%
+
+Monthly by product (pivot):
+product    2024-01   2024-02   2024-03     total
+Gadget       30.00    105.50    228.00    363.50
+Gizmo        99.99    289.99    492.48    882.46
+Widget      125.00     36.00     57.50    218.50
+
+Rep performance vs quota:
+Erin     317.50    63.5%   2022 ======
+Bob      332.50    55.4%   2021 ======
+Dave     185.49    28.5%   2020 ===
+Frank    114.00    28.5%   2023 ===
+Carol    167.49    23.9%   2018 ==
+Alice    107.50    13.4%   2019 =
+Gina     239.98      n/a      ? 
+reps without quota: ["Gina"]; reps without sales: []
+
+Distribution of sale revenue:
+  p0   =   10.000
+  p10  =   19.250
+  p25  =   31.500
+  p50  =   58.750
+  p75  =   96.367
+  p90  =  192.994
+  p100 =  292.500
+  mean = 81.3589, sd = 74.8946, n = 18
+
+Running total by date:
+  2024-01-03    30.00     30.00
+  2024-01-04    47.50     77.50
+  2024-02-01    20.00    274.99
+  2024-02-02   275.50    550.49
+  2024-03-01    60.00    746.48
+  2024-03-03    57.50    803.98
+  2024-03-05   292.50   1096.48
+  2024-03-30   199.98   1464.46
+best day: 2024-03-05 (292.50)
+February total: 431.49
+
+Re-exported (top 3 by revenue):
+15,2024-03-05,Bob,,292.5
+20,2024-03-30,Gina,,199.98
+9,2024-02-02,Erin,"multi
+line note",190
+Ok(1)
+Err("line 1: stray quote")
+Err("unterminated quoted field")
+Ok([["x", "", ""], ["", "", ""]])

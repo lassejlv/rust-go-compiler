@@ -1,0 +1,42 @@
+[] -> empty
+[7] -> one(7)
+[1, 2] -> pair(1, 2)
+[3, 9, 3] -> bookends(3)
+[1, 2, 3, 4, 5, 6] -> long: 1 2 +4 more (sum 18)
+[1, 2, 3] -> head [1, 2] tail 3
+middle Some(3) None None
+["go", "north"] => move north
+["take", "old", "lamp"] => take old lamp
+["take"] => unknown take with 0 args
+["say", "a", "b", "bye"] => say ... bye
+["jump", "x"] => unknown jump with 1 args
+[] => nothing
+from_fn [0, 1, 4, 9, 16, 25, 36, 49]
+map ["<1>", "<2>", "<3>"]
+each_ref lens [3, 3, 3]
+each_mut [10, 20, 30]
+try_into Ok([1, 2, 3]) Err("could not convert slice to array")
+ref array [2, 3] u16 770
+as_chunks [[1, 2], [3, 4]] rem [5]
+as_rchunks [1] [[2, 3], [4, 5]]
+as_flattened [1, 2, 3, 4, 5, 6] concat [1, 2, 3, 4, 5, 6]
+transpose [[1, 3, 5], [2, 4, 6]]
+sum_arr 6 0 first_last (4, 6) ('\0', '\0')
+copy semantics [3, 1, 2] [1, 2, 3] eq false lt true cmp Less
+array eq slice true vec true
+big len 1000 all zero true
+....
+..#.
+....
+destructure 10 20 30 1 5 a ["b", "c"]
+swapped via pattern [20, 10, 30]
+while let slice [1, 2]
+kv a -> 1
+kv b -> 2
+flag c
+1 a 2 b
+det -2 iter flat [2.0, 4.0, 6.0, 8.0]
+byte string array [104, 101, 121] Ok("hey")
+boxed array into_iter [1, 2, 3, 4]
+default [[], [], []] [false, false]
+["x"]

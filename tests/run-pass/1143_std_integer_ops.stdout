@@ -1,0 +1,47 @@
+pow 81 9223372036854775808 -128
+checked_pow Some(1000000000) None checked_add None None
+checked_mul None checked_div None None Some(-3) checked_rem Some(-1) checked_neg None None
+checked_shl Some(128) None checked_abs None checked_ilog2 None
+wrapping add 4 sub 65535 mul 44 neg -2147483648 shl 2 abs -9223372036854775808 div -128
+saturating 255 0 -128 -128 2147483647
+overflowing (4, true) (-123, true) (-2147483648, true) (0, true)
+leading_zeros 31 8 0 trailing 3 64 count_ones 8 count_zeros 5
+leading_ones 5 trailing_ones 3
+rotate_left 0x34567812 rotate_right 0xdabc swap_bytes 0x44332211 reverse_bits 0b01100000
+to_be_bytes [1, 2, 3, 4] to_le_bytes [4, 3, 2, 1] to_ne==le true
+from_le_bytes 0x12345678 from_be_bytes 256 i16 -2
+to_be 0x3412 from_be 0x1234
+abs_diff 247 200 4294967295 7
+rem_euclid 2 1 2 div_euclid -3 -2 3
+plain / % -2 -1 -2 1
+isqrt 0 9 10 4294967295
+ilog2 0 9 ilog10 2 3 19 ilog 5
+signum -1 0 1 is_positive true is_negative false
+is_power_of_two true false next_power_of_two 128 1 checked None
+div_ceil 4 4 next_multiple_of 15 15
+midpoint 127 11 0
+unsigned_abs 128 5 cast_signed -56 cast_unsigned 65535
+min/max/clamp 3 9 10 -3
+MIN/MAX -128 65535 -170141183460469231731687303715884105728 340282366920938463463374607431768211455 BITS 64 8
+from_str_radix Ok(-255) Ok(5) Ok(1295) Err("number too large to fit in target type")
+casts 44 4294967295 3 -3 2147483647 0 0
+casts2 -1 0 4294967300 9007199254740992 66
+i128 24305883351495604533098186245126300818 170141183460469231731687303715884105727 37037036703703703670370370367
+u128 ops 0xffffffffffffffff 100 128
+i128 div/rem -14 -2 5 1
+formatting +42 -001.500 ff BEE 10 101 0b11111110
+negative hex ff ffffffff 0x8000000000000000
+width/fill     42 42    |   -42   -00042 +00042 0x00ff
+u128 fmt  340282366920938463463374607431768211455 1.234567e6
+parse edge Ok(0) Ok(0) Err(ParseIntError { kind: InvalidDigit }) Ok(340282366920938463463374607431768211455)
+swap via xor (9, 5)
+bit tricks 16 33 3
+shifts -4 15 4611686018427387904 1
+sum/product overflow-free 2432902008176640000 333833500
+gcd/lcm 21 42
+checked chain Some(4096000001)
+strict-ish via checked None
+overflow in sum panics in debug: true
+div by zero panics: true
+MIN / -1 panics: true
+shift overflow panics: true

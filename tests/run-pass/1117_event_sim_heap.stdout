@@ -1,0 +1,48 @@
+processed 523 events, final time 194:16.79
+  [00:00.00] counter 0 starts #1 (118.3s)
+  [00:20.05] counter 1 starts #2 (153.8s)
+  [00:27.77] counter 2 starts #3 (321.4s)
+  [01:58.26] counter 0 starts #4 (28.5s)
+  [02:26.77] counter 0 starts #5 (55.0s)
+  [02:53.83] counter 1 starts #6 (172.2s)
+  [03:21.74] counter 0 starts #7 (79.9s)
+  [04:41.65] counter 0 starts #10 VIP (69.9s)
+  [05:46.01] counter 1 starts #8 (165.6s)
+  [05:49.13] counter 2 starts #9 (195.8s)
+  [05:51.60] counter 0 starts #11 (245.8s)
+  [08:04.83] #20 balks at line of 8
+  [08:19.59] #21 balks at line of 8
+  [08:31.63] counter 1 starts #17 VIP (48.8s)
+  [09:04.97] counter 2 starts #12 (135.3s)
+  [09:20.44] counter 1 starts #13 (410.4s)
+  [09:57.36] counter 0 starts #14 (60.1s)
+  [10:57.45] counter 0 starts #15 (107.4s)
+  [11:20.23] counter 2 starts #16 (79.9s)
+  [12:40.09] counter 2 starts #18 (499.7s)
+  [12:44.87] counter 0 starts #19 (180.5s)
+  [13:10.87] #30 balks at line of 8
+  [14:05.55] #31 balks at line of 8
+  [15:45.42] counter 0 starts #22 (203.8s)
+  [16:10.86] counter 1 starts #23 (123.0s)
+customers: 308 arrived, 210 served (14 VIP), 98 balked
+wait: mean 496.33s median 473.88s p95 1045.68s max 1149.28s
+vip mean wait 59.47s
+max line 22, avg line 8.388
+counter 0: served  83, utilisation  97.0%
+counter 1: served  59, utilisation  91.6%
+counter 2: served  68, utilisation  97.3%
+    0-120  |********************          | 25
+  120-240  |*****************             | 21
+  240-360  |***********************       | 29
+  360-480  |*************************     | 32
+  480-600  |******************************| 37
+  600-720  |**************                | 18
+  720-840  |********                      | 10
+  840-960  |**********                    | 13
+  960-1080 |*************                 | 17
+ 1080-1200 |******                        | 8
+time in system: total 137560.4s mean 655.05s
+elevator nearest  avg wait   65.86 max wait  244.97 floors travelled 138
+elevator sweep    avg wait   52.68 max wait  133.04 floors travelled 129
+00:00.00 00:60.00 62:05.50
+[Time(-0.0), Time(0.0), Time(1.5), Time(3.0), Time(inf)]

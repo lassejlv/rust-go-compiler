@@ -1,0 +1,57 @@
+len 42 chars 29 bytes[0..3] [71, 114, 195]
+char_indices: [(2, 'ü'), (4, 'ß'), (10, 'ü'), (18, 'ñ'), (23, 'ú'), (26, '—'), (30, '日'), (33, '本'), (36, '語')]
+split_once ',': Some(("Grüße", " Jürgen! ñandú — 日本語 ok"))  rsplit_once ' ': Some(("Grüße, Jürgen! ñandú — 日本語", "ok"))  none: None
+split_once str: Some(("key", "value = more"))
+trim_matches: "hi" "abc" "pad"
+trim_start_matches/end: "title##" "file.tar"
+strip_prefix/suffix: Some("body") Some("body") None
+repeat: "ababab" ""
+upper: STRASSE | ǄEMAL ǇUBAV | FINE
+lower: ὀδυσσεύς | 9 | σας σ
+ascii case: HELLO WöRLD abc true
+escape_debug: tab\there \"q\" \u{7f} é ́
+escape_default: tab\there \"q\" \u{e9}
+escape_unicode: \u{61}\u{e9}
+char escapes: \u{f1} \n \'
+"3.14"->Ok(3.14) "-0"->Ok(-0.0) "1e3"->Ok(1000.0) "1E-2"->Ok(0.01) "inf"->Ok(inf) "-infinity"->Ok(-inf) "NaN"->Ok(NaN) "nan"->Ok(NaN) ".5"->Ok(0.5) "5."->Ok(5.0) "+7"->Ok(7.0) "1_000"->Err(ParseFloatError { kind: Invalid }) "0x10"->Err(ParseFloatError { kind: Invalid }) ""->Err(ParseFloatError { kind: Empty }) " 1"->Err(ParseFloatError { kind: Invalid }) "1e400"->Ok(inf) "4.9e-324"->Ok(5e-324) "2.4e-324"->Ok(0.0) 
+"42":Some(42)/Ok(42) "-42":Some(-42)/Err("invalid digit found in string") "+42":Some(42)/Ok(42) "0042":Some(42)/Ok(42) "":None/Err("cannot parse integer from empty string") "-":None/Err("invalid digit found in string") "256":None/Err("number too large to fit in target type") "-129":None/Err("invalid digit found in string") "1 ":None/Err("invalid digit found in string") 
+bool/char parse: Ok(true) true Ok('é') Err("too many characters in string")
+[      日本] [ñandú   ] [   é    ] [Grü] [    αβ]
+[----中文-----] [++++++ü]
+split_whitespace: ["a", "b", "c"]
+split_ascii_whitespace: ["x\u{a0}y", "z"]
+split_terminator: ["a", "b", "", "c"] vs split ["a", "b", "", "c", ""]
+rsplitn: ["d", "a/b/c"] splitn: ["a", "b", "c/d"]
+split by str/closure/array: ["1", "2", "3"] ["a", "b", "c"] ["a", "b", "c"]
+split_inclusive: ["line1\n", "line2\n"]
+lines: ["a", "b", "", "c"]
+matches: 3 match_indices: [(0, "ab"), (3, "ab"), (6, "ab")] rmatch_indices: [(3, "X"), (1, "X")]
+find/rfind: Some(2) Some(10) None Some(30)
+replace: a+b+c | bbaa | .x.y.z.
+contains/starts/ends: true true true true
+is_char_boundary: [true, true, true, false, true, false]
+get: None Some("Grü")
+char_indices nth_back: Some((36, '語'))
+bytes sum: 294 rev chars: bña
+from_utf8 err: Err((2, Some(1)))
+from_utf8_lossy: fo�o
+str::from_utf8 trunc: Err(None)
+¡hello world! len 14 cap>=len true
+remove '¡' -> hello world!
+retain: heo word!
+drain "heo " left "word!"
+replace_range/truncate "Word" pop Some('d') "Wor"
+abcdefgh split_off "fgh" abcde
+cleared "" empty true
+chars: [(true, false, true, false, false, 1), (true, false, true, false, false, 1), (false, true, true, false, false, 1), (true, false, true, false, false, 2), (true, true, true, false, false, 3), (false, false, false, true, false, 1), (false, false, false, false, true, 1)]
+to_digit: Some(7) Some(15) None from_digit Some('b') None
+from_u32: Some('A') None Some('😀')
+char ranges: "abcde" 4
+u8 as char é char as u32 233 26085
+to_uppercase char iter: "SS" "i\u{307}"
+encode_utf8: 2 utf16 len 4
+cmp: Greater Some(Less) true
+xy plain true
+char count by class: [13, 8, 5, 3]
+-00003.142|42        |    0xff    |1.2345e3
+x-"x"-   7-n

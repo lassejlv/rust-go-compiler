@@ -1,0 +1,48 @@
+storages: [("Attack", 3), ("Health", 4), ("Name", 6), ("Pos", 6), ("Vel", 4)]
+  Entity(1) knight  pos=(  2.00,  2.00) hp= 30 atk=7/3.0
+  Entity(2) archer  pos=( 18.00,  8.00) hp= 18 atk=4/8.0
+  Entity(3) orc     pos=( 10.00,  5.00) hp= 45 atk=9/2.5
+  Entity(4) ghost   pos=(  5.00,  9.00)
+  Entity(5) slime   pos=( 12.00,  1.00) hp= 12
+  Entity(6) rock    pos=(  0.00,  0.00)
+loaded plugin<core> -> CorePlugin
+loaded combat(reaper=true) -> CombatPlugin { with_reaper: true }
+systems: ["fn:tick", "movement", "combat", "reaper", "fn:drain-events"]
+  t1   Spawned(Entity(1), "knight")
+  t1   Spawned(Entity(2), "archer")
+  t1   Spawned(Entity(3), "orc")
+  t1   Spawned(Entity(4), "ghost")
+  t1   Spawned(Entity(5), "slime")
+  t1   Spawned(Entity(6), "rock")
+  t1   Hit { attacker: Entity(2), target: Entity(3), dmg: 4 }
+  t2   Hit { attacker: Entity(2), target: Entity(3), dmg: 4 }
+  t3   Hit { attacker: Entity(2), target: Entity(3), dmg: 4 }
+  t4   Hit { attacker: Entity(2), target: Entity(3), dmg: 4 }
+  t5   Hit { attacker: Entity(2), target: Entity(3), dmg: 4 }
+  t6   Hit { attacker: Entity(1), target: Entity(3), dmg: 7 }
+  t6   Hit { attacker: Entity(2), target: Entity(3), dmg: 4 }
+  t6   Hit { attacker: Entity(3), target: Entity(1), dmg: 9 }
+  t7   Hit { attacker: Entity(2), target: Entity(3), dmg: 4 }
+  t8   Hit { attacker: Entity(1), target: Entity(3), dmg: 7 }
+  t8   Hit { attacker: Entity(2), target: Entity(1), dmg: 4 }
+  t9   Hit { attacker: Entity(2), target: Entity(1), dmg: 4 }
+  t9   Hit { attacker: Entity(3), target: Entity(1), dmg: 9 }
+  t10  Hit { attacker: Entity(1), target: Entity(2), dmg: 7 }
+  t10  Hit { attacker: Entity(2), target: Entity(1), dmg: 4 }
+  t10  Died(Entity(1))
+  t11  Hit { attacker: Entity(2), target: Entity(3), dmg: 4 }
+  t11  Died(Entity(3))
+  t19  Hit { attacker: Entity(2), target: Entity(5), dmg: 4 }
+  t20  Hit { attacker: Entity(2), target: Entity(5), dmg: 4 }
+  t21  Hit { attacker: Entity(2), target: Entity(5), dmg: 4 }
+  t21  Died(Entity(5))
+after 40 ticks:
+  Entity(2) archer  pos=(  1.50,  1.75) hp= 11 atk=4/8.0
+  Entity(4) ghost   pos=( 18.50,  6.00)
+  Entity(6) rock    pos=(  0.00,  0.00)
+hits=19 deaths=3 bounces=12 damage=95
+storages: {"Attack": 1, "Health": 1, "Name": 3, "Pos": 3, "Vel": 2}
+missing resource: None
+downcast Health: Some(Health(5)), as Pos: None
+still a Health: true
+true

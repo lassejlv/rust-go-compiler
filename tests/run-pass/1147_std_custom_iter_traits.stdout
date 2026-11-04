@@ -1,0 +1,22 @@
+sum by ref Money { cents: 400 } by val Money { cents: 425 } empty Money { cents: 0 }
+product Frac(1, 4)
+forward [0, 3, 6, 9, 12, 15, 18] len 7
+rev [18, 15, 12, 9, 6, 3, 0]
+mixed Some(0) Some(18) Some(3) Some(15) len 3
+rposition Some(6) nth_back Some(15) rfind Some(15)
+zip rev [(0, 18), (3, 15), (6, 12)]
+chain len 10 step_by [0, 6, 12, 18] skip/take [6, 9]
+rev enumerate [(6, 18), (5, 15)]
+empty len 0 next None back None
+bag {'i': 4, 'm': 1, 'p': 2, 's': 4} total 11
+count m 3 z 1 q 0
+iter "iiiimmmppssssz"
+for over &bag s=4
+owned into_iter rev ['z', 's', 's', 's']
+bag eq true
+grid rows reversed [2, 1, 0, 5, 4, 3, 8, 7, 6]
+total 36
+xyz [1, 2, 3] ([3, 6], [1, 2, 4, 5])
+extend [3, 2, 1, 9, 9]
+collect map {0: 'a', 1: 'b', 2: 'c'}
+[0, 1, 2, 3, 4] [5, 6, 7, 8, 9] ([0, 1, 4], "abc")

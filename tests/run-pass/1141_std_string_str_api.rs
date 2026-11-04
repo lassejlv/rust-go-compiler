@@ -1,0 +1,84 @@
+// Breadth test of String/str/char APIs, including non-ASCII behavior.
+fn main() {
+    let s = "Grüße, Jürgen! ñandú — 日本語 ok";
+    println!("len {} chars {} bytes[0..3] {:?}", s.len(), s.chars().count(), &s.as_bytes()[..3]);
+    println!("char_indices: {:?}", s.char_indices().filter(|(_, c)| !c.is_ascii()).collect::<Vec<_>>());
+    println!("split_once ',': {:?}  rsplit_once ' ': {:?}  none: {:?}", s.split_once(','), s.rsplit_once(' '), s.split_once('#'));
+    println!("split_once str: {:?}", "key = value = more".split_once(" = "));
+    println!("trim_matches: {:?} {:?} {:?}", "xxhixx".trim_matches('x'), "123abc456".trim_matches(char::is_numeric), "  \t pad \n".trim());
+    println!("trim_start_matches/end: {:?} {:?}", "##title##".trim_start_matches('#'), "file.tar.gz".trim_end_matches(".gz"));
+    println!("strip_prefix/suffix: {:?} {:?} {:?}", "prefix-body".strip_prefix("prefix-"), "body.rs".strip_suffix(".rs"), "x".strip_prefix("y"));
+    println!("repeat: {:?} {:?}", "ab".repeat(3), "é".repeat(0));
+    println!("upper: {} | {} | {}", "straße".to_uppercase(), "ǆemal ǉubav".to_uppercase(), "ﬁne".to_uppercase());
+    println!("lower: {} | {} | {}", "ὈΔΥΣΣΕΎΣ".to_lowercase(), "İSTANBUL".to_lowercase().chars().count(), "ΣΑΣ Σ".to_lowercase());
+    println!("ascii case: {} {} {}", "Hello Wörld".to_ascii_uppercase(), "ABC".to_ascii_lowercase(), "HeLLo".eq_ignore_ascii_case("hello"));
+    println!("escape_debug: {}", "tab\there \"q\" \u{7f} é \u{301}".escape_debug());
+    println!("escape_default: {}", "tab\there \"q\" é".escape_default());
+    println!("escape_unicode: {}", "aé".escape_unicode());
+    println!("char escapes: {} {} {}", 'ñ'.escape_default(), '\n'.escape_debug(), '\''.escape_default());
+    for t in ["3.14", "-0", "1e3", "1E-2", "inf", "-infinity", "NaN", "nan", ".5", "5.", "+7", "1_000", "0x10", "", " 1", "1e400", "4.9e-324", "2.4e-324"] {
+        print!("{:?}->{:?} ", t, t.parse::<f64>());
+    }
+    println!();
+    for t in ["42", "-42", "+42", "0042", "", "-", "256", "-129", "1 "] {
+        print!("{:?}:{:?}/{:?} ", t, t.parse::<i8>().ok(), t.parse::<u8>().map_err(|e| e.to_string()));
+    }
+    println!();
+    println!("bool/char parse: {:?} {:?} {:?} {:?}", "true".parse::<bool>(), "True".parse::<bool>().is_err(), "é".parse::<char>(), "ab".parse::<char>().map_err(|e| e.to_string()));
+    println!("[{:>8}] [{:<8}] [{:^8}] [{:.3}] [{:>6.2}]", "日本", "ñandú", "é", "Grüße", "αβγδ");
+    println!("[{:-^11}] [{:+>7}]", "中文", "ü");
+    println!("split_whitespace: {:?}", " a  b\t\nc  ".split_whitespace().collect::<Vec<_>>());
+    println!("split_ascii_whitespace: {:?}", "x\u{a0}y z".split_ascii_whitespace().collect::<Vec<_>>());
+    println!("split_terminator: {:?} vs split {:?}", "a;b;;c;".split_terminator(';').collect::<Vec<_>>(), "a;b;;c;".split(';').collect::<Vec<_>>());
+    println!("rsplitn: {:?} splitn: {:?}", "a/b/c/d".rsplitn(2, '/').collect::<Vec<_>>(), "a/b/c/d".splitn(3, '/').collect::<Vec<_>>());
+    println!("split by str/closure/array: {:?} {:?} {:?}", "1--2--3".split("--").collect::<Vec<_>>(), "a1b2c".split(char::is_numeric).collect::<Vec<_>>(), "a,b;c".split([',', ';']).collect::<Vec<_>>());
+    println!("split_inclusive: {:?}", "line1\nline2\n".split_inclusive('\n').collect::<Vec<_>>());
+    println!("lines: {:?}", "a\r\nb\n\nc\r\n".lines().collect::<Vec<_>>());
+    println!("matches: {:?} match_indices: {:?} rmatch_indices: {:?}", "abcabcab".matches("ab").count(), "abcabcab".match_indices("ab").collect::<Vec<_>>(), "aXbXc".rmatch_indices('X').collect::<Vec<_>>());
+    println!("find/rfind: {:?} {:?} {:?} {:?}", s.find('ü'), s.rfind('ü'), s.find(|c: char| c.is_ascii_digit()), s.find("日本"));
+    println!("replace: {} | {} | {}", "a-b-c".replace('-', "+"), "aaaa".replacen("a", "b", 2), "xyz".replace("", "."));
+    println!("contains/starts/ends: {} {} {} {}", s.contains("Jür"), s.starts_with(char::is_uppercase), s.ends_with("ok"), s.contains(['#', '!']));
+    println!("is_char_boundary: {:?}", (0..6).map(|i| s.is_char_boundary(i)).collect::<Vec<_>>());
+    println!("get: {:?} {:?}", s.get(0..3), s.get(0..4));
+    println!("char_indices nth_back: {:?}", s.char_indices().nth_back(3));
+    println!("bytes sum: {} rev chars: {}", "abc".bytes().map(|b| b as u32).sum::<u32>(), "añb".chars().rev().collect::<String>());
+    let bad = vec![0x66, 0x6f, 0xff, 0x6f];
+    println!("from_utf8 err: {:?}", String::from_utf8(bad.clone()).map_err(|e| (e.utf8_error().valid_up_to(), e.utf8_error().error_len())));
+    println!("from_utf8_lossy: {}", String::from_utf8_lossy(&bad));
+    println!("str::from_utf8 trunc: {:?}", std::str::from_utf8(&"é".as_bytes()[..1]).map_err(|e| e.error_len()));
+    let mut st = String::from("hello");
+    st.insert(0, '¡');
+    st.insert_str(st.len(), " world");
+    st.push('!');
+    println!("{} len {} cap>=len {}", st, st.len(), st.capacity() >= st.len());
+    println!("remove {:?} -> {}", st.remove(0), st);
+    st.retain(|c| c != 'l');
+    println!("retain: {}", st);
+    let dr: String = st.drain(..4).collect();
+    println!("drain {:?} left {:?}", dr, st);
+    st.replace_range(0..1, "W");
+    st.truncate(4);
+    println!("replace_range/truncate {:?} pop {:?} {:?}", st.clone(), st.pop(), st);
+    let mut t = String::with_capacity(4);
+    t += "ab";
+    t.extend(['c', 'd']);
+    t.extend(["ef", "gh"].iter().copied());
+    println!("{} split_off {:?} {}", t.clone(), t.split_off(5), t);
+    t.clear();
+    println!("cleared {:?} empty {}", t, t.is_empty());
+    println!("chars: {:?}", ['a', 'Z', '7', 'é', 'Ⅻ', ' ', '\u{0}'].iter().map(|c| (c.is_alphabetic(), c.is_numeric(), c.is_alphanumeric(), c.is_whitespace(), c.is_control(), c.len_utf8())).collect::<Vec<_>>());
+    println!("to_digit: {:?} {:?} {:?} from_digit {:?} {:?}", '7'.to_digit(10), 'f'.to_digit(16), 'g'.to_digit(16), char::from_digit(11, 16), char::from_digit(10, 10));
+    println!("from_u32: {:?} {:?} {:?}", char::from_u32(0x41), char::from_u32(0xD800), char::from_u32(0x1F600));
+    println!("char ranges: {:?} {}", ('a'..='e').collect::<String>(), ('α'..'ε').count());
+    println!("u8 as char {} char as u32 {} {}", 233u8 as char, 'é' as u32, '日' as u32);
+    println!("to_uppercase char iter: {:?} {:?}", 'ß'.to_uppercase().collect::<String>(), 'İ'.to_lowercase().collect::<String>());
+    println!("encode_utf8: {:?} utf16 len {}", { let mut b = [0u8; 4]; 'ü'.encode_utf8(&mut b).len() }, "日本😀".encode_utf16().count());
+    println!("cmp: {:?} {:?} {}", "apple".cmp("Apple"), "a".partial_cmp("ab"), "Zebra" < "apple");
+    let owned: String = ["x", "y"].concat();
+    let cow = String::from_utf8_lossy(b"plain");
+    println!("{} {} {}", owned, cow, matches!(cow, std::borrow::Cow::Borrowed(_)));
+    println!("char count by class: {:?}", s.chars().fold([0; 4], |mut acc, c| { acc[if c.is_ascii_alphabetic() { 0 } else if c.is_alphabetic() { 1 } else if c.is_whitespace() { 2 } else { 3 }] += 1; acc }));
+    let num = format!("{:>+010.3}|{:<10}|{:^#12x}|{:e}", -3.14159, 42u8, 255, 1234.5);
+    println!("{}", num);
+    println!("{}", format!("{0}-{0:?}-{1:>4}-{name}", "x", 7, name = "n"));
+}

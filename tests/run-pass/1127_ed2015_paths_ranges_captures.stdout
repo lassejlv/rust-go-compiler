@@ -1,0 +1,12 @@
+8 12 1010
+3 -> small
+10 -> large
+grades: AABCF?
+core max: 9  mystd min: 3
+  closure ran
+  closure about to drop
+  drop a
+  drop b
+  end of capture_demo
+panic payload: Some("{}")
+formatted payload: None

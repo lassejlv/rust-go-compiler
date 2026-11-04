@@ -1,0 +1,37 @@
+freq: [("five", 4), ("four", 1), ("one", 1), ("three", 3), ("two", 2)]
+and_modify/or_insert_with: [("five", [1007, 8, 9, 10]), ("four", [1006]), ("one", [1000]), ("three", [1002, 4, 5]), ("two", [1001, 3])]
+or_insert_with_key: [("alpha", 50), ("be", 20)]
+or_default: [('x', [1, 2])]
+  removed pear (was 0)
+  inserting kiwi
+  removed apple (was 2)
+entry match: [("kiwi", 5)]
+get Some("odd") get_key_value Some((4, "even")) contains true false
+insert existing returns Some("even"), new returns None
+remove Some("odd") None remove_entry Some((5, "odd"))
+retain: [(1, "ONE"), (2, "TWO"), (4, "even"), (6, "even"), (7, "odd")]
+extract_if even: [(2, "TWO"), (4, "even"), (6, "even")] left [(1, "ONE"), (7, "odd")]
+keys [1, 7] values ["ONE", "odd"] len 2
+values_mut -> [(1, "x"), (7, "x")] into_keys [1, 7]
+drain [(1, "x"), (7, "x")] now empty true
+map eq ignoring order: true
+extend: [(1, 20), (3, 4), (5, 6)]
+inverted: {4: 3, 6: 5, 20: 1}
+capacity >= len: true
+get_disjoint_mut swap: [(1, 'c'), (2, 'b'), (3, 'a')]
+union [1, 2, 3, 4, 5, 6, 7, 8, 9]
+intersection [4, 5, 6]
+difference [1, 2, 3]
+symmetric_difference [1, 2, 3, 7, 8, 9]
+operators: [1, 2, 3, 4, 5, 6, 7, 8, 9] [4, 5, 6] [1, 2, 3] [1, 2, 3, 7, 8, 9]
+subset true superset true disjoint false true
+insert true true false
+contains true get Some("b") take Some("a") take again None
+replace Some("b") -> ["b"]
+extend+retain: ["b", "c", "eee"]
+extract_if: ["eee"] left ["b", "c"]
+remove true false
+unique words 4: ["and", "cat", "hat", "the"]
+first-seen order: ['m', 'i', 's', 'p']
+tuple set 2
+nested: [("a", [1, 2]), ("b", [])]

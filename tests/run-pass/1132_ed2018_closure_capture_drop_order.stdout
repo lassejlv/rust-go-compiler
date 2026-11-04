@@ -1,0 +1,19 @@
+ 0: -- move closure touching only h.first
+ 1: closure body
+ 2: drop h.first
+ 3: drop h.second
+ 4: after drop(c)
+ 5: -- tuple field capture
+ 6: closure going out of scope
+ 7: drop t.0
+ 8: drop t.1
+ 9: after block
+10: drop m.first
+11: drop m.second
+12: count = 2
+13: -- non-move closure using a field by value
+14: closure created
+15: closure moved r.first (count 5)
+16: drop r.first
+17: drop r.second
+18: closure called

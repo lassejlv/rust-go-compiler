@@ -1,0 +1,7 @@
+element sizes via into_iter: [8, 8, 8]
+total 6
+max Some(3)
+user try_into(300) = Ok(44)
+Bytes(4)
+payload: Some("{} is not formatted")
+arms: 2 1 1

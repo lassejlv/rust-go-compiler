@@ -1,0 +1,25 @@
+start     perft [20, 400, 8902] OK
+kiwipete  perft [48, 2039] OK
+pos3      perft [14, 191, 2812] OK
+pos4      perft [6, 264] OK
+pos5      perft [44, 1486] OK
+start moves: a2a3 a2a4 b1a3 b1c3 b2b3 b2b4 c2c3 c2c4 d2d3 d2d4 e2e3 e2e4 f2f3 f2f4 g1f3 g1h3 g2g3 g2g4 h2h3 h2h4
+e2e4  DoublePush           rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1
+d7d5  DoublePush           rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq d6 0 2
+e4d5  Normal capture   rnbqkbnr/ppp1pppp/8/3P4/8/8/PPPP1PPP/RNBQKBNR b KQkq - 0 2
+c7c5  DoublePush           rnbqkbnr/pp2pppp/8/2pP4/8/8/PPPP1PPP/RNBQKBNR w KQkq c6 0 3
+d5c6  EnPassant capture   rnbqkbnr/pp2pppp/2P5/8/8/8/PPPP1PPP/RNBQKBNR b KQkq - 0 3
+b8c6  Normal capture   r1bqkbnr/pp2pppp/2n5/8/8/8/PPPP1PPP/RNBQKBNR w KQkq - 0 4
+g1f3  Normal           r1bqkbnr/pp2pppp/2n5/8/8/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 4
+e7e5  DoublePush           r1bqkbnr/pp3ppp/2n5/4p3/8/5N2/PPPP1PPP/RNBQKB1R w KQkq e6 0 5
+f1b5  Normal           r1bqkbnr/pp3ppp/2n5/1B2p3/8/5N2/PPPP1PPP/RNBQK2R b KQkq - 1 5
+g8f6  Normal           r1bqkb1r/pp3ppp/2n2n2/1B2p3/8/5N2/PPPP1PPP/RNBQK2R w KQkq - 2 6
+e1g1  CastleK           r1bqkb1r/pp3ppp/2n2n2/1B2p3/8/5N2/PPPP1PPP/RNBQ1RK1 b kq - 3 6
+c8g4  Normal           r2qkb1r/pp3ppp/2n2n2/1B2p3/6b1/5N2/PPPP1PPP/RNBQ1RK1 w kq - 4 7
+promotion moves: ["a7a8q", "a7a8r", "a7a8b", "a7a8n", "h2h3", "h2g2", "h2g3", "h2g1"]
+best move Some((100000, "a1a8")) after 172 nodes
+stalemate: moves=0 in_check=false
+Some("expected 8 ranks, got 3")
+Some("rank 6 has 9 files")
+Some("bad piece 'x'")
+Some("bad side x")

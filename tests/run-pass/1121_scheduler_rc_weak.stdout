@@ -1,0 +1,38 @@
+cycle: None
+Task { id: 2, name: "compile_a", status: Pending, work: 7, deps: [] }
+strong(build)=2 weak(build)=4 strong(link)=5 weak(link)=2
+compile_b parent: Some("build")
+  0-3   compile_a#2
+  3-6   compile_b#3
+  6-8   lint#6
+  8-11  docs#7
+    !! docs#7 failed, cancelled 1
+ 11-13  flaky_cleanup#9
+ 13-16  compile_a#2
+ 16-17  compile_b#3
+ 17-18  compile_a#2
+ 18-21  link#4
+ 21-23  build#1
+ 23-26  test#5
+ 26-29  test#5
+clock = 29
+ 1 build          Done       prio   5  children done@21, ready@21, done@23
+ 2 compile_a      Done       prio   4  ready@0, done@18
+ 3 compile_b      Done       prio   6  ready@0, done@17
+ 4 link           Done       prio   4  ready@18, done@21
+ 5 test           Done       prio   1  ready@21, done@29
+ 6 lint           Done       prio   3  ready@0, done@8
+ 7 docs           Failed     prio   3  ready@0, failed@11, children done@13
+ 8 publish        Cancelled  prio   9  dep failed@11
+ 9 flaky_cleanup  Done       prio   4  ready@0, done@13
+{"Cancelled": 1, "Done": 7, "Failed": 1}
+cycle: Some([1, 2, 3, 1])
+cyclic run clock 1 timeline []
+after break: None
+timeline ["  1-2   c#3", "  2-3   b#2", "  3-4   a#1"]
+try_borrow while mut-borrowed fails: (true, true)
+drops before scheduler drop: []
+after s2: 3
+build alive via scheduler: true
+build alive after scheduler drop: false
+total drops 12: ["build#1(Done)", "publish#8(Cancelled)", "test#5(Done)", "link#4(Done)", "compile_a#2(Done)", "compile_b#3(Done)", "docs#7(Failed)", "lint#6(Done)", "flaky_cleanup#9(Done)"]

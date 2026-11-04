@@ -1,0 +1,11 @@
+refs: [10, 20, 30]
+sum via refs: 60
+doubled: [20, 40, 60]
+owned: [10, 20, 30]
+flat: [1, 2, 3, 4]
+user try_into: Some(200) None
+std TryFrom: Some(255) true
+two alternatives / one pattern
+false,true,false,true,false,true
+1 | "two" | Some(3.5) | ['x']
+[("a", 3), ("b", 2), ("c", 1)]

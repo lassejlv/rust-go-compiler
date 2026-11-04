@@ -1,0 +1,36 @@
+plain        -> plain        borrowed=true
+Has Caps     -> has_caps     borrowed=false
+with space   -> with_space   borrowed=false
+cow slices [1, 2, 3] owned=true [1, 2] owned=false
+into_owned a_b add_assign abcdef len 6
+cow eq true
+strong 2 weak 1 ptr_eq true upgrade Some("a")
+make_mut cloned: a=a c=a-cow strong(a)=2 strong(c)=1
+get_mut unique ok, now shared -> false
+try_unwrap Ok(6) Err(3)
+into_inner Some("only")
+weak after drop: true strong 0
+Weak::new upgrade None
+shared str [9, 8] 10
+arc strong 2 eq true unwrap_or_clone [1, 2]
+cell replace 10 get 21 take 21 after 0
+swap 2 1 update-ish 14
+cells [100, 101, 102]
+as_slice_of_cells [3, 2, 3]
+two borrows 3 1 try_borrow_mut err true
+replace old [1, 2, 3, 4] new [9]
+replace_with [18]
+Ref::map left still can borrow: true
+map_split ("left++", 6)
+filter_map Ok(18)
+take [18] left [] into_inner 3
+shared counter 60 strong 5
+once get None
+once first first set err Err("third")
+take Some(7) None
+swap/replace/take: x=new prev=y took=x y=""
+take field [7, 7, 7] -> Big { data: [], tag: "t" }
+size_of: 8 8 8 10 8
+align_of 8 1 discriminant eq true
+leaked "L"
+rc dyn fn 10

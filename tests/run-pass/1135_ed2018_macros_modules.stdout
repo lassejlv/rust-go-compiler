@@ -1,0 +1,9 @@
+Some(List([Num(1), Text("xy"), List([Num(2), Num(3)])]))
+total 18
+total 51 ["a", "b", "c", "d"]
+Num(3) Text("x") true
+helper 700
+glob / local wins
+3 9
+[(1, Some(Mid)), (5, Some(High)), (10, None)]
+[Low, Mid, High] max=Some(High)

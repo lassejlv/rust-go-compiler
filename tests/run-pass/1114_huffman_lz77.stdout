@@ -1,0 +1,23 @@
+crc32("") = 00000000
+crc32("123456789") = cbf43926
+crc32(fox) = 414fa339
+bits packed: [fb, 9f, 77, df, 56, ef, 01]
+bits read: [Some(1), Some(5), Some(1ff), Some(0), Some(deadbeef), Some(3), None]
+huffman code lengths: {2: ['a'], 3: [' ', 'r', 's'], 4: ['b', 'e', 'h', 'l'], 5: ['c', 'd'], 6: ['!', 'o', 't', 'y']}
+huffman: 74 bytes -> 61 bytes, round trip true
+length-limited max=7 kraft=0.9922 n=40
+skewed: 73726 symbols -> 41027 bytes, ok true
+lz77 tokens: [Lit(97), Match { dist: 1, len: 9 }, Lit(98), Lit(99), Match { dist: 3, len: 12 }, Lit(120)]
+unlz77: Ok("aaaaaaaaaabcabcabcabcabcx")
+bad stream: Err("bad distance 5 at 1")
+rle: [(97, 3), (98, 1), (99, 2), (100, 5), (101, 1)]
+name         in    out   ratio ok
+empty         0     14   0.000 true
+one           1     16  16.000 true
+text        169    124   0.734 true
+zeros      5000     75   0.015 true
+utf8        680     75   0.110 true
+noise      3000   3416   1.139 true
+pattern    4000    282   0.070 true
+corrupted: Err("crc mismatch 3a366656 != 8d3d51e3")
+truncated: Err("truncated header")

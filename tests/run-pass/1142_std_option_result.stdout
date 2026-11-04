@@ -1,0 +1,47 @@
+zip Some((4, 'x')) None xor Some(4) None None
+and Some("s") or Some(9) or_else Some(-1) and_then Some(8) None
+filter Some(4) None map_or 5 0 map_or_else 12 -1
+ok_or Ok(4) Err("none") ok_or_else Err("missing at 7")
+unwrap_or 5 unwrap_or_else 6 unwrap_or_default 0 Cfg { name: "", port: 0 }
+is_some_and true false is_none_or true false is_none true
+as_deref Some("hello") as_ref map len Some(5) cloned Some("hello")
+copied Some(5) cloned Some(5)
+flatten Some(3) None
+transpose Ok(Some(2)) Err("bad") Ok(None)
+result transpose Some(Ok(1))
+inspect Some(5) seen [4]
+take Some(10) -> None
+replace Some(1) -> Some(2)
+get_or_insert_with Some([5, 6])
+get_or_insert Some(7) insert Some(10)
+as_mut Some(300)
+take_if None Some(300) -> None
+unzip (Some(1), Some('a')) (None, None)
+iter sum 4 chain [4, 8]
+ordering: true true Some(Some(3))
+Option<Option> eq true
+ok Some(3) err None None Some("boom")
+map Ok(6) map_err Err(4) map_or 0 map_or_else 4
+and_then Err("3 too small") Err("boom") or_else Ok(0)
+and Ok("next") or Ok(42)
+unwrap_or -1 unwrap_or_else 4 unwrap_or_default 0
+is_ok_and true is_err_and true false
+as_deref Ok("x") copied Ok(5) cloned Ok("y")
+inspect log ["ok 3", "err boom"]
+flatten Err("inner")
+iter [3] 0
+expect_err boom
+copied ok Ok(7)
+ports [Ok(80), Err("\"x\": invalid digit found in string"), Err("\"70000\": number too large to fit in target type"), Ok(443)]
+oks [80, 443] errs 2
+collect Ok([1, 2]) Err("\"a\": invalid digit found in string")
+sum Ok(6)
+db:5432    -> Ok(Cfg { name: "db", port: 5432 })
+web        -> Err("no colon in \"web\"")
+:80        -> Err("empty name")
+x:999999   -> Err("\"999999\": number too large to fit in target type")
+api:8080   -> Ok(Cfg { name: "api", port: 8080 })
+? on option None
+ordering Result: true true
+as_mut Ok([1]) unwrap_unchecked-free Ok(1)
+boxed err: invalid digit found in string

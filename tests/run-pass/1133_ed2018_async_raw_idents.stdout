@@ -1,0 +1,23 @@
+42 82 15
+raw field 9
+Ok(3) Err("4294967295 + 1 overflows")
+task 2 -> 7 after 1 polls
+task 0 -> 141 after 4 polls
+task 1 -> 40 after 4 polls
+ 0 alpha pending (1 left)
+ 1 solo pending (2 left)
+ 2 instant
+ 3 alpha pending (0 left)
+ 4 solo pending (1 left)
+ 5 alpha ready
+ 6 alpha got 5
+ 7 beta pending (0 left)
+ 8 solo pending (0 left)
+ 9 beta ready
+10 beta got 4
+11 gamma ready
+12 gamma got 5
+13 solo ready
+14 solo got 4
+total 188
+[12.0, 4.0]

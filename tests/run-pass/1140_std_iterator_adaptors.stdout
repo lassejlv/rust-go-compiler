@@ -1,0 +1,58 @@
+zip: [(1, "apple"), (2, "Bob"), (3, "cat"), (4, "Dog"), (5, "egg"), (6, "fig")]
+iter::zip: [(1, 'x', true), (2, 'y', false)]
+unzip: [1, 2, 3, 4, 5, 6] ["apple", "Bob", "cat", "Dog", "egg", "fig"]
+partition: [2, 4, 6, 8, 10] [1, 3, 5, 7, 9]
+fold: 12345678910
+rfold: 9217
+try_fold: Err("stop at 8 (acc 28)")
+try_fold overflow: None
+scan: [1, 2, 6, 24, 120, 720]
+flat_map: "elppaboBtac"
+flatten: [1, 2, 3]
+flatten options: 4
+step_by: [0, 7, 14]
+rev step_by: [19, 13, 7, 1]
+skip_while: [4, 5, 6]
+take_while: [1, 2, 3, 4, 5]
+map_while: [1, 22]
+inspect: sum 18 saw 10
+rev/last/nth: Some(10) Some(10) Some(4) None
+nth_back: Some(8) Some(1) then next_back Some(7)
+min_by_key: Some("Bob") max_by_key: Some("apple")
+max_by: Some("fig") min_by: Some("fig")
+max/min ties: Some((3, 'c')) Some((1, 'a'))
+position Some(4) rposition Some(2) find Some("Dog") find_map Some("gg")
+sum 55 product 720 float sum 0.6000000000000001
+sum Option Some(3) None product Result Err("bad")
+collect Result Ok([1, 2, 3]) Err("bad \"x\"") Option Some(['a', 'b'])
+cmp Greater Less Equal
+eq true ne true lt true le false gt true ge true
+partial_cmp floats None Some(Less)
+is_sorted true false
+peekable next_if groups: [[1, 2, 3], [4, 5, 6, 7], [8, 9, 10]]
+next_if_eq Some(1) None peek Some(1)
+chain/cycle: [1, 2, 7, 8, 1, 2, 7, 8, 1]
+successors: [1, 3, 9, 27, 81, 243, 729, 2187]
+from_fn fib: [0, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89]
+repeat_with: [2, 4, 6, 8]
+repeat_n: "ababab" once: [5, 6]
+enumerate rev: [(5, "fig"), (4, "egg")]
+zip rev: [(6, "fig"), (5, "egg")]
+ExactSize len 3 size_hint (0, Some(10))
+any true all true count 5
+by_ref: [1, 2, 3] rest sum 49
+fuse: Some(1) None None
+map rev: [16, 9, 4, 1]
+sum of squares of odd: 166650
+min/max empty: None None
+reduce: Some("apple,Bob,cat,Dog,egg,fig")
+collect String from chars rev: desserts
+unzip3-ish: ([1, 2], "ab", ["x", "y"])
+array map / zip: [10, 20, 30] [3, 8]
+windows max: [3, 4, 5, 6, 7, 8, 9, 10]
+last of map with side effects: Some(10)
+double ended chain: [6, 5, 2, 1]
+rev chars of graphemes-ish: ["5o", "4l", "3l", "1é", "0h"]
+array_chunks via chunks_exact: [24, 1680]
+intersperse-like: apple | Bob | cat
+max_by partial floats: Some(9.75)

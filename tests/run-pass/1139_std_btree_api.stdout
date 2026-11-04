@@ -1,0 +1,39 @@
+first Some((10, "v1")) last Some((100, "v10"))
+range 25..=60: [30, 40, 50, 60]
+range ..30: [(10, "v1"), (20, "v2")]
+range (Excluded 50, Unbounded): [60, 70, 80, 90, 100]
+range (Included 35, Excluded 70) rev: [60, 50, 40]
+floor of 47: Some(40)  ceiling of 47: Some(50)
+range_mut: ["v3", "v4!", "v5!", "v6!", "v7"]
+pop_first Some((10, "v1")) pop_last Some((100, "v10"))
+last_entry key 90 removed "v9"
+split_off(55): lo [20, 30, 40, 50]
+  hi [60, 70, 80]
+append: [5, 20, 30, 40, 50, 60, 70, 80] hi empty true
+retain: {5: "five", 30: "v3", 40: "v4!", 50: "v5!", 60: "v6!", 70: "v7"}
+extract_if: {5: "five", 30: "v3"} left [40, 50, 60, 70]
+entry: {40: "v4!", 50: "V5!", 60: "v6!", 70: "v7", 1000: "new"}
+into_keys [40, 50, 60, 70, 1000] into_values ["v4!", "V5!", "v6!", "v7", "new"]
+iter rev nth(1): Some((70, "v7"))
+len 5 contains 50 true get 51 None
+freq {'d': 2, 'e': 2, 'f': 1, 'h': 1, 'l': 4, 'n': 1, 'o': 3, 'r': 2, 'u': 1, 'w': 2} top ('l', 4)
+day 2: ["9h standup", "10h deploy"]
+after (1,12): Some(((1, 14), "review"))
+a {1, 3, 5, 7, 9} first Some(1) last Some(9)
+union [1, 3, 4, 5, 6, 7, 8, 9]
+intersection [5, 7]
+difference [1, 3, 9]
+sym diff [1, 3, 4, 6, 8, 9]
+ops {1, 3, 4, 5, 6, 7, 8, 9} {1, 3, 9}
+range 2..8 [3, 5, 7]
+subset true superset true disjoint true
+pop_first Some(1) pop_last Some(9) -> {3, 5, 7}
+split_off {3} {5, 7}
+extend/retain {3, 70}
+replace Some(70) take Some(3) get Some(70)
+extract_if [70] left {}
+{"brown", "dog", "fox", "jumps", "lazy", "over", "quick", "the"}
+words starting with t..: ["the"]
+{[], [1], [1, 9], [2]}
+{None, Some(-1), Some(3)} cmp Less
+{"a": [1, 1], "b": [2]} true
