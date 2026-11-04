@@ -1,0 +1,18 @@
+hook: first
+drop bomb
+already panicking
+drop a
+caught true
+body done
+hook: panic in drop
+caught drop panic true
+drop v1
+drop v2
+drop x
+Some(5)
+hook: in thread
+drop thread
+join err true
+hook: main panic
+hook: panic in drop
+hook: panic in a destructor during cleanup
