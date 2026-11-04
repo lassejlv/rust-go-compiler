@@ -1,0 +1,80 @@
+== l01
+Ok(()) Ok(()) Err("dup 2")
+Some(1) Some(2) None
+["2=User { name: \"bo\", age: 0 }", "1=User { name: \"al\", age: 2 }"]
+["al"]
+["reg 2", "reg 1"]
+== l02
+GET /x
+a: 1
+b: true
+POST /y
+Id<Order>(7) Id<Customer>(7) true
+== x26
+255 0 9223372036854775807 0 -128 340282366920938463463374607431768211455
+16777216.0 inf 1.8446744073709552e19 18446744073709551615 -32768 2
+[255, 255, 0] 0.1 0.3333333333333333 1.0 0.30000000000000004 28
+255 -2 inf 4294967295 [0.14285715, 2.2]
+2
+== x27
+23
+[1, 2]
+owned
+5
+5
+== x28
+M { d: [11, 22, 33] } M { d: [12, 24, 36] } M { d: [24, 48, 72] }
+M { d: [-1, -2, -3] } M { d: [20, 40, 60] }
+M { d: [22, 44, 66] } M { d: [9, 18, 27] }
+M { d: [2.0, 6.0] }
+true true true false
+true true
+Some(1)
+true
+== x46
+Cfg { mode: Normal, level: 0, name: "", tags: [], ratio: 0.0 }
+Normal 3
+neg zero small even-mid odd-mid big big 
+[9, 9, 9] [None, None]
+"hello" 5
+a "quoted" \n str [98, 121, 116, 101, 115, 0, 255] [114, 97, 119, 92, 98, 121, 116, 101, 115]
+4 A
+big
+1 2 3 [4, 5]
+1000000 3735928559 511 170 1000
+nested 3
+HELLO
+i=0
+i=2
+Ok(7)
+true
+Some(1)
+== x47
+2 2 -64
+None Some(0) 128
+4 340282366920938463463374607431768211455
+(3, true) (-1, true)
+true
+0
+true
+true
+true
+true
+true
+true
+0
+46340
+true
+true
+true
+true
+None
+true
+true
+true
+true
+true
+true
+true
+true
+true
