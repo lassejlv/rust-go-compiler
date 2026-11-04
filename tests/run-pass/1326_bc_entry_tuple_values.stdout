@@ -1,0 +1,3 @@
+{2: ("e", "owned")}
+{1: ("m", "owned"), 2: ("e", "owned"), 3: ("f", "owned")}
+{"owned": ("new", 1), "x": ("seen", 2), "y": ("new", 1)}

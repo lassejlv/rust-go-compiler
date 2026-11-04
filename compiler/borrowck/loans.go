@@ -2046,6 +2046,9 @@ func (lc *loanChecker) transferTerm(st *lstate, t Term) {
 				if precise && lc.intoSlotsCover(fl, e, p) {
 					continue // stored slot by slot below
 				}
+				if precise && lc.entryStore(st, fl, e, args, p) {
+					continue
+				}
 				pl := lc.localLayout(p.Local)
 				for k, d := range pl.depth {
 					if d >= e.DstDepth && d-e.DstDepth+e.SrcDepth < maxDepth {
@@ -2773,6 +2776,60 @@ func isMapEntry(t ast.Type) bool {
 		return true
 	}
 	return false
+}
+
+// entryStore stores the value of a map entry's type parameter (`V` of
+// `or_insert(self, default: V)`) into the map p the entry borrows, slot
+// by slot into the map's V (the entry's and the map's type arguments are
+// K, V in that order), instead of into all of the map's slots by depth.
+// It reports whether it did.
+func (lc *loanChecker) entryStore(st *lstate, fl *Flow, e IntoEdge, args []lval, p Place) bool {
+	if e.Name == "" || e.Name[0] == '\'' || e.Dst >= len(fl.ArgLays) || e.Dst >= len(fl.ArgLabels) || e.Src >= len(args) {
+		return false
+	}
+	dl, labels := fl.ArgLays[e.Dst], fl.ArgLabels[e.Dst]
+	if dl == nil || dl.flat || len(labels) != dl.n() {
+		return false
+	}
+	en := dl.root
+	if en.ty != nil && en.ty.Kind == TRef && len(en.kids) == 1 {
+		en = en.kids[0]
+	}
+	if !isMapEntryTy(en.ty) {
+		return false
+	}
+	vi := -1
+	for i, k := range en.kids {
+		if k.end > k.start && strings.HasPrefix(labels[k.start], e.Name+"#") {
+			if vi >= 0 {
+				return false
+			}
+			vi = i
+		}
+	}
+	if vi < 0 {
+		return false
+	}
+	vk := en.kids[vi]
+	pi := lc.placeInfo(p)
+	mt := pi.lay.root.ty
+	if pi.raw || pi.lay.flat || mt == nil || mt.Kind != TAdt || mt.Def == nil || mt.Def.Crate == nil || mt.Def.Crate.Name != "std" || (mt.Def.Name != "HashMap" && mt.Def.Name != "BTreeMap") {
+		return false
+	}
+	if vi >= len(pi.lay.root.kids) {
+		return false
+	}
+	mk := pi.lay.root.kids[vi]
+	sv := args[e.Src]
+	if mk.ty != vk.ty || mk.end-mk.start != vk.end-vk.start || sv.lay.flat || sv.lay.root.ty != vk.ty || len(sv.s) != vk.end-vk.start {
+		return false
+	}
+	for k := range sv.s {
+		for _, r := range pi.m[mk.start+k] {
+			lc.or(st, skey(p.Local, r), sv.s[k])
+		}
+	}
+	return true
 }
 
 func isMapEntryTy(t Ty) bool {
