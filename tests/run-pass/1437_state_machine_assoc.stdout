@@ -1,0 +1,4 @@
+  ignored Lock(1) in Open
+  ignored Unlock(7) in Locked
+Broken ["creak", "locked 42", "click", "thud", "crash"] [(Closed, 4), (Open, 1), (Locked, 1), (Broken, 1)]
+true [200, 255] [(false, 2), (true, 4)]

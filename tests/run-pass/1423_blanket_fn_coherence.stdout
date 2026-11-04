@@ -1,0 +1,15 @@
+fn:closure
+static:s
+fn:direct
+disp:5 disp:x disp:21.5C
+opaque:3 opaque:1,opaque:2
+bytes:3 opaque:9 none
+opaque:4,none
+b2 Some(1)
+[4, 6] Some(4)
+11
+[7, 8]
+upper -> HI
+count -> hi#1
+upper -> HI
+count -> hi#2

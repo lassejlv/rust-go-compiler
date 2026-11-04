@@ -1,0 +1,15 @@
+["hello", "foo", ""]
+["hello world", "foo bar baz", ""]
+sum=60
+sum=10
+Some(1)|None
+(1, "a")
+["ylophone", "xyl", "xylophone"]
+[]
+<42>
+16
+10
+3
+["a", "b", "c"]
+Some("banana")
+Some(-7)

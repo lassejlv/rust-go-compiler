@@ -107,6 +107,7 @@ func (g *Gen) namedType(t Ty) string {
 		return name
 	}
 	fmt.Fprintf(&g.fwd, "typedef %s %s %s; /* %s */\n", kw, name, name, sanitizeComment(t.String()))
+	g.checkTypeDepth(t, false)
 	g.pendingTypes = append(g.pendingTypes, t)
 	return name
 }
@@ -355,6 +356,7 @@ func (g *Gen) dropFn(t Ty) string {
 	g.fnN++
 	name := fmt.Sprintf("drop%d", g.fnN)
 	g.dropFns[t] = name
+	g.checkTypeDepth(t, true)
 	g.dropQueue = append(g.dropQueue, t)
 	return name
 }

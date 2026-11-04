@@ -129,6 +129,14 @@ func (fcx *FnCtxt) checkMethodCall(x *ast.MethodCallExpr, expected Ty) Ty {
 	args := fcx.ownArgs(p.item, seg, p.parent, x.Span)
 	ins, out := fcx.instantiateSig(p.item, args, x.Span)
 	fcx.registerPredicates(p.item, args, x.Span)
+	if p.item.InTrait() && len(args) > 0 && p.item.Fn != nil && p.item.Fn.Ast != nil && whereSelfSized(p.item.Fn.Ast.Generics) {
+		// rustc picks the method for `Self = dyn Trait` (it does not go on
+		// to an impl for `&mut dyn Trait` at a later autoref step) and then
+		// rejects it
+		if st := fcx.shallow(args[0]); st.Kind == TDyn {
+			fcx.errorf(x.Method.Span, "the `%s` method cannot be invoked on a trait object", x.Method.Name)
+		}
+	}
 	if len(ins) > 0 {
 		if !fcx.ic.unify(ins[0], p.recvTy) {
 			fcx.errorf(x.Span, "method receiver mismatch: expected `%s`, found `%s`", fcx.resolve(ins[0]), fcx.resolve(p.recvTy))

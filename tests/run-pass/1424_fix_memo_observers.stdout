@@ -1,0 +1,6 @@
+3628800
+23416728348467685 55
+601080390
+Ok(21) Err("rejected at small with 120")
+Ok("hi") Err("rejected at nonempty with \"\"")
+["a=1", "b=2"] 2

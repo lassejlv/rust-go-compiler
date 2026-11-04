@@ -1,0 +1,8 @@
+Point { x: 20, y: -2 } 20
+Line { a: Point { x: 0, y: 0 }, b: Point { x: 2, y: 0 } } line->2
+Dot(Point { x: 2, y: 2 }) dot@2
+6
+[Point { x: 10, y: -1 }, Point { x: 20, y: -2 }]
+Dot(Point { x: 4, y: 4 })
+true true Line { a: Point { x: 0, y: 0 }, b: Point { x: 0, y: 0 } } Point { x: 0, y: 0 }
+Point { x: 1, y: 0 }

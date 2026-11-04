@@ -43,6 +43,9 @@ func (t *Tcx) checkGenericParams() {
 		case DefStruct, DefEnum, DefUnion, DefTyAlias:
 			t.checkUnusedParams(d)
 		}
+		if d.Kind == DefAssocTy && d.InTrait() && d.AssocTy != nil && d.AssocTy.Default != nil && d.Crate != nil && d.Crate.Local {
+			t.ErrorCode(d.Item.Span, "E0658", "associated type defaults are unstable")
+		}
 		if d.InTrait() && d.Item.Vis != ast.VisPrivate && d.Crate != nil && d.Crate.Local {
 			t.ErrorCode(d.Item.Span, "E0449", "visibility qualifiers are not permitted here")
 		}

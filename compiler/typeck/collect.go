@@ -915,6 +915,9 @@ func (ac *astConv) lowerPathType(x *ast.PathType) Ty {
 			return TyErr
 		}
 		ty := ac.projectionFor(tr, rest[0].Ident.Name, x.Span)
+		if ty.Kind == TProjection {
+			ty = ac.applyGatArgs(ty, self, rest[0].Ident.Name, rest[0])
+		}
 		if len(rest) > 1 {
 			return ac.assocTypeOn(ty, rest[1:], x.Span)
 		}

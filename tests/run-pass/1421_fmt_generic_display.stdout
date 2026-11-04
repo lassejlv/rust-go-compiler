@@ -1,0 +1,67 @@
+[   $123.45] [$123.45   ] [ $123.45  ] [*$123.45*]
+[      ¥500] [¥500      ] [   ¥500   ] [**¥500***]
+Money { cents: 12345, sym: "$" }
+Money {
+    cents: 500,
+    sym: "¥",
+}
+[raw7] [raw7] [raw7] [raw7]
+[F<3.14>] [     2.5] [F<10>]
+w=None p=None alt=false plus=false zero=false fill=' ' align=-
+w=Some(12) p=Some(3) alt=true plus=true zero=true fill=' ' align=-
+w=Some(7) p=None alt=false plus=false zero=false fill='_' align=L
+w=Some(4) p=Some(1) alt=false plus=false zero=false fill=' ' align=R
+[Pt, Circle { r: 1.5 }, Poly([(0.0, 1.0), (2.0, 3.0)])]
+Poly(
+    [
+        (
+            0.0,
+            1.0,
+        ),
+        (
+            2.0,
+            3.0,
+        ),
+    ],
+)
+true true
+Some(Less)
+Wrapper { name: "w", items: [['z']], map: {1: Some(['a']), 2: None}, unit: (), tup: (-1, "t") }
+Wrapper {
+    name: "w",
+    items: [
+        [
+            'z',
+        ],
+    ],
+    map: {
+        1: Some(
+            [
+                'a',
+            ],
+        ),
+        2: None,
+    },
+    unit: (),
+    tup: (
+        -1,
+        "t",
+    ),
+}
+Wrapper { name: "", items: [], map: {}, unit: (), tup: (0, "") }
+[1, 2] {"a"} {1: "one", 2: "two"} Tup(1, "x", ..)
+{
+    "k": [
+        Some(
+            1,
+        ),
+    ],
+}
+Tup(
+    1,
+    "x",
+    ..
+)
+[Some(     1)] ["ab"] [(    1    ,     2    )]
+[true ] [x    ] [  é  ] [  1.5]
+0xff 0o10 0b101 01.234e3 1.2e-4
