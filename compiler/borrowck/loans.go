@@ -278,7 +278,8 @@ func (b *builder) sigFlow(c *typeck.Callee, nargs int, ret Ty, argTys []Ty) *Flo
 			}
 			w.add(lt, 0)
 			w.path(&ast.Path{Segments: []*ast.PathSegment{{Ident: ast.Ident{Name: "Self"}}}}, 1)
-			mutIn = append(mutIn, sp.Kind == ast.SelfRefMut)
+			// cells store through `&self` (`Cell::set(&self, val: T)`)
+			mutIn = append(mutIn, sp.Kind == ast.SelfRefMut || d.Crate != nil && d.Crate.Name == "std" && isInteriorMut(selfTy))
 		case ast.SelfTyped:
 			w.walk(sp.Ty, 0)
 			rt, ok := sp.Ty.(*ast.RefType)
@@ -2563,6 +2564,20 @@ func isMapEntryTy(t Ty) bool {
 	}
 	switch t.Def.Name {
 	case "Entry", "VacantEntry", "OccupiedEntry":
+		return true
+	}
+	return false
+}
+
+// isInteriorMut reports whether t is one of std's cell types, whose
+// `&self` methods store values (`Cell::set`, `RefCell::replace`).
+func isInteriorMut(t ast.Type) bool {
+	pt, ok := t.(*ast.PathType)
+	if !ok || pt.Path == nil || len(pt.Path.Segments) == 0 {
+		return false
+	}
+	switch pt.Path.Segments[len(pt.Path.Segments)-1].Ident.Name {
+	case "Cell", "RefCell", "OnceCell", "OnceLock":
 		return true
 	}
 	return false
