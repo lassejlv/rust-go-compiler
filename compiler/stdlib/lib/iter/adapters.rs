@@ -1663,6 +1663,54 @@ impl<I: DoubleEndedIterator + ExactSizeIterator> DoubleEndedIterator for StepBy<
 impl<I: ExactSizeIterator> ExactSizeIterator for StepBy<I> {}
 
 // ---------------------------------------------------------------------------
+// Default (an adapter over the inner iterator's default, like std)
+
+impl<A: Default, B: Default> Default for Chain<A, B> {
+    fn default() -> Self {
+        Chain { a: Some(A::default()), b: Some(B::default()) }
+    }
+}
+
+impl<I: Default> Default for Cloned<I> {
+    fn default() -> Self {
+        Cloned { it: I::default() }
+    }
+}
+
+impl<I: Default> Default for Copied<I> {
+    fn default() -> Self {
+        Copied { it: I::default() }
+    }
+}
+
+impl<I: Default> Default for Enumerate<I> {
+    fn default() -> Self {
+        Enumerate { iter: I::default(), count: 0 }
+    }
+}
+
+impl<I: Default> Default for Fuse<I> {
+    fn default() -> Self {
+        Fuse { iter: Some(I::default()) }
+    }
+}
+
+impl<T: Default> Default for Rev<T> {
+    fn default() -> Self {
+        Rev { iter: T::default() }
+    }
+}
+
+impl<I: Iterator + Default> Default for Flatten<I>
+where
+    I::Item: IntoIterator,
+{
+    fn default() -> Self {
+        Flatten { iter: I::default(), frontiter: None, backiter: None }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Debug for adapters holding closures (printed like std, closures omitted)
 
 impl<I: fmt::Debug, P> fmt::Debug for SkipWhile<I, P> {

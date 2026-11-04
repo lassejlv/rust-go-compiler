@@ -418,6 +418,32 @@ impl From<&OsStr> for Box<OsStr> {
     }
 }
 
+impl From<OsString> for crate::sync::Arc<OsStr> {
+    fn from(s: OsString) -> crate::sync::Arc<OsStr> {
+        let arc: crate::sync::Arc<[u8]> = crate::sync::Arc::from(s.into_encoded_bytes());
+        unsafe { crate::mem::transmute::<crate::sync::Arc<[u8]>, crate::sync::Arc<OsStr>>(arc) }
+    }
+}
+
+impl From<&OsStr> for crate::sync::Arc<OsStr> {
+    fn from(s: &OsStr) -> crate::sync::Arc<OsStr> {
+        crate::sync::Arc::from(s.to_os_string())
+    }
+}
+
+impl From<OsString> for crate::rc::Rc<OsStr> {
+    fn from(s: OsString) -> crate::rc::Rc<OsStr> {
+        let rc: crate::rc::Rc<[u8]> = crate::rc::Rc::from(s.into_encoded_bytes());
+        unsafe { crate::mem::transmute::<crate::rc::Rc<[u8]>, crate::rc::Rc<OsStr>>(rc) }
+    }
+}
+
+impl From<&OsStr> for crate::rc::Rc<OsStr> {
+    fn from(s: &OsStr) -> crate::rc::Rc<OsStr> {
+        crate::rc::Rc::from(s.to_os_string())
+    }
+}
+
 impl<'a> From<Cow<'a, OsStr>> for OsString {
     fn from(s: Cow<'a, OsStr>) -> OsString {
         s.into_owned()

@@ -393,3 +393,60 @@ pub type NonZeroI64 = NonZero<i64>;
 pub type NonZeroI128 = NonZero<i128>;
 /// An integer that is known not to equal zero.
 pub type NonZeroIsize = NonZero<isize>;
+
+// Conversions between non-zero integer types (lossless ones are `From`,
+// the others `TryFrom` with the integer conversion's error).
+macro_rules! __std_nonzero_from {
+    ($($a:ident => $b:ident),*) => {
+        $(
+            impl From<NonZero<$a>> for NonZero<$b> {
+                #[inline]
+                fn from(n: NonZero<$a>) -> NonZero<$b> {
+                    NonZero(n.0 as $b)
+                }
+            }
+        )*
+    };
+}
+
+macro_rules! __std_nonzero_try_from {
+    ($($a:ident => $b:ident),*) => {
+        $(
+            impl crate::convert::TryFrom<NonZero<$a>> for NonZero<$b> {
+                type Error = crate::num::TryFromIntError;
+                #[inline]
+                fn try_from(n: NonZero<$a>) -> Result<NonZero<$b>, crate::num::TryFromIntError> {
+                    match <$b as crate::convert::TryFrom<$a>>::try_from(n.0) {
+                        Ok(v) => Ok(NonZero(v)),
+                        Err(e) => Err(e),
+                    }
+                }
+            }
+        )*
+    };
+}
+
+__std_nonzero_from! {
+    u8 => u16, u8 => u32, u8 => u64, u8 => u128, u8 => usize, u8 => i16, u8 => i32, u8 => i64,
+    u8 => i128, u8 => isize, u16 => u32, u16 => u64, u16 => u128, u16 => usize, u16 => i32,
+    u16 => i64, u16 => i128, u32 => u64, u32 => u128, u32 => i64, u32 => i128, u64 => u128,
+    u64 => i128, i8 => i16, i8 => i32, i8 => i64, i8 => i128, i8 => isize, i16 => i32, i16 => i64,
+    i16 => i128, i16 => isize, i32 => i64, i32 => i128, i64 => i128
+}
+
+__std_nonzero_try_from! {
+    u8 => i8, u16 => u8, u16 => i8, u16 => i16, u16 => isize, u32 => u8, u32 => u16, u32 => usize,
+    u32 => i8, u32 => i16, u32 => i32, u32 => isize, u64 => u8, u64 => u16, u64 => u32,
+    u64 => usize, u64 => i8, u64 => i16, u64 => i32, u64 => i64, u64 => isize, u128 => u8,
+    u128 => u16, u128 => u32, u128 => u64, u128 => usize, u128 => i8, u128 => i16, u128 => i32,
+    u128 => i64, u128 => i128, u128 => isize, usize => u8, usize => u16, usize => u32, usize => u64,
+    usize => u128, usize => i8, usize => i16, usize => i32, usize => i64, usize => i128,
+    usize => isize, i8 => u8, i8 => u16, i8 => u32, i8 => u64, i8 => u128, i8 => usize, i16 => u8,
+    i16 => u16, i16 => u32, i16 => u64, i16 => u128, i16 => usize, i16 => i8, i32 => u8, i32 => u16,
+    i32 => u32, i32 => u64, i32 => u128, i32 => usize, i32 => i8, i32 => i16, i32 => isize,
+    i64 => u8, i64 => u16, i64 => u32, i64 => u64, i64 => u128, i64 => usize, i64 => i8, i64 => i16,
+    i64 => i32, i64 => isize, i128 => u8, i128 => u16, i128 => u32, i128 => u64, i128 => u128,
+    i128 => usize, i128 => i8, i128 => i16, i128 => i32, i128 => i64, i128 => isize, isize => u8,
+    isize => u16, isize => u32, isize => u64, isize => u128, isize => usize, isize => i8,
+    isize => i16, isize => i32, isize => i64, isize => i128
+}

@@ -604,3 +604,15 @@ impl<'a, T: fmt::Debug + Eq + Hash, S: BuildHasher> fmt::Debug for Union<'a, T, 
         f.debug_list().entries(self.clone()).finish()
     }
 }
+
+impl<'a, K> Default for Iter<'a, K> {
+    fn default() -> Self {
+        Iter { inner: Default::default() }
+    }
+}
+
+impl<K> Default for IntoIter<K> {
+    fn default() -> Self {
+        IntoIter { inner: Default::default() }
+    }
+}

@@ -1116,6 +1116,18 @@ impl<'a, P: Pattern> fmt::Debug for Matches<'a, P> {
     }
 }
 
+impl<'a, P: Pattern + Clone> Clone for RMatches<'a, P> {
+    fn clone(&self) -> Self {
+        RMatches(self.0.clone())
+    }
+}
+
+impl<'a, P: Pattern + Clone> Clone for RMatchIndices<'a, P> {
+    fn clone(&self) -> Self {
+        RMatchIndices(self.0.clone())
+    }
+}
+
 impl<'a, P: Pattern> fmt::Debug for RMatches<'a, P> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("RMatches").field(&self.0).finish()

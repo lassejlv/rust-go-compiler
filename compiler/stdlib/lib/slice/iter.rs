@@ -1639,6 +1639,12 @@ impl<'a, T: 'a, P> ChunkBy<'a, T, P> {
     }
 }
 
+impl<'a, T: 'a, P: Clone> Clone for ChunkBy<'a, T, P> {
+    fn clone(&self) -> Self {
+        ChunkBy { slice: self.slice, predicate: self.predicate.clone() }
+    }
+}
+
 impl<'a, T: 'a + fmt::Debug, P> fmt::Debug for ChunkBy<'a, T, P> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("ChunkBy").field("slice", &self.slice).finish()

@@ -9,6 +9,13 @@ use crate::ops::{Deref, DerefMut};
 use crate::slice;
 use crate::vec;
 
+/// An iterator over the elements of a `BinaryHeap` (in internal order).
+pub type Iter<'a, T> = slice::Iter<'a, T>;
+/// An owning iterator over the elements of a `BinaryHeap` (in internal order).
+pub type IntoIter<T> = vec::IntoIter<T>;
+/// A draining iterator over the elements of a `BinaryHeap`.
+pub type Drain<'a, T> = vec::Drain<'a, T>;
+
 #[inline(always)]
 fn log2_fast(x: usize) -> usize {
     (usize::BITS - x.leading_zeros() - 1) as usize

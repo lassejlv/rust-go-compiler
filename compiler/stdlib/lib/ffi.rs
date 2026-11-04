@@ -395,9 +395,135 @@ impl CString {
         unsafe { CStr::from_bytes_with_nul_unchecked(&self.inner) }
     }
 
-    /// Converts this `CString` into a boxed `CStr` (here: returns itself).
-    pub fn into_boxed_c_str(self) -> CString {
-        self
+    /// Converts this `CString` into a boxed `CStr`.
+    pub fn into_boxed_c_str(self) -> Box<CStr> {
+        let b: Box<[u8]> = self.inner.into_boxed_slice();
+        unsafe { Box::from_raw(Box::into_raw(b) as *mut CStr) }
+    }
+
+    /// Retakes ownership of a `CString` that was transferred to C via `CString::into_raw`.
+    pub unsafe fn from_raw(ptr: *mut c_char) -> CString {
+        let len = intrinsics::cstr_len(ptr as *const u8) + 1;
+        let v = Vec::from_raw_parts(ptr as *mut u8, len, len);
+        CString { inner: v }
+    }
+
+    /// Creates a C-compatible string by consuming a byte vector, without checking for interior 0 bytes.
+    pub unsafe fn from_vec_unchecked(v: Vec<u8>) -> CString {
+        let mut v = v;
+        v.push(0);
+        CString { inner: v }
+    }
+}
+
+impl CStr {
+    /// Converts a `Box<CStr>` into a `CString` without copying or allocating.
+    pub fn into_c_string(self: Box<CStr>) -> CString {
+        CString::from(&*self)
+    }
+}
+
+impl Clone for Box<CStr> {
+    fn clone(&self) -> Self {
+        CString::from(&**self).into_boxed_c_str()
+    }
+}
+
+impl From<&CStr> for Box<CStr> {
+    fn from(s: &CStr) -> Box<CStr> {
+        CString::from(s).into_boxed_c_str()
+    }
+}
+
+impl From<CString> for Box<CStr> {
+    fn from(s: CString) -> Box<CStr> {
+        s.into_boxed_c_str()
+    }
+}
+
+impl From<Box<CStr>> for CString {
+    fn from(s: Box<CStr>) -> CString {
+        s.into_c_string()
+    }
+}
+
+impl From<CString> for crate::sync::Arc<CStr> {
+    fn from(s: CString) -> crate::sync::Arc<CStr> {
+        let arc: crate::sync::Arc<[u8]> = crate::sync::Arc::from(s.inner);
+        unsafe { crate::mem::transmute::<crate::sync::Arc<[u8]>, crate::sync::Arc<CStr>>(arc) }
+    }
+}
+
+impl From<&CStr> for crate::sync::Arc<CStr> {
+    fn from(s: &CStr) -> crate::sync::Arc<CStr> {
+        crate::sync::Arc::from(CString::from(s))
+    }
+}
+
+impl From<CString> for crate::rc::Rc<CStr> {
+    fn from(s: CString) -> crate::rc::Rc<CStr> {
+        let rc: crate::rc::Rc<[u8]> = crate::rc::Rc::from(s.inner);
+        unsafe { crate::mem::transmute::<crate::rc::Rc<[u8]>, crate::rc::Rc<CStr>>(rc) }
+    }
+}
+
+impl From<&CStr> for crate::rc::Rc<CStr> {
+    fn from(s: &CStr) -> crate::rc::Rc<CStr> {
+        crate::rc::Rc::from(CString::from(s))
+    }
+}
+
+impl<'a> From<Cow<'a, CStr>> for CString {
+    fn from(s: Cow<'a, CStr>) -> CString {
+        s.into_owned()
+    }
+}
+
+impl<'a> From<&'a CStr> for Cow<'a, CStr> {
+    fn from(s: &'a CStr) -> Cow<'a, CStr> {
+        Cow::Borrowed(s)
+    }
+}
+
+impl<'a> From<&'a CString> for Cow<'a, CStr> {
+    fn from(s: &'a CString) -> Cow<'a, CStr> {
+        Cow::Borrowed(s.as_c_str())
+    }
+}
+
+impl<'a> From<CString> for Cow<'a, CStr> {
+    fn from(s: CString) -> Cow<'a, CStr> {
+        Cow::Owned(s)
+    }
+}
+
+impl From<Vec<crate::num::NonZero<u8>>> for CString {
+    fn from(v: Vec<crate::num::NonZero<u8>>) -> CString {
+        let mut bytes: Vec<u8> = Vec::with_capacity(v.len() + 1);
+        for b in v {
+            bytes.push(b.get());
+        }
+        bytes.push(0);
+        CString { inner: bytes }
+    }
+}
+
+impl Default for &CStr {
+    fn default() -> Self {
+        unsafe { CStr::from_bytes_with_nul_unchecked(b"\0") }
+    }
+}
+
+impl Default for Box<CStr> {
+    fn default() -> Self {
+        CString::default().into_boxed_c_str()
+    }
+}
+
+impl crate::ops::Index<crate::ops::RangeFull> for CString {
+    type Output = CStr;
+    fn index(&self, _index: crate::ops::RangeFull) -> &CStr {
+        self.as_c_str()
     }
 }
 

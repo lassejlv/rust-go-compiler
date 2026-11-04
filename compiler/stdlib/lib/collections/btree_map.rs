@@ -1450,3 +1450,54 @@ impl<K, V: fmt::Debug> fmt::Debug for IntoValues<K, V> {
         f.debug_list().entries(self.inner.inner.as_slice().iter().map(|e| &e.1)).finish()
     }
 }
+
+// ---------------------------------------------------------------------------
+// Default for the iterators (empty iterators, like std)
+
+impl<'a, K, V> Default for Iter<'a, K, V> {
+    fn default() -> Self {
+        Iter { inner: Flat { front: Default::default(), mid: Default::default(), back: Default::default(), n: 0 } }
+    }
+}
+
+impl<'a, K, V> Default for Range<'a, K, V> {
+    fn default() -> Self {
+        Range { inner: Flat { front: Default::default(), mid: Default::default(), back: Default::default(), n: 0 } }
+    }
+}
+
+impl<'a, K, V> Default for IterMut<'a, K, V> {
+    fn default() -> Self {
+        IterMut { inner: FlatMut { front: Default::default(), mid: Default::default(), back: Default::default(), n: 0 } }
+    }
+}
+
+impl<'a, K, V> Default for Keys<'a, K, V> {
+    fn default() -> Self {
+        Keys { inner: Default::default() }
+    }
+}
+
+impl<'a, K, V> Default for Values<'a, K, V> {
+    fn default() -> Self {
+        Values { inner: Default::default() }
+    }
+}
+
+impl<K, V> Default for IntoIter<K, V> {
+    fn default() -> Self {
+        IntoIter { inner: Default::default() }
+    }
+}
+
+impl<K, V> Default for IntoKeys<K, V> {
+    fn default() -> Self {
+        IntoKeys { inner: Default::default() }
+    }
+}
+
+impl<K, V> Default for IntoValues<K, V> {
+    fn default() -> Self {
+        IntoValues { inner: Default::default() }
+    }
+}

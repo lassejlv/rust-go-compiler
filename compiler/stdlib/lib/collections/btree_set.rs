@@ -684,3 +684,21 @@ impl<'a, T: fmt::Debug + Ord> fmt::Debug for SymmetricDifference<'a, T> {
         f.debug_list().entries(self.clone()).finish()
     }
 }
+
+impl<'a, T> Default for Iter<'a, T> {
+    fn default() -> Self {
+        Iter { inner: Default::default() }
+    }
+}
+
+impl<T> Default for IntoIter<T> {
+    fn default() -> Self {
+        IntoIter { inner: Default::default() }
+    }
+}
+
+impl<'a, T> Default for Range<'a, T> {
+    fn default() -> Self {
+        Range { inner: Default::default() }
+    }
+}

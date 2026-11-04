@@ -282,6 +282,12 @@ impl<'a, T: fmt::Debug> fmt::Debug for IterMut<'a, T> {
     }
 }
 
+impl<T: Clone> Clone for IntoIter<T> {
+    fn clone(&self) -> Self {
+        IntoIter { inner: self.inner.clone() }
+    }
+}
+
 impl<T: fmt::Debug> fmt::Debug for IntoIter<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("IntoIter").field(self.inner.as_deque()).finish()
@@ -333,3 +339,21 @@ impl<T> DoubleEndedIterator for IntoIter<T> {
 }
 
 impl<T> ExactSizeIterator for IntoIter<T> {}
+
+impl<'a, T> Default for Iter<'a, T> {
+    fn default() -> Self {
+        Iter { inner: Default::default() }
+    }
+}
+
+impl<'a, T> Default for IterMut<'a, T> {
+    fn default() -> Self {
+        IterMut { inner: Default::default() }
+    }
+}
+
+impl<T> Default for IntoIter<T> {
+    fn default() -> Self {
+        IntoIter { inner: VecDeque::new().into_iter() }
+    }
+}

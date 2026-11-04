@@ -1083,3 +1083,15 @@ impl<'a, T> DoubleEndedIterator for Drain<'a, T> {
 }
 
 impl<'a, T> ExactSizeIterator for Drain<'a, T> {}
+
+impl<'a, T> Default for Iter<'a, T> {
+    fn default() -> Self {
+        Iter { a: Default::default(), b: Default::default() }
+    }
+}
+
+impl<'a, T> Default for IterMut<'a, T> {
+    fn default() -> Self {
+        IterMut { a: Default::default(), b: Default::default() }
+    }
+}

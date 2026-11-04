@@ -1,0 +1,18 @@
+5 200 Err(TryFromIntError(PosOverflow)) Err(TryFromIntError(NegOverflow)) Ok(100) Ok(5) Ok(7) -3 2
+number too large to fit in target type
+"hello" "hello"
+"hello" "hello" "hello"
+"hello" "abc" [97, 98, 99, 0]
+"hello" "hello" true
+"" "hello" ""
+"nz"
+"o" "o2" "o3" 2
+0
+Some([1, 1])
+Some("2")
+Some((3, "2"))
+Some(4) Some(4)
+Some(9)
+3
+3
+[5]

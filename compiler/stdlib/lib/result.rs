@@ -456,6 +456,18 @@ pub struct Iter<'a, T: 'a> {
     inner: Option<&'a T>,
 }
 
+impl<'a, T> Clone for Iter<'a, T> {
+    fn clone(&self) -> Self {
+        Iter { inner: self.inner }
+    }
+}
+
+impl<T: Clone> Clone for IntoIter<T> {
+    fn clone(&self) -> Self {
+        IntoIter { inner: self.inner.clone() }
+    }
+}
+
 impl<'a, T: fmt::Debug> fmt::Debug for Iter<'a, T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Iter").field("inner", &self.inner).finish()
