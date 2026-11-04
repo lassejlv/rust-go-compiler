@@ -1,0 +1,72 @@
+{
+  "address": {
+    "street": "12 St James's Sq\nLondon",
+    "zip": 10001
+  },
+  "age": 36,
+  "emails": [
+    "ada@example.com",
+    "countess@analytical.engine"
+  ],
+  "extra": [
+    true,
+    false,
+    null,
+    1000,
+    -0.25,
+    "é\t\"q\""
+  ],
+  "name": "Ada Lovelace",
+  "pos": [
+    -3,
+    4
+  ],
+  "scores": {
+    "math": 99.5,
+    "poetry": 71
+  }
+}
+compact: {"address":{"street":"12 St James's Sq\nLondon","zip":10001},"age":36,"emails":["ada@example.com","countess@analytical.engine"],"extra":[true,false,null,1000,-0.25,"é\t\"q\""],"name":"Ada Lovelace","pos":[-3,4],"scores":{"math":99.5,"poetry":71}}
+get scores.math = Some(Num(99.5))
+get extra.5 = Some("\"é\\t\\\"q\\\"\"")
+get nope.x = None
+Some(Address { street: "12 St James's Sq\nLondon", zip: 10001 })
+Ada Lovelace 36 ["ada@example.com", "countess@analytical.engine"] ["math", "poetry"] (-3, 4)
+roundtrip person: true
+[
+  {
+    "r": 1.5,
+    "type": "circle"
+  },
+  {
+    "h": 3.25,
+    "type": "rect",
+    "w": 2
+  },
+  {
+    "type": "unit"
+  }
+]
+roundtrip shapes: true
+nested: [["a",[1,2,3]],null,["",[]]] rt=true
+slice: ["x","y\"z"]
+"" => 1:1: unexpected end of input
+"[1, 2," => 1:7: unexpected end of input
+"{\"a\" 1}" => 1:6: expected `:`
+"{\"a\": 1, \"a\": 2}" => 1:16: duplicate key "a"
+"[1 2]" => 1:4: expected `,` or `]`
+"\"abc" => 1:2: unterminated string
+"tru" => 1:1: expected `true`
+"{\"k\": \"\\x\"}" => 1:8: bad escape \x
+"[1]x" => 1:4: trailing characters
+"\n\n  [\n   @]" => 4:4: unexpected character '@'
+"-" => 1:1: bad number: invalid float literal
+"\"\\uZZZZ\"" => 0:0: bad \u escape "ZZZZ": invalid digit found in string
+ok 255
+error: Person.emails: [1]: expected string, got number 5
+error: Person.scores: m: expected f64, got string "high"
+error: missing field `name`
+error: Person.age: expected u8, got number 3.5
+error: [0]: missing field `r`
+error: [0]: expected shape tag, got hexagon
+big: 5121 bytes, 200 items, total 2487.5, eq true

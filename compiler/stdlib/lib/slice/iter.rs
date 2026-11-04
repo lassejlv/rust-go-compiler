@@ -154,6 +154,12 @@ impl<'a, T> IterMut<'a, T> {
     }
 }
 
+impl<'a, T> Default for IterMut<'a, T> {
+    fn default() -> Self {
+        IterMut { ptr: crate::ptr::dangling_mut::<T>(), start: 0, end: 0, _marker: PhantomData }
+    }
+}
+
 impl<'a, T: fmt::Debug> fmt::Debug for IterMut<'a, T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("IterMut").field(&self.as_slice()).finish()

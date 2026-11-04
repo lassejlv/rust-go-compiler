@@ -305,6 +305,32 @@ func slotFlow(tcx *typeck.Tcx, fl *Flow, d *Def, selfAst ast.Type, params map[st
 		fl.ArgFull[i] = a.full
 		fl.ArgLabels[i] = a.labels
 	}
+	// implied bounds: the regions within the referent of an argument
+	// `&'a T` outlive 'a (T: 'a), so a result holding 'a keeps what the
+	// referent holds alive too (`__Arg::new_debug(&&v.x) -> __Arg<'a>`)
+	nested := map[string][][2]int{} // 'a -> (arg, slot) within a `&'a _`
+	for i, a := range args {
+		if !a.full {
+			continue
+		}
+		var walk func(n *lnode)
+		walk = func(n *lnode) {
+			if n == nil {
+				return
+			}
+			if n.ty != nil && n.ty.Kind == TRef && n.end > n.start+1 {
+				if lb := a.labels[n.start]; lb != "" && lb[0] == '\'' && lb != "'static" {
+					for k := n.start + 1; k < n.end; k++ {
+						nested[lb] = append(nested[lb], [2]int{i, k})
+					}
+				}
+			}
+			for _, c := range n.kids {
+				walk(c)
+			}
+		}
+		walk(a.lay.root)
+	}
 	fl.Covered = make([]bool, rl.n())
 	seen := map[SlotEdge]bool{}
 	add := func(e SlotEdge) {
@@ -326,6 +352,9 @@ func slotFlow(tcx *typeck.Tcx, fl *Flow, d *Def, selfAst ast.Type, params map[st
 			}
 			fl.Covered[j] = true
 			for _, src := range bySlot[name] {
+				add(SlotEdge{Arg: src[0], From: src[1], To: j})
+			}
+			for _, src := range nested[name] {
 				add(SlotEdge{Arg: src[0], From: src[1], To: j})
 			}
 			// transitively: lifetimes declared to outlive it

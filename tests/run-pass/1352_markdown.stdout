@@ -1,0 +1,54 @@
+12 top-level blocks
+h,p,h,list,list,h,quote,table,hr,p,list,list
+<h1 id="the-rustgo-manual">The <em>Rustgo</em> Manual</h1>
+<p>Welcome to <strong>rustgo</strong> -- a <code>Rust</code> compiler written in <em>Go</em>.
+It supports <del>some</del> <strong>most</strong> of the language. See <a href="https://example.com/rustgo" title="Rustgo home">the repo</a>
+or <a href="https://example.org/docs">https://example.org/docs</a>.</p>
+<h2 id="getting-started">Getting started</h2>
+<ol>
+<li>Install Go</li>
+<li>Build it:
+<pre><code class="language-sh">go build -o rustgo ./cmd/rustgo
+</code></pre></li>
+<li>Run <code>rustgo file.rs</code></li>
+</ol>
+<ul>
+<li>Fast <em>enough</em></li>
+<li>Written in Go
+<ul>
+<li>with <strong>nested</strong> lists</li>
+<li>and <code>code</code></li>
+</ul></li>
+<li>Escapes: *not emphasis* and 3 &lt; 4 &amp; 5 &gt; 2</li>
+</ul>
+<h2 id="getting-started-1">Getting started</h2>
+<blockquote>
+<p><strong>Note:</strong> headings with the same text get unique ids.
+&gt; nested quote with <a href="/x">link</a></p>
+</blockquote>
+<table>
+<thead>
+<tr><th align="left">Feature</th><th align="center">Status</th><th align="right">Notes</th></tr>
+</thead>
+<tbody>
+<tr><td align="left">Traits</td><td align="center">done</td><td align="right"><code>dyn</code> too</td></tr>
+<tr><td align="left">Async</td><td align="center">partial</td><td align="right"><em>experimental</em></td></tr>
+</tbody>
+</table>
+<hr>
+<p>Line one with break
+line two. <img src="img/logo.png" alt="logo"> and an unclosed *star and a [bracket.</p>
+<ol start="7">
+<li>seven</li>
+<li>eight</li>
+</ol>
+<ul>
+<li><p>loose item one</p></li>
+<li><p>loose item two</p></li>
+</ul>
+--- toc ---
+- [The Rustgo Manual](#the-rustgo-manual)
+  - [Getting started](#getting-started)
+  - [Getting started](#getting-started-1)
+"a b c d f"
+[('/', 72), ('<', 120), ('>', 120)] total bytes 1594

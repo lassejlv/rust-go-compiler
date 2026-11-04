@@ -297,11 +297,84 @@ pub(crate) fn substr_find(haystack: &str, needle: &str, start: usize, end: usize
     let first = nb[0];
     let last_start = end - n;
     let mut i = start;
+    // naive search; when partial matches make it too slow (periodic texts
+    // like "aaaa…ab"), switch to KMP, which is linear in the worst case
+    let mut budget = 64 + 4 * (end - start);
     while i <= last_start {
-        if h[i] == first && bytes_eq_at(h, i, nb) {
-            return Some((i, i + n));
+        if h[i] == first {
+            let mut j = 1;
+            while j < n && h[i + j] == nb[j] {
+                j += 1;
+            }
+            if j == n {
+                return Some((i, i + n));
+            }
+            if j > budget {
+                return kmp_find(h, nb, i + 1, end);
+            }
+            budget -= j;
         }
         i += 1;
+    }
+    None
+}
+
+/// KMP failure function of `nb` read forwards (`rev`: backwards).
+fn kmp_table(nb: &[u8], rev: bool) -> Vec<usize> {
+    let n = nb.len();
+    let at = |i: usize| if rev { nb[n - 1 - i] } else { nb[i] };
+    let mut fail = vec![0usize; n];
+    let mut k = 0;
+    let mut i = 1;
+    while i < n {
+        while k > 0 && at(i) != at(k) {
+            k = fail[k - 1];
+        }
+        if at(i) == at(k) {
+            k += 1;
+        }
+        fail[i] = k;
+        i += 1;
+    }
+    fail
+}
+
+fn kmp_find(h: &[u8], nb: &[u8], start: usize, end: usize) -> Option<(usize, usize)> {
+    let n = nb.len();
+    let fail = kmp_table(nb, false);
+    let mut k = 0;
+    let mut i = start;
+    while i < end {
+        while k > 0 && h[i] != nb[k] {
+            k = fail[k - 1];
+        }
+        if h[i] == nb[k] {
+            k += 1;
+        }
+        if k == n {
+            return Some((i + 1 - n, i + 1));
+        }
+        i += 1;
+    }
+    None
+}
+
+fn kmp_rfind(h: &[u8], nb: &[u8], start: usize, end: usize) -> Option<(usize, usize)> {
+    let n = nb.len();
+    let fail = kmp_table(nb, true);
+    let mut k = 0;
+    let mut i = end;
+    while i > start {
+        i -= 1;
+        while k > 0 && h[i] != nb[n - 1 - k] {
+            k = fail[k - 1];
+        }
+        if h[i] == nb[n - 1 - k] {
+            k += 1;
+        }
+        if k == n {
+            return Some((i, i + n));
+        }
     }
     None
 }
@@ -319,11 +392,24 @@ pub(crate) fn substr_rfind(haystack: &str, needle: &str, start: usize, end: usiz
     }
     let h = haystack.as_bytes();
     let nb = needle.as_bytes();
+    let last = nb[n - 1];
+    let mut budget = 64 + 4 * (end - start);
     let mut i = end - n + 1;
     while i > start {
         i -= 1;
-        if bytes_eq_at(h, i, nb) {
-            return Some((i, i + n));
+        if h[i + n - 1] == last {
+            // compare backwards from the end (see substr_find)
+            let mut j = 1;
+            while j < n && h[i + n - 1 - j] == nb[n - 1 - j] {
+                j += 1;
+            }
+            if j == n {
+                return Some((i, i + n));
+            }
+            if j > budget {
+                return kmp_rfind(h, nb, start, i + n - 1);
+            }
+            budget -= j;
         }
     }
     None

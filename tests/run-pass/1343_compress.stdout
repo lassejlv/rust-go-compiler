@@ -1,0 +1,20 @@
+crc32("123456789") = cbf43926
+adler32("Wikipedia") = 11e60398
+fnv1a("hello") = a430d84680aabd0b
+empty        in=     0 out=   156 ratio= 0.000 tokens=    0 matches=    0 crc=00000000 adler=00000001 fnv=193d3179b8fd6554
+one          in=     1 out=   156 ratio=156.000 tokens=    1 matches=    0 crc=e8b7be43 adler=00620062 fnv=0199e0bc0dccabe5
+abc-repeat   in=  1500 out=   163 ratio= 0.109 tokens=    9 matches=    6 crc=9567df5a adler=cbbd3e57 fnv=17a771d2f5253970
+lorem        in= 12444 out=  2168 ratio= 0.174 tokens= 1042 matches=  977 crc=426b0409 adler=63d521ee fnv=374a44dbf74cdfb6
+noise        in=  3000 out=  3145 ratio= 1.048 tokens= 3000 matches=    0 crc=901694cc adler=7544d831 fnv=9886c8d4dd056d28
+skewed       in=  5000 out=  1635 ratio= 0.327 tokens=  878 matches=  745 crc=520525e3 adler=56922030 fnv=6d8e2cc987fdb268
+code         in= 15399 out=  2517 ratio= 0.163 tokens= 1678 matches=  914 crc=4d8b57c0 adler=60b0dda9 fnv=1b9e683cb6fdb681
+zeros        in= 10000 out=   186 ratio= 0.019 tokens=   40 matches=   39 crc=4d3bca2e adler=27100001 fnv=d71005f8c954688d
+total 47344 -> 10126
+flip@0: bad magic [92, 90, 72, 70]
+flip@5: checksum mismatch: want d389ee4e, got d389ee4e
+flip@9: checksum mismatch: want d389fe4e, got d389ee4e
+flip@20: distance 35 exceeds output size 14
+flip@185: ok? same=true
+trunc: truncated input at byte 93
+limited lens [7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 6, 3, 2, 1]
+codes [2, 0, 6, 7]

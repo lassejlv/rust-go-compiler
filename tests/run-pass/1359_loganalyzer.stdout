@@ -1,0 +1,18 @@
+config Config { min_level: 1, slow_ms: 800 }, again same: true
+121 entries, 3 errors: ["bad timestamp \"09:99:00\"", "line has only 2 fields", "unknown level \"FATAL\""]
+timestamps sorted: true
+services ["api", "auth", "cache", "db"], api rc=32
+level runs >2: [(2, 3), (3, 5), (2, 3), (4, 8), (2, 3), (2, 3), (2, 3), (2, 4), (2, 4), (2, 5), (1, 4)]
+minutes 7 busiest (542, [0, 3, 8, 2, 11])
+<slow>800ms> -> 17 findings, first ["auth@32442 815ms", "cache@32444 853ms", "cache@32476 846ms"]
+<error-burst> -> 3 findings, first ["burst at 32531 (8 errors)", "burst at 32558 (4 errors)", "burst at 32695 (4 errors)"]
+lat n=120 mean~471 sd~267 p50=482 p90=838 p99=891 log2(max)=Some(9) log10=2
+[0, 1, 4, 4, 1, 0] ["a0", "b1", "c4", "d9", "e16", "f25"] 20
+api=31 db=29 nope=0
+Some([1, 2, 3]) Err("invalid digit found in string") None Ok(42)
+hi�!€ Ok("hi") Err(2)
+3 8364 [172, 32, 0, 0] 0x00ff 0b00000101 +1.23e4
+cow: [1, 2, 3, 4] [1, 2, 3]
+unique-now=true
+5 0 [1] [10]
+true false Some((4, 'z'))

@@ -1,0 +1,14 @@
+dijkstra: reachable 60/60, farthest 16 at Some(303), path [0, 51, 36, 54, 57, 30, 23, 20, 16]
+sum of distances 10600, edges 240
+bellman-ford with negative edge: [Some(0), Some(-1), Some(1), Some(0), Some(3)]
+A*: Some((57, 90))
+A* blocked: None
+max flow 34 == min cut 34: true
+kruskal 7679 prim 7679 edges 39 first [(1, 3), (35, 36), (23, 28)]
+8 sccs, nontrivial: [[0, 2, 4, 6, 7, 8, 10, 14, 15]]
+topo: Err(13)
+dag topo ok: true [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+segtree checks 300, gcd[0..4]=6 gcd[4..7]=7 gcd all=1
+min ID 9223372036854775807 sum ID 0
+lca agree 500/500, max depth 8, sample [(134, 64, 0), (47, 196, 0), (139, 195, 0), (193, 52, 7), (50, 102, 50)]
+[(3, 5), (3, 6), (3, 8), (3, 9), (2, 2), (2, 3), (2, 4), (1, 1), (1, 7), (0, 0)]

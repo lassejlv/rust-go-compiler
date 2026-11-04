@@ -1,0 +1,21 @@
+42                                                                     : int
+(fn (x) x)                                                             : 'a -> 'a
+(fn (f g x) (f (g x)))                                                 : ('a -> 'b), ('c -> 'a), 'c -> 'b
+(let id (fn (x) x) (tuple (id 1) (id true)))                           : (int * bool)
+(letrec len (fn (l) (if (null l) 0 (+ 1 (len (tail l))))) len)         : 'a list -> int
+(letrec map (fn (f l) (if (null l) nil (cons (f (head l)) (map f (tail l))))) map) : ('a -> 'b), 'a list -> 'b list
+(letrec fold (fn (f acc l) (if (null l) acc (fold f (f acc (head l)) (tail l)))) fold) : ('a, 'b -> 'a), 'a, 'b list -> 'a
+(let compose (fn (f g) (fn (x) (f (g x)))) (compose (fn (x) (< x 3)) (fn (y) (* y 2)))) : int -> bool
+(fn (p) (tuple (snd p) (fst p)))                                       : ('a * 'b) -> ('b * 'a)
+(fn (x) (x x))                                                         ! infinite type: t2 occurs in 'a -> 'b
+(+ 1 true)                                                             ! cannot unify int with bool
+(fn (f) (tuple (f 1) (f true)))                                        ! cannot unify int with bool
+(undefined 3)                                                          ! unbound variable undefined
+((fn (x y) x) 1)                                                       ! arity mismatch: 2 vs 1
+(let k (fn (x) (fn (y) x)) (tuple (k 1) ((k true) 5)))                 : ('a -> int * bool)
+(letrec fact (fn (n) (if (< n 2) 1 (* n (fact (- n 1))))) (fact 10))   : int
+(fn (a b c d e) (tuple e d c b a (= a b)))                             : 'a, 'a, 'b, 'c, 'd -> ('d * 'c * 'b * 'a * 'a * bool)
+(cons (tuple 1 nil) nil)                                               : (int * 'a list) list
+(let pair (fn (x) (tuple x x)) (pair (pair (pair 1))))                 : (((int * int) * (int * int)) * ((int * int) * (int * int)))
+(if true 1                                                             parse error: unclosed (
+total unifications: 160

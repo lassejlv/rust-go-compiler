@@ -1,0 +1,14 @@
+initial total 26760
+missing account: None
+{"account #1 locked": 2, "account #13 locked": 1, "account #20 locked": 1, "account #21 locked": 1, "account #5 locked": 2, "account #6 locked": 1, "insufficient": 55, "no such account #24": 10, "ok": 227}
+after sequential: total 26760 min Some((0, 27)) max Some((2, 4028))
+concurrent processed 400 (ok+failed = 400), total 26760
+clients seen: ["client-0", "client-1", "client-2", "client-3"]
+mean 1115.00 var>=0 true
+shard 0 committed 307 legs, first Some("TxId(2) 20-371")
+shard 1 committed 307 legs, first Some("TxId(1) 17-623")
+shard 2 committed 323 legs, first Some("TxId(2) 22+371")
+shard 3 committed 313 legs, first Some("TxId(1) 3+623")
+total shard ops > 1000: true
+recv on closed: true, try_recv: Err(Disconnected)
+rendezvous got [0, 1, 2, 3, 4]; recv_timeout Err(Disconnected)

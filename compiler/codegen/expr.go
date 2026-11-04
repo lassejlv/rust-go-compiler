@@ -1105,6 +1105,25 @@ func (fc *fnGen) tryExpr(x *ast.TryExpr, t Ty) string {
 		}
 		return fmt.Sprintf("%s.f0", fc.g.enumPayload(st, v, some.Index))
 	}
+	if info.Src == typeck.TryControlFlow {
+		cont := tcx.Lang("Continue").Variant
+		brk := tcx.Lang("Break")
+		fc.line("if (!%s) {", fc.g.enumIs(st, v, cont))
+		fc.ind++
+		var b []string
+		if !isZST(st.Args[0]) {
+			b = []string{fmt.Sprintf("%s.f0", fc.g.enumPayload(st, v, brk.Variant.Index))}
+		} else {
+			b = []string{fc.unit()}
+		}
+		fc.emitReturn(fc.g.adtLiteral(info.OutTy, brk, b))
+		fc.ind--
+		fc.line("}")
+		if isZST(t) {
+			return fc.unit()
+		}
+		return fmt.Sprintf("%s.f0", fc.g.enumPayload(st, v, cont.Index))
+	}
 	ok := tcx.Lang("Ok").Variant
 	errD := tcx.Lang("Err")
 	g := fc.g

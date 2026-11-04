@@ -1,0 +1,11 @@
+round 0: len 12 range checks 323 sum 113135 last key Some(43) tail [(43, 2978), (42, 2986), (39, 72096)] into_keys 5
+round 1: len 1231 range checks 1887 sum 4372865334160110054 last key Some(4501) tail [(4501, 19936), (4412, 19899), (4262, 19849)] into_keys 614
+round 2: len 3121 range checks 1956 sum 17985430830802395067 last key Some(334881) tail [(334881, 3917546), (334783, 1818748), (334062, 3923274)] into_keys 1630
+round 3: len 8 range checks 594 sum 95007 last key Some(18) tail [(18, 5997), (14, 5997), (13, 5971)] into_keys 4
+total ops 49000
+dijkstra: corner dist 306 pops 2400 max 309
+orderbook: trades 12767 notional 194147567 bid levels 73 ask levels 83 spread Some(21)
+top bids [(1075, 20), (1070, 22), (1062, 19)]
+asks 1050..1060 []
+sets: |a|=1999 |b|=1500 |a&b|=1500 |a|b|=1999 |a-b|=499 |a^b|=499 subset true first Some(0) last Some(1775)
+{"apple", "banana"} {"fig", "kiwi", "pear"} ["kiwi", "pear"]

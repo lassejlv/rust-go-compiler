@@ -1,0 +1,31 @@
+small: sat=true model=[Some(false), Some(true), Some(true), Some(true)] ok=true
+p cnf 4 5
+-3 1 2 0
+-1 3 0
+-2 3 0
+pigeonhole(5,4): sat=false SatStats { decisions: 23, propagations: 177, conflicts: 24, pure: 18 }
+random 3-SAT: 71:UNSAT(6) 73:SAT(7) 78:SAT(8) 77:UNSAT(3) 85:UNSAT(8) 87:UNSAT(11)
+sudoku via SAT: vars=729 clauses=12018 sat=true valid=true decisions=0
+534|678|912
+672|195|348
+198|342|567
+---+---+---
+859|761|423
+426|853|791
+713|924|856
+---+---+---
+961|537|284
+287|419|635
+345|286|179
+bitmask solver: 1 solution(s), nodes 52, same as SAT: true
+hard: 1 solution(s), nodes 6520, valid true
+relaxed: 2 solution(s)
+conflicting givens rejected: true
+4-queens: 2 solutions, first Some([1, 3, 0, 2])
+5-queens: 10 solutions, first Some([0, 2, 4, 1, 3])
+6-queens: 4 solutions, first Some([1, 3, 5, 0, 2, 4])
+8-queens: 92 solutions, first Some([0, 4, 7, 5, 2, 6, 1, 3])
+10-queens first with col0>=2: Break([2, 0, 5, 8, 4, 9, 7, 3, 1, 6])
+subsets summing to 30: {[2, 3, 4, 9, 12], [3, 27], [4, 5, 9, 12]}
+first pair: Break([3, 27])
+Break(53) Some(53)

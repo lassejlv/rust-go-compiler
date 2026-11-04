@@ -1,0 +1,9 @@
+fft product ok: true checksum 11146965977785686221
+primes below 1e6: 78498 last Some(999983) sum 37550402023
+twin pairs 8169 max gap Some((114, 1))
+distinct words 1110 top [("lo", 2096), ("zu", 2082), ("ka", 2017), ("po", 1994), ("ru", 1988)]
+lines 4616 unique 4616
+sorted equal true stable true distinct 300000 median 8783734752767
+btree size 23339 first Some((0, 2251)) range sum 209477950
+formatted 657742 bytes hash b5ce4c93
+edit distance total 100816 closest (1, 7, 35) ("cebdbcdddedbcbe", "acebdbcdddedbcbe")

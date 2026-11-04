@@ -1,0 +1,12 @@
+Continue(6)
+Break("negative -4 at depth 1")
+got 2
+Continue(()) Break(())
+generic continued
+Continue(()) Break([1])
+Break(42) true false
+found Break([1, 1, 0]) after [1, 5, 8]
+none: Continue(())
+Break(("rent", -900)) {}
+Some((1, 2, 3)) None None
+Ok(42) Err("need 2, got 3")

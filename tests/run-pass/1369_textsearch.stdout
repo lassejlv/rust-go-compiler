@@ -1,0 +1,20 @@
+random checks 400 (found 219)
+periodic 200000x2000: find Some(198000) rfind Some(200000) missing None count 1 pieces [198000, 2000]
+periodic 100000x50000: find Some(50000) rfind Some(100000) missing None count 1 pieces [50000, 50000]
+periodic 300000x64: find Some(299936) rfind Some(300000) missing None count 1 pieces [299936, 64]
+fibonacci word len 28657 occurrences of prefix 987: 21 first [0, 987, 2584, 3571, 5168, 6765, 7752, 9349] last Some(27060)
+   1: alpha
+*  2: beta gamma
+*  3: gamma ray
+   4: delta
+*  5: epsilon gamma
+   6: zeta
+   7: eta
+*  8: theta gamma
+trigrams 216 candidates 5 verified 5 brute 5 sample ["aantes", "asantest", "eetrantet", "atnante"]
+["one", "two,", "three ,four"]
+["four", "one, two,, three "]
+["one", "two", "", "three", "four"]
+Some(("one, two", " three ,four")) Some(("one, two,, three", ",four"))
+"a_a_abc"
+"hi"

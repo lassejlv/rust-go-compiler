@@ -1,0 +1,27 @@
+5000 m + 1000 ft = 5304.80 m
+speed 2.947 m/s = 34808.399 ft/h
+1.8 m 0.75
+1 84.66666666666667
+true
+321 1 1208925819614629174706177
+1594323 5.0625 12157665459056928801
+["'a'", "'b'"]
+Some(9) Some(-2.0) None
+[0.5, 1.0, 1.5]
+URYYB, JBEYQ
+HELLO AGAIN
+upper calls Some(2)
+letters Some("l3n2o2r2y2")
+rot Some(13) missing false
+["counter", "rot", "upper"]
+int 5
+&int 7
+Box<&str "hi">
+Box<str "boxed">
+array3[int 1, int 2, int 3]
+(int 4 & &str "x")
+[Box<int 1>, Box<int 2>]
+total 10.75 sq>circ false circ>sq true
+Sq(1.0) vol 2 scaled Sq(2.0) area 0.25
+Circ(1.0) vol 2 scaled Circ(2.0) area 0.75
+[1.0, 3.0]

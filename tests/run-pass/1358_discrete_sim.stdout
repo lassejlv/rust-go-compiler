@@ -1,0 +1,105 @@
+policy FIFO | t=200.0 customers=303 interrupted=3
+  wait Vip      n=29    mean=   1.412 sd=   1.505 min=  0.000 max=   5.984
+  wait Regular  n=224   mean=   1.515 sd=   1.695 min=  0.000 max=   7.555
+  wait Bulk     n=47    mean=   1.049 sd=   1.424 min=  0.000 max=   5.514
+  wait ALL      n=300   mean=   1.432 sd=   1.642 min=  0.000 max=   7.555
+  server 0 speed 1.00 served  97 util  79.0%
+  server 1 speed 1.25 served  85 util  79.4%
+  server 2 speed 1.50 served 112 util  73.3%
+  avg queue length 1.900 (max Some(8))
+  sojourn 12 bins, overflow 0
+  [  0.0,  2.0)  116 ##############################
+  [  2.0,  4.0)   93 #########################
+  [  4.0,  6.0)   56 ###############
+  [  6.0,  8.0)   19 #####
+  [  8.0, 10.0)    8 ###
+  [ 10.0, 12.0)    1 #
+  [ 12.0, 14.0)    1 #
+  [ 14.0, 16.0)    0 
+  [ 16.0, 18.0)    0 
+  [ 18.0, 20.0)    0 
+  [ 20.0, 22.0)    0 
+  [ 22.0, 24.0)    0 
+  overflow 0  log: t=30.00 server 0 broke (idle)
+  log: t=36.94 server 0 repaired
+  log: t=80.54 server 1 broke while serving #112
+  log: t=87.50 server 1 repaired
+  log: t=127.84 server 2 broke while serving #192
+  log: t=131.43 server 2 repaired
+policy PRIORITY | t=200.0 customers=303 interrupted=3
+  wait Vip      n=29    mean=   0.408 sd=   0.351 min=  0.000 max=   1.039
+  wait Regular  n=224   mean=   1.042 sd=   1.259 min=  0.000 max=   6.238
+  wait Bulk     n=47    mean=   1.983 sd=   3.467 min=  0.000 max=  14.397
+  wait ALL      n=300   mean=   1.128 sd=   1.793 min=  0.000 max=  14.397
+  server 0 speed 1.00 served  92 util  79.6%
+  server 1 speed 1.25 served  87 util  78.9%
+  server 2 speed 1.50 served 115 util  73.4%
+  avg queue length 1.550 (max Some(9))
+  sojourn 12 bins, overflow 0
+  [  0.0,  2.0)  147 ##############################
+  [  2.0,  4.0)   82 #################
+  [  4.0,  6.0)   42 #########
+  [  6.0,  8.0)   12 ###
+  [  8.0, 10.0)    5 ##
+  [ 10.0, 12.0)    1 #
+  [ 12.0, 14.0)    2 #
+  [ 14.0, 16.0)    1 #
+  [ 16.0, 18.0)    2 #
+  [ 18.0, 20.0)    0 
+  [ 20.0, 22.0)    0 
+  [ 22.0, 24.0)    0 
+  overflow 0policy SJF(aging=0) | t=200.0 customers=303 interrupted=3
+  wait Vip      n=29    mean=   0.812 sd=   1.347 min=  0.000 max=   6.249
+  wait Regular  n=224   mean=   0.768 sd=   1.183 min=  0.000 max=   8.269
+  wait Bulk     n=48    mean=   1.740 sd=   3.718 min=  0.000 max=  20.932
+  wait ALL      n=301   mean=   0.927 sd=   1.871 min=  0.000 max=  20.932
+  server 0 speed 1.00 served  80 util  83.1%
+  server 1 speed 1.25 served 100 util  82.3%
+  server 2 speed 1.50 served 115 util  72.9%
+  avg queue length 1.250 (max Some(5))
+  sojourn 12 bins, overflow 1
+  [  0.0,  2.0)  166 ##############################
+  [  2.0,  4.0)   72 ##############
+  [  4.0,  6.0)   35 #######
+  [  6.0,  8.0)   12 ###
+  [  8.0, 10.0)    6 ##
+  [ 10.0, 12.0)    2 #
+  [ 12.0, 14.0)    0 
+  [ 14.0, 16.0)    0 
+  [ 16.0, 18.0)    0 
+  [ 18.0, 20.0)    0 
+  [ 20.0, 22.0)    0 
+  [ 22.0, 24.0)    1 #
+  overflow 1policy SJF(aging=0.5) | t=200.0 customers=303 interrupted=3
+  wait Vip      n=29    mean=   0.881 sd=   1.235 min=  0.000 max=   5.366
+  wait Regular  n=225   mean=   0.808 sd=   1.106 min=  0.000 max=   6.388
+  wait Bulk     n=47    mean=   1.783 sd=   3.906 min=  0.000 max=  22.529
+  wait ALL      n=301   mean=   0.967 sd=   1.876 min=  0.000 max=  22.529
+  server 0 speed 1.00 served  91 util  81.8%
+  server 1 speed 1.25 served  92 util  82.1%
+  server 2 speed 1.50 served 112 util  74.7%
+  avg queue length 1.350 (max Some(5))
+  sojourn 12 bins, overflow 1
+  [  0.0,  2.0)  161 ##############################
+  [  2.0,  4.0)   72 ##############
+  [  4.0,  6.0)   39 ########
+  [  6.0,  8.0)   14 ###
+  [  8.0, 10.0)    6 ##
+  [ 10.0, 12.0)    0 
+  [ 12.0, 14.0)    1 #
+  [ 14.0, 16.0)    0 
+  [ 16.0, 18.0)    0 
+  [ 18.0, 20.0)    0 
+  [ 20.0, 22.0)    1 #
+  [ 22.0, 24.0)    0 
+  overflow 1SJF(aging=0)     mean wait   0.927 vip   0.812
+SJF(aging=0.5)   mean wait   0.967 vip   0.881
+PRIORITY         mean wait   1.128 vip   0.408
+FIFO             mean wait   1.432 vip   1.412
+4 bins, overflow 1
+  [  0.0,  0.2)    2 ##############################
+  [  0.2,  0.5)    2 ##############################
+  [  0.5,  0.8)    0 
+  [  0.8,  1.0)    1 ###############
+  overflow 1
+[(0.5, 5), (1.0, 1), (1.0, 3), (2.0, 2), (3.0, 0), (inf, 4)]

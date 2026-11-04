@@ -1,0 +1,27 @@
+{"bounced": 69, "collision": 22, "despawned": 18, "spawned": 20}
+t0 Collision(Entity { id: 2, gen: 0 }, Entity { id: 8, gen: 0 })
+t0 Collision(Entity { id: 5, gen: 0 }, Entity { id: 7, gen: 0 })
+t1 Collision(Entity { id: 2, gen: 0 }, Entity { id: 8, gen: 0 })
+t1 Collision(Entity { id: 5, gen: 0 }, Entity { id: 7, gen: 0 })
+t2 Collision(Entity { id: 2, gen: 0 }, Entity { id: 8, gen: 0 })
+t2 Collision(Entity { id: 8, gen: 0 }, Entity { id: 11, gen: 0 })
+system order: gravity -> movement -> walls -> collisions -> reaper
+storages: ["Health:1", "Name:2", "Pos:2", "Radius:1", "Vel:1"]
+alive: e3v0,e12v0
+  e3v0 Some("ball3") pos=(24.702, 2.374) hp=Some(13) v=Some(-2.36)
+  e12v0 Some("anchor") pos=(50.000, 0.000) hp=None v=None
+stale get: None
+despawn stale: false
+pos checksum 77.08
+f32 fmt: 0.3 0.3 0.33333334 1.2345e3 340282350000000000000000000000000000000 0.000000000000000000000000000000000000011754944
+f32 more: 16777216 0.0000001 inf 1.5811388
+root @ (0.0, 0.0) rc=1 weak=2
+  arm @ (1.0, 2.0) rc=2 weak=1
+    hand @ (1.5, 2.2) rc=2 weak=1
+      finger @ (1.6, 2.2) rc=2 weak=0
+  leg @ (-1.0, -3.0) rc=1 weak=0
+finger path root/arm/hand/finger world (1.625, 2.25)
+after move: (10.625, 10.25)
+finger orphan? parent alive = false
+drops so far: ["hand"]
+drops at end: ["hand", "finger", "root", "arm", "leg"]
