@@ -646,6 +646,9 @@ func (fcx *FnCtxt) checkUnary(x *ast.UnaryExpr, expected Ty) Ty {
 			if x.Op == ast.UnNot && s.IsFloat() {
 				fcx.errorf(x.Span, "cannot apply unary operator `!` to type `%s`", s)
 			}
+			if x.Op == ast.UnNeg && s.Kind == TInt && !s.IsSigned() && !fcx.t.isStd(fcx.def) {
+				fcx.t.ErrorCode(x.Span, "E0600", "cannot apply unary operator `-` to type `%s`", s)
+			}
 			return s
 		}
 		name := "neg"
