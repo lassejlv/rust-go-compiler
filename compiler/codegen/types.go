@@ -99,7 +99,7 @@ func (g *Gen) namedType(t Ty) string {
 		if len(ps) == 0 {
 			ps = append(ps, "void")
 		}
-		if t.Sub == 1 {
+		if t.FnVariadic() {
 			ps = append(ps, "...")
 		}
 		fmt.Fprintf(&g.fwd, "typedef %s (*%s)(%s); /* %s */\n", g.ctype(t.Ret), name, strings.Join(ps, ", "), sanitizeComment(t.String()))

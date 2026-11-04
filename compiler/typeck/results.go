@@ -19,6 +19,7 @@ const (
 	AdjClosureFnPtr                      // non-capturing closure -> fn pointer
 	AdjMutToConst                        // &mut T -> &T, *mut T -> *const T
 	AdjBorrowRaw                         // &mut T -> *mut T, &T -> *const T
+	AdjUnsafeFnPtr                       // fn pointer -> unsafe fn pointer
 )
 
 // Adjustment is one step applied to an expression's value. Target is the

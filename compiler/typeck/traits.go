@@ -246,6 +246,14 @@ func (ic *InferCtxt) selectTraitUncached(tr *TraitRef, depth int) (res Selection
 		if r, ok := ic.builtinFn(tr, self, depth); ok {
 			return r
 		}
+	case "fn_ptr_trait":
+		switch {
+		case self.Kind == TFnPtr:
+			return Selection{Kind: SelBuiltin}
+		case self.Kind == TInfer && self.Sub == 0:
+			return Selection{Kind: SelAmbig}
+		}
+		return Selection{Kind: SelNone}
 	case "tuple_trait":
 		if self.Kind == TTuple {
 			return Selection{Kind: SelBuiltin}
@@ -522,7 +530,7 @@ func (ic *InferCtxt) rejectTy(p, g Ty) bool {
 	case TAdt, TFnDef:
 		return p.Def != g.Def || p.Index != g.Index || ic.rejectList(p.Args, g.Args)
 	case TFnPtr:
-		return p.Sub != g.Sub || ic.rejectList(p.Elems, g.Elems) || ic.rejectTy(p.Ret, g.Ret)
+		return p.Sub != g.Sub || p.Name != g.Name || ic.rejectList(p.Elems, g.Elems) || ic.rejectTy(p.Ret, g.Ret)
 	case TClosure:
 		return p.Index != g.Index
 	case TDyn:
@@ -750,6 +758,15 @@ func (ic *InferCtxt) builtinFn(tr *TraitRef, self Ty, depth int) (Selection, boo
 	want := fnKindRank(tr.Trait.LangItem)
 	switch self.Kind {
 	case TFnDef, TFnPtr, TClosure:
+		// unsafe and non-Rust-ABI fn items and pointers are not Fn*
+		if self.Kind == TFnPtr && (self.FnUnsafe() || self.FnAbi() != "" || self.FnVariadic()) {
+			return Selection{Kind: SelNone}, true
+		}
+		if self.Kind == TFnDef {
+			if unsafe, abi, variadic := ic.t.fnItemHeader(self.Def); unsafe || abi != "" || variadic {
+				return Selection{Kind: SelNone}, true
+			}
+		}
 		ins, _, kind, ok := ic.fnSigOf(self)
 		if !ok {
 			return Selection{Kind: SelAmbig}, true

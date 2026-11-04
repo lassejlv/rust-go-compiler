@@ -182,8 +182,8 @@ pub unsafe fn write_volatile<T>(dst: *mut T, src: T) {
 
 /// Compares the addresses of the two function pointers for equality.
 #[inline]
-pub fn fn_addr_eq<T: Copy, U: Copy>(f: T, g: U) -> bool {
-    unsafe { intrinsics::transmute::<T, usize>(f) == intrinsics::transmute::<U, usize>(g) }
+pub fn fn_addr_eq<T: crate::marker::FnPtr, U: crate::marker::FnPtr>(f: T, g: U) -> bool {
+    f.addr() == g.addr()
 }
 
 /// Compares raw pointers for equality (address and metadata).

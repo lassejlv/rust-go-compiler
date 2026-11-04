@@ -70,19 +70,35 @@ func (fcx *FnCtxt) coerce(e ast.Expr, from, to Ty) bool {
 	case TFnPtr:
 		switch a.Kind {
 		case TFnDef:
+			// the pointer has the item's ABI; a safe fn also coerces to
+			// an unsafe fn pointer (not the reverse)
 			ins, out := fcx.instantiateSig(a.Def, a.Args, e.GetSpan())
-			if fcx.ic.unify(FnPtr(ins, out, false), b) {
+			unsafe, abi, variadic := fcx.t.fnItemHeader(a.Def)
+			if fcx.ic.unify(FnPtrSig(ins, out, variadic, unsafe || b.FnUnsafe(), abi), b) {
 				fcx.addAdjust(e, Adjustment{Kind: AdjReifyFnPtr, Target: b})
 				return true
 			}
 			return false
 		case TClosure:
+			// non-capturing closures coerce to safe and unsafe Rust-ABI
+			// fn pointers
 			ci := fcx.t.Closures[a]
-			if ci != nil && fcx.ic.unify(FnPtr(ci.Inputs, ci.Output, false), b) {
+			if ci != nil && fcx.ic.unify(FnPtrSig(ci.Inputs, ci.Output, false, b.FnUnsafe(), ""), b) {
 				fcx.addAdjust(e, Adjustment{Kind: AdjClosureFnPtr, Target: b})
 				return true
 			}
 			return false
+		case TFnPtr:
+			// `fn(..)` -> `unsafe fn(..)` (same ABI)
+			if !a.FnUnsafe() && b.FnUnsafe() && a.Name == b.Name {
+				s := fcx.ic.snapshot()
+				if fcx.ic.unify(a.WithFnSafety(true), b) {
+					fcx.addAdjust(e, Adjustment{Kind: AdjUnsafeFnPtr, Target: b})
+					return true
+				}
+				fcx.ic.rollback(s)
+				return false
+			}
 		}
 	case TAdt:
 		if a.Kind == TAdt && a.Def == b.Def && isUnsizableSmartPtr(a.Def) {
@@ -287,4 +303,20 @@ func (fcx *FnCtxt) canUnsizePtr(a, b Ty) bool {
 // type itself.
 func (fcx *FnCtxt) opaqueToDyn(src, dst Ty) bool {
 	return fcx.shallow(dst).Kind == TDyn && fcx.pendingOpaque(src) != nil
+}
+
+// fnItemHeader returns whether calling fn item d needs unsafe, its ABI
+// ("" for Rust) and whether it is C-variadic: the header of the fn pointer
+// type it coerces to.
+func (t *Tcx) fnItemHeader(d *Def) (unsafe bool, abi string, variadic bool) {
+	if d == nil || d.Kind != DefFn || d.Fn == nil {
+		return false, "", false
+	}
+	if d.Fn.Ast != nil {
+		abi = d.Fn.Ast.Abi
+	}
+	if d.Fn.Extern {
+		abi = d.Fn.Abi
+	}
+	return unsafeFn(d), NormalizeAbi(abi), t.FnSig(d).Variadic
 }

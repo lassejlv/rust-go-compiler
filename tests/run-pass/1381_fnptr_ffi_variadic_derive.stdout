@@ -1,0 +1,30 @@
+5 "7-x-9" 5
+15
+[0, 1, 2, 3]
+7
+-4 -40 -40
+77
+31
+-5 5
+2
+true
+Equal
+2
+42
+true
+true
+true
+2
+true
+-2 -1
+true
+42
+10
+[3, 6]
+-10
+[-60, 3, 36]
+-17
+[-2, -1, 0]
+unsafe extern "C" fn(*mut i8, usize, *const i8, ...) -> i32
+unsafe fn(&'_ mut alloc::vec::Vec<i32>, usize)
+extern "system" fn(i32) -> i32

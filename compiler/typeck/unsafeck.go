@@ -92,6 +92,8 @@ func (cx *unsafeCx) walk(n any, inUnsafe bool) {
 			if !inUnsafe {
 				if c := cx.r.Callees[e.ID]; c != nil && (c.Kind == CallFn || c.Kind == CallVirtual) && unsafeFn(c.Def) {
 					cx.report(e.Span, "call to unsafe function `"+c.Def.Path()+"`")
+				} else if c != nil && c.Kind == CallFnPtr && c.Ty != nil && c.Ty.FnUnsafe() {
+					cx.report(e.Span, "call to unsafe function")
 				}
 			}
 		case *ast.MethodCallExpr:

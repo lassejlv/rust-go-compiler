@@ -187,6 +187,9 @@ func (fc *fnGen) applyAdjust(op operand, a typeck.Adjustment) operand {
 		return operand{s: fmt.Sprintf("((%s)%s)", fc.ctype(a.Target), fc.g.closurePtrThunk(cur)), ty: a.Target}
 	case typeck.AdjMutToConst:
 		return operand{s: fc.toValue(op), ty: a.Target}
+	case typeck.AdjUnsafeFnPtr:
+		// (each fn pointer type has its own C typedef)
+		return operand{s: fmt.Sprintf("((%s)%s)", fc.ctype(a.Target), fc.toValue(op)), ty: a.Target}
 	}
 	fc.g.fatalf("unsupported adjustment")
 	return op
@@ -1441,6 +1444,8 @@ func (fc *fnGen) builtinTraitCall(d *Def, args []Ty, vals []string, ret Ty) stri
 		}
 		// bitwise copy of *self
 		return "(*" + vals[0] + ")"
+	case "fn_ptr_trait": // FnPtr::addr(self)
+		return fmt.Sprintf("((%s)(%s))", fc.ctype(ret), vals[0])
 	case "fn", "fn_mut", "fn_once":
 		self := args[0]
 		tupleTy := args[1]
