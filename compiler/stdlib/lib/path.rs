@@ -1490,7 +1490,7 @@ impl_cmp_os_str!(&'a Path, OsString);
 
 impl fmt::Display for StripPrefixError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("prefix not found")
+        f.pad("prefix not found")
     }
 }
 

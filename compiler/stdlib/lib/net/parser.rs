@@ -341,7 +341,7 @@ pub struct AddrParseError(AddrKind);
 
 impl fmt::Display for AddrParseError {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt.write_str(match self.0 {
+        fmt.pad(match self.0 {
             AddrKind::Ip => "invalid IP address syntax",
             AddrKind::Ipv4 => "invalid IPv4 address syntax",
             AddrKind::Ipv6 => "invalid IPv6 address syntax",

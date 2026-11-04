@@ -121,7 +121,7 @@ impl<T> fmt::Debug for SendError<T> {
 
 impl<T> fmt::Display for SendError<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("sending on a closed channel")
+        f.pad("sending on a closed channel")
     }
 }
 
@@ -139,8 +139,8 @@ impl<T> fmt::Debug for TrySendError<T> {
 impl<T> fmt::Display for TrySendError<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
-            TrySendError::Full(..) => f.write_str("sending on a full channel"),
-            TrySendError::Disconnected(..) => f.write_str("sending on a closed channel"),
+            TrySendError::Full(..) => f.pad("sending on a full channel"),
+            TrySendError::Disconnected(..) => f.pad("sending on a closed channel"),
         }
     }
 }
@@ -155,7 +155,7 @@ impl<T> From<SendError<T>> for TrySendError<T> {
 
 impl fmt::Display for RecvError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("receiving on a closed channel")
+        f.pad("receiving on a closed channel")
     }
 }
 
@@ -164,8 +164,8 @@ impl crate::error::Error for RecvError {}
 impl fmt::Display for TryRecvError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
-            TryRecvError::Empty => f.write_str("receiving on an empty channel"),
-            TryRecvError::Disconnected => f.write_str("receiving on a closed channel"),
+            TryRecvError::Empty => f.pad("receiving on an empty channel"),
+            TryRecvError::Disconnected => f.pad("receiving on a closed channel"),
         }
     }
 }
@@ -181,8 +181,8 @@ impl From<RecvError> for TryRecvError {
 impl fmt::Display for RecvTimeoutError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
-            RecvTimeoutError::Timeout => f.write_str("timed out waiting on channel"),
-            RecvTimeoutError::Disconnected => f.write_str("channel is empty and sending half is closed"),
+            RecvTimeoutError::Timeout => f.pad("timed out waiting on channel"),
+            RecvTimeoutError::Disconnected => f.pad("channel is empty and sending half is closed"),
         }
     }
 }

@@ -1,0 +1,15 @@
+[     invalid IP address syntax]
+[invalid IPv6 socket address syntax  ]
+[  prefix not found  ]
+[ receiving on a closed channel]
+[ receiving on an empty channel]
+[ receiving on a closed channel]
+[  timed out waiting on channel]
+[  channel is empty and sending half is closed]
+[   sending on a closed channel]
+[     sending on a full channel]
+[sending on a closed channel---]
+[receiving]
+[   sending on a closed channel] SendError { .. }
+ArgsOs { inner: [] }
+Args { inner: [] }

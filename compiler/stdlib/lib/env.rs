@@ -77,7 +77,7 @@ impl DoubleEndedIterator for Args {
 
 impl fmt::Debug for Args {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Args").field("args", &self.inner.as_slice()).finish()
+        f.debug_struct("Args").field("inner", &self.inner.as_slice()).finish()
     }
 }
 
@@ -105,7 +105,7 @@ impl DoubleEndedIterator for ArgsOs {
 
 impl fmt::Debug for ArgsOs {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("ArgsOs").field("args", &self.inner.as_slice()).finish()
+        f.debug_struct("ArgsOs").field("inner", &self.inner.as_slice()).finish()
     }
 }
 
