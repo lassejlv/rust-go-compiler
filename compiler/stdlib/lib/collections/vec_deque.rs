@@ -412,6 +412,24 @@ impl<T> VecDeque<T> {
         self.len += 1;
     }
 
+    /// Appends an element to the back of the deque, returning a reference to it.
+    pub fn push_back_mut(&mut self, value: T) -> &mut T {
+        self.push_back(value);
+        self.back_mut().unwrap()
+    }
+
+    /// Prepends an element to the deque, returning a reference to it.
+    pub fn push_front_mut(&mut self, value: T) -> &mut T {
+        self.push_front(value);
+        self.front_mut().unwrap()
+    }
+
+    /// Inserts an element at `index` within the deque, returning a reference to it.
+    pub fn insert_mut(&mut self, index: usize, value: T) -> &mut T {
+        self.insert(index, value);
+        self.get_mut(index).unwrap()
+    }
+
     /// Removes an element from anywhere in the deque and returns it, replacing it with the first element.
     pub fn swap_remove_front(&mut self, index: usize) -> Option<T> {
         let length = self.len;

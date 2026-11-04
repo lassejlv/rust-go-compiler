@@ -562,6 +562,27 @@ impl<T> Vec<T> {
         }
     }
 
+    /// Appends an element to the back of the vector, returning a reference to it.
+    #[inline]
+    pub fn push_mut(&mut self, value: T) -> &mut T {
+        self.push(value);
+        let i = self.len - 1;
+        unsafe { &mut *self.ptr.add(i) }
+    }
+
+    /// Inserts an element at position `index`, returning a reference to it.
+    #[track_caller]
+    pub fn insert_mut(&mut self, index: usize, element: T) -> &mut T {
+        self.insert(index, element);
+        unsafe { &mut *self.ptr.add(index) }
+    }
+
+    /// Decomposes a `Vec<T>` into its raw components: `(pointer, length, capacity)`.
+    pub fn into_raw_parts(self) -> (*mut T, usize, usize) {
+        let me = mem::ManuallyDrop::new(self);
+        (me.ptr, me.len, me.cap)
+    }
+
     /// Consumes and leaks the `Vec`, returning a mutable reference to the contents.
     pub fn leak<'a>(self) -> &'a mut [T] {
         let p = self.ptr;

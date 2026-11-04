@@ -80,6 +80,16 @@ impl Duration {
         Duration { secs: nanos / (NANOS_PER_SEC as u64), nanos: (nanos % (NANOS_PER_SEC as u64)) as u32 }
     }
 
+    /// Creates a new `Duration` from the specified number of nanoseconds (as `u128`).
+    #[track_caller]
+    pub fn from_nanos_u128(nanos: u128) -> Duration {
+        let secs = nanos / (NANOS_PER_SEC as u128);
+        if secs > u64::MAX as u128 {
+            crate::rt::panic_str("overflow in `Duration::from_nanos_u128`", file!(), line!(), column!());
+        }
+        Duration { secs: secs as u64, nanos: (nanos % (NANOS_PER_SEC as u128)) as u32 }
+    }
+
     /// Creates a new `Duration` from the specified number of minutes.
     #[inline]
     #[track_caller]

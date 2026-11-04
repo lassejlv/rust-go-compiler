@@ -323,6 +323,15 @@ impl<T, E> Result<T, E> {
             Err(_) => crate::rt::panic_str("called `Result::unwrap_unchecked()` on an `Err` value", file!(), line!(), column!()),
         }
     }
+
+    /// Returns the contained `Err` value, without checking that the value is not an `Ok`.
+    #[inline]
+    pub unsafe fn unwrap_err_unchecked(self) -> E {
+        match self {
+            Ok(_) => crate::rt::panic_str("called `Result::unwrap_err_unchecked()` on an `Ok` value", file!(), line!(), column!()),
+            Err(e) => e,
+        }
+    }
 }
 
 impl<T, E> Result<&T, E> {

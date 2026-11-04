@@ -1800,3 +1800,82 @@ where
 }
 
 impl<'a, T: 'a, P> FusedIterator for ChunkByMut<'a, T, P> where P: FnMut(&T, &T) -> bool {}
+
+/// An iterator over overlapping windows of `N` elements of a slice
+/// (created by `slice::array_windows`).
+#[derive(Debug)]
+#[must_use]
+pub struct ArrayWindows<'a, T: 'a, const N: usize> {
+    v: &'a [T],
+}
+
+impl<'a, T: 'a, const N: usize> ArrayWindows<'a, T, N> {
+    #[inline]
+    pub(crate) fn new(slice: &'a [T]) -> Self {
+        ArrayWindows { v: slice }
+    }
+}
+
+impl<T, const N: usize> Clone for ArrayWindows<'_, T, N> {
+    fn clone(&self) -> Self {
+        ArrayWindows { v: self.v }
+    }
+}
+
+impl<'a, T, const N: usize> Iterator for ArrayWindows<'a, T, N> {
+    type Item = &'a [T; N];
+
+    #[inline]
+    fn next(&mut self) -> Option<&'a [T; N]> {
+        let ret = self.v.first_chunk::<N>();
+        if ret.is_some() {
+            self.v = &self.v[1..];
+        }
+        ret
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let size = self.v.len().saturating_sub(N - 1);
+        (size, Some(size))
+    }
+
+    #[inline]
+    fn count(self) -> usize {
+        self.v.len().saturating_sub(N - 1)
+    }
+
+    #[inline]
+    fn nth(&mut self, n: usize) -> Option<&'a [T; N]> {
+        let idx = n.min(self.v.len());
+        self.v = &self.v[idx..];
+        self.next()
+    }
+
+    #[inline]
+    fn last(self) -> Option<&'a [T; N]> {
+        self.v.last_chunk::<N>()
+    }
+}
+
+impl<'a, T, const N: usize> DoubleEndedIterator for ArrayWindows<'a, T, N> {
+    #[inline]
+    fn next_back(&mut self) -> Option<&'a [T; N]> {
+        let ret = self.v.last_chunk::<N>();
+        if ret.is_some() {
+            self.v = &self.v[..self.v.len() - 1];
+        }
+        ret
+    }
+
+    #[inline]
+    fn nth_back(&mut self, n: usize) -> Option<&'a [T; N]> {
+        let idx = self.v.len().saturating_sub(n);
+        self.v = &self.v[..idx];
+        self.next_back()
+    }
+}
+
+impl<T, const N: usize> ExactSizeIterator for ArrayWindows<'_, T, N> {}
+
+impl<T, const N: usize> FusedIterator for ArrayWindows<'_, T, N> {}

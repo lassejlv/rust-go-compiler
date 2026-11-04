@@ -351,6 +351,13 @@ impl<T, F: FnOnce() -> T> LazyLock<T, F> {
         }
         unsafe { (*this.value.get()).as_ref().unwrap() }
     }
+
+    /// Forces the evaluation of this lazy value and returns a mutable reference to the result.
+    #[track_caller]
+    pub fn force_mut(this: &mut LazyLock<T, F>) -> &mut T {
+        LazyLock::force(this);
+        unsafe { (*this.value.get()).as_mut().unwrap() }
+    }
 }
 
 impl<T, F> LazyLock<T, F> {

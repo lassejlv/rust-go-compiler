@@ -353,3 +353,25 @@ __std_convert_try_from_int! { i32 => i8 i16 isize u8 u16 u32 u64 u128 usize }
 __std_convert_try_from_int! { i64 => i8 i16 i32 isize u8 u16 u32 u64 u128 usize }
 __std_convert_try_from_int! { i128 => i8 i16 i32 i64 isize u8 u16 u32 u64 u128 usize }
 __std_convert_try_from_int! { isize => i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 usize }
+
+/// Supporting trait for `f32::to_int_unchecked` / `f64::to_int_unchecked`.
+pub trait FloatToInt<Int> {
+    #[doc(hidden)]
+    unsafe fn to_int_unchecked(self) -> Int;
+}
+
+macro_rules! __std_float_to_int {
+    ($f:ident => $($i:ident)*) => {
+        $(
+            impl FloatToInt<$i> for $f {
+                #[inline]
+                unsafe fn to_int_unchecked(self) -> $i {
+                    self as $i
+                }
+            }
+        )*
+    };
+}
+
+__std_float_to_int! { f32 => u8 u16 u32 u64 u128 usize i8 i16 i32 i64 i128 isize }
+__std_float_to_int! { f64 => u8 u16 u32 u64 u128 usize i8 i16 i32 i64 i128 isize }

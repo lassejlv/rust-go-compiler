@@ -9,7 +9,7 @@ mod unstable_sort;
 pub use self::index::{range, SliceIndex};
 pub(crate) use self::index::{bounds_into_range, bounds_into_range_unchecked, bounds_into_slice_range};
 pub use self::iter::{
-    ChunkBy, ChunkByMut, Chunks, ChunksExact, ChunksExactMut, ChunksMut, Iter, IterMut, RChunks, RChunksExact,
+    ArrayWindows, ChunkBy, ChunkByMut, Chunks, ChunksExact, ChunksExactMut, ChunksMut, Iter, IterMut, RChunks, RChunksExact,
     RChunksExactMut, RChunksMut, RSplit, RSplitMut, RSplitN, RSplitNMut, Split, SplitInclusive, SplitInclusiveMut,
     SplitMut, SplitN, SplitNMut, Windows,
 };
@@ -705,6 +705,45 @@ impl<T> [T] {
         }
         let p = self.as_mut_ptr();
         Ok(crate::array::from_fn(|k| unsafe { &mut *p.add(indices[k]) }))
+    }
+
+    /// Returns mutable references to many indices at once, without doing any checks.
+    pub unsafe fn get_disjoint_unchecked_mut<const N: usize>(&mut self, indices: [usize; N]) -> [&mut T; N] {
+        let p = self.as_mut_ptr();
+        crate::array::from_fn(|k| unsafe { &mut *p.add(indices[k]) })
+    }
+
+    /// Returns an iterator over overlapping windows of `N` elements of the slice.
+    #[track_caller]
+    pub fn array_windows<const N: usize>(&self) -> ArrayWindows<'_, T, N> {
+        if N == 0 {
+            crate::rt::panic_str("window size must be non-zero", file!(), line!(), column!());
+        }
+        ArrayWindows::new(self)
+    }
+
+    /// Returns the index that an element reference points to, if it is in the slice.
+    pub fn element_offset(&self, element: &T) -> Option<usize> {
+        let size = crate::mem::size_of::<T>();
+        if size == 0 {
+            crate::rt::panic_str("elements are zero-sized", file!(), line!(), column!());
+        }
+        let self_start = self.as_ptr() as usize;
+        let elem_start = element as *const T as usize;
+        let byte_offset = elem_start.wrapping_sub(self_start);
+        if byte_offset % size != 0 {
+            return None;
+        }
+        let offset = byte_offset / size;
+        if offset < self.len() { Some(offset) } else { None }
+    }
+
+    /// Returns a subslice with the prefix and suffix removed.
+    pub fn strip_circumfix(&self, prefix: &[T], suffix: &[T]) -> Option<&[T]>
+    where
+        T: PartialEq,
+    {
+        self.strip_prefix(prefix)?.strip_suffix(suffix)
     }
 
     /// Returns an iterator over subslices separated by elements that match `pred`.

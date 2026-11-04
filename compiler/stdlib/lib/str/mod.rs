@@ -578,6 +578,11 @@ impl str {
         suffix.strip_suffix_of(self)
     }
 
+    /// Returns a string slice with the prefix and suffix removed.
+    pub fn strip_circumfix<P: Pattern, S: Pattern>(&self, prefix: P, suffix: S) -> Option<&str> {
+        self.strip_prefix(prefix)?.strip_suffix(suffix)
+    }
+
     /// Parses this string slice into another type.
     #[inline]
     pub fn parse<F: FromStr>(&self) -> Result<F, F::Err> {

@@ -104,6 +104,16 @@ impl<T> LinkedList<T> {
         self.inner.push_back(elt)
     }
 
+    /// Appends an element to the back of the list, returning a reference to it.
+    pub fn push_back_mut(&mut self, elt: T) -> &mut T {
+        self.inner.push_back_mut(elt)
+    }
+
+    /// Adds an element first in the list, returning a reference to it.
+    pub fn push_front_mut(&mut self, elt: T) -> &mut T {
+        self.inner.push_front_mut(elt)
+    }
+
     /// Removes the last element from a list and returns it, or `None` if it is empty.
     #[inline]
     pub fn pop_back(&mut self) -> Option<T> {
@@ -129,6 +139,51 @@ impl<T> LinkedList<T> {
         F: FnMut(&T) -> bool,
     {
         self.inner.retain(f)
+    }
+
+    /// Creates an iterator which uses a closure to determine if an element should be removed.
+    /// Elements not visited (if the iterator is dropped early) stay in the list.
+    pub fn extract_if<F>(&mut self, filter: F) -> ExtractIf<'_, T, F>
+    where
+        F: FnMut(&mut T) -> bool,
+    {
+        ExtractIf { list: self, idx: 0, pred: filter }
+    }
+}
+
+/// An iterator produced by calling `extract_if` on `LinkedList`.
+pub struct ExtractIf<'a, T: 'a, F: 'a> {
+    list: &'a mut LinkedList<T>,
+    idx: usize,
+    pred: F,
+}
+
+impl<'a, T, F> Iterator for ExtractIf<'a, T, F>
+where
+    F: FnMut(&mut T) -> bool,
+{
+    type Item = T;
+    fn next(&mut self) -> Option<T> {
+        while self.idx < self.list.inner.len() {
+            let hit = match self.list.inner.get_mut(self.idx) {
+                Some(x) => (self.pred)(x),
+                None => false,
+            };
+            if hit {
+                return self.list.inner.remove(self.idx);
+            }
+            self.idx += 1;
+        }
+        None
+    }
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (0, Some(self.list.inner.len() - self.idx))
+    }
+}
+
+impl<'a, T: fmt::Debug, F> fmt::Debug for ExtractIf<'a, T, F> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("ExtractIf").field(&*self.list).finish()
     }
 }
 

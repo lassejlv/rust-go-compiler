@@ -38,6 +38,20 @@ impl<B, C> ControlFlow<B, C> {
             ControlFlow::Break(..) => None,
         }
     }
+    /// Converts the `ControlFlow` into a `Result`: `Ok` for `Break`, `Err` for `Continue`.
+    pub fn break_ok(self) -> Result<B, C> {
+        match self {
+            ControlFlow::Continue(c) => Err(c),
+            ControlFlow::Break(b) => Ok(b),
+        }
+    }
+    /// Converts the `ControlFlow` into a `Result`: `Ok` for `Continue`, `Err` for `Break`.
+    pub fn continue_ok(self) -> Result<C, B> {
+        match self {
+            ControlFlow::Continue(c) => Ok(c),
+            ControlFlow::Break(b) => Err(b),
+        }
+    }
     /// Maps `ControlFlow<B, C>` to `ControlFlow<T, C>` by applying a function to the break value.
     pub fn map_break<T, F: FnOnce(B) -> T>(self, f: F) -> ControlFlow<T, C> {
         match self {

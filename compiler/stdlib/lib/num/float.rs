@@ -209,6 +209,46 @@ macro_rules! __std_float_impl {
                 }
             }
 
+            /// Float addition that allows optimizations based on algebraic rules.
+            #[inline]
+            pub fn algebraic_add(self, rhs: $t) -> $t {
+                self + rhs
+            }
+
+            /// Float subtraction that allows optimizations based on algebraic rules.
+            #[inline]
+            pub fn algebraic_sub(self, rhs: $t) -> $t {
+                self - rhs
+            }
+
+            /// Float multiplication that allows optimizations based on algebraic rules.
+            #[inline]
+            pub fn algebraic_mul(self, rhs: $t) -> $t {
+                self * rhs
+            }
+
+            /// Float division that allows optimizations based on algebraic rules.
+            #[inline]
+            pub fn algebraic_div(self, rhs: $t) -> $t {
+                self / rhs
+            }
+
+            /// Float remainder that allows optimizations based on algebraic rules.
+            #[inline]
+            pub fn algebraic_rem(self, rhs: $t) -> $t {
+                self % rhs
+            }
+
+            /// Rounds toward zero and converts to any primitive integer type,
+            /// assuming that the value is finite and fits in that type.
+            #[inline]
+            pub unsafe fn to_int_unchecked<Int>(self) -> Int
+            where
+                $t: crate::convert::FloatToInt<Int>,
+            {
+                <$t as crate::convert::FloatToInt<Int>>::to_int_unchecked(self)
+            }
+
             /// Calculates the middle point of `self` and `rhs`.
             #[inline]
             pub fn midpoint(self, other: $t) -> $t {

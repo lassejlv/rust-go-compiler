@@ -746,6 +746,12 @@ impl<T, F: FnOnce() -> T> LazyCell<T, F> {
         }
         this.cell.get().unwrap()
     }
+
+    /// Forces the evaluation of this lazy value and returns a mutable reference to the result.
+    pub fn force_mut(this: &mut LazyCell<T, F>) -> &mut T {
+        LazyCell::force(this);
+        this.cell.get_mut().unwrap()
+    }
 }
 
 impl<T, F: FnOnce() -> T> Deref for LazyCell<T, F> {

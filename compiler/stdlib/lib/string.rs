@@ -125,6 +125,57 @@ impl String {
         ret
     }
 
+    fn utf16_units(v: &[u8], le: bool) -> Vec<u16> {
+        let mut units = Vec::with_capacity(v.len() / 2);
+        let mut i = 0;
+        while i + 1 < v.len() {
+            let b = [v[i], v[i + 1]];
+            units.push(if le { u16::from_le_bytes(b) } else { u16::from_be_bytes(b) });
+            i += 2;
+        }
+        units
+    }
+
+    fn from_utf16_bytes(v: &[u8], le: bool) -> Result<String, FromUtf16Error> {
+        if v.len() % 2 != 0 {
+            return Err(FromUtf16Error { kind: FromUtf16ErrorKind::OddBytes });
+        }
+        String::from_utf16(&String::utf16_units(v, le))
+    }
+
+    fn from_utf16_bytes_lossy(v: &[u8], le: bool) -> String {
+        let mut s = String::from_utf16_lossy(&String::utf16_units(v, le));
+        if v.len() % 2 != 0 {
+            s.push_str("\u{FFFD}");
+        }
+        s
+    }
+
+    /// Decode a UTF-16LE–encoded slice `v` into a `String`.
+    pub fn from_utf16le(v: &[u8]) -> Result<String, FromUtf16Error> {
+        String::from_utf16_bytes(v, true)
+    }
+
+    /// Decode a UTF-16BE–encoded slice `v` into a `String`.
+    pub fn from_utf16be(v: &[u8]) -> Result<String, FromUtf16Error> {
+        String::from_utf16_bytes(v, false)
+    }
+
+    /// Decode a UTF-16LE–encoded slice `v` into a `String`, replacing invalid data with U+FFFD.
+    pub fn from_utf16le_lossy(v: &[u8]) -> String {
+        String::from_utf16_bytes_lossy(v, true)
+    }
+
+    /// Decode a UTF-16BE–encoded slice `v` into a `String`, replacing invalid data with U+FFFD.
+    pub fn from_utf16be_lossy(v: &[u8]) -> String {
+        String::from_utf16_bytes_lossy(v, false)
+    }
+
+    /// Decomposes a `String` into its raw components: `(pointer, length, capacity)`.
+    pub fn into_raw_parts(self) -> (*mut u8, usize, usize) {
+        self.vec.into_raw_parts()
+    }
+
     /// Creates a new `String` from a pointer, a length and a capacity.
     #[inline]
     pub unsafe fn from_raw_parts(buf: *mut u8, length: usize, capacity: usize) -> String {

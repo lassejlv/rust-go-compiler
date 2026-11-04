@@ -335,6 +335,41 @@ impl<I: Iterator> Peekable<I> {
     {
         self.next_if(|next| next == expected)
     }
+
+    /// Consumes the next value and maps it if `f` returns `Ok`; otherwise the
+    /// value returned in `Err` is kept for the next call.
+    pub fn next_if_map<R, F: FnOnce(I::Item) -> Result<R, I::Item>>(&mut self, f: F) -> Option<R> {
+        let next = match self.peeked.take() {
+            Some(v) => v,
+            None => self.iter.next(),
+        };
+        let unpeek = match next {
+            Some(item) => match f(item) {
+                Ok(result) => return Some(result),
+                Err(item) => Some(item),
+            },
+            None => None,
+        };
+        self.peeked = Some(unpeek);
+        None
+    }
+
+    /// Like `next_if_map`, but `f` gets a mutable reference to the next value.
+    pub fn next_if_map_mut<R, F: FnOnce(&mut I::Item) -> Option<R>>(&mut self, f: F) -> Option<R> {
+        let next = match self.peeked.take() {
+            Some(v) => v,
+            None => self.iter.next(),
+        };
+        let unpeek = match next {
+            Some(mut item) => match f(&mut item) {
+                Some(result) => return Some(result),
+                None => Some(item),
+            },
+            None => None,
+        };
+        self.peeked = Some(unpeek);
+        None
+    }
 }
 
 impl<I: Iterator + Clone> Clone for Peekable<I>
