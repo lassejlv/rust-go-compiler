@@ -33,6 +33,7 @@ func (t *Tcx) checkGenericParams() {
 			}
 		}
 		t.checkSigLifetimes(d)
+		t.checkBinderOutputs(ga)
 		t.checkNeverType(d)
 		t.checkGenericConstPatterns(d)
 		for _, a := range d.Item.Attrs {
@@ -44,6 +45,79 @@ func (t *Tcx) checkGenericParams() {
 					t.ErrorCode(tt.Tok.Span, "E0565", "meta item in `repr` must be an identifier")
 				}
 			}
+		}
+	}
+}
+
+// typeLifetimes adds the named lifetimes a type mentions to out.
+func typeLifetimes(n any, out map[string]bool) {
+	if n == nil {
+		return
+	}
+	ast.Walk(n, func(x any) bool {
+		switch x := x.(type) {
+		case *ast.RefType:
+			out[x.Lifetime] = true
+		case *ast.Path:
+			for _, sg := range x.Segments {
+				if sg.Args != nil {
+					for _, a := range sg.Args.Args {
+						out[a.Lifetime] = true
+					}
+				}
+			}
+		case *ast.DynTraitType:
+			for _, b := range x.Bounds {
+				out[b.Lifetime] = true
+			}
+		case *ast.ImplTraitType:
+			for _, b := range x.Bounds {
+				out[b.Lifetime] = true
+			}
+		}
+		return true
+	})
+}
+
+// checkBinderOutputs reports lifetimes of a `for<'a>` binder on an Fn*
+// bound that only its output mentions (E0582): `for<'a> Fn() -> &'a T`
+// would return a reference of any lifetime the caller picks.
+func (t *Tcx) checkBinderOutputs(g *ast.Generics) {
+	if g == nil {
+		return
+	}
+	check := func(b *ast.Bound, outer []string) {
+		if b.Path == nil || len(b.Path.Segments) == 0 {
+			return
+		}
+		binder := append(append([]string(nil), outer...), b.ForLifetimes...)
+		if len(binder) == 0 {
+			return
+		}
+		ga := b.Path.Segments[len(b.Path.Segments)-1].Args
+		if ga == nil || !ga.Parenthesized || ga.Output == nil {
+			return
+		}
+		in, out := map[string]bool{}, map[string]bool{}
+		for _, a := range ga.Inputs {
+			typeLifetimes(a, in)
+		}
+		typeLifetimes(ga.Output, out)
+		for _, lt := range binder {
+			if lt != "" && lt != "'_" && out[lt] && !in[lt] {
+				t.ErrorCode(b.Span, "E0582", "binding for associated type `Output` references lifetime `%s`, which does not appear in the trait input types", lt)
+				return
+			}
+		}
+	}
+	for _, p := range g.Params {
+		for _, b := range p.Bounds {
+			check(b, nil)
+		}
+	}
+	for _, w := range g.Where {
+		for _, b := range w.Bounds {
+			check(b, w.ForLifetimes)
 		}
 	}
 }

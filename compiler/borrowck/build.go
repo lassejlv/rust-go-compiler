@@ -1,6 +1,8 @@
 package borrowck
 
 import (
+	"fmt"
+
 	"rustgo/compiler/ast"
 	"rustgo/compiler/lexer"
 	. "rustgo/compiler/middle"
@@ -69,6 +71,13 @@ type builder struct {
 	// expectKind: closure expressions passed to Fn/FnMut-bounded
 	// parameters, which fixes their kind (rustc deduces it from the bound)
 	expectKind map[ast.NodeID]int
+	// letClosures: closures initializing a `let` without a declared type
+	// (no expected signature: their annotated parameter references are
+	// late-bound)
+	letClosures map[ast.NodeID]bool
+	// guards: the code of match guards with the scrutinee place they may
+	// not assign (guards.go)
+	guards []guardRange
 }
 
 type ovlInfo struct {
@@ -462,11 +471,14 @@ func (b *builder) unadjPlace(e ast.Expr) tplace {
 		}
 		if c := b.r.Callees[x.ID]; c != nil {
 			mut := b.r.MutPlace[x.ID]
+			// the base is borrowed before the index is evaluated (an
+			// autoref without two-phase borrows: `v[v.len() - 1] = 0` is
+			// E0502 with IndexMut)
 			base := b.placeOf(x.X)
-			idx := b.operandOf(b.valueTemp(x.Index))
 			ref := b.temp(Ref(base.ty, mut), e.GetSpan())
 			b.assign(ref.p, Rvalue{Kind: RRef, Place: base.p, Mut: mut}, e.GetSpan())
 			info := b.ovlHere(base.ty, "index_mut")
+			idx := b.operandOf(b.valueTemp(x.Index))
 			res := b.temp(Ref(b.nodeTy(e), mut), e.GetSpan())
 			if info != nil {
 				b.ovl[res.p.Local] = info
@@ -676,6 +688,9 @@ func (b *builder) promotable(e ast.Expr) bool {
 		}
 	case *ast.CastExpr:
 		return b.promotable(x.X)
+	case *ast.RefExpr:
+		// `&&Cl(2)`: a shared borrow of a promotable value
+		return !x.Mut && !x.Raw && b.promotable(x.X)
 	}
 	return false
 }
@@ -1177,12 +1192,16 @@ func (b *builder) callExpr(x *ast.CallExpr, dest tplace) {
 func (b *builder) twoPhaseArgs(args []ast.Expr, deferred bool) []Operand {
 	ops := make([]Operand, len(args))
 	later := map[int]tplace{}
+	var resv []LocalID
 	for i, a := range args {
 		t := b.adjTy(a)
 		if t != nil && t.Kind == TRef && t.Mut && (b.isPlaceExpr(a) || len(b.r.Adjust[a.GetID()]) > 0) {
 			tp := b.placeOf(a)
 			if tp.ty != nil && tp.ty.Kind == TRef && tp.ty.Mut && !(len(tp.p.Proj) == 0 && b.isTempLocal(tp.p.Local)) {
 				later[i] = tp
+				if i+1 < len(args) {
+					resv = append(resv, b.reserve(tp.deref().p, tp.ty.Elem, a.GetSpan(), true))
+				}
 				continue
 			}
 			ops[i] = b.reborrow(tp, a.GetSpan())
@@ -1201,12 +1220,36 @@ func (b *builder) twoPhaseArgs(args []ast.Expr, deferred bool) []Operand {
 		b.assign(t.p, Rvalue{Kind: RUse, Ops: []Operand{o}}, args[i].GetSpan())
 		ops[i] = Operand{Kind: OMove, Place: t.p, Ty: o.Ty}
 	}
+	for _, l := range resv {
+		b.activate(l, lexer.Span{})
+	}
 	for i := range args {
 		if tp, ok := later[i]; ok {
 			ops[i] = b.reborrow(tp, args[i].GetSpan())
 		}
 	}
 	return ops
+}
+
+// reserve borrows p (of type t) before a call's arguments are evaluated,
+// held by a temporary until activate: the shared borrow of a shared
+// autoref, or (mut) the reservation of a two-phase mutable borrow, which
+// acts as a shared borrow until it is activated (rustc's two-phase borrows
+// allow only reads of the place in between).
+func (b *builder) reserve(p Place, t Ty, sp lexer.Span, mut bool) LocalID {
+	if b.cur < 0 || t == nil {
+		return -1
+	}
+	tp := b.temp(Ref(t, false), sp)
+	b.assign(tp.p, Rvalue{Kind: RRef, Place: p, Reserve: mut}, sp)
+	return tp.p.Local
+}
+
+// activate ends a reservation (the borrow itself is taken next).
+func (b *builder) activate(l LocalID, sp lexer.Span) {
+	if l >= 0 {
+		b.emit(Stmt{Kind: SFakeRead, Place: Place{Local: l}, Span: sp})
+	}
 }
 
 func defName(c *typeck.Callee) string {
@@ -1251,7 +1294,19 @@ func (b *builder) methodCall(x *ast.MethodCallExpr, dest tplace) {
 	if c != nil {
 		b.expectClosureKinds(c, x.Args, 1)
 	}
+	// the receiver's borrow is reserved before the arguments are
+	// evaluated: a two-phase borrow acts as a shared borrow until it is
+	// activated (`v.push(v.len())` is fine, `v.push(v.pop())` is not)
+	resv := LocalID(-1)
+	if !isTemp && len(x.Args) > 0 && recv.ty != nil {
+		if last != nil {
+			resv = b.reserve(recv.p, recv.ty, sp, last.Mut)
+		} else if mutRecv {
+			resv = b.reserve(recv.deref().p, recv.ty.Elem, sp, true)
+		}
+	}
 	ops := b.twoPhaseArgs(x.Args, last != nil || mutRecv)
+	b.activate(resv, sp)
 	var r Operand
 	if last == nil && mutRecv {
 		// a `&mut` receiver is reborrowed (two-phase: after the arguments)
@@ -1366,6 +1421,9 @@ func (b *builder) closureExpr(x *ast.ClosureExpr, dest tplace) {
 		// the closure value holds the captured operands (slots.go)
 		registerClosureCaps(ci.Ty, capTys)
 		summarizeClosure(b.tcx, ci.Ty, cb.body)
+		if sm := closSummaries[ci.Ty]; sm != nil && b.letClosures[x.ID] && closureReturnsLateBound(x, sm) {
+			b.body.Errors = append(b.body.Errors, fmt.Sprintf("%s: error: lifetime may not live long enough", x.Span.Lo))
+		}
 		if sm := closSummaries[ci.Ty]; sm != nil && ci.Expr.Ret != nil {
 			sm.imprecise = true
 		}
@@ -1542,6 +1600,12 @@ func (b *builder) letStmt(x *ast.LetStmt) {
 		b.declarePat(x.Pat)
 		return
 	}
+	if cl, ok := unparen(x.Init).(*ast.ClosureExpr); ok && x.Ty == nil {
+		if b.letClosures == nil {
+			b.letClosures = map[ast.NodeID]bool{}
+		}
+		b.letClosures[cl.ID] = true
+	}
 	b.pushTemps()
 	sp := x.Span
 	letMark := -1
@@ -1564,6 +1628,10 @@ func (b *builder) letStmt(x *ast.LetStmt) {
 				return
 			}
 			b.exprInto(x.Init, tplace{p: Place{Local: id}, ty: l.Ty})
+			b.ascribeStatic(x.Ty, id, l.Ty, sp)
+			if rt, ok := x.Ty.(*ast.RefType); ok && l.Ty.Kind == TRef && rt.Lifetime != "" && rt.Lifetime != "'_" && rt.Lifetime != "'static" {
+				b.emit(Stmt{Kind: SAscribe, Place: Place{Local: id}, Region: rt.Lifetime, Span: sp})
+			}
 			b.endLetTemps(x, letMark, sp)
 			return
 		}
@@ -1592,10 +1660,30 @@ func (b *builder) letStmt(x *ast.LetStmt) {
 	b.endLetTemps(x, letMark, sp)
 }
 
+// ascribeStatic checks the value of a `let` binding against the 'static
+// its declared type requires explicitly (`let f: Box<dyn Fn() + 'static>`):
+// a pseudo-call with the requirement.
+func (b *builder) ascribeStatic(a ast.Type, id LocalID, t Ty, sp lexer.Span) {
+	if a == nil || t == nil || !carriesBorrows(t) {
+		return
+	}
+	var ds []int
+	explicitStatics(a, t, 0, &ds, 0)
+	if len(ds) == 0 {
+		return
+	}
+	fl := noFlow()
+	for _, d := range ds {
+		fl.Static = append(fl.Static, StaticReq{Arg: 0, Depth: d, Deep: true, Object: true})
+	}
+	u := b.temp(TyUnit, sp)
+	b.call(u.p, []Operand{{Kind: OCopy, Place: Place{Local: id}, Ty: t}}, fl, "ascribe", sp, false)
+}
+
 // endLetTemps ends the temporaries of a let initializer, except those
 // whose lifetime is extended to the enclosing block (`let r = &temp();`).
 func (b *builder) endLetTemps(x *ast.LetStmt, letMark int, sp lexer.Span) {
-	if extendsTemps(x.Init) || b.patBorrows(x.Pat) {
+	if b.extendsTemps(x.Init) || b.patBorrows(x.Pat) {
 		b.keepTemps(letMark)
 		return
 	}
@@ -1617,54 +1705,62 @@ func (b *builder) patBorrows(p ast.Pat) bool {
 	return refs
 }
 
-func extendsTemps(e ast.Expr) bool {
+func (b *builder) extendsTemps(e ast.Expr) bool {
 	switch x := e.(type) {
 	case *ast.RefExpr:
 		return true
 	case *ast.ParenExpr:
-		return extendsTemps(x.X)
+		return b.extendsTemps(x.X)
 	case *ast.CastExpr:
-		return extendsTemps(x.X)
+		return b.extendsTemps(x.X)
 	case *ast.TupleExpr:
 		for _, el := range x.Elems {
-			if extendsTemps(el) {
+			if b.extendsTemps(el) {
 				return true
 			}
 		}
 	case *ast.ArrayExpr:
 		for _, el := range x.Elems {
-			if extendsTemps(el) {
+			if b.extendsTemps(el) {
 				return true
 			}
 		}
 	case *ast.StructExpr:
 		for _, f := range x.Fields {
-			if f.Expr != nil && extendsTemps(f.Expr) {
+			if f.Expr != nil && b.extendsTemps(f.Expr) {
 				return true
 			}
 		}
 	case *ast.CallExpr:
+		// only the operands of tuple struct / variant constructors are
+		// extending (`Some(&temp())`), not those of function calls
+		// (std's pin! helper stands in for rustc's `Pin { __pointer:
+		// &mut { .. } }`)
+		c := b.r.Callees[x.ID]
+		if c == nil || (c.Kind != typeck.CallCtor && !(c.Def != nil && c.Def.Name == "__pin" && c.Def.Crate != nil && c.Def.Crate.Name == "std")) {
+			return false
+		}
 		for _, a := range x.Args {
-			if extendsTemps(a) {
+			if b.extendsTemps(a) {
 				return true
 			}
 		}
 	case *ast.BlockExpr:
 		if x.Block != nil {
 			if t := blockTail(x.Block); t != nil {
-				return extendsTemps(t)
+				return b.extendsTemps(t)
 			}
 		}
 	case *ast.IfExpr:
 		if x.Then != nil {
-			if t := blockTail(x.Then); t != nil && extendsTemps(t) {
+			if t := blockTail(x.Then); t != nil && b.extendsTemps(t) {
 				return true
 			}
 		}
-		return x.Else != nil && extendsTemps(x.Else)
+		return x.Else != nil && b.extendsTemps(x.Else)
 	case *ast.MatchExpr:
 		for _, a := range x.Arms {
-			if extendsTemps(a.Body) {
+			if b.extendsTemps(a.Body) {
 				return true
 			}
 		}
@@ -1756,6 +1852,7 @@ func (b *builder) matchExpr(x *ast.MatchExpr, dest tplace) {
 		src = b.valueTempUnadj(x.Scrutinee)
 	}
 	b.emit(Stmt{Kind: SFakeRead, Place: src.p, Span: sp})
+	tested, guarded := b.guardTested(x, src)
 	end := b.newBlock()
 	for _, arm := range x.Arms {
 		armB, next := b.newBlock(), b.newBlock()
@@ -1769,8 +1866,16 @@ func (b *builder) matchExpr(x *ast.MatchExpr, dest tplace) {
 			body := b.newBlock()
 			fail := b.newBlock()
 			b.pushTemps()
+			g := guardRange{place: tested, block: b.cur, blocksFrom: len(b.body.Blocks)}
+			if b.cur >= 0 {
+				g.stmt = len(b.body.Blocks[b.cur].Stmts)
+			}
 			op := b.operand(arm.Guard)
 			_ = op
+			if guarded {
+				g.blocksTo = len(b.body.Blocks)
+				b.guards = append(b.guards, g)
+			}
 			b.popTemps(sp)
 			b.switchTo(body, fail)
 			b.cur = fail

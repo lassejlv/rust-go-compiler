@@ -111,6 +111,9 @@ type Rvalue struct {
 	// a struct update base)
 	Variant int
 	Fields  []int
+	// Reserve: a shared RRef that is the reservation of a two-phase
+	// mutable borrow (taken before the call's arguments are evaluated)
+	Reserve bool
 }
 
 // StmtKind classifies statements.
@@ -122,6 +125,9 @@ const (
 	SDrop                 // drop of a place (at scope end / before reassignment)
 	SFakeRead             // a read without a use of the value (match scrutinee, let _ = ..)
 	SNop
+	// SAscribe: the reference in Place (a `let` declared `&'r T` with a
+	// lifetime of the signature) has region Region from here on
+	SAscribe
 )
 
 type Stmt struct {
@@ -133,6 +139,8 @@ type Stmt struct {
 	// assignment of by-value bindings of guarded match arms is not a
 	// reassignment).
 	Init bool
+	// Region: the lifetime of an SAscribe
+	Region string
 }
 
 // TermKind classifies block terminators.
@@ -198,6 +206,8 @@ type Body struct {
 	// ClosureKind for closure bodies (-1 for functions): 0 Fn, 1 FnMut,
 	// 2 FnOnce.
 	ClosureKind int
+	// Errors found while building (formatted diagnostics)
+	Errors []string
 }
 
 // ---------------------------------------------------------------------------

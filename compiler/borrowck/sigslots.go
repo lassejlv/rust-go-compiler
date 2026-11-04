@@ -31,6 +31,12 @@ type labeler struct {
 	// labeled by its definition, in terms of the impl's parameters)
 	assoc   map[string]ast.Type
 	inAssoc int
+	// objects: label the slots of trait objects by their (default)
+	// lifetime bound (objLt: the default of the enclosing type: the
+	// label of the enclosing reference, "'static" in a type argument of
+	// an ADT without lifetimes, "" unknown)
+	objects bool
+	objLt   string
 }
 
 func newLabeler(params map[string]bool, selfAst ast.Type) *labeler {
@@ -107,6 +113,27 @@ func (w *labeler) walk(a ast.Type, n *lnode, nest int) {
 	case *ast.ParenType:
 		w.walk(x.Elem, n, nest)
 		return
+	case *ast.DynTraitType:
+		if !w.objects || !w.out || n.ty == nil || n.ty.Kind != TDyn || !n.wild {
+			return
+		}
+		lb := ""
+		switch lt := dynLifetimeBound(x); {
+		case lt == "'static":
+			lb = lt
+		case lt == "" && w.objLt == "'static":
+			if objectDefaultStatic(n.ty) {
+				lb = "'static"
+			}
+		case lt == "" && w.objLt != "":
+			lb = w.objLt
+		}
+		if lb != "" {
+			for k := n.start; k < n.end; k++ {
+				w.labels[k] = lb
+			}
+		}
+		return
 	case *ast.PathType:
 		if x.QSelf != nil || x.Path == nil || len(x.Path.Segments) == 0 {
 			return
@@ -173,15 +200,24 @@ func (w *labeler) walk(a ast.Type, n *lnode, nest int) {
 		if len(tys) > len(n.kids) {
 			return
 		}
+		saved := w.objLt
+		w.objLt = ""
+		if n.nlt == 0 {
+			w.objLt = "'static"
+		}
 		for i, kid := range n.kids {
 			if i < len(tys) {
 				w.walk(tys[i], kid, nest+1)
 			}
 		}
+		w.objLt = saved
 	case *ast.RefType:
 		if n.ty != nil && n.ty.Kind == TRef {
 			w.labels[n.start] = w.lt(x.Lifetime)
+			saved := w.objLt
+			w.objLt = w.labels[n.start]
 			w.walk(x.Elem, n.kids[0], nest+1)
+			w.objLt = saved
 		}
 	case *ast.TupleType:
 		if n.ty != nil && n.ty.Kind == TTuple && len(x.Elems) == len(n.kids) {

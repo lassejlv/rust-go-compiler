@@ -112,8 +112,13 @@ merged one does not compile).
   mutability (E0596/E0594/E0384), conflicting borrows with non-lexical
   lifetimes and two-phase borrows (E0499/E0502/E0503/E0505/E0506),
   dangling references (E0597/E0716/E0515), closures outliving their
-  captures (E0373), and signature lifetimes (E0621, "lifetime may not live
-  long enough"). Types carry no lifetimes after type checking, so regions
+  captures (E0373, also scoped threads), assignments to the scrutinee in
+  match guards (E0510), and signature lifetimes (E0621, "lifetime may not
+  live long enough", including default object lifetime bounds:
+  `Box<dyn Trait>` in a signature is `'static`). Two-phase borrows are
+  reserved before the call's arguments are evaluated (`v.push(v.pop())` is
+  E0499), and loans flowing into the return value stay live at every point
+  reachable from where they are taken (NLL problem case #3). Types carry no lifetimes after type checking, so regions
   are modeled by loan sets attached to values (by reference depth) and
   propagated through calls by the callees' declared signatures; whenever
   the model is unsure it drops loans, so valid programs are never rejected

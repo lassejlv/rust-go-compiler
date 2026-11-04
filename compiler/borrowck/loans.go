@@ -306,6 +306,37 @@ func (b *builder) sigFlow(c *typeck.Callee, nargs int, ret Ty, argTys []Ty) *Flo
 			}
 		}
 	}
+	// trait objects that are 'static (`Box<dyn Trait>`): all they hold
+	if len(argTys) == nargs {
+		off := 0
+		if decl.SelfParam != nil {
+			off = 1
+		}
+		for j, p := range decl.Params {
+			var ds []int
+			staticObjects(p.Ty, argTys[off+j], 0, false, &ds, 0)
+			for _, dp := range ds {
+				static = append(static, StaticReq{Arg: off + j, Depth: dp, Deep: true, Object: true})
+			}
+		}
+	}
+	// the closure of a scoped thread must outlive 'scope, a region of
+	// the `thread::scope` closure's parameter (invariant in Scope): it
+	// outlives every body that can reach the Scope, so the closure may
+	// not borrow their locals
+	if d.Crate != nil && d.Crate.Name == "std" && d.Parent != nil && d.Parent.Kind == DefImpl {
+		if p := implSelfName(d) + "::" + d.Name; p == "Scope::spawn" || p == "Builder::spawn_scoped" {
+			off := 0
+			if decl.SelfParam != nil {
+				off = 1
+			}
+			for j, prm := range decl.Params {
+				if pt, ok := prm.Ty.(*ast.PathType); ok && pt.Path != nil && len(pt.Path.Segments) == 1 && pt.Path.Segments[0].Ident.Name == "F" {
+					static = append(static, StaticReq{Arg: off + j, Depth: 0, Deep: true, Object: true, LocalsOnly: true})
+				}
+			}
+		}
+	}
 	// 'static occurrences relate to nothing else
 	for i, os := range ins {
 		var keep []occ
@@ -475,6 +506,12 @@ func (b *builder) sigFlow(c *typeck.Callee, nargs int, ret Ty, argTys []Ty) *Flo
 type StaticReq struct {
 	Arg, Depth int
 	Deep       bool
+	// Object: a 'static trait object (only loans of locals themselves are
+	// reported, reborrows through references by their origins)
+	Object bool
+	// LocalsOnly: the required region outlives the body but is not
+	// 'static (a scoped thread's 'scope): origins are not checked
+	LocalsOnly bool
 }
 
 // refLevels counts the reference levels of a type: references and
@@ -545,6 +582,8 @@ type loan struct {
 	stmt   int
 	span   lexer.Span
 	origin string // universal region pseudo-loan (place.Local = -1)
+	// reserve: the reservation of a two-phase borrow
+	reserve bool
 }
 
 type loanChecker struct {
@@ -572,6 +611,13 @@ type loanChecker struct {
 	paramLabels [][]string
 	// tempSrc: temporaries assigned once, from a whole local (stores.go)
 	tempSrc map[LocalID]LocalID
+	// retLoans: loans flowing into the return value; retLive: those live
+	// at the entry of each block (retlive.go)
+	retLoans   bitset
+	retLive    []bitset
+	onRetStore func(st *lstate)
+	// originOf: the pseudo-loan of each universal region by name
+	originOf map[string]int
 }
 
 var debugLoans = os.Getenv("RUSTGO_BORROWCK_DEBUG") != ""
@@ -1012,7 +1058,7 @@ func (c *checker) checkLoans() {
 		for si, s := range bl.Stmts {
 			if s.Kind == SAssign && s.Rv.Kind == RRef && !ignoreBorrow(s.Rv.Place) {
 				lc.loanAt[[2]int{bi, si}] = len(lc.loans)
-				lc.loans = append(lc.loans, loan{place: s.Rv.Place, mut: s.Rv.Mut, block: bi, stmt: si, span: s.Span})
+				lc.loans = append(lc.loans, loan{place: s.Rv.Place, mut: s.Rv.Mut, block: bi, stmt: si, span: s.Span, reserve: s.Rv.Reserve})
 			}
 		}
 	}
@@ -1035,6 +1081,7 @@ func (c *checker) checkLoans() {
 	if lc.regions != nil && len(lc.regions.params) == len(lc.params) {
 		r := lc.regions
 		byName := map[string]int{}
+		lc.originOf = byName
 		loanOf := func(name string) int {
 			li, ok := byName[name]
 			if !ok {
@@ -1081,6 +1128,13 @@ func (c *checker) checkLoans() {
 					origins = append(origins, o)
 				}
 				w.out = true
+				w.objects = true
+				// `Self::Item` in the output: the impl's definition
+				if p := c.ctx.fn.Parent; p != nil && p.Item != nil && r.selfAst != nil {
+					if im, ok := p.Item.Kind.(*ast.ImplItem); ok {
+						w.assoc = implAssocTypes(im)
+					}
+				}
 				w.label(r.outAst, lc.localLayout(0))
 				lc.retLabels = w.labels
 			}
@@ -1122,6 +1176,7 @@ func (c *checker) checkLoans() {
 		lc.or(in[0], skey(o.local, o.slot), v)
 	}
 	lc.solve(in)
+	lc.computeReturnLive(in)
 	for bi := range body.Blocks {
 		if in[bi] != nil {
 			lc.runBlock(bi, in[bi], true)
@@ -1549,17 +1604,25 @@ const (
 	aBorrowShared
 	aBorrowMut
 	aStorageDead
+	aReserveMut // the reservation of a two-phase mutable borrow
 )
 
 func (lc *loanChecker) runBlock(bi int, in *lstate, report bool) *lstate {
 	st := in.clone()
 	bl := lc.body.Blocks[bi]
 	var after []bitset
+	var rl bitset
 	if report {
 		after = lc.liveAfter(bi)
+		if lc.retLive != nil && lc.retLive[bi] != nil {
+			rl = lc.retLive[bi].clone()
+		}
 	}
 	liveLoans := func(i int, ud useDef) bitset {
 		ll := newBitset(lc.nLoans)
+		if rl != nil {
+			ll.union(rl)
+		}
 		live := after[i]
 		for i, h := range st.holds {
 			// a local overwritten here no longer holds its old loans
@@ -1588,6 +1651,12 @@ func (lc *loanChecker) runBlock(bi int, in *lstate, report bool) *lstate {
 			lc.checkStmt(st, s, ll, -1)
 		}
 		lc.transferStmt(st, bi, si, s)
+		if lc.onRetStore != nil && s.Kind == SAssign && s.Place.Local == 0 {
+			lc.onRetStore(st)
+		}
+		if rl != nil {
+			lc.retLiveStmt(rl, bi, si, s)
+		}
 	}
 	t := bl.Term
 	if report {
@@ -1596,6 +1665,9 @@ func (lc *loanChecker) runBlock(bi int, in *lstate, report bool) *lstate {
 		lc.checkTerm(st, t, ll)
 	}
 	lc.transferTerm(st, t)
+	if lc.onRetStore != nil && t.Kind == TCall && t.Dest.Local == 0 {
+		lc.onRetStore(st)
+	}
 	return st
 }
 
@@ -1631,6 +1703,15 @@ func (lc *loanChecker) transferStmt(st *lstate, bi, si int, s Stmt) {
 			delete(st.holds, skey(s.Place.Local, k))
 		}
 		lc.killLocalLoans(st, s.Place.Local)
+	case SAscribe:
+		// the reference now has the declared (universal) region
+		if li, ok := lc.originOf[s.Region]; ok && lc.regions != nil {
+			if l := lc.localLayout(s.Place.Local); !l.flat && l.root.ty != nil && l.root.ty.Kind == TRef && l.n() > 0 {
+				v := newBitset(lc.nLoans)
+				v.set(li)
+				lc.or(st, skey(s.Place.Local, 0), v)
+			}
+		}
 	}
 }
 
@@ -1863,6 +1944,8 @@ func (lc *loanChecker) checkStmt(st *lstate, s Stmt, live bitset, own int) {
 			k := aBorrowShared
 			if s.Rv.Mut {
 				k = aBorrowMut
+			} else if s.Rv.Reserve {
+				k = aReserveMut
 			}
 			lc.access(s.Rv.Place, k, live, own, s.Span)
 		case RRawRef:
@@ -1980,7 +2063,7 @@ func (lc *loanChecker) access(p Place, k accessKind, live bitset, own int, sp le
 			continue
 		}
 		switch k {
-		case aRead, aShallowRead, aBorrowShared:
+		case aRead, aShallowRead, aBorrowShared, aReserveMut:
 			if !ln.mut {
 				continue
 			}
@@ -2002,6 +2085,10 @@ func (lc *loanChecker) access(p Place, k accessKind, live bitset, own int, sp le
 func (lc *loanChecker) conflict(p Place, k accessKind, ln loan, sp lexer.Span) {
 	what := lc.describe(p)
 	lp := lc.describe(ln.place)
+	if k == aReserveMut {
+		// reported like the mutable borrow it reserves (once)
+		k = aBorrowMut
+	}
 	key := fmt.Sprintf("%v/%d/%s", sp.Lo, k, what)
 	if lc.reported[key] {
 		return
@@ -2009,7 +2096,7 @@ func (lc *loanChecker) conflict(p Place, k accessKind, ln loan, sp lexer.Span) {
 	lc.reported[key] = true
 	switch k {
 	case aBorrowMut:
-		if ln.mut {
+		if ln.mut || ln.reserve {
 			lc.errorf(sp, "E0499", "cannot borrow `%s` as mutable more than once at a time", what)
 		} else {
 			lc.errorf(sp, "E0502", "cannot borrow `%s` as mutable because it is also borrowed as immutable", what)
@@ -2180,7 +2267,7 @@ func (lc *loanChecker) checkStatic(st *lstate, o Operand, req StaticReq, sp lexe
 			}
 			ln := lc.loans[li]
 			if ln.origin != "" {
-				if lc.regions != nil && !lc.regions.outlives(ln.origin, "'static") {
+				if lc.regions != nil && !req.LocalsOnly && !lc.regions.outlives(ln.origin, "'static") {
 					lc.regionError(ln.origin, sp)
 					return
 				}
@@ -2188,6 +2275,9 @@ func (lc *loanChecker) checkStatic(st *lstate, o Operand, req StaticReq, sp lexe
 			}
 			ld := lc.body.Locals[ln.place.Local]
 			if ld.Kind == LStatic || ld.Kind == LUpvar {
+				continue
+			}
+			if req.Object && placeThroughRef(ln.place) {
 				continue
 			}
 			name := lc.describe(Place{Local: ln.place.Local})
