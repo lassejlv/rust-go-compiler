@@ -1,0 +1,4 @@
+["key"] ["value"] ["v1"]
+["k1", "k2"] ["v1"] ["k1", "k2"] ["k1", "k2"]
+{"key"} Some("k1") Some("k2") Some("v1")
+["v1"] Some("value") ["k1", "k2"] ["value"]

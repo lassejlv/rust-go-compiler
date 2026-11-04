@@ -48,6 +48,10 @@ type IntoSlot struct {
 	// Name: the type parameter both occurrences are (`push(&mut self,
 	// value: T)`), "" for a store a bound relates
 	Name string
+	// Items: an iterator's items stored by the impls' declarations
+	// (`extend`, see itemStores): checked against the parameter's
+	// declared regions slot by slot
+	Items bool
 }
 
 func noFlow() *Flow { return &Flow{} }

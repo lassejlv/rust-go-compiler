@@ -3,6 +3,7 @@ package borrowck
 import (
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 
 	"rustgo/compiler/ast"
@@ -120,7 +121,7 @@ func opaqueItemLabels(tcx *typeck.Tcx, d *Def, it *ast.ImplTraitType, rl *layout
 // reference depth. Slots the signature does not describe keep the
 // depth-based flow.
 func slotFlow(tcx *typeck.Tcx, fl *Flow, d *Def, selfAst ast.Type, params map[string]bool, gens []*ast.Generics, argTys []Ty, ret Ty, elided string, mutIn []bool) {
-	decl := d.Fn.Ast.Decl
+	decl := sigDecl(d)
 	if ret == nil {
 		return
 	}
@@ -155,10 +156,47 @@ func slotFlow(tcx *typeck.Tcx, fl *Flow, d *Def, selfAst ast.Type, params map[st
 	if len(inAst) != len(argTys) {
 		return
 	}
+	// constant arguments come typed `()` (they hold no loans): one
+	// declared as a type parameter the result also holds (`fold("", f)`)
+	// gets that parameter's instance, so that the parameter is known
+	// to be an input
+	var outOcc map[string][]*lnode
+	for i, t := range argTys {
+		if t.Kind != TTuple || len(t.Elems) != 0 {
+			continue
+		}
+		pt, ok := inAst[i].(*ast.PathType)
+		if !ok || pt.QSelf != nil || pt.Path == nil || len(pt.Path.Segments) != 1 || pt.Path.Segments[0].Args != nil {
+			continue
+		}
+		name := pt.Path.Segments[0].Ident.Name
+		if !params[name] || name == "Self" {
+			continue
+		}
+		if outOcc == nil {
+			ow := newLabeler(params, selfAst)
+			ow.out = true
+			ow.label(decl.Output, rl)
+			outOcc = ow.occ
+		}
+		var inst Ty
+		for _, n := range outOcc[name] {
+			if inst != nil && n.ty != inst {
+				inst = nil
+				break
+			}
+			inst = n.ty
+		}
+		if inst != nil && !inst.HasParam() && !inst.HasInfer() && !layoutOf(inst).flat {
+			argTys = append([]Ty{}, argTys...)
+			argTys[i] = inst
+		}
+	}
 	type argInfo struct {
-		lay    *layout
-		labels []string
-		proj   map[int]string
+		lay       *layout
+		labels    []string
+		proj      map[int]string
+		projAssoc map[int]string
 		occ    map[string][]*lnode
 		full   bool
 	}
@@ -179,7 +217,7 @@ func slotFlow(tcx *typeck.Tcx, fl *Flow, d *Def, selfAst ast.Type, params map[st
 	}
 	w.out = true
 	w.label(decl.Output, rl)
-	out := argInfo{lay: rl, labels: w.labels, proj: w.proj, occ: w.occ}
+	out := argInfo{lay: rl, labels: w.labels, proj: w.proj, projAssoc: w.projAssoc, occ: w.occ}
 	// a type parameter must have the same instance everywhere (it does,
 	// unless the syntax and the types went out of step)
 	inst := map[string]string{}
@@ -375,10 +413,281 @@ func slotFlow(tcx *typeck.Tcx, fl *Flow, d *Def, selfAst ast.Type, params map[st
 			fl.Covered[j] = true
 		}
 	}
+	// the items of iterator x (an argument's type parameter or Self),
+	// by the impls of their types (see items.go): the edges into result
+	// node n, rel giving the item slots each slot of n holds; nil when
+	// that is not known
+	itemEdges := func(x string, n *lnode, rel func(im *itemMap) [][]int) []SlotEdge {
+		if !iterParam(d, x, gens) {
+			return nil
+		}
+		// closures that make x's items too (`F: FnMut(Self::Item,
+		// Self::Item) -> Self::Item` of reduce)
+		type node struct {
+			arg int
+			n   *lnode
+		}
+		var prods, xs []node
+		for i, a := range args {
+			for y, ys := range a.occ {
+				if y == x {
+					for _, s := range ys {
+						xs = append(xs, node{i, s})
+					}
+					continue
+				}
+				if len(ys) > 0 && boundMentions(y, x, gens, params) && !onlyClosureInputs(y, x, gens, params) {
+					if !producesItems(y, x, gens) {
+						return nil
+					}
+					for _, yn := range ys {
+						prods = append(prods, node{i, yn})
+					}
+				}
+			}
+		}
+		if len(xs) == 0 || len(prods) > 0 && len(xs) > 1 {
+			return nil
+		}
+		var edges []SlotEdge
+		for _, xn := range xs {
+			s := xn.n
+			if layoutOf(s.ty).n() != s.end-s.start {
+				return nil
+			}
+			im := iterItems(tcx, s.ty, 0)
+			if debugLoans {
+				fmt.Fprintf(os.Stderr, "borrowck: items of %v: %v\n", s.ty, im)
+			}
+			if im == nil {
+				return nil
+			}
+			rm := rel(im)
+			if rm == nil || len(rm) != n.end-n.start {
+				return nil
+			}
+			// the sources of each item slot
+			type src struct{ arg, slot int }
+			srcs := make([][]src, len(im.m))
+			has := func(k int, x src) bool {
+				for _, y := range srcs[k] {
+					if y == x {
+						return true
+					}
+				}
+				return false
+			}
+			for k, ms := range im.m {
+				for _, m := range ms {
+					srcs[k] = append(srcs[k], src{xn.arg, s.start + m})
+				}
+			}
+			for _, pr := range prods {
+				sm := closSummaries[pr.n.ty]
+				if pr.n.ty == nil || pr.n.ty.Kind != TClosure || sm == nil || sm.ret == nil || sm.ret.flat || sm.imprecise || !sameSlots(sm.ret.root.ty, im.lay.root.ty) || len(sm.fromArg) != len(srcs) || len(sm.capVague) != len(srcs) || len(sm.capSlots) != len(srcs) {
+					return nil
+				}
+				for _, pl := range sm.params {
+					if pl == nil || pl.flat || !sameSlots(pl.root.ty, im.lay.root.ty) {
+						return nil
+					}
+				}
+				for j := range srcs {
+					if sm.capVague[j] {
+						return nil
+					}
+					for _, dd := range sm.capSlots[j] {
+						if dd >= pr.n.end-pr.n.start {
+							return nil
+						}
+						if x := (src{pr.arg, pr.n.start + dd}); !has(j, x) {
+							srcs[j] = append(srcs[j], x)
+						}
+					}
+				}
+			}
+			// the results the closures return come back as their
+			// arguments
+			for changed := len(prods) > 0; changed; {
+				changed = false
+				for _, pr := range prods {
+					sm := closSummaries[pr.n.ty]
+					for j := range srcs {
+						for _, fa := range sm.fromArg[j] {
+							if fa[1] >= len(srcs) {
+								return nil
+							}
+							for _, x := range srcs[fa[1]] {
+								if !has(j, x) {
+									srcs[j] = append(srcs[j], x)
+									changed = true
+								}
+							}
+						}
+					}
+				}
+			}
+			for j, ks := range rm {
+				for _, k := range ks {
+					if k >= len(srcs) {
+						return nil
+					}
+					for _, x := range srcs[k] {
+						edges = append(edges, SlotEdge{Arg: x.arg, From: x.slot, To: n.start + j})
+					}
+				}
+			}
+		}
+		if edges == nil {
+			edges = []SlotEdge{}
+		}
+		return edges
+	}
+	// the items of iterator x when exactly one argument node is x
+	itemsOf := func(x string) (int, *lnode, *itemMap) {
+		if !iterParam(d, x, gens) {
+			return 0, nil, nil
+		}
+		ai, an := -1, (*lnode)(nil)
+		for i, a := range args {
+			for _, s := range a.occ[x] {
+				if an != nil {
+					return 0, nil, nil
+				}
+				ai, an = i, s
+			}
+		}
+		if an == nil || layoutOf(an.ty).n() != an.end-an.start {
+			return 0, nil, nil
+		}
+		for _, a := range args {
+			for y, ys := range a.occ {
+				if y != x && len(ys) > 0 && boundMentions(y, x, gens, params) && !onlyClosureInputs(y, x, gens, params) {
+					return 0, nil, nil
+				}
+			}
+		}
+		im := iterItems(tcx, an.ty, 0)
+		if im == nil {
+			return 0, nil, nil
+		}
+		return ai, an, im
+	}
+	// outputs also made by a closure from themselves (`fold<B, F:
+	// FnMut(B, Self::Item) -> B>(self, init: B, f: F) -> B`): what its
+	// summary says the result holds of the other inputs, and of its own
+	// argument B again (the previous result) slot by slot
+	for name, ns := range out.occ {
+		if !inParams[name] || bad[name] || name == "Self" || len(ns) != 1 {
+			continue
+		}
+		_, producers := boundSources(name, gens, params)
+		if len(producers) != 1 {
+			continue
+		}
+		var bArg int
+		var bNode *lnode
+		for i, a := range args {
+			for _, x := range a.occ[name] {
+				if bNode != nil {
+					bNode = nil
+					break
+				}
+				bArg, bNode = i, x
+			}
+		}
+		if bNode == nil || bNode.ty != ns[0].ty {
+			continue
+		}
+		argOcc := make([]map[string][]*lnode, len(args))
+		for i, a := range args {
+			argOcc[i] = a.occ
+		}
+		n := ns[0]
+		for f, inputs := range producers {
+			es, good := closureProduced(f, inputs, argOcc, n, params, itemsOf)
+			if !good {
+				continue
+			}
+			// result slot j holds what result slot a held (through B)
+			w := n.end - n.start
+			srcs := make([][]SlotEdge, w)
+			deps := make([][]int, w)
+			for _, e := range es {
+				j := e.To - n.start
+				if e.Arg == bArg && e.From >= bNode.start && e.From < bNode.end {
+					deps[j] = append(deps[j], e.From-bNode.start)
+				}
+				srcs[j] = append(srcs[j], e)
+			}
+			for changed := true; changed; {
+				changed = false
+				for j := range deps {
+					for _, a := range deps[j] {
+						for _, e := range srcs[a] {
+							ne := SlotEdge{Arg: e.Arg, From: e.From, To: n.start + j}
+							if !slices.Contains(srcs[j], ne) {
+								srcs[j] = append(srcs[j], ne)
+								changed = true
+							}
+						}
+					}
+				}
+			}
+			for _, ss := range srcs {
+				for _, e := range ss {
+					add(e)
+				}
+			}
+		}
+	}
 	// outputs only the bounds relate to the inputs
 	for name, ns := range out.occ {
 		if inParams[name] || bad[name] || name == "Self" {
 			continue
+		}
+		// collected items (`B: FromIterator<Self::Item>`)
+		if tr, x, a, z := itemBoundOf(tcx, d, name, gens, params); tr != nil {
+			var all []SlotEdge
+			ok := true
+			for _, n := range ns {
+				es := itemEdges(x, n, func(im *itemMap) [][]int {
+					if z == nil {
+						return traitArgSlots(tcx, tr, n.ty, im.lay.root.ty, 0)
+					}
+					// the part of the items the declared item type z
+					// gives parameter a
+					_, occ, projs := labelAst(params, z, im.lay)
+					if len(projs) > 0 || len(occ[a]) != 1 {
+						return nil
+					}
+					an := occ[a][0]
+					m := traitArgSlots(tcx, tr, n.ty, an.ty, 0)
+					if m == nil {
+						return nil
+					}
+					for j := range m {
+						for k := range m[j] {
+							m[j][k] += an.start
+						}
+					}
+					return m
+				})
+				if es == nil {
+					ok = false
+					break
+				}
+				all = append(all, es...)
+			}
+			if ok {
+				for _, e := range all {
+					add(e)
+				}
+				for _, n := range ns {
+					cover(n)
+				}
+				continue
+			}
 		}
 		srcs, producers := boundSources(name, gens, params)
 		if len(srcs) == 0 && len(producers) == 1 {
@@ -392,7 +701,7 @@ func slotFlow(tcx *typeck.Tcx, fl *Flow, d *Def, selfAst ast.Type, params map[st
 			ok := true
 			for f, inputs := range producers {
 				for _, n := range ns {
-					es, good := closureProduced(f, inputs, argOcc, n, params)
+					es, good := closureProduced(f, inputs, argOcc, n, params, itemsOf)
 					if !good {
 						ok = false
 						break
@@ -470,6 +779,32 @@ func slotFlow(tcx *typeck.Tcx, fl *Flow, d *Def, selfAst ast.Type, params map[st
 	// associated types of parameters (Self::Item)
 	for _, pn := range projNodes(out.proj, rl) {
 		x := out.proj[pn.start]
+		if out.projAssoc[pn.start] == "Item" {
+			es := itemEdges(x, pn, func(im *itemMap) [][]int {
+				// the projection's node (projNodes gives the outermost
+				// node with its slots: Option<Self::Item>)
+				for n := pn; n != nil; {
+					if sameSlots(im.lay.root.ty, n.ty) {
+						return rangeMap(0, pn.end-pn.start)
+					}
+					var next *lnode
+					for _, k := range n.kids {
+						if k.start == pn.start && k.end == pn.end {
+							next = k
+						}
+					}
+					n = next
+				}
+				return nil
+			})
+			if es != nil {
+				for _, e := range es {
+					add(e)
+				}
+				cover(pn)
+				continue
+			}
+		}
 		found := false
 		for i, a := range args {
 			for y, ys := range a.occ {
@@ -489,6 +824,71 @@ func slotFlow(tcx *typeck.Tcx, fl *Flow, d *Def, selfAst ast.Type, params map[st
 		}
 		if found {
 			cover(pn)
+		}
+	}
+	// `K: Borrow<Q>` with K and Q instances of the same type: only the
+	// identity impl applies, so they are the same type, regions included
+	// (HashMap::get(&self, k: &Q) with K = &'static str needs a key of
+	// type &&'static str). Behind `&'s Map<K, ..>` (covariant) K may
+	// shrink, but K: 's: the result's 's slots hold what the key's Q
+	// holds; behind `&mut` (invariant) the key's regions are the map's,
+	// as if stored into its K slots.
+	for _, pr := range borrowPairs(gens, params) {
+		type at struct {
+			arg int
+			n   *lnode
+		}
+		var as, bs []at
+		for i, a := range args {
+			for _, n := range a.occ[pr[0]] {
+				as = append(as, at{i, n})
+			}
+			for _, n := range a.occ[pr[1]] {
+				bs = append(bs, at{i, n})
+			}
+		}
+		same := len(as) > 0 && len(bs) > 0
+		for _, x := range append(append([]at{}, as...), bs...) {
+			if x.n.ty == nil || x.n.ty != as[0].n.ty || x.n.end-x.n.start != as[0].n.end-as[0].n.start {
+				same = false
+			}
+		}
+		if !same || as[0].n.end == as[0].n.start || hasClosure(as[0].n) {
+			continue
+		}
+		for _, a := range as {
+			ref := refAbove(args[a.arg].lay.root, a.n)
+			if ref == nil || ref.ty == nil {
+				continue
+			}
+			if !ref.ty.Mut {
+				lt := args[a.arg].labels[ref.start]
+				if lt == "" || lt[0] != '\'' || lt == "'static" {
+					continue
+				}
+				for j, lb := range out.labels {
+					if lb == lt || (lb == "'?" && elided != "" && elided == lt) {
+						for _, b := range bs {
+							for k := 0; k < b.n.end-b.n.start; k++ {
+								add(SlotEdge{Arg: b.arg, From: b.n.start + k, To: j})
+							}
+						}
+					}
+				}
+				continue
+			}
+			if ref != args[a.arg].lay.root || a.arg >= len(mutIn) || !mutIn[a.arg] {
+				continue
+			}
+			for _, b := range bs {
+				if b.arg == a.arg {
+					continue
+				}
+				for k := 0; k < b.n.end-b.n.start; k++ {
+					fl.IntoSlots = append(fl.IntoSlots, IntoSlot{Dst: a.arg, DstSlot: a.n.start + k, Src: b.arg, SrcSlot: b.n.start + k, Name: pr[0]})
+				}
+				fl.Into = append(fl.Into, IntoEdge{Dst: a.arg, DstDepth: a.n.depth - 1, Src: b.arg, SrcDepth: b.n.depth, Name: pr[0]})
+			}
 		}
 	}
 	if debugLoans {
@@ -526,6 +926,12 @@ func slotFlow(tcx *typeck.Tcx, fl *Flow, d *Def, selfAst ast.Type, params map[st
 							continue
 						}
 						for _, s := range xs {
+							// the items of an iterator (`I: IntoIterator<Item
+							// = (K, V)>`), by the impls (items.go)
+							if is := itemStores(tcx, d, x, name, s, si, n, di, gens, params); is != nil {
+								fl.IntoSlots = append(fl.IntoSlots, is...)
+								continue
+							}
 							alignInto(fl, si, s, sa.lay, di, n, a.lay)
 						}
 					}
@@ -563,7 +969,7 @@ func slotFlow(tcx *typeck.Tcx, fl *Flow, d *Def, selfAst ast.Type, params map[st
 // summary: its parameters' slots (inputs `X` or `&X` with X a type
 // parameter of the arguments) and the slots of the closure value its
 // captures sit in. good is false when that cannot be related precisely.
-func closureProduced(f string, inputs []ast.Type, occ []map[string][]*lnode, n *lnode, params map[string]bool) (edges []SlotEdge, good bool) {
+func closureProduced(f string, inputs []ast.Type, occ []map[string][]*lnode, n *lnode, params map[string]bool, itemsOf func(x string) (int, *lnode, *itemMap)) (edges []SlotEdge, good bool) {
 	fi := -1
 	var fn *lnode
 	for i, o := range occ {
@@ -597,6 +1003,7 @@ func closureProduced(f string, inputs []ast.Type, occ []map[string][]*lnode, n *
 		arg   int
 		node  *lnode
 		shift int
+		items *itemMap // an iterator's items (`X::Item`): their slots in node
 	}
 	srcOf := func(k int) (src, bool) {
 		in := inputs[k]
@@ -606,6 +1013,13 @@ func closureProduced(f string, inputs []ast.Type, occ []map[string][]*lnode, n *
 				break
 			}
 			in = p.Elem
+		}
+		if pt, ok := in.(*ast.PathType); ok && itemsOf != nil && pt.QSelf == nil && pt.Path != nil && len(pt.Path.Segments) == 2 && pt.Path.Segments[1].Ident.Name == "Item" && pt.Path.Segments[0].Args == nil && pt.Path.Segments[1].Args == nil {
+			i, nd, im := itemsOf(pt.Path.Segments[0].Ident.Name)
+			if im == nil || sm.params[k] == nil || sm.params[k].flat || !sameSlots(sm.params[k].root.ty, im.lay.root.ty) {
+				return src{}, false
+			}
+			return src{arg: i, node: nd, items: im}, true
 		}
 		shift := 0
 		if r, ok := in.(*ast.RefType); ok {
@@ -627,7 +1041,7 @@ func closureProduced(f string, inputs []ast.Type, occ []map[string][]*lnode, n *
 				if found {
 					return src{}, false
 				}
-				s, found = src{i, nd, shift}, true
+				s, found = src{arg: i, node: nd, shift: shift}, true
 			}
 		}
 		if !found {
@@ -647,6 +1061,15 @@ func closureProduced(f string, inputs []ast.Type, occ []map[string][]*lnode, n *
 		}
 		for _, a := range sm.fromArg[rj] {
 			s, ok := srcOf(a[0])
+			if ok && s.items != nil {
+				if a[1] >= len(s.items.m) {
+					return nil, false
+				}
+				for _, x := range s.items.m[a[1]] {
+					edges = append(edges, SlotEdge{Arg: s.arg, From: s.node.start + x, To: n.start + j})
+				}
+				continue
+			}
 			if !ok || a[1] < s.shift {
 				return nil, false
 			}
