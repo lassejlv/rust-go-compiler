@@ -35,7 +35,7 @@ type Gen struct {
 	// #[track_caller] wrappers (see genFunction) and those referred to
 	tcWrappers []tcWrapper
 	tcUsed     map[string]bool
-	usesAsm bool              // asm! present (see Program.UsesAsm)
+	usesAsm    bool // asm! present (see Program.UsesAsm)
 	// scalarConsts caches literal renderings of scalar const items.
 	scalarConsts map[string]string
 	fns          chunkBuf // function bodies (one chunk per function)
