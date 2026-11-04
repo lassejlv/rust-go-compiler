@@ -268,7 +268,9 @@ func (b *builder) sigFlow(c *typeck.Callee, nargs int, ret Ty, argTys []Ty) *Flo
 		switch sp.Kind {
 		case ast.SelfValue:
 			w.path(&ast.Path{Segments: []*ast.PathSegment{{Ident: ast.Ident{Name: "Self"}}}}, 0)
-			mutIn = append(mutIn, false)
+			// map entries hold a `&mut` of their map: what their by-value
+			// methods take (`or_insert(self, default: V)`) is stored there
+			mutIn = append(mutIn, d.Crate != nil && d.Crate.Name == "std" && isMapEntry(selfTy))
 		case ast.SelfRef, ast.SelfRefMut:
 			lt := sp.Lifetime
 			if lt == "" {
@@ -1884,7 +1886,23 @@ func (lc *loanChecker) transferTerm(st *lstate, t Term) {
 			}
 			src := lc.depthView(args[e.Src])
 			// the places the `&mut` argument borrows receive the loans
-			for _, p := range lc.borrowedPlaces(args[e.Dst]) {
+			// (through a map entry, the map it borrows too)
+			places := lc.borrowedPlaces(args[e.Dst])
+			shift := map[int]int{}
+			for _, p := range places {
+				if len(p.Proj) == 0 && isMapEntryTy(lc.body.Locals[p.Local].Ty) {
+					// the entry's values sit one level down from the map's
+					for _, mp := range lc.borrowedPlaces(lc.placeVal(st, p)) {
+						shift[len(places)] = 1
+						places = append(places, mp)
+					}
+				}
+			}
+			for pi, p := range places {
+				e := e
+				if shift[pi] > 0 && e.DstDepth > 0 {
+					e.DstDepth--
+				}
 				if precise && lc.intoSlotsCover(fl, e, p) {
 					continue // stored slot by slot below
 				}
@@ -2482,4 +2500,29 @@ func (ctx *Ctx) dropSignificant(t Ty) bool {
 	}
 	dr := ctx.tcx.LangOpt("drop")
 	return dr != nil && ctx.tcx.Implements(t, dr)
+}
+
+// isMapEntry reports whether t is one of std's map entry types, which hold
+// a mutable borrow of their map.
+func isMapEntry(t ast.Type) bool {
+	pt, ok := t.(*ast.PathType)
+	if !ok || pt.Path == nil || len(pt.Path.Segments) == 0 {
+		return false
+	}
+	switch pt.Path.Segments[len(pt.Path.Segments)-1].Ident.Name {
+	case "Entry", "VacantEntry", "OccupiedEntry":
+		return true
+	}
+	return false
+}
+
+func isMapEntryTy(t Ty) bool {
+	if t == nil || t.Kind != TAdt || t.Def == nil || t.Def.Crate == nil || t.Def.Crate.Name != "std" {
+		return false
+	}
+	switch t.Def.Name {
+	case "Entry", "VacantEntry", "OccupiedEntry":
+		return true
+	}
+	return false
 }
