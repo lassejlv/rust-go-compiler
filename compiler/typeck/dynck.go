@@ -59,6 +59,17 @@ func (t *Tcx) checkDynTrait(principal *TraitRef, bindings []Binding, sp lexer.Sp
 	if !t.isStd(principal.Trait) && !t.dynCompatible(principal.Trait, map[*Def]bool{}) {
 		t.ErrorCode(sp, "E0038", "the trait `%s` is not dyn compatible", principal.Trait.Name)
 	}
+	// std traits that are not dyn compatible (rustgo's declarations of
+	// std traits are not checked: they may differ in details)
+	if t.isStd(principal.Trait) && stdNotDynCompatible[principal.Trait.Name] {
+		t.ErrorCode(sp, "E0038", "the trait `%s` is not dyn compatible", principal.Trait.Name)
+	}
+}
+
+var stdNotDynCompatible = map[string]bool{
+	"Clone": true, "Copy": true, "Default": true, "Sized": true, "Eq": true, "Ord": true,
+	"Hash": true, "From": true, "Into": true, "FromStr": true, "TryFrom": true, "TryInto": true,
+	"FromIterator": true, "Extend": true, "ToOwned": true,
 }
 
 // mentionsSelf reports whether a type mentions `Self` other than through

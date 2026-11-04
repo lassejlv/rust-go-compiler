@@ -19,6 +19,7 @@ type deriveInfo struct {
 	union    *ast.UnionItem
 	span     lexer.Span
 	attrs    []*ast.Attr
+	foreign  bool // see Expander.Foreign
 }
 
 type deriveFn func(d *deriveInfo) (string, error)
@@ -31,7 +32,7 @@ var derives = map[string]struct {
 	"Clone":      {"::std::clone::Clone", deriveClone},
 	"Copy":       {"::std::marker::Copy", deriveEmpty},
 	"PartialEq":  {"::std::cmp::PartialEq", derivePartialEq},
-	"Eq":         {"::std::cmp::Eq", deriveEmpty},
+	"Eq":         {"::std::cmp::Eq", deriveEq},
 	"PartialOrd": {"::std::cmp::PartialOrd", derivePartialOrd},
 	"Ord":        {"::std::cmp::Ord", deriveOrd},
 	"Hash":       {"::std::hash::Hash", deriveHash},
@@ -72,7 +73,7 @@ func (e *Expander) deriveItem(it *ast.Item) ([]*ast.Item, error) {
 	if !hasAttr(it.Attrs, "derive") {
 		return nil, nil
 	}
-	d := &deriveInfo{name: it.Name.Name, span: it.Span, attrs: it.Attrs}
+	d := &deriveInfo{name: it.Name.Name, span: it.Span, attrs: it.Attrs, foreign: e.Foreign}
 	switch k := it.Kind.(type) {
 	case *ast.StructItem:
 		d.strct, d.generics = k, k.Generics
@@ -124,7 +125,7 @@ func (e *Expander) deriveItem(it *ast.Item) ([]*ast.Item, error) {
 			if err != nil {
 				return nil, errAt(spans[i], "%v", err)
 			}
-			src := implHeader(d, dv.trait) + " {\n" + body + "\n}"
+			src := "#[automatically_derived] " + implHeader(d, dv.trait) + " {\n" + body + "\n}"
 			items, err := parseDerived(src, a.Span)
 			if err != nil {
 				return nil, err
@@ -188,6 +189,66 @@ func implHeader(d *deriveInfo, trait string) string {
 }
 
 func deriveEmpty(d *deriveInfo) (string, error) { return "", nil }
+
+// deriveEq asserts that every field is Eq (like rustc's
+// AssertParamIsEq): `#[derive(Eq)]` on a struct with an f64 field is E0277.
+func deriveEq(d *deriveInfo) (string, error) {
+	var b strings.Builder
+	if d.foreign {
+		return "", nil
+	}
+	if d.strct != nil {
+		if reprPacked(d.attrs) {
+			return "", nil // fields of packed structs cannot be borrowed
+		}
+		for i, f := range d.strct.Fields {
+			b.WriteString("__assert_param_is_eq(&self." + fieldName(f, i) + "); ")
+		}
+	} else if d.enum != nil {
+		var arms []string
+		hasUnit := false
+		for _, v := range d.enum.Variants {
+			if len(v.Fields) == 0 {
+				hasUnit = true
+				continue
+			}
+			arm := variantPat(v, "__self_") + " => { "
+			for i := range v.Fields {
+				arm += fmt.Sprintf("__assert_param_is_eq(__self_%d); ", i)
+			}
+			arms = append(arms, arm+"}")
+		}
+		if len(arms) > 0 {
+			if hasUnit {
+				arms = append(arms, "_ => {}")
+			}
+			b.WriteString("match self { " + strings.Join(arms, ", ") + " }")
+		}
+	}
+	if b.Len() == 0 {
+		return "", nil
+	}
+	return "#[doc(hidden)] #[inline] fn assert_receiver_is_total_eq(&self) { fn __assert_param_is_eq<__T: ::std::cmp::Eq + ?::std::marker::Sized>(_: &__T) {} " + b.String() + " }", nil
+}
+
+// reprPacked reports a #[repr(packed)] attribute.
+func reprPacked(attrs []*ast.Attr) bool {
+	for _, a := range attrs {
+		if a.Path != "repr" {
+			continue
+		}
+		args, ok := attrArgs(a)
+		if !ok {
+			continue
+		}
+		for _, t := range args {
+			if t.Delim == 0 && t.Tok.Kind == lexer.Ident && t.Tok.Text == "packed" {
+				return true
+			}
+		}
+	}
+	return false
+}
 
 // fieldName renders a field name for use after `.` or in struct
 // expressions/patterns.

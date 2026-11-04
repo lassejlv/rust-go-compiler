@@ -43,6 +43,12 @@ func (t *Tcx) checkConstContext(r *Results, def *Def) {
 			return false
 		case *ast.CallExpr:
 			c, sp = r.Callees[x.ID], x.Span
+			if c != nil && c.Kind == CallFn && nonConstStdFn(c.Def) {
+				// std functions that allocate are not const (also when a
+				// macro such as `vec!` or `format!` calls them)
+				t.ErrorCode(sp, "E0015", "cannot call non-const fn `%s` in %s", stdFnName(c.Def), what)
+				return true
+			}
 			if pe, ok := x.Fn.(*ast.PathExpr); ok && fromMacro(pe.Path) {
 				c = nil
 			}

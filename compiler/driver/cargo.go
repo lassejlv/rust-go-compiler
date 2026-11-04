@@ -759,9 +759,11 @@ func (bs *buildState) compileProgram(units []*crateUnit, binIdx int) (*codegen.P
 			}
 		}
 		exp.DisplayName = u.name
+		exp.Foreign = strings.Contains(u.src, "/.cargo/registry/") || strings.Contains(u.src, "/.cargo/git/")
 		if err := exp.ExpandCrate(c, u.key); err != nil {
 			return nil, fmt.Errorf("crate %s: %v", u.name, err)
 		}
+		exp.Foreign = false
 		exp.Config = nil
 		exp.Externs = nil
 		exp.ProcMacros = nil

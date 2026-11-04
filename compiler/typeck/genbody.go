@@ -121,6 +121,7 @@ func (t *Tcx) CheckGenericBodies() {
 				// a body without errors: the deny-by-default lints
 				t.polyResults = nil
 				t.checkLints(r, d, d.Fn.Ast.Body)
+				t.checkParamStatic(r, d)
 				ast.Walk(d.Fn.Ast.Body, func(n any) bool {
 					switch x := n.(type) {
 					case *ast.ItemStmt:

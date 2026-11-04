@@ -817,6 +817,11 @@ func (ac *astConv) genericArgsFor(d *Def, seg *ast.PathSegment, prefix []Ty, sp 
 		if nlt > declared && (d.Kind == DefStruct || d.Kind == DefEnum || d.Kind == DefUnion || d.Kind == DefTrait || d.Kind == DefTyAlias) {
 			t.ErrorCode(sp, "E0107", "%s takes %d lifetime argument%s but %d lifetime arguments were supplied", d.Kind, declared, plural(declared), nlt)
 		}
+		if d.Kind == DefFn && d.Fn != nil && d.Fn.Ast != nil && ac.owner != nil && ac.owner.Crate != nil && ac.owner.Crate.Local && (seg == nil || seg.Ident.Hyg == 0) {
+			if early, ok := earlyBoundLifetimes(d.Fn.Ast); ok && early < declared {
+				t.ErrorCode(sp, "E0794", "cannot specify lifetime arguments explicitly if late bound lifetime parameters are present")
+			}
+		}
 	}
 	gi := 0
 	for _, p := range own {
@@ -913,6 +918,20 @@ func (ac *astConv) lowerPathType(x *ast.PathType) Ty {
 		if len(rest) == 0 {
 			t.Errorf(x.Span, "expected associated type")
 			return TyErr
+		}
+		// `<u8 as Trait>::A` with no `impl Trait for u8` (a local trait
+		// and fully known types)
+		if t.implsIndexed && ac.owner != nil && ac.owner.Crate != nil && ac.owner.Crate.Local && !t.isStd(tr.Trait) && !fromMacro(x.Path) {
+			known := true
+			for _, a := range tr.Args {
+				if a == nil || a.HasParam() || a.HasInfer() || a.HasProj() || a.HasOpaque() || a.HasError() {
+					known = false
+				}
+			}
+			if known && newInferCtxt(t).evaluate(&Predicate{Trait: tr}, 0) == SelNone {
+				t.ErrorCode(x.Span, "E0277", "the trait bound `%s: %s` is not satisfied", tr.Args[0], tr.Trait.Name)
+				return TyErr
+			}
 		}
 		ty := ac.projectionFor(tr, rest[0].Ident.Name, x.Span)
 		if len(rest) > 1 {

@@ -54,6 +54,15 @@ type Resolver struct {
 	changed bool
 	// macroReexports: macros a crate re-exports by `pub use` (per crate).
 	macroReexports map[*Crate]map[string]bool
+	// missingExterns: `extern crate` items whose crate was not found
+	// while collecting (reported by ResolveImports if still missing).
+	missingExterns []missingExtern
+}
+
+type missingExtern struct {
+	m    *Module
+	name string
+	span ast.Span
 }
 
 func (r *Resolver) isMacro(c *Crate, name string) bool {
@@ -284,6 +293,9 @@ func (r *Resolver) collectItem(it *ast.Item, m *Module, parent *Def) *Def {
 		} else if name == "std" || name == "core" || name == "alloc" {
 			// std may not be loaded yet if we are std itself; resolve lazily via path.
 			m.Imports = append(m.Imports, &Import{Module: m, Path: []string{name}, Global: true, Name: bind, Span: it.Span})
+		} else if name != "self" && name != "proc_macro" && name != "test" {
+			// checked once every crate's extern prelude is known (E0463)
+			r.missingExterns = append(r.missingExterns, missingExtern{m, name, it.Span})
 		}
 		return nil
 	case *ast.ExternBlockItem:
@@ -430,6 +442,9 @@ func (r *Resolver) collectUse(t *ast.UseTree, prefix []string, global bool, m *M
 			// use a::b::{self} -> binds b
 			path = segs[:len(segs)-1]
 			if len(path) == 0 {
+				if t.Rename == nil {
+					r.Errors = append(r.Errors, fmt.Sprintf("%s: error[E0431]: imports need to be explicitly named", t.Span.Lo))
+				}
 				return
 			}
 			name = path[len(path)-1]
@@ -441,7 +456,13 @@ func (r *Resolver) collectUse(t *ast.UseTree, prefix []string, global bool, m *M
 	case ast.UseGlob:
 		m.Imports = append(m.Imports, &Import{Module: m, Path: segs, Global: global, Glob: true, Span: t.Span, Vis: vis})
 	case ast.UseNested:
+		selves := 0
 		for _, n := range t.Nested {
+			if n.Kind == ast.UseSimple && n.Prefix != nil && len(n.Prefix.Segments) == 1 && n.Prefix.Segments[0].Ident.Name == "self" {
+				if selves++; selves == 2 {
+					r.Errors = append(r.Errors, fmt.Sprintf("%s: error[E0430]: `self` import can only appear once in an import list", n.Span.Lo))
+				}
+			}
 			r.collectUse(n, segs, global, m, vis)
 		}
 	}
@@ -484,6 +505,22 @@ func (r *Resolver) ResolveImports() {
 	if r.Std != nil {
 		if pm := r.Std.Root.Lookup("prelude", TypeNS); pm != nil && pm.Res.Def != nil && pm.Res.Def.Mod != nil {
 			r.Prelude = pm.Res.Def.Mod
+		}
+	}
+	for _, me := range r.missingExterns {
+		if me.m.Crate != nil && me.m.Crate.Local && r.ExternCrate(me.m.Crate, me.name) == nil {
+			r.Errors = append(r.Errors, fmt.Sprintf("%s: error[E0463]: can't find crate for `%s`", me.span.Lo, me.name))
+		}
+	}
+	r.missingExterns = nil
+	for _, c := range r.CrateList {
+		if !c.Local || c.Ast == nil {
+			continue
+		}
+		for _, a := range c.Ast.Attrs {
+			if a.Inner && a.Path == "feature" {
+				r.Errors = append(r.Errors, fmt.Sprintf("%s: error[E0554]: `#![feature]` may not be used on the stable release channel", a.Span.Lo))
+			}
 		}
 	}
 	mods := r.allModules()
@@ -1272,7 +1309,7 @@ func VisibleFrom(vis ast.Visibility, owner, from *Module) bool {
 	switch vis {
 	case ast.VisPub:
 		return true
-	case ast.VisCrate, ast.VisRestricted:
+	case ast.VisCrate:
 		return owner.Crate == from.Crate
 	}
 	if owner.Crate != from.Crate {
@@ -1285,12 +1322,63 @@ func VisibleFrom(vis ast.Visibility, owner, from *Module) bool {
 	if vis == ast.VisSuper {
 		anc = anc.ParentModule()
 	}
+	if vis.Restricted() {
+		anc = RestrictedModule(vis, owner)
+		if anc == nil {
+			return true // unknown path: crate-visible
+		}
+	}
 	for x := from; x != nil; x = x.Parent {
 		if x == anc || x.Normal == anc {
 			return true
 		}
 	}
 	return false
+}
+
+// RestrictedModule resolves the path of a `pub(in path)` visibility of an
+// item declared in module owner to the module it names (nil if it does not
+// name a module of owner's crate).
+func RestrictedModule(vis ast.Visibility, owner *Module) *Module {
+	p := vis.RestrictedPath()
+	if p == nil || owner == nil || owner.Crate == nil {
+		return nil
+	}
+	var cur *Module
+	for i, sg := range p.Segments {
+		name := sg.Ident.Name
+		switch {
+		case i == 0 && name == "crate":
+			cur = owner.Crate.Root
+			continue
+		case i == 0 && name == "self":
+			cur = owner.Normal
+			if cur == nil {
+				cur = owner
+			}
+			continue
+		case name == "super":
+			if cur == nil {
+				cur = owner.Normal
+				if cur == nil {
+					cur = owner
+				}
+			}
+			cur = cur.ParentModule()
+			continue
+		case i == 0:
+			cur = owner.Crate.Root // 2015: relative to the crate root
+		}
+		if cur == nil {
+			return nil
+		}
+		b := cur.Lookup(name, TypeNS)
+		if b == nil || b.Res.Def == nil || b.Res.Def.Kind != DefMod || b.Res.Def.Mod == nil {
+			return nil
+		}
+		cur = b.Res.Def.Mod
+	}
+	return cur
 }
 
 // injectedStd reports whether a 2015 crate-root path `::name` refers to the

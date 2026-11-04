@@ -15,6 +15,7 @@ package expand
 
 import (
 	"fmt"
+	"strings"
 	"rustgo/compiler/ast"
 	"rustgo/compiler/lexer"
 	"rustgo/compiler/parser"
@@ -235,6 +236,10 @@ func desugarAsync(c *ast.Crate) error {
 				return x
 			}
 			// c"..." => CStr::from_bytes_with_nul_unchecked(b"...\0")
+			if strings.ContainsRune(e.Value, 0) {
+				fail(errAt(e.Span, "null characters in C string literals are not supported"))
+				return x
+			}
 			r, err := templExpr("unsafe { ::std::ffi::CStr::from_bytes_with_nul_unchecked(b"+quoteRust(e.Value+"\x00", '"')+") }", nil, e.Span)
 			if err != nil {
 				fail(err)

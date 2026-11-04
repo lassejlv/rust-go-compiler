@@ -364,6 +364,88 @@ func (t *Tcx) compareImplMethod(impl, im, tm *Def) {
 	}
 	if eq, cmp := same(tsig.Output, isig.Output); cmp && !eq {
 		t.ErrorCode(im.Item.Name.Span, "E0053", "method `%s` has an incompatible type for trait", im.Name)
+		return
+	}
+	t.checkStricterBounds(im, tm, ig, tg, args)
+}
+
+// checkStricterBounds reports a bound of an impl method's own type
+// parameter that the trait method's declaration does not imply (E0276).
+// Only bounds `P: Trait<..>` on the method's own parameters are compared.
+func (t *Tcx) checkStricterBounds(im, tm *Def, ig, tg *Generics, args []Ty) {
+	// (std's trait declarations in rustgo's library may carry fewer bounds
+	// than the real ones)
+	if im.Crate == nil || !im.Crate.Local || t.isStd(tm) {
+		return
+	}
+	var tpreds []*TraitRef
+	for _, q := range tg.Predicates {
+		if q.Maybe || q.Trait == nil {
+			continue
+		}
+		var s *TraitRef
+		if !t.quietly(func() {
+			s = q.Trait.Subst(args)
+			na := make([]Ty, len(s.Args))
+			for i, a := range s.Args {
+				na[i] = t.Normalize(a)
+			}
+			s = &TraitRef{Trait: s.Trait, Args: na}
+		}) || s == nil {
+			return
+		}
+		for _, a := range s.Args {
+			if a == nil || a.HasProj() || a.HasOpaque() || a.HasError() {
+				return // not comparable
+			}
+		}
+		tpreds = append(tpreds, s)
+	}
+	implied := func(p *TraitRef) bool {
+		for _, q := range tpreds {
+			var sups []*TraitRef
+			if !t.quietly(func() { sups = t.AllSupertraits(q) }) {
+				return true
+			}
+			for _, s := range append([]*TraitRef{q}, sups...) {
+				if s.Trait != p.Trait || len(s.Args) != len(p.Args) {
+					continue
+				}
+				eq := true
+				for i := range s.Args {
+					if s.Args[i] != p.Args[i] {
+						eq = false
+					}
+				}
+				if eq {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	for _, p := range ig.Predicates {
+		if p.Maybe || p.Trait == nil || len(p.Trait.Args) == 0 || p.Trait.Trait == nil {
+			continue
+		}
+		self := p.Trait.Args[0]
+		if self == nil || self.Kind != TParam || self.Sub != 0 || self.Index < ig.OwnStart || self.Index >= len(ig.Params) {
+			continue
+		}
+		if p.Trait.Trait.LangItem == "sized" {
+			continue
+		}
+		ok := true
+		for _, a := range p.Trait.Args {
+			if a == nil || a.HasInfer() || a.HasError() || a.HasProj() || a.HasOpaque() {
+				ok = false
+			}
+		}
+		if !ok || implied(p.Trait) {
+			continue
+		}
+		t.ErrorCode(im.Item.Name.Span, "E0276", "impl has stricter requirements than trait: `%s: %s`", self, p.Trait.Trait.Name)
+		return
 	}
 }
 

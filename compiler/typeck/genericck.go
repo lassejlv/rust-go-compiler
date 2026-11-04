@@ -9,6 +9,7 @@ package typeck
 import (
 	"rustgo/compiler/ast"
 	"rustgo/compiler/lexer"
+	"rustgo/compiler/resolve"
 	. "rustgo/compiler/middle"
 )
 
@@ -31,6 +32,85 @@ func (t *Tcx) checkGenericParams() {
 				}
 				seen[n] = true
 			}
+			// An associated item's parameters may not shadow the
+			// enclosing impl's or trait's (E0403 / E0496).
+			if d.Kind == DefFn && d.Parent != nil && (d.Parent.Kind == DefImpl || d.Parent.Kind == DefTrait) && d.Crate != nil && d.Crate.Local {
+				if pg := genericsAst(d.Parent); pg != nil {
+					outer := map[string]bool{}
+					for _, p := range pg.Params {
+						outer[p.Name.Name] = true
+					}
+					for _, p := range ga.Params {
+						n := p.Name.Name
+						if !outer[n] {
+							continue
+						}
+						if p.Kind == ast.GPLifetime {
+							if n != "'_" && n != "'static" {
+								t.ErrorCode(p.Name.Span, "E0496", "lifetime name `%s` shadows a lifetime name that is already in scope", n)
+							}
+						} else {
+							t.ErrorCode(p.Name.Span, "E0403", "the name `%s` is already used for a generic parameter in this item's generic parameters", n)
+						}
+					}
+				}
+			}
+		}
+		if d.Item.Vis.RestrictedPath() != nil && d.Scope != nil && d.Crate != nil && d.Crate.Local {
+			// `pub(in path)`: path must name an ancestor module (E0742)
+			if m := resolve.RestrictedModule(d.Item.Vis, d.Scope); m != nil {
+				anc := false
+				for x := d.Scope; x != nil; x = x.Parent {
+					if x == m || x.Normal == m {
+						anc = true
+						break
+					}
+				}
+				if !anc {
+					t.ErrorCode(d.Item.Vis.RestrictedPath().Span, "E0742", "visibilities can only be restricted to ancestor modules")
+				}
+			}
+		}
+		if ga != nil && d.Crate != nil && d.Crate.Local {
+			// const parameters are integers, `bool` or `char` (on stable)
+			for _, p := range ga.Params {
+				if p.Kind != ast.GPConst || p.ConstTy == nil {
+					continue
+				}
+				var ct Ty
+				if g := t.Generics(d); g != nil {
+					for _, gp := range g.Own() {
+						if gp.Const && gp.Ast == p {
+							ct = gp.ConstTy
+						}
+					}
+				}
+				if ct == nil || ct.Kind == TInt || ct.Kind == TBool || ct.Kind == TChar || ct.HasError() {
+					continue
+				}
+				what := "is forbidden as the type of a const generic parameter"
+				if ct.HasParam() {
+					t.ErrorCode(p.Name.Span, "E0770", "the type of const parameters must not depend on other generic parameters")
+					continue
+				}
+				t.Errorf(p.Name.Span, "`%s` %s", ct, what)
+			}
+		}
+		if en, ok := d.Item.Kind.(*ast.EnumItem); ok && d.Kind == DefEnum && d.Crate != nil && d.Crate.Local {
+			// enum variants and their fields are as visible as the enum
+			for _, v := range en.Variants {
+				if v.Vis != ast.VisPrivate {
+					t.ErrorCode(v.Name.Span, "E0449", "visibility qualifiers are not permitted here")
+				}
+				for _, f := range v.Fields {
+					if f.Vis != ast.VisPrivate {
+						t.ErrorCode(f.Span, "E0449", "visibility qualifiers are not permitted here")
+					}
+				}
+			}
+		}
+		if d.Kind == DefImpl && d.Item.Vis != ast.VisPrivate && d.Crate != nil && d.Crate.Local {
+			t.ErrorCode(d.Item.Span, "E0449", "visibility qualifiers are not permitted here")
 		}
 		t.checkSigLifetimes(d)
 		t.checkBinderOutputs(ga)

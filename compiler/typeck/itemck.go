@@ -171,6 +171,9 @@ func (t *Tcx) checkEnumDiscs(d *Def) {
 		t.ErrorCode(d.Item.Name.Span, "E0732", "`#[repr(inttype)]` must be specified for enums with explicit discriminants and non-unit variants")
 		return
 	}
+	if d.Crate != nil && d.Crate.Local && !t.checkDiscRange(d, k) {
+		return
+	}
 	seen := map[int64]string{}
 	for i, v := range d.Adt.Variants {
 		if i >= len(k.Variants) {

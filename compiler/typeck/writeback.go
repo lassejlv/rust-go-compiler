@@ -608,6 +608,10 @@ func (w *capWalker) argCtx(a ast.Expr, decl []Ty, i int) useCtx {
 		return useValue
 	}
 	if t := w.fcx.r.NodeTypes[a.GetID()]; t != nil && t.Kind == TRef && t.Mut {
+		if !decl[i].Mut {
+			// `&mut T` passed as `&T`: a shared reborrow
+			return usePlace
+		}
 		return usePlaceMut
 	}
 	return useValue
@@ -941,4 +945,35 @@ func (fcx *FnCtxt) checkUninferredLocals() {
 			return
 		}
 	}
+	// a method receiver whose type is never inferred (`[].len()`)
+	if fcx.r.Body == nil || fcx.def == nil || fcx.def.Crate == nil || !fcx.def.Crate.Local {
+		return
+	}
+	reported := false
+	ast.Walk(fcx.r.Body, func(n any) bool {
+		if reported {
+			return false
+		}
+		switch x := n.(type) {
+		case *ast.ItemStmt:
+			return false
+		case *ast.MethodCallExpr:
+			t := fcx.r.NodeTypes[x.Receiver.GetID()]
+			if t == nil {
+				return true
+			}
+			t = fcx.ic.resolve(t)
+			Walk(t, func(v Ty) bool {
+				if v.Kind == TInfer && v.Sub == 0 && !closureVars[v] {
+					reported = true
+				}
+				return !reported
+			})
+			if reported {
+				fcx.t.ErrorCode(x.Receiver.GetSpan(), "E0282", "type annotations needed")
+				return false
+			}
+		}
+		return true
+	})
 }
